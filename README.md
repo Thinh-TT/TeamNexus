@@ -10,6 +10,7 @@ kết hợp Kanban real-time với AI Agent (xem `Project-Documents/`).
 ```
 src/                        # Backend (.NET)
   TeamNexus.Api/            #   Entry point: Program.cs, DI, middleware, OpenAPI/Scalar
+  TeamNexus.Persistence/    #   Single DbContext + entities + EF migrations (one migration chain)
   Modules/Auth/TeamNexus.Modules.Auth/   #   Module Auth (Identity, OAuth, JWT – Phase 1)
   Shared/TeamNexus.Shared/  #   Contracts & helpers dùng chung
 frontend/                   # Web (React + TS + Vite + Ant Design)
@@ -35,12 +36,14 @@ npm run dev
 
 - Mọi secret local (OAuth Client ID/Secret, connection string, JWT key) đặt trong **User Secrets**:
   `dotnet user-secrets init --project src/TeamNexus.Api` rồi `dotnet user-secrets set "<Key>" "<Value>"`.
+- Connection string PostgreSQL đọc từ `ConnectionStrings:DefaultConnection`, ví dụ:
+  `dotnet user-secrets set --project src/TeamNexus.Api "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=TeamNexus;Username=postgres;Password=..."`.
 - Frontend override backend URL qua `frontend/.env` (xem `.env.example`).
 - Mục `Cors:AllowedOrigins` cho phép gọi trực tiếp từ origin Vite (`http://localhost:5173`).
 
 ## Trạng thái (Giai đoạn 1 – Nền tảng & Auth)
 
 - [x] §1 Khởi tạo Project — backend modular monolith + frontend Vite build/run được
-- [ ] §2 Schema PostgreSQL (EF Core migration)
+- [x] §2 Schema PostgreSQL (EF Core migration) — `TeamNexusDbContext` tại `src/TeamNexus.Persistence`, migration `InitialSchema` đã áp dụng lên DB `TeamNexus` local
 - [ ] §3 Auth Backend (OAuth Google/GitHub, JWT + refresh token HttpOnly cookie, RBAC)
 - [ ] §4 Auth Frontend (login, protected routes, auto-refresh)

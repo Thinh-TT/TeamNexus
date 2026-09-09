@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\Shared\TeamNexus.Shared\TeamNexus.Shared.csproj" />
+    <ProjectReference Include="..\..\..\TeamNexus.Persistence\TeamNexus.Persistence.csproj" />
   </ItemGroup>
 
   <ItemGroup>
