@@ -32,6 +32,11 @@ export const useAuthStore = create<AuthState>((set) => ({
         isAuthenticated: true,
         isLoading: false,
       })
+      try {
+        await httpClient.get('/auth/antiforgery')
+      } catch {
+        // non-blocking
+      }
     } catch {
       set({
         user: null,

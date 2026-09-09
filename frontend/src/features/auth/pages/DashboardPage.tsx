@@ -1,10 +1,11 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
   Avatar,
   Button,
   Card,
   Descriptions,
   Flex,
+  Input,
   Layout,
   Result,
   Space,
@@ -19,10 +20,22 @@ const { Header, Content } = Layout
 
 export const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth()
+  const [workspace, setWorkspace] = useState<{ id: string; name: string } | null>(null)
   const [rbacLoading, setRbacLoading] = useState<string | null>(null)
   const [rbacResult, setRbacResult] = useState<{ status: 'success' | 'error'; msg: string } | null>(
     null
   )
+
+  useEffect(() => {
+    httpClient
+      .get<Array<{ id: string; name: string; role: string }>>('/workspaces')
+      .then((res) => {
+        if (res.data && res.data.length > 0) {
+          setWorkspace(res.data[0])
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const handleTestEndpoint = async (endpoint: string, label: string) => {
     setRbacLoading(endpoint)
@@ -95,6 +108,44 @@ export const DashboardPage: React.FC = () => {
                 )}
               </Descriptions.Item>
             </Descriptions>
+          </Card>
+
+          <Card
+            title={
+              <Flex align="center" gap={8}>
+                <span style={{ fontSize: 16 }}>📊 Không Gian Làm Việc (Kanban Boards - Phase 2)</span>
+              </Flex>
+            }
+            style={{ borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+          >
+            <Typography.Paragraph type="secondary">
+              Truy cập các bảng Kanban của Workspace để quản lý công việc và cộng tác thời gian thực:
+            </Typography.Paragraph>
+
+            <Flex gap={12} align="center" wrap="wrap">
+              <Input
+                placeholder="Nhập Workspace ID (Guid)..."
+                id="dashboard-workspace-input"
+                value={workspace?.id ?? ''}
+                onChange={(e) =>
+                  setWorkspace((prev) =>
+                    prev ? { ...prev, id: e.target.value } : { id: e.target.value, name: 'Workspace' }
+                  )
+                }
+                style={{ maxWidth: 380, borderRadius: 8 }}
+              />
+              <Button
+                type="primary"
+                style={{ backgroundColor: '#6366f1', borderRadius: 8 }}
+                onClick={() => {
+                  const input = document.getElementById('dashboard-workspace-input') as HTMLInputElement
+                  const wsId = input?.value.trim() || workspace?.id || '00000000-0000-0000-0000-000000000001'
+                  window.location.href = `/workspaces/${wsId}/boards`
+                }}
+              >
+                Mở Danh Sách Bảng {workspace?.name ? `(${workspace.name})` : ''} →
+              </Button>
+            </Flex>
           </Card>
 
           <Card title="Kiểm tra Phân quyền RBAC (Phase 1 §3.3)" style={{ borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>

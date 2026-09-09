@@ -18,6 +18,11 @@ export default defineConfig(({ mode }) => {
           target: apiTarget,
           changeOrigin: true,
         },
+        '/hubs': {
+          target: apiTarget,
+          changeOrigin: true,
+          ws: true,
+        },
       },
     },
   }

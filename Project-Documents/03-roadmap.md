@@ -18,10 +18,10 @@ Khởi tạo project ASP.NET Core (Modular Monolith) + React, thiết kế schem
 Xây dựng CRUD cho Board/Task/Column, giao diện kéo-thả bằng @dnd-kit, tích hợp SignalR để đồng bộ trạng thái real-time giữa các client.
 
 **Yêu cầu hoàn thiện:**
-- [ ] CRUD đầy đủ cho Board, Column, Task
-- [ ] Giao diện kéo-thả task giữa các column hoạt động mượt
-- [ ] SignalR đồng bộ real-time: thay đổi ở client A phản ánh ngay ở client B (không cần reload)
-- [ ] SignalR group theo boardId, có xử lý auto-reconnect khi mất kết nối
+- [x] CRUD đầy đủ cho Board, Column, Task
+- [x] Giao diện kéo-thả task giữa các column hoạt động mượt
+- [x] SignalR đồng bộ real-time: thay đổi ở client A phản ánh ngay ở client B (không cần reload)
+- [x] SignalR group theo boardId, có xử lý auto-reconnect khi mất kết nối
 
 ## Giai đoạn 3: AI Smart Setup
 

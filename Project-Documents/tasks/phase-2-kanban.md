@@ -194,8 +194,8 @@ Sau mỗi thao tác thay đổi thành công (sau `SaveChanges`/commit), service
 
 ### 4.1 Cài đặt & Cấu trúc
 
-- [ ] Cài packages: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`, `@microsoft/signalr`
-- [ ] Tạo cấu trúc thư mục feature:
+- [x] Cài packages: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`, `@microsoft/signalr`, `@ant-design/icons`, `dayjs`
+- [x] Tạo cấu trúc thư mục feature:
   ```
   src/features/board/
   ├── components/
@@ -203,63 +203,69 @@ Sau mỗi thao tác thay đổi thành công (sau `SaveChanges`/commit), service
   │   ├── KanbanColumn.tsx
   │   ├── TaskCard.tsx
   │   ├── TaskDetailModal.tsx
-  │   └── CreateColumnModal.tsx
+  │   ├── ColumnModal.tsx
+  │   └── BoardModal.tsx
   ├── hooks/
   │   ├── useBoard.ts
   │   └── useBoardHub.ts
   ├── services/
   │   └── boardApi.ts
-  └── stores/
-      └── boardStore.ts
+  ├── stores/
+  │   └── boardStore.ts
+  ├── types/
+  │   └── board.types.ts
+  └── pages/
+      ├── BoardPage.tsx
+      └── BoardListPage.tsx
   ```
 
 ### 4.2 API Service & State
 
-- [ ] `boardApi.ts`: các hàm gọi API (getBoard, createTask, updateTask, moveTask, createColumn, reorderColumns, ...)
-- [ ] `boardStore.ts` (Zustand): lưu `{ columns, tasks }`, action `applyEvent(event)` để cập nhật từ SignalR
-- [ ] `useBoard` hook: fetch board data khi mount, expose actions
+- [x] `boardApi.ts`: các hàm gọi API (getBoard, createTask, updateTask, moveTask, createColumn, reorderColumns, ...)
+- [x] `boardStore.ts` (Zustand): lưu `{ columns, tasks }`, action `applyEvent(event)` để cập nhật từ SignalR
+- [x] `useBoard` hook: fetch board data khi mount, expose actions
 
 ### 4.3 Drag & Drop (dnd-kit)
 
-- [ ] Setup `DndContext` bao bọc `BoardView` với `sensors` (PointerSensor, KeyboardSensor)
-- [ ] `KanbanColumn` dùng `useDroppable`; `TaskCard` dùng `useSortable`
-- [ ] `onDragEnd` handler:
+- [x] Setup `DndContext` bao bọc `BoardView` với `sensors` (PointerSensor, KeyboardSensor)
+- [x] `KanbanColumn` dùng `useDroppable`; `TaskCard` dùng `useSortable`
+- [x] `onDragEnd` handler:
   - Xác định task và column đích + position mới
   - **Optimistic update:** cập nhật state local ngay lập tức
   - Gọi `PUT /api/boards/{boardId}/tasks/{taskId}/move` lên backend
   - Nếu request thất bại → **revert** state + hiển thị thông báo lỗi
-- [ ] Hỗ trợ reorder trong cùng column và move sang column khác
-- [ ] `DragOverlay` hiển thị ghost card khi đang kéo
+- [x] Hỗ trợ reorder trong cùng column và move sang column khác
+- [x] `DragOverlay` hiển thị ghost card khi đang kéo
 
 ### 4.4 SignalR Client (useBoardHub)
 
-- [ ] Khởi tạo `HubConnection` khi mount `BoardView`:
+- [x] Khởi tạo `HubConnection` khi mount `BoardView`:
   ```ts
   const connection = new HubConnectionBuilder()
     .withUrl("/hubs/board", { withCredentials: true })
     .withAutomaticReconnect()
     .build();
   ```
-- [ ] Sau kết nối: `connection.invoke("JoinBoard", boardId)`
-- [ ] Cleanup khi unmount: `connection.invoke("LeaveBoard", boardId)` → `connection.stop()`
-- [ ] Đăng ký handler cho tất cả events → cập nhật `boardStore` qua `applyEvent(event)`
-- [ ] **Tránh double-update:** bỏ qua event do chính client này tạo ra (dùng flag hoặc so sánh `connectionId`)
-- [ ] Hiển thị trạng thái kết nối: badge nhỏ `Connected` / `Reconnecting` / `Disconnected`
+- [x] Sau kết nối: `connection.invoke("JoinBoard", boardId)`
+- [x] Cleanup khi unmount: `connection.invoke("LeaveBoard", boardId)` → `connection.stop()`
+- [x] Đăng ký handler cho tất cả events → cập nhật `boardStore` qua `applyEvent(event)`
+- [x] **Tránh double-update:** bỏ qua event do chính client này tạo ra (dùng flag hoặc so sánh `connectionId`)
+- [x] Hiển thị trạng thái kết nối: badge nhỏ `Connected` / `Reconnecting` / `Disconnected`
 
 ### 4.5 UI Components
 
-- [ ] **`BoardView`**: layout flex-row các `KanbanColumn` + nút "+ Thêm cột"
-- [ ] **`KanbanColumn`**: header (tên + số task + menu đổi tên/xóa), danh sách `TaskCard` cuộn dọc
-- [ ] **`TaskCard`**: title, priority badge (màu theo mức), assignee avatar, due date, label chips; click → mở modal
-- [ ] **`TaskDetailModal`**: form đầy đủ (title, desc, assignee, due date, priority, labels) + tab Comments
-- [ ] **`CreateColumnModal`**: input tên cột, submit
-- [ ] Loading state & empty state (board không có cột, cột không có task)
+- [x] **`BoardView`**: layout flex-row các `KanbanColumn` + nút "+ Thêm cột"
+- [x] **`KanbanColumn`**: header (tên + số task + menu đổi tên/xóa), danh sách `TaskCard` cuộn dọc
+- [x] **`TaskCard`**: title, priority badge (màu theo mức), assignee avatar, due date, label chips; click → mở modal
+- [x] **`TaskDetailModal`**: form đầy đủ (title, desc, assignee, due date, priority, labels) + tab Comments
+- [x] **`CreateColumnModal` / `ColumnModal`**: input tên cột, submit
+- [x] Loading state & empty state (board không có cột, cột không có task)
 
 ### 4.6 Routing & Navigation
 
-- [ ] Route `/workspaces/:workspaceId/boards` → trang danh sách board
-- [ ] Route `/workspaces/:workspaceId/boards/:boardId` → `BoardView`
-- [ ] Sidebar/breadcrumb điều hướng workspace → board
+- [x] Route `/workspaces/:workspaceId/boards` → trang danh sách board
+- [x] Route `/workspaces/:workspaceId/boards/:boardId` → `BoardView`
+- [x] Sidebar/breadcrumb điều hướng workspace → board
 
 ---
 
@@ -267,25 +273,25 @@ Sau mỗi thao tác thay đổi thành công (sau `SaveChanges`/commit), service
 
 ### 5.1 Verify theo Checklist Roadmap
 
-- [ ] CRUD đầy đủ: tạo/sửa/xóa Board, Column, Task qua UI
-- [ ] Kéo-thả mượt: move task giữa columns, reorder trong cùng column; optimistic update + revert khi lỗi
-- [ ] Real-time: 2 client cùng board → thay đổi ở A hiển thị ngay ở B không cần reload
-- [ ] Group isolation: thao tác board A không broadcast sang client đang xem board B
-- [ ] Auto-reconnect: mất mạng tạm thời → kết nối tự phục hồi, UI hiển thị trạng thái đúng
+- [x] CRUD đầy đủ: tạo/sửa/xóa Board, Column, Task qua UI
+- [x] Kéo-thả mượt: move task giữa columns, reorder trong cùng column; optimistic update + revert khi lỗi
+- [x] Real-time: 2 client cùng board → thay đổi ở A hiển thị ngay ở B không cần reload
+- [x] Group isolation: thao tác board A không broadcast sang client đang xem board B
+- [x] Auto-reconnect: mất mạng tạm thời → kết nối tự phục hồi, UI hiển thị trạng thái đúng
 
 ### 5.2 Edge Cases
 
-- [ ] Move task sang column không cùng board → backend trả lỗi 400
-- [ ] Xoá column còn task → xử lý rõ ràng (chặn + thông báo, hoặc cascade soft delete task)
-- [ ] Nhiều user kéo task cùng lúc → last-write-wins, không crash
-- [ ] JWT hết hạn khi SignalR đang kết nối → auto-reconnect lấy token mới qua Axios interceptor + `withCredentials`
-- [ ] Board không có column → empty state có hướng dẫn tạo cột đầu tiên
+- [x] Move task sang column không cùng board → backend trả lỗi 400
+- [x] Xoá column còn task → xử lý rõ ràng (chặn + thông báo, hoặc cascade soft delete task)
+- [x] Nhiều user kéo task cùng lúc → last-write-wins, không crash
+- [x] JWT hết hạn khi SignalR đang kết nối → auto-reconnect lấy token mới qua Axios interceptor + `withCredentials`
+- [x] Board không có column → empty state có hướng dẫn tạo cột đầu tiên
 
 ### 5.3 Bổ sung (nếu còn thời gian)
 
 - [ ] Ghi `activity_logs` cho các hành động task (TaskCreated, TaskMoved, TaskCompleted) — chuẩn bị dữ liệu cho Giai đoạn 5 AI Observer
-- [ ] Filter task theo assignee / priority / label trên UI board
-- [ ] Search task trong board
+- [x] Filter task theo assignee / priority / label trên UI board
+- [x] Search task trong board
 
 ---
 
@@ -293,8 +299,8 @@ Sau mỗi thao tác thay đổi thành công (sau `SaveChanges`/commit), service
 
 > Tất cả các mục dưới đây phải ✅ trước khi chuyển sang Giai đoạn 3.
 
-- [ ] CRUD đầy đủ cho Board, Column, Task (tạo/sửa/xóa qua UI và API)
-- [ ] Giao diện kéo-thả task giữa các column hoạt động mượt (optimistic update + revert khi lỗi)
-- [ ] SignalR đồng bộ real-time: thay đổi ở client A phản ánh ngay ở client B (không cần reload)
-- [ ] SignalR group theo `boardId`, chỉ broadcast đến đúng board
-- [ ] Auto-reconnect khi mất kết nối hoạt động, UI hiển thị trạng thái kết nối
+- [x] CRUD đầy đủ cho Board, Column, Task (tạo/sửa/xóa qua UI và API)
+- [x] Giao diện kéo-thả task giữa các column hoạt động mượt (optimistic update + revert khi lỗi)
+- [x] SignalR đồng bộ real-time: thay đổi ở client A phản ánh ngay ở client B (không cần reload)
+- [x] SignalR group theo `boardId`, chỉ broadcast đến đúng board
+- [x] Auto-reconnect khi mất kết nối hoạt động, UI hiển thị trạng thái kết nối
