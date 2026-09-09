@@ -5,7 +5,8 @@ namespace TeamNexus.Modules.Board.Endpoints;
 
 /// <summary>
 /// Maps all Board module endpoint groups (Phase 2 §2.2–§2.5). Called from Program.cs
-/// after UseAuthentication/UseAuthorization. SignalR hub mapping arrives in §3.
+/// after UseAuthentication/UseAuthorization. The SignalR hub is mapped by
+/// <c>MapBoardHub</c> (Hubs/BoardHub.cs), also from Program.cs.
 /// </summary>
 public static class BoardEndpoints
 {

@@ -20,11 +20,16 @@ public sealed class CommentService : ICommentService
 {
     private readonly TeamNexusDbContext _db;
     private readonly IWorkspaceAccess _access;
+    private readonly IBoardEventPublisher _events;
 
-    public CommentService(TeamNexusDbContext db, IWorkspaceAccess access)
+    public CommentService(
+        TeamNexusDbContext db,
+        IWorkspaceAccess access,
+        IBoardEventPublisher events)
     {
         _db = db;
         _access = access;
+        _events = events;
     }
 
     public async Task<IReadOnlyList<CommentResponse>> GetCommentsAsync(
@@ -60,7 +65,9 @@ public sealed class CommentService : ICommentService
         _db.TaskComments.Add(comment);
         await _db.SaveChangesAsync(ct);
 
-        return await LoadCommentAsync(comment.Id, ct);
+        var response = await LoadCommentAsync(comment.Id, ct);
+        await _events.CommentAdded(task.BoardId, response, ct);
+        return response;
     }
 
     public async Task<CommentResponse> UpdateCommentAsync(
@@ -81,8 +88,14 @@ public sealed class CommentService : ICommentService
         var comment = await LoadCommentForAuthorizeAsync(commentId, ct);
         await AuthorizeAsync(comment, userId, ct);
 
+        var boardId = comment.Task?.BoardId;
         comment.DeletedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
+
+        if (boardId.HasValue)
+        {
+            await _events.CommentDeleted(boardId.Value, commentId, comment.TaskId, ct);
+        }
     }
 
     // ---- helpers ----------------------------------------------------------

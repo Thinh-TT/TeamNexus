@@ -25,11 +25,16 @@ public sealed class ColumnService : IColumnService
 
     private readonly TeamNexusDbContext _db;
     private readonly IWorkspaceAccess _access;
+    private readonly IBoardEventPublisher _events;
 
-    public ColumnService(TeamNexusDbContext db, IWorkspaceAccess access)
+    public ColumnService(
+        TeamNexusDbContext db,
+        IWorkspaceAccess access,
+        IBoardEventPublisher events)
     {
         _db = db;
         _access = access;
+        _events = events;
     }
 
     public async Task<IReadOnlyList<ColumnResponse>> GetColumnsAsync(
@@ -68,7 +73,9 @@ public sealed class ColumnService : IColumnService
         _db.BoardColumns.Add(column);
         await _db.SaveChangesAsync(ct);
 
-        return ToResponse(column, []);
+        var response = ToResponse(column, []);
+        await _events.ColumnCreated(boardId, response, ct);
+        return response;
     }
 
     public async Task<ColumnResponse> UpdateColumnAsync(
@@ -89,7 +96,9 @@ public sealed class ColumnService : IColumnService
         }
 
         await _db.SaveChangesAsync(ct);
-        return ToResponse(column, []);
+        var response = ToResponse(column, []);
+        await _events.ColumnUpdated(column.BoardId, response, ct);
+        return response;
     }
 
     public async Task ReorderColumnsAsync(
@@ -124,6 +133,8 @@ public sealed class ColumnService : IColumnService
 
         await _db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
+
+        await _events.ColumnsReordered(boardId, request.Items, ct);
     }
 
     public async Task DeleteColumnAsync(Guid columnId, Guid userId, CancellationToken ct = default)
@@ -146,6 +157,8 @@ public sealed class ColumnService : IColumnService
 
         _db.BoardColumns.Remove(column);
         await _db.SaveChangesAsync(ct);
+
+        await _events.ColumnDeleted(column.BoardId, columnId, ct);
     }
 
     // ---- helpers ----------------------------------------------------------

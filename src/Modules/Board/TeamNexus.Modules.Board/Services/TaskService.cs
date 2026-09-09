@@ -25,11 +25,16 @@ public sealed class TaskService : ITaskService
 {
     private readonly TeamNexusDbContext _db;
     private readonly IWorkspaceAccess _access;
+    private readonly IBoardEventPublisher _events;
 
-    public TaskService(TeamNexusDbContext db, IWorkspaceAccess access)
+    public TaskService(
+        TeamNexusDbContext db,
+        IWorkspaceAccess access,
+        IBoardEventPublisher events)
     {
         _db = db;
         _access = access;
+        _events = events;
     }
 
     public async Task<IReadOnlyList<TaskResponse>> GetTasksAsync(
@@ -117,7 +122,9 @@ public sealed class TaskService : ITaskService
         _db.Tasks.Add(task);
         await _db.SaveChangesAsync(ct);
 
-        return DtoMapping.MapTask(task, []);
+        var response = DtoMapping.MapTask(task, []);
+        await _events.TaskCreated(boardId, response, ct);
+        return response;
     }
 
     public async Task<TaskResponse> UpdateTaskAsync(
@@ -142,7 +149,9 @@ public sealed class TaskService : ITaskService
         task.Priority = ParsePriority(request.Priority);
 
         await _db.SaveChangesAsync(ct);
-        return await GetTaskByIdAsync(taskId, userId, ct);
+        var response = await GetTaskByIdAsync(taskId, userId, ct);
+        await _events.TaskUpdated(task.BoardId, response, ct);
+        return response;
     }
 
     public async Task<TaskResponse> MoveTaskAsync(
@@ -164,6 +173,7 @@ public sealed class TaskService : ITaskService
             throw new BadRequestException("Target column does not belong to the same board.");
         }
 
+        var fromColumnId = task.ColumnId;
         await using var transaction = await _db.Database.BeginTransactionAsync(ct);
 
         // Rebuild the target column's order: source tasks first (compact), then the moved
@@ -192,6 +202,11 @@ public sealed class TaskService : ITaskService
         await _db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
 
+        await _events.TaskMoved(
+            task.BoardId,
+            new TaskMovedEventPayload(task.Id, fromColumnId, targetColumn.Id, insertIndex),
+            ct);
+
         // Reload with details (assignee/labels) for the response.
         return await GetTaskByIdAsync(taskId, userId, ct);
     }
@@ -204,8 +219,11 @@ public sealed class TaskService : ITaskService
 
         await RequireMemberOfTaskBoardAsync(task, userId, ct);
 
+        var boardId = task.BoardId;
         task.DeletedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
+
+        await _events.TaskDeleted(boardId, taskId, ct);
     }
 
     // ---- helpers ----------------------------------------------------------

@@ -1,7 +1,7 @@
 # TeamNexus.Modules.Board — Backend Kanban (Phase 2 §2–§3)
 
 Module cung cấp CRUD Board/Column/Task + Label/Comment theo Minimal API
-(nhất quán module Auth). SignalR `BoardHub` sẽ bổ sung ở §3.
+(nhất quán module Auth) và real-time qua SignalR `BoardHub`.
 
 ## Quyền (workspace-scoped)
 
@@ -25,6 +25,31 @@ header `X-XSRF-TOKEN` (lấy ở `GET /api/auth/antiforgery`).
 | Tasks | `GET|POST /api/boards/{boardId}/tasks`, `GET|PUT|DELETE /tasks/{taskId}`, `PUT /tasks/{taskId}/move` |
 | Labels | `GET|POST /api/workspaces/{workspaceId}/labels`, `DELETE /labels/{labelId}`, `POST|DELETE /api/tasks/{taskId}/labels[/{labelId}]` |
 | Comments | `GET|POST /api/tasks/{taskId}/comments`, `PUT|DELETE /comments/{commentId}` |
+| Real-time | `WS /hubs/board` (yêu cầu đăng nhập) — `JoinBoard(boardId)`, `LeaveBoard(boardId)` |
+
+## SignalR (Phase 2 §3)
+
+- Client connect `/hubs/board` → gọi `JoinBoard(boardId)` để vào group `board-{boardId}`.
+  Join chỉ thành công nếu user là **member** của workspace chứa board (kiểm tra mỗi lần join).
+- Server broadcast qua `IBoardEventPublisher` (wrapper `IHubContext<BoardHub>`) **sau khi** ghi
+  DB commit. Lỗi broadcast chỉ log, không làm fail request.
+- Sự kiện (tên method client đăng ký):
+
+| Sự kiện | Payload |
+|---|---|
+| `TaskCreated` / `TaskUpdated` | `TaskResponse` |
+| `TaskMoved` | `{ taskId, fromColumnId, toColumnId, position }` |
+| `TaskDeleted` | `{ taskId }` |
+| `ColumnCreated` / `ColumnUpdated` | `ColumnResponse` |
+| `ColumnsReordered` | danh sách `{ id, position }` |
+| `ColumnDeleted` | `{ columnId }` |
+| `CommentAdded` | `CommentResponse` |
+| `CommentDeleted` | `{ commentId, taskId }` |
+
+- JSON payload camelCase (mặc định SignalR). Auth: JWT trong cookie `access_token` gửi kèm
+  handshake; ngoài ra JwtBearer chấp nhận `access_token` query chỉ cho path `/hubs/*`
+  (SignalR client không set được Authorization header).
+- Không broadcast cho: Board CRUD, comment update, label attach/detach (theo §3.2 task doc).
 
 ## Ghi chú nghiệp vụ
 
@@ -42,3 +67,5 @@ header `X-XSRF-TOKEN` (lấy ở `GET /api/auth/antiforgery`).
    cho user GitHub trong `workspace_members`).
 2. Chạy API (`dotnet run --project src/TeamNexus.Api` — port 5000) → Scalar tại `/scalar`.
 3. Login GitHub → gọi các endpoint nhóm Boards/Columns/Tasks/Labels/Comments.
+4. Real-time: mở 2 tab (hoặc 2 client WebSocket) cùng board → thao tác REST ở 1 client,
+   client kia nhận event ngay; client ở board khác không nhận (group isolation).

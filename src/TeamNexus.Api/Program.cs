@@ -3,6 +3,7 @@ using TeamNexus.Modules.Auth;
 using TeamNexus.Modules.Auth.Endpoints;
 using TeamNexus.Modules.Board;
 using TeamNexus.Modules.Board.Endpoints;
+using TeamNexus.Modules.Board.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,7 +20,7 @@ builder.Services.AddOpenApi();
 // Auth internals (DbContext, Identity, OAuth, JWT) arrive in Phase 1 §2–§3.
 builder.Services.AddAuthModule(builder.Configuration);
 
-// Board module: Kanban CRUD services (Phase 2 §2); SignalR hub wiring arrives in §3.
+// Board module: Kanban CRUD services + SignalR hub registration (Phase 2 §2–§3).
 builder.Services.AddBoardModule();
 
 // ---- CORS ------------------------------------------------------------
@@ -71,5 +72,6 @@ api.MapGet("/health", () => Results.Ok(new
 // ---- Feature module endpoints -----------------------------------------
 app.MapAuthModuleEndpoints();
 app.MapBoardModuleEndpoints();
+app.MapBoardHub();
 
 app.Run();
