@@ -101,22 +101,22 @@
 ## 4. Auth Frontend
 
 ### 4.1 Trang & Luồng Đăng nhập
-- [ ] Trang `/login` – UI đăng nhập (Ant Design):
+- [x] Trang `/login` – UI đăng nhập (Ant Design):
   - Nút "Đăng nhập với Google" (redirect đến `/api/auth/login/google`)
   - Nút "Đăng nhập với GitHub" (redirect đến `/api/auth/login/github`)
-- [ ] Sau khi OAuth callback thành công, backend redirect về `/` hoặc `/dashboard`
-- [ ] Gọi `GET /api/auth/me` để lấy thông tin user → lưu vào global state (zustand/jotai)
+- [x] Sau khi OAuth callback thành công, backend redirect về `/` hoặc `/dashboard`
+- [x] Gọi `GET /api/auth/me` để lấy thông tin user → lưu vào global state (zustand)
 
 ### 4.2 Auth State & Protected Routes
-- [ ] Hook `useAuth()`: expose `user`, `isLoading`, `isAuthenticated`, `logout()`
-- [ ] `ProtectedRoute` component: redirect về `/login` nếu chưa đăng nhập
-- [ ] `axios` interceptor:
+- [x] Hook `useAuth()`: expose `user`, `isLoading`, `isAuthenticated`, `logout()`
+- [x] `ProtectedRoute` component: redirect về `/login` nếu chưa đăng nhập
+- [x] `axios` interceptor:
   - `401` response → tự động gọi `POST /api/auth/refresh`
   - Nếu refresh thành công → retry request gốc
   - Nếu refresh thất bại (401) → logout, redirect `/login`
-- [ ] Xử lý CSRF: đọc cookie `XSRF-TOKEN` → gắn vào header `X-XSRF-TOKEN` cho mỗi mutating request (POST/PUT/DELETE/PATCH)
-- [ ] Trang `/dashboard` (placeholder, yêu cầu đăng nhập): hiển thị thông tin user, nút logout
-- [ ] Verify: truy cập `/dashboard` khi chưa login → redirect `/login`; sau khi login → vào được dashboard, hiển thị đúng tên/avatar
+- [x] Xử lý CSRF: đọc cookie `XSRF-TOKEN` → gắn vào header `X-XSRF-TOKEN` cho mỗi mutating request (POST/PUT/DELETE/PATCH)
+- [x] Trang `/dashboard` (placeholder, yêu cầu đăng nhập): hiển thị thông tin user, nút logout
+- [x] Verify: truy cập `/dashboard` khi chưa login → redirect `/login`; sau khi login → vào được dashboard, hiển thị đúng tên/avatar
 
 ---
 
@@ -132,4 +132,4 @@
 - [x] Rotate refresh token mỗi lần dùng (token cũ bị revoke ngay sau khi refresh)
 - [x] Cơ chế CSRF (anti-forgery token) hoạt động
 - [x] Phân quyền Policy-based cho 3 role áp dụng được trên ít nhất 1 endpoint mẫu mỗi loại
-- [ ] Frontend tự động refresh token khi nhận 401, redirect login khi refresh thất bại — *thuộc §4*
+- [x] Frontend tự động refresh token khi nhận 401, redirect login khi refresh thất bại — *thuộc §4*

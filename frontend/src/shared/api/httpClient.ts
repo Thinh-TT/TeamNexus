@@ -1,5 +1,16 @@
 import axios from 'axios'
 
+function getCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null
+  const value = `; ${document.cookie}`
+  const parts = value.split(`; ${name}=`)
+  if (parts.length === 2) {
+    const cookieVal = parts.pop()?.split(';').shift()
+    return cookieVal ? decodeURIComponent(cookieVal) : null
+  }
+  return null
+}
+
 /**
  * Base Axios instance shared across all features.
  *
@@ -13,3 +24,84 @@ export const httpClient = axios.create({
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 })
+
+// Request Interceptor: Attach X-XSRF-TOKEN for mutating operations
+httpClient.interceptors.request.use(async (config) => {
+  const method = config.method?.toUpperCase()
+  if (method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+    let xsrfToken = getCookie('XSRF-TOKEN')
+    if (!xsrfToken && !config.url?.includes('/auth/antiforgery')) {
+      try {
+        await axios.get(`${import.meta.env.VITE_API_BASE_URL ?? '/api'}/auth/antiforgery`, {
+          withCredentials: true,
+        })
+        xsrfToken = getCookie('XSRF-TOKEN')
+      } catch {
+        // Silently ignore if antiforgery call fails
+      }
+    }
+    if (xsrfToken) {
+      config.headers['X-XSRF-TOKEN'] = xsrfToken
+    }
+  }
+  return config
+})
+
+// Response Interceptor: Handle 401 Unauthorized by attempting Refresh Token rotation
+let isRefreshing = false
+let failedQueue: Array<{
+  resolve: (value?: unknown) => void
+  reject: (reason?: unknown) => void
+}> = []
+
+const processQueue = (error: unknown) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error)
+    } else {
+      prom.resolve()
+    }
+  })
+  failedQueue = []
+}
+
+httpClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config
+
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/auth/refresh') &&
+      !originalRequest.url?.includes('/auth/login')
+    ) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject })
+        })
+          .then(() => httpClient(originalRequest))
+          .catch((err) => Promise.reject(err))
+      }
+
+      originalRequest._retry = true
+      isRefreshing = true
+
+      try {
+        await httpClient.post('/auth/refresh')
+        processQueue(null)
+        return httpClient(originalRequest)
+      } catch (refreshError) {
+        processQueue(refreshError)
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'))
+        return Promise.reject(refreshError)
+      } finally {
+        isRefreshing = false
+      }
+    }
+
+    return Promise.reject(error)
+  }
+)
+
