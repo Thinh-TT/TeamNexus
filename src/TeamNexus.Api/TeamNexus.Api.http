@@ -1,0 +1,15 @@
+@TeamNexus.Api_HostAddress = http://localhost:5000
+
+### Health check
+GET {{TeamNexus.Api_HostAddress}}/api/health
+Accept: application/json
+
+### OpenAPI document (JSON)
+GET {{TeamNexus.Api_HostAddress}}/openapi/v1.json
+Accept: application/json
+
+### Scalar UI (browser)
+GET {{TeamNexus.Api_HostAddress}}/scalar
+Accept: text/html
+
+###
