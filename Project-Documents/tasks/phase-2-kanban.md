@@ -116,39 +116,81 @@
 
 ### 3.1 Thiết lập Hub
 
-- [ ] Tạo `BoardHub : Hub` tại `Hubs/BoardHub.cs`:
-  - Method `JoinBoard(string boardId)` → `Groups.AddToGroupAsync(connectionId, $"board-{boardId}")`
+- [x] Tạo `BoardHub : Hub` tại `Hubs/BoardHub.cs`:
+  - Method `JoinBoard(string boardId)` → verify membership (workspace_members) rồi `Groups.AddToGroupAsync(connectionId, $"board-{boardId}")`; không phải member → HubException
   - Method `LeaveBoard(string boardId)` → `Groups.RemoveFromGroupAsync(connectionId, $"board-{boardId}")`
-- [ ] Map hub endpoint: `app.MapHub<BoardHub>("/hubs/board")` với Authorization (yêu cầu đăng nhập)
-- [ ] Cấu hình CORS cho SignalR (cho phép credential từ frontend origin)
-- [ ] Inject `IHubContext<BoardHub>` vào các service cần broadcast
+- [x] Map hub endpoint: `app.MapHub<BoardHub>("/hubs/board")` với Authorization (yêu cầu đăng nhập); JwtBearer nhận `access_token` query cho path `/hubs/*` (cookie auth vẫn là primary)
+- [x] Cấu hình CORS cho SignalR (policy `WebFrontend` sẵn có đã gồm AllowCredentials từ Vite origin — không cần đổi)
+- [x] Inject `IHubContext<BoardHub>` vào các service cần broadcast (qua `IBoardEventPublisher` wrapper)
 
 ### 3.2 Broadcast sự kiện từ Service
 
-Sau mỗi thao tác thay đổi thành công, service gọi `IHubContext` broadcast đến group `board-{boardId}`:
+Sau mỗi thao tác thay đổi thành công (sau `SaveChanges`/commit), service publish qua `IBoardEventPublisher` → group `board-{boardId}`:
 
-- [ ] **Task events:**
+- [x] **Task events:**
   - `TaskCreated` → payload: `TaskResponse`
   - `TaskUpdated` → payload: `TaskResponse`
   - `TaskMoved` → payload: `{ taskId, fromColumnId, toColumnId, position }`
   - `TaskDeleted` → payload: `{ taskId }`
-- [ ] **Column events:**
+- [x] **Column events:**
   - `ColumnCreated` → payload: `ColumnResponse`
   - `ColumnUpdated` → payload: `ColumnResponse`
   - `ColumnsReordered` → payload: danh sách `{ id, position }`
   - `ColumnDeleted` → payload: `{ columnId }`
-- [ ] **Comment events:**
+- [x] **Comment events:**
   - `CommentAdded` → payload: `CommentResponse`
   - `CommentDeleted` → payload: `{ commentId, taskId }`
 
 ### 3.3 Verify Real-time
 
-- [ ] Mở 2 tab trình duyệt cùng board → thao tác ở tab A → tab B cập nhật ngay không cần reload
-- [ ] Test group isolation: thao tác ở board A không ảnh hưởng client đang xem board B
+- [x] 2 client WebSocket cùng board → tạo/sửa/move/xoá task, column (create/reorder/delete), comment (add/delete) ở client REST → client còn lại nhận đủ event ngay (probe 14 check PASS)
+- [x] Test group isolation: client ở board B không nhận event của board A (probe verify silence)
 
 ---
 
 ## 4. Frontend – Kanban UI
+
+> **Ghi chú bàn giao (backend §1–§3 đã hoàn thiện, commit `826adf8` + nhánh hiện tại):**
+> Phần này do **antigravity** đảm nhiệm. Backend đã sẵn sàng — xem trước khi code:
+>
+> - **Base URL & auth:** dùng `frontend/src/shared/api/httpClient.ts` (base `/api`, `withCredentials`,
+>   tự gắn `X-XSRF-TOKEN` + auto-refresh khi 401) — mọi mutating request POST/PUT/DELETE phải đi qua
+>   instance này. Token truy cập nằm trong HttpOnly cookie, không cần thao tác thủ công.
+> - **DTO/JSON:** backend trả **camelCase** (records PascalCase → camelCase qua mặc định ASP.NET/SignalR).
+>   Field mẫu: `TaskResponse { id, boardId, columnId, title, description, position, assigneeId,
+>   assigneeName, dueDate, priority?, createdAt, updatedAt, completedAt, labels[], commentCount }`
+>   với `priority ∈ 'Low'|'Medium'|'High'|'Urgent' | null`; `ColumnResponse { id, boardId, name,
+>   position, isDone, createdAt, updatedAt, tasks[] }`; `BoardResponse` (full) gồm `columns` mỗi cột
+>   mang `tasks`. Định nghĩa TS nên viết tay theo `src/Modules/Board/DTOs/*.cs` (không cần NSwag).
+> - **REST endpoints đã verify:** Boards `/api/workspaces/{wsId}/boards[/{boardId}]`; Columns
+>   `/api/boards/{boardId}/columns` + `PUT /reorder`; Tasks `/api/boards/{boardId}/tasks[/{taskId}]
+>   [/move]`; Labels `/api/workspaces/{wsId}/labels` + `/api/tasks/{taskId}/labels[/{labelId}]`;
+>   Comments `/api/tasks/{taskId}/comments[/{commentId}]`. Status: create → 201, update → 200,
+>   delete → 204, errors → 400/403/404/409 `{ error }`.
+> - **Hub SignalR:** URL `/hubs/board` (cùng origin qua Vite proxy, cookie auth tự động gửi kèm —
+>   đừng set Authorization header thủ công; `access_token` query cũng được chấp nhận cho WS).
+>   Luồng: connect → `invoke("JoinBoard", boardId)` → mọi client trong group `board-{boardId}` nhận
+>   sự kiện (kể cả client gây ra — tự xử lý double-update phía client). Unmount → `LeaveBoard` + stop.
+> - **Events nhận được (tên method = tên dưới đây):** `TaskCreated|TaskUpdated` → `TaskResponse`;
+>   `TaskMoved` → `{ taskId, fromColumnId, toColumnId, position }` (position là index sau khi server
+>   đã renumber — dùng làm thứ tự chính xác); `TaskDeleted` → `{ taskId }`; `ColumnCreated|
+>   ColumnUpdated` → `ColumnResponse`; `ColumnsReordered` → mảng `{ id, position }`; `ColumnDeleted`
+>   → `{ columnId }`; `CommentAdded` → `CommentResponse`; `CommentDeleted` → `{ commentId, taskId }`.
+> - **Ngữ nghĩa vị trí:** vị trí task trong cột luôn 0..n-1 (server renumber khi move/create thêm vào
+>   cuối); reorder column gửi cả danh sách `{id, position}`. Kéo-thả → `PUT .../move {columnId,
+>   position}` với optimistic update, revert khi lỗi (server đã thử lại/renumber chuẩn).
+> - **completed_at:** tự set khi task vào cột có `isDone: true`, clear khi rời đi — chỉ đọc hiển thị.
+> - **Hạn chế đã biết (§3 theo spec, cần cân nhắc khi làm §4):**
+>   1. **Gắn/gỡ label KHÔNG broadcast event** → client khác không thấy label đổi real-time;
+>      đề xuất: sau attach/detach gọi lại `GET /api/boards/{boardId}` (hoặc chờ bổ sung event sau).
+>   2. **Board CRUD & rename, sửa comment (PUT) không broadcast** → danh sách board nên refetch khi
+>      điều hướng/quay lại trang; sửa comment chỉ tác giả thấy (client khác refetch comments).
+>   3. Xoá column trả 409 nếu còn task (kể cả task đã xoá mềm) — UI cần bắt lỗi và thông báo.
+>   4. Chưa có endpoint `GET /api/workspaces` (liệt kê workspace theo membership) — để có trang
+>      `/workspaces/:workspaceId/boards` cần chọn workspace; tạm thời lấy id qua URL/dev hoặc
+>      thêm 1 endpoint nhỏ phía backend.
+> - **Xem thêm:** `README.md` root (mục Trạng thái Giai đoạn 2), `src/Modules/Board/TeamNexus.Modules.Board/README.md`
+>   (bảng endpoints + events + payload).
 
 ### 4.1 Cài đặt & Cấu trúc
 
