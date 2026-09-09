@@ -1,0 +1,14 @@
+<Project>
+
+  <!--
+    TeamNexus – shared build properties for all .NET projects (Modular Monolith).
+    Keep target framework and common compiler settings in ONE place.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+</Project>
