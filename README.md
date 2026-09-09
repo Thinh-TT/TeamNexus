@@ -47,3 +47,11 @@ npm run dev
 - [x] §2 Schema PostgreSQL (EF Core migration) — `TeamNexusDbContext` tại `src/TeamNexus.Persistence`, migration `InitialSchema` đã áp dụng lên DB `TeamNexus` local
 - [x] §3 Auth Backend — GitHub OAuth ✅ (Google chờ credentials), JWT + refresh HttpOnly cookie + rotate, CSRF, RBAC policies + endpoint mẫu
 - [x] §4 Auth Frontend (login, protected routes, auto-refresh)
+
+## Trạng thái (Giai đoạn 2 – Kanban Core)
+
+- [x] §1 Schema Kanban (EF migration `Phase2KanbanSchema`) — thêm `board_columns`, `tasks`, `labels`, `task_labels`, `task_comments` (đã migrate lên DB local)
+- [x] §2 Backend Module Board — CRUD Board/Column/Task + Label/Comment (Minimal API, quyền theo workspace_members.role), migration `Phase2BoardColumnIsDone` (cột `is_done`) — verify 40 check API
+- [ ] §3 SignalR Real-time (BoardHub, broadcast theo board group)
+- [ ] §4 Frontend Kanban UI (drag & drop, useBoardHub)
+- [ ] §5 Kiểm thử & hoàn thiện

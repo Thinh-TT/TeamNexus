@@ -1,12 +1,12 @@
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
 
-namespace TeamNexus.Modules.Auth.Endpoints;
+namespace TeamNexus.Shared.Endpoints;
 
 /// <summary>
 /// Endpoint filter enforcing the anti-CSRF token on state-changing endpoints:
 /// the client must echo the antiforgery request token (from the XSRF-TOKEN cookie)
-/// in the X-XSRF-TOKEN header (Phase 1 §3.2).
+/// in the X-XSRF-TOKEN header (Phase 1 §3.2). Shared by all feature modules.
 /// </summary>
 public sealed class AntiforgeryValidationEndpointFilter : IEndpointFilter
 {

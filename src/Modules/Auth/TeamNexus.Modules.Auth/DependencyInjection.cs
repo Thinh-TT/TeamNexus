@@ -14,6 +14,7 @@ using TeamNexus.Modules.Auth.Services;
 using TeamNexus.Persistence;
 using TeamNexus.Persistence.Data;
 using TeamNexus.Persistence.Data.Entities;
+using TeamNexus.Shared.Endpoints;
 using AspNet.Security.OAuth.GitHub;
 
 namespace TeamNexus.Modules.Auth;

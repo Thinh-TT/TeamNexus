@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TeamNexus.Persistence.Data;
@@ -11,9 +12,11 @@ using TeamNexus.Persistence.Data;
 namespace TeamNexus.Persistence.Migrations
 {
     [DbContext(typeof(TeamNexusDbContext))]
-    partial class TeamNexusDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260909122823_Phase2BoardColumnIsDone")]
+    partial class Phase2BoardColumnIsDone
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

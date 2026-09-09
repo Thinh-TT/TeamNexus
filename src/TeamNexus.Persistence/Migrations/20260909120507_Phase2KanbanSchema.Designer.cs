@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TeamNexus.Persistence.Data;
@@ -11,9 +12,11 @@ using TeamNexus.Persistence.Data;
 namespace TeamNexus.Persistence.Migrations
 {
     [DbContext(typeof(TeamNexusDbContext))]
-    partial class TeamNexusDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260909120507_Phase2KanbanSchema")]
+    partial class Phase2KanbanSchema
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -360,12 +363,6 @@ namespace TeamNexus.Persistence.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
-
-                    b.Property<bool>("IsDone")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false)
-                        .HasColumnName("is_done");
 
                     b.Property<string>("Name")
                         .IsRequired()

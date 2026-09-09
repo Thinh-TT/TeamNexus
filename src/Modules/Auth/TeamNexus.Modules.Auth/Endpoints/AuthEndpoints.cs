@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using TeamNexus.Modules.Auth.Services;
 using TeamNexus.Persistence.Data.Entities;
+using TeamNexus.Shared.Endpoints;
 
 namespace TeamNexus.Modules.Auth.Endpoints;
 

@@ -1,6 +1,8 @@
 using Scalar.AspNetCore;
 using TeamNexus.Modules.Auth;
 using TeamNexus.Modules.Auth.Endpoints;
+using TeamNexus.Modules.Board;
+using TeamNexus.Modules.Board.Endpoints;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +18,9 @@ builder.Services.AddOpenApi();
 // Each module exposes one extension method, e.g. builder.Services.AddAuthModule(...).
 // Auth internals (DbContext, Identity, OAuth, JWT) arrive in Phase 1 §2–§3.
 builder.Services.AddAuthModule(builder.Configuration);
+
+// Board module: Kanban CRUD services (Phase 2 §2); SignalR hub wiring arrives in §3.
+builder.Services.AddBoardModule();
 
 // ---- CORS ------------------------------------------------------------
 // Dev convenience: during Phase 1 the frontend (Vite, :5173) talks to this API
@@ -65,5 +70,6 @@ api.MapGet("/health", () => Results.Ok(new
 
 // ---- Feature module endpoints -----------------------------------------
 app.MapAuthModuleEndpoints();
+app.MapBoardModuleEndpoints();
 
 app.Run();

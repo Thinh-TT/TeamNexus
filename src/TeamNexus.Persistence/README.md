@@ -4,7 +4,8 @@ Sở hữu **một DbContext duy nhất** (`TeamNexusDbContext`) cùng toàn b�
 EF configurations và **một chuỗi migration duy nhất** cho toàn bộ modular monolith
 (theo `Project-Documents/04-database-design.md` §1.1).
 
-- `Data/Entities/` – entities (Identity + Workspace/Board/RefreshToken ở Giai đoạn 1).
+- `Data/Entities/` – entities (Identity + Workspace/Board/RefreshToken ở Giai đoạn 1; BoardColumn/
+  BoardTask/Label/TaskLabel/TaskComment ở Giai đoạn 2).
 - `Data/Configurations/` – `IEntityTypeConfiguration` (snake_case tên bảng, FK, index,
   CHECK constraint, soft-delete query filters).
 - `Data/IdentityRoles.cs` – 3 role Admin/Manager/Member (seed qua migration, Guid cố định).

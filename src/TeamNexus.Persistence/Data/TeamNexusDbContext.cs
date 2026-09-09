@@ -24,6 +24,16 @@ public class TeamNexusDbContext
 
     public DbSet<Board> Boards => Set<Board>();
 
+    public DbSet<BoardColumn> BoardColumns => Set<BoardColumn>();
+
+    public DbSet<BoardTask> Tasks => Set<BoardTask>();
+
+    public DbSet<Label> Labels => Set<Label>();
+
+    public DbSet<TaskLabel> TaskLabels => Set<TaskLabel>();
+
+    public DbSet<TaskComment> TaskComments => Set<TaskComment>();
+
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
