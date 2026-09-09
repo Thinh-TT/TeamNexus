@@ -1,5 +1,6 @@
 using Scalar.AspNetCore;
 using TeamNexus.Modules.Auth;
+using TeamNexus.Modules.Auth.Endpoints;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,6 +50,10 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors("WebFrontend");
 
+// Auth: JWT bearer (access token from HttpOnly cookie) + authorization policies.
+app.UseAuthentication();
+app.UseAuthorization();
+
 // ---- Health check ----------------------------------------------------
 var api = app.MapGroup("/api");
 api.MapGet("/health", () => Results.Ok(new
@@ -57,5 +62,8 @@ api.MapGet("/health", () => Results.Ok(new
     service = "TeamNexus.Api",
     time = DateTimeOffset.UtcNow,
 }));
+
+// ---- Feature module endpoints -----------------------------------------
+app.MapAuthModuleEndpoints();
 
 app.Run();
