@@ -55,46 +55,46 @@
 ## 3. Auth Backend
 
 ### 3.1 OAuth 2.0 – Google & GitHub
-- [ ] Đăng ký OAuth App trên Google Cloud Console (Client ID + Secret)
-- [ ] Đăng ký OAuth App trên GitHub Developer Settings (Client ID + Secret)
-- [ ] Cấu hình handler trong `Program.cs`:
+- [ ] Đăng ký OAuth App trên Google Cloud Console (Client ID + Secret) — *thêm sau*
+- [x] Đăng ký OAuth App trên GitHub Developer Settings (Client ID + Secret)
+- [x] Cấu hình handler (đặt trong `AddAuthModule` của `TeamNexus.Modules.Auth`, không nằm trực tiếp ở `Program.cs`):
   ```csharp
-  .AddGoogle(...)
-  .AddGitHub(...)  // package: AspNet.Security.OAuth.GitHub
+  .AddGitHub(...)  // package: AspNet.Security.OAuth.GitHub (Google thêm sau: .AddGoogle(...))
   ```
-- [ ] Cài handler `OnCreatingTicket`: upsert `ApplicationUser` từ claims OAuth (email, name, avatar)
-- [ ] Endpoint `GET /api/auth/login/{provider}` → redirect challenge OAuth
-- [ ] Endpoint `GET /api/auth/callback/{provider}` → nhận callback, issue JWT + refresh token
-- [ ] Verify: đăng nhập qua Google và GitHub thành công, user được tạo trong DB
+- [x] Upsert `ApplicationUser` từ claims OAuth (email, name, avatar) — hiện thực trong `AuthService.HandleExternalLoginAsync` (flow external-cookie, tương đương `OnCreatingTicket`)
+- [x] Endpoint `GET /api/auth/login/{provider}` → redirect challenge OAuth (`github` hoạt động; `google` → 400 "chưa cấu hình")
+- [x] Endpoint callback OAuth → issue JWT + refresh token: `/api/auth/callback/github` do OAuth handler xử lý handshake → `/api/auth/external-login` upsert user + cấp token
+- [x] Verify: đăng nhập qua **GitHub** thành công, user được tạo/cập nhật trong DB (`users` + `user_logins` + role `Member`)
+- [ ] Verify: đăng nhập qua **Google** — chưa kích hoạt (thêm sau)
 
 ### 3.2 JWT + Refresh Token (HttpOnly Cookie)
-- [ ] Viết `JwtService`:
+- [x] Viết `JwtService` (`src/Modules/Auth/.../Services/JwtService.cs`):
   - `GenerateAccessToken(user, roles)` → JWT (expire: 15 phút)
   - `GenerateRefreshToken()` → random string (expire: 7 ngày)
-- [ ] Khi issue token: set 2 HttpOnly Cookie:
-  - `access_token`: Secure, SameSite=Lax, HttpOnly, expire 15p
-  - `refresh_token`: Secure, SameSite=Lax, HttpOnly, expire 7 ngày
-- [ ] Refresh token lưu DB (bảng `RefreshToken`) ở dạng **hashed** (SHA-256)
-- [ ] Endpoint `POST /api/auth/refresh`:
-  - Đọc `refresh_token` cookie → validate hash với DB → rotate (revoke cũ, issue cặp token mới)
-  - Trả lỗi `401` nếu token hết hạn hoặc đã bị revoke
-- [ ] Endpoint `POST /api/auth/logout`:
+- [x] Khi issue token: set 2 HttpOnly Cookie (qua `TokenCookieService`):
+  - `access_token`: Secure (khi HTTPS), SameSite=Lax, HttpOnly, expire 15p
+  - `refresh_token`: Secure (khi HTTPS), SameSite=Lax, HttpOnly, expire 7 ngày
+- [x] Refresh token lưu DB (bảng `RefreshToken`) ở dạng **hashed** (SHA-256)
+- [x] Endpoint `POST /api/auth/refresh`:
+  - Đọc `refresh_token` cookie → validate hash với DB → rotate (revoke cũ, issue cặp token mới, ghi `replaced_by_token_id`)
+  - Trả lỗi `401` nếu token hết hạn, đã bị revoke, hoặc bị **dùng lại (replay → revoke cả chuỗi)**
+- [x] Endpoint `POST /api/auth/logout`:
   - Revoke refresh token trong DB
   - Xóa cả 2 cookie
-- [ ] Cấu hình anti-CSRF: dùng `AntiForgery` middleware của ASP.NET Core, gắn token vào request header `X-XSRF-TOKEN`
-- [ ] Verify: access token expire → refresh tự động → cookie mới được set; logout → cookie bị xóa, token cũ bị reject
+- [x] Cấu hình anti-CSRF: `AddAntiforgery` (ASP.NET Core) + header `X-XSRF-TOKEN`; endpoint `/api/auth/antiforgery` cấp token (cookie `XSRF-TOKEN`)
+- [x] Verify: refresh → xoay token, cookie mới được set, token cũ revoked (replay bị 401 + revoke chuỗi); logout → cookie bị xóa, token cũ bị reject (verify bằng API test trên user tạm)
 
 ### 3.3 Policy-based Authorization (RBAC)
-- [ ] Định nghĩa 3 claim/role: `Admin`, `Manager`, `Member`
-- [ ] Đăng ký Authorization Policies trong DI:
+- [x] Định nghĩa 3 claim/role: `Admin`, `Manager`, `Member` (seed qua migration `InitialSchema`)
+- [x] Đăng ký Authorization Policies trong DI:
   - `"AdminOnly"` → RequireClaim role = Admin
   - `"ManagerOrAbove"` → RequireClaim role = Admin | Manager
   - `"MemberOrAbove"` → RequireClaim role = Admin | Manager | Member
-- [ ] Tạo endpoint mẫu để verify từng policy:
+- [x] Tạo endpoint mẫu để verify từng policy:
   - `GET /api/auth/me` → trả thông tin user đang đăng nhập (yêu cầu `MemberOrAbove`)
   - `GET /api/admin/ping` → chỉ Admin (yêu cầu `"AdminOnly"`)
   - `GET /api/manager/ping` → Manager trở lên (yêu cầu `"ManagerOrAbove"`)
-- [ ] Verify: gọi endpoint đúng role → 200; sai role → 403
+- [x] Verify: gọi endpoint đúng role → 200; sai role → 403 (test qua trình duyệt với GitHub login + gán/thu hồi role bằng SQL)
 
 ---
 
@@ -126,10 +126,10 @@
 
 - [x] Project backend (Modular Monolith) và frontend (React/Vite) khởi tạo xong, `build` và `run` không lỗi
 - [x] Schema PostgreSQL (`User`, `Role`, `Workspace`, `Board`, `RefreshToken`) đã migrate thành công
-- [ ] Đăng nhập được qua **Google OAuth** (user được tạo/cập nhật trong DB)
-- [ ] Đăng nhập được qua **GitHub OAuth** (user được tạo/cập nhật trong DB)
-- [ ] JWT access token + refresh token cấp qua HttpOnly Cookie, hoạt động đúng
-- [ ] Rotate refresh token mỗi lần dùng (token cũ bị revoke ngay sau khi refresh)
-- [ ] Cơ chế CSRF (anti-forgery token) hoạt động
-- [ ] Phân quyền Policy-based cho 3 role áp dụng được trên ít nhất 1 endpoint mẫu mỗi loại
-- [ ] Frontend tự động refresh token khi nhận 401, redirect login khi refresh thất bại
+- [ ] Đăng nhập được qua **Google OAuth** (user được tạo/cập nhật trong DB) — *thêm sau*
+- [x] Đăng nhập được qua **GitHub OAuth** (user được tạo/cập nhật trong DB)
+- [x] JWT access token + refresh token cấp qua HttpOnly Cookie, hoạt động đúng
+- [x] Rotate refresh token mỗi lần dùng (token cũ bị revoke ngay sau khi refresh)
+- [x] Cơ chế CSRF (anti-forgery token) hoạt động
+- [x] Phân quyền Policy-based cho 3 role áp dụng được trên ít nhất 1 endpoint mẫu mỗi loại
+- [ ] Frontend tự động refresh token khi nhận 401, redirect login khi refresh thất bại — *thuộc §4*

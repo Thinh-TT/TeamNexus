@@ -45,5 +45,5 @@ npm run dev
 
 - [x] §1 Khởi tạo Project — backend modular monolith + frontend Vite build/run được
 - [x] §2 Schema PostgreSQL (EF Core migration) — `TeamNexusDbContext` tại `src/TeamNexus.Persistence`, migration `InitialSchema` đã áp dụng lên DB `TeamNexus` local
-- [ ] §3 Auth Backend (OAuth Google/GitHub, JWT + refresh token HttpOnly cookie, RBAC)
+- [x] §3 Auth Backend — GitHub OAuth ✅ (Google chờ credentials), JWT + refresh HttpOnly cookie + rotate, CSRF, RBAC policies + endpoint mẫu
 - [ ] §4 Auth Frontend (login, protected routes, auto-refresh)
