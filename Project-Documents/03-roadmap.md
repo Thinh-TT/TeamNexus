@@ -53,6 +53,8 @@ Xây BackgroundService quét log định kỳ, phát hiện bottleneck/quá tả
 - [ ] Phát hiện được ít nhất 1 loại tín hiệu (vd: task quá hạn dồn ứ ở 1 người, task đứng yên lâu ngày)
 - [ ] Kết quả cảnh báo chỉ hiển thị cho Manager, không public toàn team
 
+> **Kế hoạch chi tiết:** `tasks/phase-5-ai-observer.md` (đã lập — 3 tín hiệu bắt buộc `OverdueTask`/`StalledTask`/`Overload` + `Bottleneck` optional, kênh gửi chỉ in-app đợt này, email ghi chú cho tương lai). Schema 3 bảng mới đã được chốt trong `04-database-design.md` §3.6, nhưng **chưa** hiện thực — các ô trên vẫn `[ ]` cho tới khi verify xong §7.1 của file task.
+
 ## Giai đoạn 6: Báo cáo & Xuất dữ liệu
 
 Xây tính năng tổng hợp tiến độ/hiệu suất, xuất PDF (QuestPDF) và Excel (ClosedXML) theo yêu cầu, generate on-demand.
