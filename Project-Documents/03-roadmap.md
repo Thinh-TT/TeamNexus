@@ -69,6 +69,11 @@ Xây tính năng tổng hợp tiến độ/hiệu suất, xuất PDF (QuestPDF) 
 - [ ] Xuất báo cáo ra Excel (ClosedXML) đúng định dạng, mở được
 - [ ] File generate on-demand, không lưu trữ vĩnh viễn trên server
 
+> **Trạng thái:** Kế hoạch & chia task đã chốt ở `tasks/phase-6-reporting-export.md` (§0 quyết định kiến trúc D1–D20:
+> module `Reporting` **mới**, **không** schema/migration — báo cáo là projection read-only; quyền **Manager/Admin**;
+> phạm vi workspace + lọc `?boardId=`; cửa sổ `?from=&to=` mặc định 30 ngày clamp 365; file là `byte[]` trong RAM,
+> cap `Reports:MaxExportRows = 5000`). Các ô trên sẽ được tick sau khi verify backend + frontend theo §7.1–§7.3 của file task.
+
 ## Giai đoạn 7: Hoàn thiện, Test & Deploy
 
 Viết test (xUnit, Vitest), dọn UI/UX, cấu hình CI/CD bằng GitHub Actions, deploy backend/frontend/DB lên hạ tầng free-tier đã chọn, xử lý các vấn đề cold-start/SignalR reconnect.

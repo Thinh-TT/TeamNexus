@@ -363,7 +363,20 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 
 ### 3.7 Module Reporting (Giai đoạn 6)
 
-**Không tạo bảng lưu trữ.** File PDF (QuestPDF) / Excel (ClosedXML) được **generate on-demand** và không lưu lâu dài trên server (theo `02-tech-stack-decisions.md` §2.5). Dữ liệu báo cáo được tổng hợp trực tiếp từ `tasks`, `board_columns`, `activity_logs` tại thời điểm yêu cầu.
+**Không tạo bảng lưu trữ.** File PDF (QuestPDF) / Excel (ClosedXML) được **generate on-demand** và không lưu lâu dài trên server (theo `02-tech-stack-decisions.md` §2.5). Dữ liệu báo cáo được tổng hợp trực tiếp từ `tasks`, `boards`, `board_columns`, `activity_logs`, `ai_observer_runs` tại thời điểm yêu cầu.
+
+> **Ghi chú tinh chỉnh (Giai đoạn 6 — chốt ở bước lập kế hoạch, chi tiết `tasks/phase-6-reporting-export.md` §0):**
+> - Báo cáo là **projection read-only**: module `Reporting` (project `TeamNexus.Modules.Reporting`) **không** có entity, **không** có
+>   migration, **không** ghi bất kỳ bảng nào (kể cả `activity_logs`/`notifications`/`ai_action_logs`). Không có bảng lịch sử báo cáo.
+> - Nguồn dữ liệu: `tasks` + `board_columns` (tiến độ hiện tại & hiệu suất theo `completed_at`/`due_date`), `activity_logs` (khối hoạt động
+>   trong cửa sổ), `ai_observer_runs.summary` (khối "sức khoẻ dự án").
+> - Quyền: **Manager/Admin** của workspace (Member ⇒ 403) cho cả 3 endpoint (`GET .../reports/summary`, `GET .../reports/export`,
+>   `GET .../reports/boards`); phạm vi workspace, lọc tuỳ chọn `?boardId=`.
+> - Cửa sổ thời gian `?from=&to=` (mặc định **30 ngày**, clamp ≤ **365 ngày**); mọi thời lượng trả bằng **giờ**, tỉ lệ bằng **%**.
+> - File là **`byte[]` trong RAM** (`Results.File`) — không ghi disk/temp/blob; có `Content-Length` + `Content-Disposition` (tên file ASCII);
+>   cap `Reports:MaxExportRows` (5000) chống phình bộ nhớ trên free-tier.
+> - **Không** index/cột mới: các truy vấn dùng đúng index hiện có (`tasks.board_id`, `tasks.assignee_id`,
+>   `activity_logs (workspace_id, created_at)`, `boards.workspace_id`).
 
 ---
 
@@ -428,6 +441,7 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 - **Free-tier quota:** Neon/Supabase giới hạn storage/compute — không lưu file report lâu dài; cần chính sách retention cho `activity_logs` (ghi chú: dọn log cũ định kỳ để không phình quota). **Giai đoạn 5 chốt cơ chế:** prune `activity_logs` cũ hơn `Observer:RetentionDays` (mặc định 30 ngày) ở cuối mỗi run thành công, có cap số row mỗi lần xoá.
 - **AI Observer (Giai đoạn 5):** Observer là lớp **đọc/cảnh báo** — chỉ ghi `activity_logs`/`notifications`/`ai_observer_runs`, **không** ghi `tasks`/`labels`/`task_labels` và **không** đi qua `ai_action_logs`. Chống chạy chồng bằng `pg_try_advisory_lock` (1 run/workspace tại một thời điểm, toàn hệ thống); chống cảnh báo trùng bằng cửa sổ dedupe `(workspace_id, type, entity)` mặc định 24h; `ai_observer_runs.status = Skipped` khi Observer tắt hoặc không lấy được lock (không phải lỗi).
 - **Bất biến của log:** `activity_logs` **không** có query filter và **không** soft-delete — đây là event store chỉ ghi thêm; việc dọn dữ liệu chỉ theo chính sách retention ở trên. `notifications` cũng không soft-delete (lịch sử cảnh báo giữ nguyên kể cả khi Manager rời workspace; quyền đọc được lọc theo `recipient_user_id`).
+- **Reporting (Giai đoạn 6):** báo cáo là **projection read-only** trên `tasks`/`boards`/`board_columns`/`activity_logs`/`ai_observer_runs` — không bảng mới, không soft-delete, không retention riêng, không ghi dữ liệu, không đi qua `ai_action_logs`. File export sinh trong RAM rồi trả về client; **không** lưu trên server (xem §3.7).
 - **Nhất quán `tasks.board_id` / `tasks.column_id`:** app layer phải đảm bảo task luôn thuộc cột thuộc đúng board; khuyến nghị validate ở service thay vì trigger để giữ logic tập trung.
 - **Cascade delete:** không dùng cascade vật lý; việc xóa workspace/board phải xử lý mềm (soft delete) và cân nhắc chính sách xóa các entity con.
 
@@ -438,7 +452,7 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 **Giả định chính:**
 - Dữ liệu văn bản (name/description/title/content) không giới hạn độ dài cứng ở cấp DB trong tài liệu này; sẽ ràng buộc `varchar(n)`/`maxLength` cụ thể khi hiện thực nếu cần.
 - MVP dùng 1 assignee/task; đa assignee để giai đoạn sau.
-- Bảng giai đoạn 2–6 là thiết kế sơ bộ, có thể thay đổi khi hiện thực từng giai đoạn. Riêng **Giai đoạn 5 (§3.6)** đã được tinh chỉnh ở bước lập kế hoạch theo `tasks/phase-5-ai-observer.md` §0 (thêm `Skipped`, chốt fan-out notification, retention, advisory lock).
+- Bảng giai đoạn 2–6 là thiết kế sơ bộ, có thể thay đổi khi hiện thực từng giai đoạn. Riêng **Giai đoạn 5 (§3.6)** đã được tinh chỉnh ở bước lập kế hoạch theo `tasks/phase-5-ai-observer.md` §0 (thêm `Skipped`, chốt fan-out notification, retention, advisory lock). **Giai đoạn 6 (§3.7)** đã chốt ở bước lập kế hoạch theo `tasks/phase-6-reporting-export.md` §0 (không bảng mới, quyền Manager/Admin, cửa sổ 30 ngày clamp 365, cap `MaxExportRows`, file trong RAM).
 
 **Tài liệu nguồn:**
 - `Project-Documents/01-system-specification.md`

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Reporting module (Phase 6): tiến độ/hiệu suất + xuất PDF/Excel on-demand.
+       §1 = AGGREGATION THUẦN (chỉ BCL, không EF Core, không HTTP — verify bằng harness thuần).
+       §2 = options/DI, §3 = ReportService (nơi duy nhất chạm DB),
+       §4 = renderer QuestPDF/ClosedXML + ReportExportService,
+       §5 = DTO + endpoints.
+       References Shared (endpoint filters) + Persistence (single DbContext) + Board
+       (IWorkspaceAccess, DomainExceptionFilter, BoardModuleException — dùng từ §3/§5). -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- §4: sinh file trong RAM, không lưu disk (Phase 6 §0 D11/D15). Pin chính xác để build tất định. -->
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
+    <PackageReference Include="QuestPDF" Version="2026.8.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Shared\TeamNexus.Shared\TeamNexus.Shared.csproj" />
+    <ProjectReference Include="..\..\..\TeamNexus.Persistence\TeamNexus.Persistence.csproj" />
+    <ProjectReference Include="..\..\Board\TeamNexus.Modules.Board\TeamNexus.Modules.Board.csproj" />
+  </ItemGroup>
+
+</Project>
