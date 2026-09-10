@@ -17,6 +17,7 @@ public static class BoardEndpoints
         endpoints.MapTasksEndpoints();
         endpoints.MapLabelsEndpoints();
         endpoints.MapCommentsEndpoints();
+        endpoints.MapMembersEndpoints();
 
         return endpoints;
     }

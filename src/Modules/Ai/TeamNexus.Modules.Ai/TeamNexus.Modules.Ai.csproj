@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Ai module (Phase 3): AI Smart Setup qua DeepSeek API.
+       §1 = cấu hình DeepSeek + đăng ký DI (options, named HttpClient, endpoint filters).
+       References Shared (CSRF filter) + Persistence (single DbContext) + Board
+       (IWorkspaceAccess, BoardModuleException, DomainExceptionFilter — dùng ở §2/§4). -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Shared\TeamNexus.Shared\TeamNexus.Shared.csproj" />
+    <ProjectReference Include="..\..\..\TeamNexus.Persistence\TeamNexus.Persistence.csproj" />
+    <ProjectReference Include="..\..\Board\TeamNexus.Modules.Board\TeamNexus.Modules.Board.csproj" />
+  </ItemGroup>
+
+</Project>

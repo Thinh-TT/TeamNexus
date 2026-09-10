@@ -15,6 +15,7 @@ public static class BoardModule
     public static IServiceCollection AddBoardModule(this IServiceCollection services)
     {
         services.AddScoped<IWorkspaceAccess, WorkspaceAccess>();
+        services.AddScoped<IWorkspaceMemberService, WorkspaceMemberService>();
         services.AddScoped<IBoardService, BoardService>();
         services.AddScoped<IColumnService, ColumnService>();
         services.AddScoped<ITaskService, TaskService>();

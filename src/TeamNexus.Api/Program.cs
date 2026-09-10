@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
+using TeamNexus.Modules.Ai;
 using TeamNexus.Modules.Auth;
 using TeamNexus.Modules.Auth.Endpoints;
 using TeamNexus.Modules.Board;
@@ -23,6 +24,9 @@ builder.Services.AddAuthModule(builder.Configuration);
 
 // Board module: Kanban CRUD services + SignalR hub registration (Phase 2 §2–§3).
 builder.Services.AddBoardModule();
+
+// Ai module: DeepSeek config + DI wiring for AI Smart Setup (Phase 3 §1).
+builder.Services.AddAiModule(builder.Configuration);
 
 // ---- CORS ------------------------------------------------------------
 // Dev convenience: during Phase 1 the frontend (Vite, :5173) talks to this API
@@ -122,6 +126,7 @@ api.MapGet("/workspaces", async (TeamNexus.Persistence.Data.TeamNexusDbContext d
 // ---- Feature module endpoints -----------------------------------------
 app.MapAuthModuleEndpoints();
 app.MapBoardModuleEndpoints();
+app.MapAiModuleEndpoints();
 app.MapBoardHub();
 
 app.Run();

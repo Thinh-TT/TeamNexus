@@ -10,6 +10,7 @@ Quyền kiểm tra theo **workspace_members.role** (không dùng role Identity t
 | Hành động | Yêu cầu |
 |---|---|
 | Đọc board/column/task/label/comment; tạo/sửa/di chuyển/xoá task; bình luận; gắn/gỡ label | Member+ trong workspace của board |
+| Đọc danh sách thành viên workspace (`GET .../members`) | Member+ |
 | Tạo/sửa/xoá board, column, reorder; tạo/xoá label workspace | Manager/Admin |
 | Sửa/xoá comment | Tác giả, hoặc Manager/Admin của workspace |
 
@@ -25,6 +26,7 @@ header `X-XSRF-TOKEN` (lấy ở `GET /api/auth/antiforgery`).
 | Tasks | `GET|POST /api/boards/{boardId}/tasks`, `GET|PUT|DELETE /tasks/{taskId}`, `PUT /tasks/{taskId}/move` |
 | Labels | `GET|POST /api/workspaces/{workspaceId}/labels`, `DELETE /labels/{labelId}`, `POST|DELETE /api/tasks/{taskId}/labels[/{labelId}]` |
 | Comments | `GET|POST /api/tasks/{taskId}/comments`, `PUT|DELETE /comments/{commentId}` |
+| Members | `GET /api/workspaces/{workspaceId}/members` → `[{ userId, displayName, role, avatarUrl }]` (Phase 3 §3.1) |
 | Real-time | `WS /hubs/board` (yêu cầu đăng nhập) — `JoinBoard(boardId)`, `LeaveBoard(boardId)` |
 
 ## SignalR (Phase 2 §3)
