@@ -10,6 +10,7 @@ using TeamNexus.Modules.Ai.Options;
 using TeamNexus.Modules.Ai.Services;
 using TeamNexus.Modules.Ai.Services.Appliers;
 using TeamNexus.Modules.Board.Endpoints;
+using TeamNexus.Modules.Board.Services;
 using TeamNexus.Shared.Endpoints;
 
 namespace TeamNexus.Modules.Ai;
@@ -73,6 +74,22 @@ public static class AiModule
         services.AddScoped<IAiActionService, AiActionService>();
         services.AddScoped<IAiActionApplier, CreateSubtasksApplier>();
 
+        // ---- Activity log (Phase 5 §2) ---------------------------------------
+        // Real adapter for the port declared by the Board module (which registers a no-op
+        // default). This line must stay AFTER AddBoardModule in Program.cs to win the resolve.
+        services.AddScoped<IActivityLogWriter, ActivityLogWriter>();
+
+        // ---- AI Observer (Phase 5 §5.4) --------------------------------------
+        // Options are bound here (the POCO itself lives in §3); the notification writer and the
+        // scan service are scoped, and the periodic driver is a hosted service so it starts with
+        // the host. ObserverBackgroundService only needs IServiceScopeFactory, so scoped services
+        // resolve inside its own scope (no captive dependency).
+        services.AddOptions<ObserverOptions>()
+            .Bind(configuration.GetSection(ObserverOptions.SectionName));
+        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IObserverService, ObserverService>();
+        services.AddHostedService<ObserverBackgroundService>();
+
         // ---- Endpoint filters (resolved from DI) -----------------------------
         // DomainExceptionFilter (Board) maps BoardModuleException → { error, status }
         // (bao gồm AiProviderException 502); AntiforgeryValidationEndpointFilter (Shared)
@@ -86,13 +103,16 @@ public static class AiModule
     }
 
     /// <summary>
-    /// Maps Ai module endpoint groups: the Smart Setup proposal endpoint (Phase 3 §3.2) and the
-    /// Accountability Layer endpoints (Phase 4 §3).
+    /// Maps Ai module endpoint groups: the Smart Setup proposal endpoint (Phase 3 §3.2), the
+    /// Accountability Layer endpoints (Phase 4 §3) and the AI Observer + notification endpoints
+    /// (Phase 5 §5).
     /// </summary>
     public static IEndpointRouteBuilder MapAiModuleEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapSmartSetupEndpoints();
         endpoints.MapAiActionEndpoints();
+        endpoints.MapObserverEndpoints();
+        endpoints.MapNotificationEndpoints();
 
         return endpoints;
     }
@@ -127,5 +147,19 @@ public static class AiModule
                 options.NormalizedBaseUrl,
                 options.TimeoutSeconds);
         }
+
+        // Observer configuration (Phase 5 §5.4): one line so it is obvious at a glance whether the
+        // periodic scan is on and how aggressive it is. Contains no secrets.
+        var observer = configuration.GetSection(ObserverOptions.SectionName).Get<ObserverOptions>()
+                       ?? new ObserverOptions();
+
+        logger.LogInformation(
+            "Ai module: Observer enabled={Enabled}, interval={Interval}, lookback={LookbackHours}h, "
+            + "dedupe={DeduplicationWindowHours}h, minSeverity={MinSeverityToNotify}.",
+            observer.Enabled,
+            observer.Interval,
+            observer.LookbackHours,
+            observer.DeduplicationWindowHours,
+            observer.MinSeverityToNotify);
     }
 }

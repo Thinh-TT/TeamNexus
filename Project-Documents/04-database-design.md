@@ -321,9 +321,10 @@ Nguồn "log hệ thống" cho Observer quét định kỳ.
 | `user_id` | uuid | null | FK→`users` | Actor (nếu có) |
 | `entity_type` | text | — | | Loại entity (ví dụ `Task`, `Comment`) |
 | `entity_id` | uuid | null | | Id entity |
-| `action` | text | — | | `TaskCreated` / `TaskMoved` / `TaskCompleted` / … |
+| `action` | text | — | | `TaskCreated` / `TaskUpdated` / `TaskMoved` / `TaskCompleted` / `TaskDeleted` / `CommentAdded` |
 | `payload` | jsonb | null | | Chi tiết sự kiện (trạng thái trước/sau, …) |
 | `created_at` | timestamptz | — | | |
+| `updated_at` | timestamptz | — | | Stamp tự động qua `IAuditableEntity` (append-only ⇒ không mang thông tin) |
 
 #### `notifications`
 Cảnh báo gửi **riêng cho Manager** (không public toàn team).
@@ -350,8 +351,15 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 | `workspace_id` | uuid | — | FK→`workspaces`, IX | |
 | `started_at` | timestamptz | — | | |
 | `finished_at` | timestamptz | null | | |
-| `status` | text | — | | `Running` / `Completed` / `Failed` |
-| `summary` | jsonb | null | | Tổng kết lần chạy (tín hiệu phát hiện, token đã dùng, …) |
+| `status` | text | — | | `Running` / `Completed` / `Skipped` / `Failed` |
+| `summary` | jsonb | null | | Tổng kết lần chạy (tín hiệu phát hiện, notification đã tạo, token đã dùng, lý do skip/error, …) |
+
+> **Ghi chú tinh chỉnh (Giai đoạn 5):** ba bảng trên được tinh chỉnh khi hiện thực AI Observer (theo tinh thần "thiết kế sơ bộ, sẽ tinh chỉnh khi hiện thực" ở đầu tài liệu):
+> - `activity_logs` là **event store append-only**: **không** có global query filter (`deleted_at`) — log vẫn phải đọc được kể cả sau khi board/workspace bị soft-delete — và có thêm `updated_at` để giữ đúng interface `IAuditableEntity` chung. Bộ giá trị `action` đợt này: `TaskCreated`, `TaskUpdated`, `TaskMoved`, `TaskCompleted`, `TaskDeleted`, `CommentAdded` (text tự do — §4).
+> - `notifications` **fan-out theo người nhận**: 1 row / 1 Manager (hoặc Admin) — `recipient_user_id` là người nhận thật, `is_read`/`read_at` theo từng người, nhờ vậy đọc "cảnh báo chưa đọc của tôi" chỉ cần index `(recipient_user_id, is_read)` và **không** cần bảng junction riêng. Bộ giá trị `type` đợt này: `OverdueTask`, `StalledTask`, `Overload`, `Bottleneck` (text tự do — §4).
+> - `ai_observer_runs.status` bổ sung `Skipped` so với bản sơ bộ: dùng khi Observer đang tắt hoặc **không lấy được advisory lock** (một lần quét khác đang chạy) — trạng thái này **không** phải lỗi và **không** sinh notification.
+> - Mỗi run gắn với **một workspace** (1 row/workspace/lần quét); `summary` gồm `signalsDetected`, `signalsByType`, `truncatedSignals`, `findingsWritten`, `notificationsCreated`, `aiCalled`, `model`, `promptTokens`, `completionTokens`, `durationMs`, `skippedReason`, `error`.
+> - Observer là lớp **đọc/cảnh báo**: **không** ghi `tasks`/`labels`/`task_labels` và **không** đi qua `ai_action_logs`/`AiActionService`. Chi tiết quyết định (kèm advisory lock, dedupe 24h, retention) xem `tasks/phase-5-ai-observer.md` §0.
 
 ### 3.7 Module Reporting (Giai đoạn 6)
 
@@ -368,9 +376,10 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 | `TaskPriority` | `text` + CHECK | `Low`, `Medium`, `High`, `Urgent` | `tasks.priority` |
 | `AiActionStatus` | `text` + CHECK | `Pending`, `Approved`, `Rejected`, `Undone` | `ai_action_logs.status` |
 | `AiActionType` | `text` (tự do, bộ gợi ý) | `CreateSubtasks`, `AssignMember`, `SetLabels`, `MoveTasks`, … | `ai_action_logs.action` |
-| `ActivityAction` | `text` (tự do, bộ gợi ý) | `TaskCreated`, `TaskMoved`, `TaskCompleted`, `TaskDeleted`, `CommentAdded`, … | `activity_logs.action` |
-| `NotificationType` | `text` (tự do, bộ gợi ý) | `Bottleneck`, `Overload`, `ConflictPotential`, `OverdueTask`, … | `notifications.type` |
-| `ObserverRunStatus` | `text` | `Running`, `Completed`, `Failed` | `ai_observer_runs.status` |
+| `ActivityAction` | `text` (tự do, bộ gợi ý) | `TaskCreated`, `TaskUpdated`, `TaskMoved`, `TaskCompleted`, `TaskDeleted`, `CommentAdded`, … | `activity_logs.action` |
+| `NotificationType` | `text` (tự do, bộ gợi ý) | `OverdueTask`, `StalledTask`, `Overload`, `Bottleneck`, … | `notifications.type` |
+| `NotificationSeverity` | `text` (tự do, bộ gợi ý) | `Low`, `Medium`, `High`, `Critical` | `notifications.payload.severity` (không phải cột) |
+| `ObserverRunStatus` | `text` + CHECK | `Running`, `Completed`, `Skipped`, `Failed` | `ai_observer_runs.status` |
 
 > Nguyên tắc: enum có tập giá trị cố định (role, priority, status) dùng `CHECK`; enum dự kiến mở rộng (action type, notification type) dùng `text` tự do kèm bộ giá trị gợi ý để không phải sửa constraint mỗi lần thêm loại mới.
 
@@ -396,6 +405,8 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 | `notifications` | `(recipient_user_id, is_read)` | IX | Lấy cảnh báo chưa đọc của Manager |
 | `ai_observer_runs` | `workspace_id` | IX | Audit theo workspace |
 
+> Các FK còn lại (`activity_logs.board_id`/`user_id`, `notifications.workspace_id`, `ai_observer_runs.workspace_id`, …) **không** khai báo tường minh: EF Core sinh index theo FK convention (đúng tiền lệ Phase 4 §1.2 — FK `decided_by_user_id` cũng sinh index phụ, chấp nhận).
+
 ---
 
 ## 6. Chiến lược Migration
@@ -414,7 +425,9 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 - **Kanban đồng thời:** cập nhật `position`/`column_id` có thể xung đột giữa các client; chấp nhận **last-write-wins** ở giai đoạn này, client dùng optimistic update và đồng bộ lại khi server xác nhận (theo `02` §2.2).
 - **AI Smart Setup:** output JSON phải validate đúng schema trước khi ghi DB; không ghi thẳng — luôn qua `ai_action_logs` ở `Pending` rồi mới áp dụng (theo `02` §2.3).
 - **JSONB:** `basis`, `before/after_snapshot`, `payload`, `summary` chứa dữ liệu động; không dùng thay thế cột quan hệ cần lọc/truy vấn.
-- **Free-tier quota:** Neon/Supabase giới hạn storage/compute — không lưu file report lâu dài; cần chính sách retention cho `activity_logs` (ghi chú: dọn log cũ định kỳ để không phình quota).
+- **Free-tier quota:** Neon/Supabase giới hạn storage/compute — không lưu file report lâu dài; cần chính sách retention cho `activity_logs` (ghi chú: dọn log cũ định kỳ để không phình quota). **Giai đoạn 5 chốt cơ chế:** prune `activity_logs` cũ hơn `Observer:RetentionDays` (mặc định 30 ngày) ở cuối mỗi run thành công, có cap số row mỗi lần xoá.
+- **AI Observer (Giai đoạn 5):** Observer là lớp **đọc/cảnh báo** — chỉ ghi `activity_logs`/`notifications`/`ai_observer_runs`, **không** ghi `tasks`/`labels`/`task_labels` và **không** đi qua `ai_action_logs`. Chống chạy chồng bằng `pg_try_advisory_lock` (1 run/workspace tại một thời điểm, toàn hệ thống); chống cảnh báo trùng bằng cửa sổ dedupe `(workspace_id, type, entity)` mặc định 24h; `ai_observer_runs.status = Skipped` khi Observer tắt hoặc không lấy được lock (không phải lỗi).
+- **Bất biến của log:** `activity_logs` **không** có query filter và **không** soft-delete — đây là event store chỉ ghi thêm; việc dọn dữ liệu chỉ theo chính sách retention ở trên. `notifications` cũng không soft-delete (lịch sử cảnh báo giữ nguyên kể cả khi Manager rời workspace; quyền đọc được lọc theo `recipient_user_id`).
 - **Nhất quán `tasks.board_id` / `tasks.column_id`:** app layer phải đảm bảo task luôn thuộc cột thuộc đúng board; khuyến nghị validate ở service thay vì trigger để giữ logic tập trung.
 - **Cascade delete:** không dùng cascade vật lý; việc xóa workspace/board phải xử lý mềm (soft delete) và cân nhắc chính sách xóa các entity con.
 
@@ -425,7 +438,7 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 **Giả định chính:**
 - Dữ liệu văn bản (name/description/title/content) không giới hạn độ dài cứng ở cấp DB trong tài liệu này; sẽ ràng buộc `varchar(n)`/`maxLength` cụ thể khi hiện thực nếu cần.
 - MVP dùng 1 assignee/task; đa assignee để giai đoạn sau.
-- Bảng giai đoạn 2–6 là thiết kế sơ bộ, có thể thay đổi khi hiện thực từng giai đoạn.
+- Bảng giai đoạn 2–6 là thiết kế sơ bộ, có thể thay đổi khi hiện thực từng giai đoạn. Riêng **Giai đoạn 5 (§3.6)** đã được tinh chỉnh ở bước lập kế hoạch theo `tasks/phase-5-ai-observer.md` §0 (thêm `Skipped`, chốt fan-out notification, retention, advisory lock).
 
 **Tài liệu nguồn:**
 - `Project-Documents/01-system-specification.md`

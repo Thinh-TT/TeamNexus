@@ -4,6 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { BoardView } from '../BoardView'
 import { aiActionApi } from '../../../ai/services/aiActionApi'
+import { notificationApi } from '../../../ai/services/notificationApi'
+import { observerApi } from '../../../ai/services/observerApi'
+import { httpClient } from '../../../../shared/api'
 import type { BoardResponse, ColumnResponse, TaskResponse } from '../../types/board.types'
 import type { AiActionLog } from '../../../ai/types/aiAction.types'
 
@@ -87,6 +90,15 @@ vi.mock('../../hooks/useBoard', () => ({
   useBoard: () => mockUseBoardResult,
 }))
 
+vi.mock('../../../../shared/api', () => ({
+  httpClient: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+  },
+}))
+
 vi.mock('../../../ai/services/aiActionApi', () => ({
   aiActionApi: {
     listAiActions: vi.fn(),
@@ -97,10 +109,39 @@ vi.mock('../../../ai/services/aiActionApi', () => ({
   },
 }))
 
+vi.mock('../../../ai/services/notificationApi', () => ({
+  notificationApi: {
+    listNotifications: vi.fn(),
+    markNotificationRead: vi.fn(),
+    markAllNotificationsRead: vi.fn(),
+  },
+}))
+
+vi.mock('../../../ai/services/observerApi', () => ({
+  observerApi: {
+    listObserverRuns: vi.fn(),
+    getObserverRun: vi.fn(),
+    triggerObserverScan: vi.fn(),
+  },
+}))
+
 describe('BoardView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(aiActionApi.listAiActions).mockResolvedValue([])
+    vi.mocked(observerApi.listObserverRuns).mockResolvedValue([])
+    vi.mocked(notificationApi.listNotifications).mockResolvedValue({
+      unreadCount: 3,
+      items: [],
+    })
+    vi.mocked(httpClient.get).mockImplementation(async (url: string) => {
+      if (url === '/workspaces') {
+        return {
+          data: [{ id: 'ws-1', name: 'Workspace 1', role: 'Manager' }],
+        }
+      }
+      return { data: {} }
+    })
   })
 
   const renderComponent = () => {
@@ -190,6 +231,54 @@ describe('BoardView', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Lịch sử Hành động AI')).toBeInTheDocument()
+    })
+  })
+
+  it('renders Cảnh báo AI button with unread count and opens notification drawer on click', async () => {
+    renderComponent()
+
+    await waitFor(() => {
+      expect(notificationApi.listNotifications).toHaveBeenCalled()
+    })
+
+    const notifBtn = screen.getByRole('button', { name: /Cảnh báo AI/i })
+    expect(notifBtn).toBeInTheDocument()
+    expect(screen.getByText('3')).toBeInTheDocument()
+
+    fireEvent.click(notifBtn)
+
+    await waitFor(() => {
+      expect(screen.getByText('Cảnh báo AI Observer')).toBeInTheDocument()
+    })
+  })
+
+  it('renders AI Observer button for Manager/Admin and opens observer runs drawer on click', async () => {
+    renderComponent()
+
+    const observerBtn = await screen.findByRole('button', { name: /AI Observer/i })
+    expect(observerBtn).toBeInTheDocument()
+
+    fireEvent.click(observerBtn)
+
+    await waitFor(() => {
+      expect(screen.getByText('AI Observer — Lịch sử quét')).toBeInTheDocument()
+    })
+  })
+
+  it('hides AI Observer button when user is only a Member', async () => {
+    vi.mocked(httpClient.get).mockImplementation(async (url: string) => {
+      if (url === '/workspaces') {
+        return {
+          data: [{ id: 'ws-1', name: 'Workspace 1', role: 'Member' }],
+        }
+      }
+      return { data: {} }
+    })
+
+    renderComponent()
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /AI Observer/i })).not.toBeInTheDocument()
     })
   })
 })

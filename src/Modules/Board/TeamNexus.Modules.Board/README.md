@@ -63,6 +63,25 @@ header `X-XSRF-TOKEN` (lấy ở `GET /api/auth/antiforgery`).
 - Move task: dịch chuyển + đánh số lại cột đích trong transaction; chấp nhận last-write-wins.
 - Errors: service ném `BoardModuleException` (404/403/400/409), group filter map sang `{ error }`.
 
+## Phát activity log cho AI Observer (Phase 5 §2)
+
+Board **khai báo** port `Services/IActivityLogWriter.cs` (interface + `ObserverActivityActions` +
+`ObserverEntityTypes` + `NullActivityLogWriter`) và **không** tham chiếu module `Ai` — implementation
+`ActivityLogWriter` nằm ở module Ai và đăng ký đè bản no-op của `AddBoardModule`.
+
+5 mutation phát sự kiện **sau khi** dữ liệu đã ghi (riêng move: sau `CommitAsync`):
+
+| Nơi | `action` | payload (jsonb) |
+|---|---|---|
+| `TaskService.CreateTaskAsync` | `TaskCreated` | `{columnId, assigneeId, priority, isDone}` |
+| `TaskService.UpdateTaskAsync` | `TaskUpdated` | `{titleChanged, descriptionChanged, assigneeId, dueDate, priority}` — **boolean** cho field text, **không** dump nội dung |
+| `TaskService.MoveTaskAsync` | `TaskMoved` (+ `TaskCompleted` nếu vào cột `is_done`) | `{fromColumnId, toColumnId, position}` / `{columnId}` |
+| `TaskService.DeleteTaskAsync` | `TaskDeleted` | `{columnId}` (lấy `WorkspaceId` **trước** khi soft-delete) |
+| `CommentService.CreateCommentAsync` | `CommentAdded` | `{commentId, taskId}` |
+
+Ghi log là **best-effort**: `RecordAsync` không bao giờ throw (lỗi ⇒ `LogWarning`), nên CRUD không bị ảnh
+hưởng. API/quyền công khai của Board **không đổi**; verify nhóm G (31/31 PASS) nằm ở README module Ai.
+
 ## Test nhanh (dev)
 
 1. Seed workspace + membership (xem README root, mục Auth quick test — gán `Admin`/`Manager`

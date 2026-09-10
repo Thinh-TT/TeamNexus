@@ -48,10 +48,16 @@ Xây bảng AiActionLog và service AiActionService làm cổng trung gian cho m
 Xây BackgroundService quét log định kỳ, phát hiện bottleneck/quá tải/xung đột tiềm ẩn, gửi báo cáo riêng cho Manager qua kênh phù hợp (thông báo trong app).
 
 **Yêu cầu hoàn thiện:**
-- [ ] `BackgroundService` chạy nền, quét log/hoạt động board theo chu kỳ cố định
-- [ ] Log được tóm tắt trước khi gửi cho DeepSeek API (kiểm soát token/chi phí)
-- [ ] Phát hiện được ít nhất 1 loại tín hiệu (vd: task quá hạn dồn ứ ở 1 người, task đứng yên lâu ngày)
-- [ ] Kết quả cảnh báo chỉ hiển thị cho Manager, không public toàn team
+- [x] `BackgroundService` chạy nền, quét log/hoạt động board theo chu kỳ cố định
+- [x] Log được tóm tắt trước khi gửi cho DeepSeek API (kiểm soát token/chi phí)
+- [x] Phát hiện được ít nhất 1 loại tín hiệu (vd: task quá hạn dồn ứ ở 1 người, task đứng yên lâu ngày)
+- [x] Kết quả cảnh báo chỉ hiển thị cho Manager, không public toàn team
+
+> **Trạng thái:** Backend (§1–§5 + §7.1 verify **178 check PASS**) đã xong; kênh gửi hiện là **in-app**
+> (`notifications`), email ghi chú cho tương lai. **Frontend (§6 + §7.2)** — drawer cảnh báo + badge unread
+> và màn hình lịch sử lần quét — đã bàn giao antigravity với contract chốt ở
+> `tasks/phase-5-ai-observer.md` (mục "🔻 BÀN GIAO"). Các ô trên được tick theo tiêu chí roadmap đã
+> verify ở backend; UI sẽ dùng lại đúng 6 endpoint đó.
 
 ## Giai đoạn 6: Báo cáo & Xuất dữ liệu
 

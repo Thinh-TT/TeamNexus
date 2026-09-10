@@ -1,10 +1,22 @@
 export * from './types/smartSetup.types'
 export * from './types/aiAction.types'
+export * from './types/notification.types'
+
 export * from './services/smartSetupApi'
 export * from './services/aiActionApi'
+export * from './services/notificationApi'
+export * from './services/observerApi'
+
 export * from './hooks/useSmartSetup'
 export * from './hooks/useAiActions'
+export * from './hooks/useNotifications'
+export * from './hooks/useObserverRuns'
+
 export * from './components/SmartSetupModal'
 export * from './components/ProposedTaskItem'
 export * from './components/AiActionHistoryDrawer'
 export * from './components/AiActionLogItem'
+export * from './components/NotificationDrawer'
+export * from './components/NotificationItem'
+export * from './components/ObserverRunsDrawer'
+export * from './components/ObserverFindingCard'

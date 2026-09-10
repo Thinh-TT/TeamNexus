@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using TeamNexus.Modules.Board.DTOs;
 using TeamNexus.Persistence.Data;
 using TeamNexus.Persistence.Data.Entities;
@@ -21,15 +22,18 @@ public sealed class CommentService : ICommentService
     private readonly TeamNexusDbContext _db;
     private readonly IWorkspaceAccess _access;
     private readonly IBoardEventPublisher _events;
+    private readonly IActivityLogWriter _activityLog;
 
     public CommentService(
         TeamNexusDbContext db,
         IWorkspaceAccess access,
-        IBoardEventPublisher events)
+        IBoardEventPublisher events,
+        IActivityLogWriter activityLog)
     {
         _db = db;
         _access = access;
         _events = events;
+        _activityLog = activityLog;
     }
 
     public async Task<IReadOnlyList<CommentResponse>> GetCommentsAsync(
@@ -67,6 +71,20 @@ public sealed class CommentService : ICommentService
 
         var response = await LoadCommentAsync(comment.Id, ct);
         await _events.CommentAdded(task.BoardId, response, ct);
+
+        // Phase 5 §2.3: comments are the Observer's "communication context" signal source
+        // (metadata only — the content is never copied into the log).
+        await _activityLog.RecordAsync(new ActivityLogEntry(
+            task.Board!.WorkspaceId,
+            task.BoardId,
+            userId,
+            ObserverEntityTypes.Comment,
+            comment.Id,
+            ObserverActivityActions.CommentAdded,
+            JsonSerializer.Serialize(
+                new { commentId = comment.Id, taskId },
+                ActivityJson)), ct);
+
         return response;
     }
 
@@ -99,6 +117,9 @@ public sealed class CommentService : ICommentService
     }
 
     // ---- helpers ----------------------------------------------------------
+
+    /// <summary>camelCase JSON for activity payloads (Phase 5 §2, decision A6).</summary>
+    private static readonly JsonSerializerOptions ActivityJson = new(JsonSerializerDefaults.Web);
 
     private async Task<BoardTask> LoadTaskWithBoardAsync(Guid taskId, CancellationToken ct)
         => await _db.Tasks
