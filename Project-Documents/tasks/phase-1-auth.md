@@ -55,17 +55,19 @@
 ## 3. Auth Backend
 
 ### 3.1 OAuth 2.0 – Google & GitHub
-- [ ] Đăng ký OAuth App trên Google Cloud Console (Client ID + Secret) — *thêm sau*
+- [x] Đăng ký OAuth App trên Google Cloud Console (Client ID + Secret)
 - [x] Đăng ký OAuth App trên GitHub Developer Settings (Client ID + Secret)
 - [x] Cấu hình handler (đặt trong `AddAuthModule` của `TeamNexus.Modules.Auth`, không nằm trực tiếp ở `Program.cs`):
   ```csharp
-  .AddGitHub(...)  // package: AspNet.Security.OAuth.GitHub (Google thêm sau: .AddGoogle(...))
+  .AddGitHub(...)  // package: AspNet.Security.OAuth.GitHub
+  .AddGoogle(...)  // package: Microsoft.AspNetCore.Authentication.Google
   ```
+  Provider chỉ đăng ký khi có credentials (thiếu → `login/{provider}` trả 400); thêm mapping claim avatar cho cả 2 provider.
 - [x] Upsert `ApplicationUser` từ claims OAuth (email, name, avatar) — hiện thực trong `AuthService.HandleExternalLoginAsync` (flow external-cookie, tương đương `OnCreatingTicket`)
-- [x] Endpoint `GET /api/auth/login/{provider}` → redirect challenge OAuth (`github` hoạt động; `google` → 400 "chưa cấu hình")
-- [x] Endpoint callback OAuth → issue JWT + refresh token: `/api/auth/callback/github` do OAuth handler xử lý handshake → `/api/auth/external-login` upsert user + cấp token
+- [x] Endpoint `GET /api/auth/login/{provider}` → redirect challenge OAuth (`github`, `google` đều hoạt động)
+- [x] Endpoint callback OAuth → issue JWT + refresh token: `/api/auth/callback/{provider}` do OAuth handler xử lý handshake → `/api/auth/external-login` upsert user + cấp token
 - [x] Verify: đăng nhập qua **GitHub** thành công, user được tạo/cập nhật trong DB (`users` + `user_logins` + role `Member`)
-- [ ] Verify: đăng nhập qua **Google** — chưa kích hoạt (thêm sau)
+- [x] Verify: đăng nhập qua **Google** thành công; **liên kết provider** theo email (GitHub + Google → cùng một `user_id`, roles giữ nguyên), `display_name` + `avatar_url` cập nhật từ Google (`lh3.googleusercontent.com`)
 
 ### 3.2 JWT + Refresh Token (HttpOnly Cookie)
 - [x] Viết `JwtService` (`src/Modules/Auth/.../Services/JwtService.cs`):
@@ -126,7 +128,7 @@
 
 - [x] Project backend (Modular Monolith) và frontend (React/Vite) khởi tạo xong, `build` và `run` không lỗi
 - [x] Schema PostgreSQL (`User`, `Role`, `Workspace`, `Board`, `RefreshToken`) đã migrate thành công
-- [ ] Đăng nhập được qua **Google OAuth** (user được tạo/cập nhật trong DB) — *thêm sau*
+- [x] Đăng nhập được qua **Google OAuth** (user được tạo/cập nhật trong DB)
 - [x] Đăng nhập được qua **GitHub OAuth** (user được tạo/cập nhật trong DB)
 - [x] JWT access token + refresh token cấp qua HttpOnly Cookie, hoạt động đúng
 - [x] Rotate refresh token mỗi lần dùng (token cũ bị revoke ngay sau khi refresh)
