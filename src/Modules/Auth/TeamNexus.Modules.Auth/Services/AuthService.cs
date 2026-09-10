@@ -17,6 +17,14 @@ public sealed class AuthService
 {
     public sealed record TokenPair(string AccessToken, string RawRefreshToken);
 
+    // Claim types carrying the display name / avatar, across providers
+    // (GitHub: urn:github:*, Google: name + urn:google:picture, generic: picture/Uri).
+    private static readonly string[] DisplayNameClaimTypes =
+        ["name", "display_name", ClaimTypes.Name, "login", "urn:github:login"];
+
+    private static readonly string[] AvatarClaimTypes =
+        ["avatar", "avatar_url", "urn:github:avatar", "urn:google:picture", "picture", ClaimTypes.Uri];
+
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly TeamNexusDbContext _db;
     private readonly JwtService _jwt;
@@ -78,7 +86,7 @@ public sealed class AuthService
 
         // New account.
         var userName = await CreateUniqueUserNameAsync(providerKey, claimList, ct);
-        var displayName = FindFirst(claimList, "name", "display_name", ClaimTypes.Name, "login", "urn:github:login")
+        var displayName = FindFirst(claimList, DisplayNameClaimTypes)
                           ?? userName;
 
         user = new ApplicationUser
@@ -87,7 +95,7 @@ public sealed class AuthService
             Email = string.IsNullOrWhiteSpace(email) ? null : email,
             EmailConfirmed = !string.IsNullOrWhiteSpace(email),
             DisplayName = displayName,
-            AvatarUrl = FindFirst(claimList, "avatar", "avatar_url", "urn:github:avatar", "picture"),
+            AvatarUrl = FindFirst(claimList, AvatarClaimTypes),
         };
 
         var createResult = await _userManager.CreateAsync(user);
@@ -203,14 +211,14 @@ public sealed class AuthService
     {
         var changed = false;
 
-        var displayName = FindFirst(claims, "name", "display_name", ClaimTypes.Name, "login", "urn:github:login");
+        var displayName = FindFirst(claims, DisplayNameClaimTypes);
         if (displayName is not null && user.DisplayName != displayName)
         {
             user.DisplayName = displayName;
             changed = true;
         }
 
-        var avatar = FindFirst(claims, "avatar", "avatar_url", "urn:github:avatar", "picture");
+        var avatar = FindFirst(claims, AvatarClaimTypes);
         if (avatar is not null && user.AvatarUrl != avatar)
         {
             user.AvatarUrl = avatar;

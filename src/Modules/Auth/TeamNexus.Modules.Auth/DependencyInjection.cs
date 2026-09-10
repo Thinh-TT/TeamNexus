@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
@@ -127,9 +128,9 @@ public static class DependencyInjection
                 };
             });
 
-        // ---- OAuth: GitHub (Phase 1 §3.1) ------------------------------------
-        // Google comes later — same pattern with .AddGoogle(...) once its
-        // credentials exist (Microsoft.AspNetCore.Authentication.Google is referenced).
+        // ---- OAuth providers (Phase 1 §3.1) ----------------------------------
+        // Each provider registers only when its credentials are configured, so the
+        // app still boots with a subset (login/{provider} answers 400 otherwise).
         var githubClientId = configuration["Authentication:GitHub:ClientId"];
         var githubClientSecret = configuration["Authentication:GitHub:ClientSecret"];
 
@@ -142,6 +143,31 @@ public static class DependencyInjection
                 options.SignInScheme = AuthConstants.ExternalScheme;
                 options.CallbackPath = AuthConstants.GitHubCallbackPath;
                 options.Scope.Add("user:email"); // private e-mail addresses
+
+                // The provider handler does not surface the avatar; map it ourselves
+                // (JSON key "avatar_url" from GitHub's /user endpoint).
+                options.ClaimActions.MapJsonKey("urn:github:avatar", "avatar_url");
+            });
+        }
+
+        var googleClientId = configuration["Authentication:Google:ClientId"];
+        var googleClientSecret = configuration["Authentication:Google:ClientSecret"];
+
+        if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(googleClientSecret))
+        {
+            authBuilder.AddGoogle(options =>
+            {
+                options.ClientId = googleClientId;
+                options.ClientSecret = googleClientSecret;
+                options.SignInScheme = AuthConstants.ExternalScheme;
+                options.CallbackPath = AuthConstants.GoogleCallbackPath;
+                options.Scope.Add("email");
+                options.Scope.Add("profile");
+
+                // GoogleOptions maps name/email but NOT the profile picture
+                // (verified against dotnet/aspnetcore release/10.0 GoogleOptions.cs),
+                // so map "picture" from the userinfo endpoint explicitly.
+                options.ClaimActions.MapJsonKey("urn:google:picture", "picture");
             });
         }
 
