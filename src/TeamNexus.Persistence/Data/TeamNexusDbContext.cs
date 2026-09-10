@@ -38,6 +38,13 @@ public class TeamNexusDbContext
 
     public DbSet<AiActionLog> AiActionLogs => Set<AiActionLog>();
 
+    // AI Observer (Phase 5 §1): activity event store + recipient-scoped alerts + run audit.
+    public DbSet<ActivityLog> Activities => Set<ActivityLog>();
+
+    public DbSet<Notification> Notifications => Set<Notification>();
+
+    public DbSet<AiObserverRun> AiObserverRuns => Set<AiObserverRun>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
