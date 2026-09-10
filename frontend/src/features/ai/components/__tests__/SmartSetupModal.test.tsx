@@ -1,8 +1,12 @@
+import React from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SmartSetupModal } from '../SmartSetupModal'
 import { smartSetupApi } from '../../services/smartSetupApi'
+import { aiActionApi } from '../../services/aiActionApi'
 import type { SmartSetupProposal } from '../../types/smartSetup.types'
+import type { AiActionLog, AiActionLogDetail } from '../../types/aiAction.types'
+import type { ColumnResponse } from '../../../board/types/board.types'
 
 vi.mock('../../services/smartSetupApi', () => ({
   smartSetupApi: {
@@ -10,6 +14,38 @@ vi.mock('../../services/smartSetupApi', () => ({
     getWorkspaceMembers: vi.fn(),
   },
 }))
+
+vi.mock('../../services/aiActionApi', () => ({
+  aiActionApi: {
+    confirmSmartSetup: vi.fn(),
+    approveAiAction: vi.fn(),
+    rejectAiAction: vi.fn(),
+    undoAiAction: vi.fn(),
+  },
+}))
+
+const mockColumns: ColumnResponse[] = [
+  {
+    id: 'col-1',
+    boardId: 'board-1',
+    name: 'To Do',
+    position: 0,
+    isDone: false,
+    createdAt: '2026-09-09T00:00:00Z',
+    updatedAt: '2026-09-09T00:00:00Z',
+    tasks: [],
+  },
+  {
+    id: 'col-2',
+    boardId: 'board-1',
+    name: 'Done',
+    position: 1,
+    isDone: true,
+    createdAt: '2026-09-09T00:00:00Z',
+    updatedAt: '2026-09-09T00:00:00Z',
+    tasks: [],
+  },
+]
 
 describe('SmartSetupModal', () => {
   beforeEach(() => {
@@ -28,6 +64,7 @@ describe('SmartSetupModal', () => {
         onClose={vi.fn()}
         workspaceId="ws-1"
         boardId="board-1"
+        columns={mockColumns}
       />
     )
 
@@ -62,6 +99,7 @@ describe('SmartSetupModal', () => {
         onClose={vi.fn()}
         workspaceId="ws-1"
         boardId="board-1"
+        columns={mockColumns}
       />
     )
 
@@ -86,13 +124,13 @@ describe('SmartSetupModal', () => {
     })
   })
 
-  it('transitions to Step 3 confirmed state on clicking confirm', async () => {
+  it('transitions to Step 3 pending state on clicking confirm, and approves proposal', async () => {
     const mockProposal: SmartSetupProposal = {
       summary: 'Hoàn thành đề xuất',
       tasks: [
         {
           title: 'Task A',
-          description: null,
+          description: 'Desc A',
           priority: 'Medium',
           labels: [],
           assignee: null,
@@ -100,7 +138,48 @@ describe('SmartSetupModal', () => {
       ],
     }
 
+    const mockLog: AiActionLog = {
+      id: 'log-1',
+      action: 'CreateSubtasks',
+      entityType: 'Board',
+      entityId: 'board-1',
+      status: 'Pending',
+      requestedByUserId: 'u-1',
+      requestedByName: 'Thinh-TT',
+      decidedByUserId: null,
+      decidedByName: null,
+      decidedAt: null,
+      decisionNote: null,
+      taskCount: 1,
+      createdAt: '2026-09-10T08:00:00Z',
+      updatedAt: '2026-09-10T08:00:00Z',
+    }
+
+    const mockApproved: AiActionLogDetail = {
+      ...mockLog,
+      status: 'Approved',
+      decidedByUserId: 'u-2',
+      decidedByName: 'Manager',
+      decidedAt: '2026-09-10T08:05:00Z',
+      basis: null,
+      beforeSnapshot: null,
+      afterSnapshot: null,
+      appliedSnapshot: {
+        entityType: 'Board',
+        entityId: 'board-1',
+        createdTaskIds: ['t1'],
+        createdLabelIds: [],
+        warnings: [],
+        appliedAt: '2026-09-10T08:05:00Z',
+      },
+      createdTaskIds: ['t1'],
+    }
+
     vi.mocked(smartSetupApi.generateSmartSetup).mockResolvedValueOnce(mockProposal)
+    vi.mocked(aiActionApi.confirmSmartSetup).mockResolvedValueOnce(mockLog)
+    vi.mocked(aiActionApi.approveAiAction).mockResolvedValueOnce(mockApproved)
+
+    const onApplied = vi.fn()
 
     render(
       <SmartSetupModal
@@ -108,6 +187,8 @@ describe('SmartSetupModal', () => {
         onClose={vi.fn()}
         workspaceId="ws-1"
         boardId="board-1"
+        columns={mockColumns}
+        onApplied={onApplied}
       />
     )
 
@@ -127,10 +208,37 @@ describe('SmartSetupModal', () => {
     fireEvent.click(confirmBtn)
 
     await waitFor(() => {
+      expect(aiActionApi.confirmSmartSetup).toHaveBeenCalledWith('board-1', {
+        description: 'Mô tả hợp lệ',
+        summary: 'Hoàn thành đề xuất',
+        tasks: [
+          {
+            title: 'Task A',
+            description: 'Desc A',
+            priority: 'Medium',
+            labels: [],
+            assignee: null,
+          },
+        ],
+        columnId: 'col-1',
+      })
       expect(
-        screen.getByText('Đề xuất phân rã công việc đã được xác nhận!')
+        screen.getByText('Đã tạo yêu cầu chờ phê duyệt!')
       ).toBeInTheDocument()
-      expect(screen.getByText(/Accountability Layer/i)).toBeInTheDocument()
+      expect(screen.getByText(/Pending/i)).toBeInTheDocument()
+      expect(screen.queryByText(/Giai đoạn 4/i)).not.toBeInTheDocument()
+    })
+
+    // Click "Duyệt & áp dụng ngay"
+    const approveBtn = screen.getByRole('button', { name: /Duyệt & áp dụng ngay/i })
+    fireEvent.click(approveBtn)
+
+    await waitFor(() => {
+      expect(aiActionApi.approveAiAction).toHaveBeenCalledWith('log-1')
+      expect(
+        screen.getByText('Đã duyệt & áp dụng thành công!')
+      ).toBeInTheDocument()
+      expect(onApplied).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -151,6 +259,7 @@ describe('SmartSetupModal', () => {
         onClose={vi.fn()}
         workspaceId="ws-1"
         boardId="board-1"
+        columns={mockColumns}
       />
     )
 
