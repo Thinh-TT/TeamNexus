@@ -36,6 +36,8 @@ public class TeamNexusDbContext
 
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
+    public DbSet<AiActionLog> AiActionLogs => Set<AiActionLog>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
