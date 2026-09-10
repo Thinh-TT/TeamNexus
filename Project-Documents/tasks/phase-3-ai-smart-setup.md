@@ -286,20 +286,20 @@
 
 ### 5.1 Feature `src/features/ai/`
 
-- [ ] `types/smartSetup.types.ts` — mirror DTO §4.2 (camelCase).
-- [ ] `services/smartSetupApi.ts` — `generateSmartSetup(boardId, { description })` qua `httpClient` (base `/api`).
-- [ ] `hooks/useSmartSetup.ts` — state `{ status: idle|generating|ready|error, proposal, error }`, action `generate(description)`, cho phép sửa danh sách task local trước khi xác nhận.
-- [ ] `components/SmartSetupModal.tsx` — Modal Ant Design:
+- [x] `types/smartSetup.types.ts` — mirror DTO §4.2 (camelCase).
+- [x] `services/smartSetupApi.ts` — `generateSmartSetup(boardId, { description })` qua `httpClient` (base `/api`).
+- [x] `hooks/useSmartSetup.ts` — state `{ status: idle|generating|ready|error, proposal, error }`, action `generate(description)`, cho phép sửa danh sách task local trước khi xác nhận.
+- [x] `components/SmartSetupModal.tsx` — Modal Ant Design:
   - Bước 1: `Input.TextArea` mô tả + nút "Tạo đề xuất" (loading).
   - Bước 2: hiển thị danh sách `ProposedTaskItem` **có thể chỉnh sửa** (title, description, priority Select, assignee Select từ `/workspaces/{wsId}/members`, label tags từ `/workspaces/{wsId}/labels` + nhãn mới).
   - Bước 3: nút "Xác nhận" → Giai đoạn 3 **không ghi DB**; hiển thị `Result.success` "Đề xuất đã xác nhận — sẽ được áp dụng qua Accountability Layer ở Giai đoạn 4".
   - Xử lý trạng thái lỗi (403, 502, empty) bằng `Alert`.
-- [ ] `components/ProposedTaskItem.tsx` — dòng chỉnh sửa 1 task đề xuất.
+- [x] `components/ProposedTaskItem.tsx` — dòng chỉnh sửa 1 task đề xuất.
 
 ### 5.2 Tích hợp vào Board
 
-- [ ] Thêm nút "AI Smart Setup" (icon robot/spark) vào top bar của `BoardView.tsx`, mở `SmartSetupModal` truyền `boardId`, `workspaceId`, `columns`, `workspaceLabels`.
-- [ ] Visibility: hiển thị nút luôn, backend enforce Manager/Admin (403 hiện thông báo rõ). Nâng cao (tuỳ chọn): ẩn nút cho Member bằng cách đọc `role` từ `GET /api/workspaces` hiện có.
+- [x] Thêm nút "AI Smart Setup" (icon robot/spark) vào top bar của `BoardView.tsx`, mở `SmartSetupModal` truyền `boardId`, `workspaceId`, `columns`, `workspaceLabels`.
+- [x] Visibility: hiển thị nút luôn, backend enforce Manager/Admin (403 hiện thông báo rõ). Nâng cao (tuỳ chọn): ẩn nút cho Member bằng cách đọc `role` từ `GET /api/workspaces` hiện có.
 
 ---
 
@@ -307,25 +307,25 @@
 
 ### 6.1 Verify backend (Scalar + API probe)
 
-- [ ] `POST /smart-setup` khi chưa đăng nhập → 401; Member → 403; mô tả rỗng → 400; board không tồn tại → 404.
-- [ ] Dùng `FakeAiProvider` (không key): trả proposal đúng schema, resolve assignee/label đúng (matched/unmatched).
-- [ ] Bật key thật (nếu có): gọi DeepSeek trả JSON đúng schema, validate + normalize (priority sai → null, label dupe → gọn).
-- [ ] Verify **không ghi DB**: số row `tasks`/`labels`/`ai_action_logs` không đổi sau generate.
-- [ ] `GET /api/workspaces/{wsId}/members` trả đúng danh sách, Member+ đọc được.
+- [x] `POST /smart-setup` khi chưa đăng nhập → 401; Member → 403; mô tả rỗng → 400; board không tồn tại → 404.
+- [x] Dùng `FakeAiProvider` (không key): trả proposal đúng schema, resolve assignee/label đúng (matched/unmatched).
+- [x] Bật key thật (nếu có): gọi DeepSeek trả JSON đúng schema, validate + normalize (priority sai → null, label dupe → gọn).
+- [x] Verify **không ghi DB**: số row `tasks`/`labels`/`ai_action_logs` không đổi sau generate.
+- [x] `GET /api/workspaces/{wsId}/members` trả đúng danh sách, Member+ đọc được.
 
 ### 6.2 Frontend (Vitest + Testing Library)
 
-- [ ] Test `smartSetupApi` (gọi đúng URL/body).
-- [ ] Test `useSmartSetup` (idle → generating → ready → error).
-- [ ] Test `SmartSetupModal` (hiển thị proposal, sửa task, trạng thái lỗi, nút xác nhận không gọi API ghi).
-- [ ] `oxlint` 0 warning/error, `tsc -b` + `vite build` pass.
+- [x] Test `smartSetupApi` (gọi đúng URL/body).
+- [x] Test `useSmartSetup` (idle → generating → ready → error).
+- [x] Test `SmartSetupModal` (hiển thị proposal, sửa task, trạng thái lỗi, nút xác nhận không gọi API ghi).
+- [x] `oxlint` 0 warning/error, `tsc -b` + `vite build` pass.
 
 ### 6.3 Điều kiện hoàn thành Giai đoạn 3 (map `03-roadmap.md`)
 
-- [ ] `IAiProvider` triển khai xong cho DeepSeek (+ `FakeAiProvider` dev).
-- [ ] Nhập mô tả → AI trả danh sách sub-tasks có nhãn + đề xuất người phụ trách; JSON đúng schema, có validate.
-- [ ] UI hiển thị kết quả đề xuất, cho phép chỉnh sửa trước khi xác nhận.
-- [ ] Không ghi thẳng DB — chờ xác nhận (bàn giao Accountability Layer Giai đoạn 4).
+- [x] `IAiProvider` triển khai xong cho DeepSeek (+ `FakeAiProvider` dev).
+- [x] Nhập mô tả → AI trả danh sách sub-tasks có nhãn + đề xuất người phụ trách; JSON đúng schema, có validate.
+- [x] UI hiển thị kết quả đề xuất, cho phép chỉnh sửa trước khi xác nhận.
+- [x] Không ghi thẳng DB — chờ xác nhận (bàn giao Accountability Layer Giai đoạn 4).
 
 ---
 
@@ -350,33 +350,29 @@
 
 ## 8. Tài liệu
 
-- [ ] Tạo `Project-Documents/tasks/phase-3-ai-smart-setup.md` (checklist như trên).
-- [ ] Tạo `src/Modules/Ai/TeamNexus.Modules.Ai/README.md` (endpoints, service, cấu hình DeepSeek, contract bàn giao).
-- [ ] Cập nhật `README.md` root (mục "Trạng thái Giai đoạn 3") và tick checklist `03-roadmap.md` khi hoàn tất.
+- [x] Tạo `Project-Documents/tasks/phase-3-ai-smart-setup.md` (checklist như trên).
+- [x] Tạo `src/Modules/Ai/TeamNexus.Modules.Ai/README.md` (endpoints, service, cấu hình DeepSeek, contract bàn giao).
+- [x] Cập nhật `README.md` root (mục "Trạng thái Giai đoạn 3") và tick checklist `03-roadmap.md` khi hoàn tất.
 
 ---
 
 ## Checklist Hoàn thiện Giai đoạn 3
 
 > Tất cả các mục dưới đây phải ✅ trước khi chuyển sang Giai đoạn 4.
-> **Trạng thái backend (do tôi phụ trách): §1–§4 ✅ — hạng mục UI còn lại giao antigravity (§5), test §6.**
+> **Trạng thái: Hoàn tất toàn bộ Backend (§1–§4), Frontend UI (§5), và Test Suite (§6).**
 
 - [x] Interface `IAiProvider` triển khai xong cho DeepSeek (OpenAI-compatible) + `FakeAiProvider` cho dev
 - [x] Nhập mô tả dự án/tính năng → AI trả về danh sách sub-tasks có nhãn và đề xuất người phụ trách (JSON đúng schema, có validate + normalize)
       — verify với DeepSeek thật (200, 7 task) và `FakeAiProvider` (200, 3 task)
-- [ ] Giao diện hiển thị kết quả AI đề xuất, cho phép chỉnh sửa trước khi xác nhận **(§5 — antigravity)**
+- [x] Giao diện hiển thị kết quả AI đề xuất, cho phép chỉnh sửa trước khi xác nhận (§5 — hoàn tất)
 - [x] Chưa ghi thẳng vào DB — chờ xác nhận (bàn giao contract cho Accountability Layer ở Giai đoạn 4)
       — verify: `tasks`/`labels`/`task_labels`/`workspace_members` không đổi sau khi gọi endpoint
 
-### Việc còn lại cho antigravity (§5 + §6)
+### Việc của antigravity (§5 + §6) — Đã hoàn thành
 
-- [ ] §5 frontend `src/features/ai/` (`types`, `smartSetupApi`, `useSmartSetup`, `SmartSetupModal`,
+- [x] §5 frontend `src/features/ai/` (`types`, `smartSetupApi`, `useSmartSetup`, `SmartSetupModal`,
       `ProposedTaskItem`) + gắn nút "AI Smart Setup" vào top bar `BoardView.tsx`.
-- [ ] §6.2 test Vitest cho `smartSetupApi` / `useSmartSetup` / `SmartSetupModal`; chạy `oxlint` +
+- [x] §6.2 test Vitest cho `smartSetupApi` / `useSmartSetup` / `SmartSetupModal` / `ProposedTaskItem`; chạy `oxlint` (0 warn/0 err) +
       `tsc -b` + `vite build` sạch.
-- [ ] **Không** cần làm §6.1 (verify backend) — đã hoàn thành và ghi lại trong
-      `src/Modules/Ai/TeamNexus.Modules.Ai/README.md` mục "Verify §3"/"Verify §4".
-- [ ] Sau khi §5/§6 xong: tick mục UI ở trên, cập nhật `README.md` root (mục "Trạng thái Giai đoạn 3")
-      và tick `03-roadmap.md` — §8 vẫn để mở vì phụ thuộc phần UI.
-- [ ] Đọc kỹ **khối "Ghi chú bàn giao"** ngay trước §5 ở trên (endpoint, DTO/camelCase, mã lỗi,
-      giới hạn "chưa có endpoint confirm", gợi ý test).
+- [x] Cập nhật `README.md` root và tick `03-roadmap.md`.
+

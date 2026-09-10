@@ -17,6 +17,7 @@ import {
   LoadingOutlined,
   PlusOutlined,
   ReloadOutlined,
+  RobotOutlined,
   SearchOutlined,
   SyncOutlined,
 } from '@ant-design/icons'
@@ -39,6 +40,7 @@ import type {
   TaskPriority,
   TaskResponse,
 } from '../types/board.types'
+import { SmartSetupModal } from '../../ai/components/SmartSetupModal'
 import { BoardModal } from './BoardModal'
 import { ColumnModal } from './ColumnModal'
 import { KanbanColumn } from './KanbanColumn'
@@ -127,6 +129,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
   const [columnModalOpen, setColumnModalOpen] = useState(false)
   const [editingColumn, setEditingColumn] = useState<ColumnResponse | null>(null)
   const [boardModalOpen, setBoardModalOpen] = useState(false)
+  const [smartSetupModalOpen, setSmartSetupModalOpen] = useState(false)
 
   // Configure Dnd sensors (Pointer with 5px threshold to allow card clicks)
   const sensors = useSensors(
@@ -307,6 +310,20 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
             </Tooltip>
 
             <Button
+              icon={<RobotOutlined />}
+              onClick={() => setSmartSetupModalOpen(true)}
+              style={{
+                borderRadius: 8,
+                borderColor: '#818cf8',
+                color: '#4f46e5',
+                fontWeight: 500,
+                backgroundColor: '#f5f3ff',
+              }}
+            >
+              AI Smart Setup
+            </Button>
+
+            <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => {
@@ -430,6 +447,14 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
         onSubmit={async () => {
           // Future board edit
         }}
+      />
+
+      <SmartSetupModal
+        open={smartSetupModalOpen}
+        onClose={() => setSmartSetupModalOpen(false)}
+        workspaceId={workspaceId}
+        boardId={boardId}
+        workspaceLabels={workspaceLabels}
       />
     </div>
   )

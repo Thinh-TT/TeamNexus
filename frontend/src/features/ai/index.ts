@@ -1,0 +1,5 @@
+export * from './types/smartSetup.types'
+export * from './services/smartSetupApi'
+export * from './hooks/useSmartSetup'
+export * from './components/ProposedTaskItem'
+export * from './components/SmartSetupModal'

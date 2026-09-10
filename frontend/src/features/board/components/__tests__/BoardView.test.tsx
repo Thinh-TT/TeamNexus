@@ -126,4 +126,17 @@ describe('BoardView', () => {
     expect(screen.queryByText('Deploy to Staging')).not.toBeInTheDocument()
     expect(screen.getByText('Write Documentation')).toBeInTheDocument()
   })
+
+  it('renders AI Smart Setup button and opens the modal on click', () => {
+    renderComponent()
+
+    const aiBtn = screen.getByRole('button', { name: /AI Smart Setup/i })
+    expect(aiBtn).toBeInTheDocument()
+
+    fireEvent.click(aiBtn)
+    expect(
+      screen.getByPlaceholderText(/Xây dựng tính năng thông báo Real-time/i)
+    ).toBeInTheDocument()
+  })
 })
+
