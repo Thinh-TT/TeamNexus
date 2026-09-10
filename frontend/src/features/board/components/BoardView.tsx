@@ -14,9 +14,11 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import {
   ArrowLeftOutlined,
+  BellOutlined,
   HistoryOutlined,
   LoadingOutlined,
   PlusOutlined,
+  RadarChartOutlined,
   ReloadOutlined,
   RobotOutlined,
   SearchOutlined,
@@ -34,6 +36,7 @@ import {
   Typography,
 } from 'antd'
 import { useNavigate } from 'react-router-dom'
+import { httpClient } from '../../../shared/api'
 import { useBoard } from '../hooks/useBoard'
 import type {
   ColumnResponse,
@@ -43,7 +46,10 @@ import type {
 } from '../types/board.types'
 import { SmartSetupModal } from '../../ai/components/SmartSetupModal'
 import { AiActionHistoryDrawer } from '../../ai/components/AiActionHistoryDrawer'
+import { NotificationDrawer } from '../../ai/components/NotificationDrawer'
+import { ObserverRunsDrawer } from '../../ai/components/ObserverRunsDrawer'
 import { aiActionApi } from '../../ai/services/aiActionApi'
+import { notificationApi } from '../../ai/services/notificationApi'
 import { BoardModal } from './BoardModal'
 import { ColumnModal } from './ColumnModal'
 import { KanbanColumn } from './KanbanColumn'
@@ -134,7 +140,11 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
   const [boardModalOpen, setBoardModalOpen] = useState(false)
   const [smartSetupModalOpen, setSmartSetupModalOpen] = useState(false)
   const [aiHistoryOpen, setAiHistoryOpen] = useState(false)
+  const [notificationOpen, setNotificationOpen] = useState(false)
+  const [observerRunsOpen, setObserverRunsOpen] = useState(false)
   const [pendingAiActionCount, setPendingAiActionCount] = useState<number>(0)
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState<number>(0)
+  const [isManagerOrAdmin, setIsManagerOrAdmin] = useState<boolean>(false)
 
   // Fetch pending AI actions count on mount / board change
   const refreshPendingCount = useCallback(() => {
@@ -144,6 +154,35 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
       .then((logs) => setPendingAiActionCount(logs.length))
       .catch(() => {})
   }, [boardId])
+
+  // Fetch unread notification count
+  const refreshNotificationCount = useCallback(() => {
+    notificationApi
+      .listNotifications({ take: 1 })
+      .then((res) => setUnreadNotificationCount(res.unreadCount))
+      .catch(() => {})
+  }, [])
+
+  // Check role in workspace
+  useEffect(() => {
+    let ignore = false
+    httpClient
+      .get<Array<{ id: string; role: string }>>('/workspaces')
+      .then((res) => {
+        if (!ignore && res.data) {
+          const currentWs = res.data.find((w) => w.id === workspaceId)
+          if (currentWs) {
+            const role = currentWs.role?.toLowerCase()
+            setIsManagerOrAdmin(role === 'manager' || role === 'admin')
+          }
+        }
+      })
+      .catch(() => {})
+
+    return () => {
+      ignore = true
+    }
+  }, [workspaceId])
 
   useEffect(() => {
     let ignore = false
@@ -157,10 +196,11 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
         })
         .catch(() => {})
     }
+    refreshNotificationCount()
     return () => {
       ignore = true
     }
-  }, [boardId])
+  }, [boardId, refreshNotificationCount])
 
   // Configure Dnd sensors (Pointer with 5px threshold to allow card clicks)
   const sensors = useSensors(
@@ -179,21 +219,25 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
     const result: Record<string, TaskResponse[]> = {}
     const query = searchQuery.trim().toLowerCase()
 
-    Object.entries(tasksByColumn).forEach(([colId, tasks]) => {
+    for (const [colId, tasks] of Object.entries(tasksByColumn)) {
       result[colId] = tasks.filter((t) => {
-        const matchesQuery =
-          !query ||
-          t.title.toLowerCase().includes(query) ||
-          t.assigneeName?.toLowerCase().includes(query) ||
-          t.labels?.some((l) => l.name.toLowerCase().includes(query))
+        // Priority filter
+        if (priorityFilter !== 'ALL' && t.priority !== priorityFilter) {
+          return false
+        }
+        // Search query filter (matches title, description, assignee name, or label text)
+        if (!query) return true
+        const titleMatch = t.title.toLowerCase().includes(query)
+        const descMatch = t.description?.toLowerCase().includes(query) ?? false
+        const assigneeMatch =
+          t.assigneeName?.toLowerCase().includes(query) ?? false
+        const labelMatch = t.labels?.some((l) =>
+          l.name.toLowerCase().includes(query)
+        ) ?? false
 
-        const matchesPriority =
-          priorityFilter === 'ALL' || t.priority === priorityFilter
-
-        return matchesQuery && matchesPriority
+        return titleMatch || descMatch || assigneeMatch || labelMatch
       })
-    })
-
+    }
     return result
   }, [tasksByColumn, searchQuery, priorityFilter])
 
@@ -265,7 +309,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
   if (isLoading && !board) {
     return (
       <Flex align="center" justify="center" style={{ height: '80vh' }}>
-        <Spin size="large" tip="Đang tải bảng Kanban..." />
+        <Spin size="large" description="Đang tải bảng Kanban..." />
       </Flex>
     )
   }
@@ -340,6 +384,21 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
               <Button icon={<ReloadOutlined />} onClick={refetch} />
             </Tooltip>
 
+            {/* AI Notifications Button with Unread Badge */}
+            <Badge count={unreadNotificationCount} offset={[-4, 4]}>
+              <Button
+                icon={<BellOutlined />}
+                onClick={() => setNotificationOpen(true)}
+                style={{
+                  borderRadius: 8,
+                  borderColor: '#cbd5e1',
+                  color: '#475569',
+                }}
+              >
+                Cảnh báo AI
+              </Button>
+            </Badge>
+
             {/* AI History Button with Pending Badge */}
             <Badge count={pendingAiActionCount} offset={[-4, 4]}>
               <Button
@@ -354,6 +413,23 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
                 Lịch sử AI
               </Button>
             </Badge>
+
+            {/* AI Observer Runs (Manager/Admin only) */}
+            {isManagerOrAdmin && (
+              <Button
+                icon={<RadarChartOutlined />}
+                onClick={() => setObserverRunsOpen(true)}
+                style={{
+                  borderRadius: 8,
+                  borderColor: '#818cf8',
+                  color: '#4338ca',
+                  fontWeight: 500,
+                  backgroundColor: '#eef2ff',
+                }}
+              >
+                AI Observer
+              </Button>
+            )}
 
             <Button
               icon={<RobotOutlined />}
@@ -523,6 +599,27 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
           refreshPendingCount()
         }}
       />
+
+      <NotificationDrawer
+        open={notificationOpen}
+        onClose={() => {
+          setNotificationOpen(false)
+          refreshNotificationCount()
+        }}
+        workspaceId={workspaceId}
+      />
+
+      {isManagerOrAdmin && (
+        <ObserverRunsDrawer
+          open={observerRunsOpen}
+          onClose={() => setObserverRunsOpen(false)}
+          workspaceId={workspaceId}
+          onScanFinished={() => {
+            refreshNotificationCount()
+            refetch()
+          }}
+        />
+      )}
     </div>
   )
 }
