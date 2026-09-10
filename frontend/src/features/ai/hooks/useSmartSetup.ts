@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { smartSetupApi } from '../services/smartSetupApi'
+import { aiActionApi } from '../services/aiActionApi'
 import type {
   EditableTaskProposal,
   SmartSetupLabelSuggestion,
@@ -7,8 +8,20 @@ import type {
   SmartSetupTaskProposal,
   WorkspaceMember,
 } from '../types/smartSetup.types'
+import type {
+  AiActionLog,
+  AiActionLogDetail,
+  ConfirmSmartSetupRequest,
+} from '../types/aiAction.types'
 
-export type SmartSetupStatus = 'idle' | 'generating' | 'ready' | 'error' | 'confirmed'
+export type SmartSetupStatus =
+  | 'idle'
+  | 'generating'
+  | 'ready'
+  | 'submitting'
+  | 'pending'
+  | 'error'
+  | 'confirmed'
 
 export interface UseSmartSetupResult {
   status: SmartSetupStatus
@@ -16,6 +29,8 @@ export interface UseSmartSetupResult {
   summary: string | null
   tasks: EditableTaskProposal[]
   members: WorkspaceMember[]
+  actionLog: AiActionLog | AiActionLogDetail | null
+  isActionLoading: boolean
   error: string | null
   httpStatus: number | null
   isLoadingMembers: boolean
@@ -27,7 +42,13 @@ export interface UseSmartSetupResult {
   addTask: () => void
   addLabel: (tempId: string, label: SmartSetupLabelSuggestion) => void
   removeLabel: (tempId: string, labelIndex: number) => void
-  confirm: () => void
+  submitConfirm: (
+    boardId: string,
+    columnId?: string | null
+  ) => Promise<AiActionLog | null>
+  approveAction: () => Promise<AiActionLogDetail | null>
+  rejectAction: (note?: string | null) => Promise<AiActionLogDetail | null>
+  undoAction: () => Promise<AiActionLogDetail | null>
   reset: () => void
   backToPrompt: () => void
 }
@@ -45,6 +66,8 @@ export const useSmartSetup = (): UseSmartSetupResult => {
   const [summary, setSummary] = useState<string | null>(null)
   const [tasks, setTasks] = useState<EditableTaskProposal[]>([])
   const [members, setMembers] = useState<WorkspaceMember[]>([])
+  const [actionLog, setActionLog] = useState<AiActionLog | AiActionLogDetail | null>(null)
+  const [isActionLoading, setIsActionLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [httpStatus, setHttpStatus] = useState<number | null>(null)
   const [isLoadingMembers, setIsLoadingMembers] = useState(false)
@@ -75,6 +98,10 @@ export const useSmartSetup = (): UseSmartSetupResult => {
         return null
       }
 
+      if (customDesc !== undefined) {
+        setDescription(trimmed)
+      }
+
       setStatus('generating')
       setError(null)
       setHttpStatus(null)
@@ -96,11 +123,11 @@ export const useSmartSetup = (): UseSmartSetupResult => {
       } catch (err: unknown) {
         setStatus('error')
         const errObj = err as {
-          response?: { status?: number; data?: { error?: string } }
+          response?: { status?: number; data?: { error?: string; title?: string } }
           message?: string
         }
         const statusCode = errObj?.response?.status ?? 500
-        const serverError = errObj?.response?.data?.error
+        const serverError = errObj?.response?.data?.error || errObj?.response?.data?.title
         setHttpStatus(statusCode)
 
         if (statusCode === 400) {
@@ -188,15 +215,176 @@ export const useSmartSetup = (): UseSmartSetupResult => {
     )
   }, [])
 
-  const confirm = useCallback(() => {
-    setStatus('confirmed')
-  }, [])
+  const submitConfirm = useCallback(
+    async (
+      boardId: string,
+      columnId?: string | null
+    ): Promise<AiActionLog | null> => {
+      if (!tasks.length) {
+        setError('Danh sách sub-tasks không được để trống.')
+        return null
+      }
+
+      setStatus('submitting')
+      setError(null)
+      setHttpStatus(null)
+
+      try {
+        const payload: ConfirmSmartSetupRequest = {
+          description,
+          summary,
+          // Remove tempId before sending to backend
+          tasks: tasks.map(({ tempId: _t, ...rest }) => rest),
+          columnId: columnId ?? null,
+        }
+
+        const log = await aiActionApi.confirmSmartSetup(boardId, payload)
+        setActionLog(log)
+        setStatus('pending')
+        return log
+      } catch (err: unknown) {
+        setStatus('ready')
+        const errObj = err as {
+          response?: { status?: number; data?: { error?: string; title?: string } }
+          message?: string
+        }
+        const statusCode = errObj?.response?.status ?? 500
+        const serverError = errObj?.response?.data?.error || errObj?.response?.data?.title
+        setHttpStatus(statusCode)
+
+        if (statusCode === 400) {
+          setError(
+            serverError ||
+              'Dữ liệu đề xuất không hợp lệ. Vui lòng kiểm tra lại tiêu đề và các thông tin.'
+          )
+        } else if (statusCode === 403) {
+          setError(
+            serverError ||
+              'Bạn cần quyền Manager hoặc Admin trong workspace này để xác nhận đề xuất.'
+          )
+        } else if (statusCode === 404) {
+          setError('Bảng làm việc không tồn tại hoặc đã bị xóa.')
+        } else if (statusCode === 409) {
+          setError(
+            serverError ||
+              'Hành động này đã được tạo hoặc xử lý ở một phiên khác.'
+          )
+        } else {
+          setError(
+            serverError ||
+              (err instanceof Error
+                ? err.message
+                : 'Đã xảy ra lỗi khi tạo yêu cầu phê duyệt AI. Vui lòng thử lại.')
+          )
+        }
+        return null
+      }
+    },
+    [description, summary, tasks]
+  )
+
+  const approveAction = useCallback(async (): Promise<AiActionLogDetail | null> => {
+    if (!actionLog?.id) return null
+    setIsActionLoading(true)
+    setError(null)
+    setHttpStatus(null)
+
+    try {
+      const updated = await aiActionApi.approveAiAction(actionLog.id)
+      setActionLog(updated)
+      return updated
+    } catch (err: unknown) {
+      const errObj = err as {
+        response?: { status?: number; data?: { error?: string; title?: string } }
+        message?: string
+      }
+      const statusCode = errObj?.response?.status ?? 500
+      const serverError = errObj?.response?.data?.error || errObj?.response?.data?.title
+      setHttpStatus(statusCode)
+      if (statusCode === 409) {
+        setError(
+          serverError || 'Hành động này đã được xử lý ở nơi khác (không còn chờ duyệt).'
+        )
+      } else {
+        setError(serverError || 'Không thể phê duyệt hành động AI này.')
+      }
+      return null
+    } finally {
+      setIsActionLoading(false)
+    }
+  }, [actionLog])
+
+  const rejectAction = useCallback(
+    async (note?: string | null): Promise<AiActionLogDetail | null> => {
+      if (!actionLog?.id) return null
+      setIsActionLoading(true)
+      setError(null)
+      setHttpStatus(null)
+
+      try {
+        const updated = await aiActionApi.rejectAiAction(actionLog.id, note)
+        setActionLog(updated)
+        return updated
+      } catch (err: unknown) {
+        const errObj = err as {
+          response?: { status?: number; data?: { error?: string; title?: string } }
+          message?: string
+        }
+        const statusCode = errObj?.response?.status ?? 500
+        const serverError = errObj?.response?.data?.error || errObj?.response?.data?.title
+        setHttpStatus(statusCode)
+        if (statusCode === 409) {
+          setError(
+            serverError || 'Hành động này đã được xử lý ở nơi khác.'
+          )
+        } else {
+          setError(serverError || 'Không thể từ chối hành động AI này.')
+        }
+        return null
+      } finally {
+        setIsActionLoading(false)
+      }
+    },
+    [actionLog]
+  )
+
+  const undoAction = useCallback(async (): Promise<AiActionLogDetail | null> => {
+    if (!actionLog?.id) return null
+    setIsActionLoading(true)
+    setError(null)
+    setHttpStatus(null)
+
+    try {
+      const updated = await aiActionApi.undoAiAction(actionLog.id)
+      setActionLog(updated)
+      return updated
+    } catch (err: unknown) {
+      const errObj = err as {
+        response?: { status?: number; data?: { error?: string; title?: string } }
+        message?: string
+      }
+      const statusCode = errObj?.response?.status ?? 500
+      const serverError = errObj?.response?.data?.error || errObj?.response?.data?.title
+      setHttpStatus(statusCode)
+      if (statusCode === 409) {
+        setError(
+          serverError || 'Hành động này đã bị hoàn tác hoặc không thể hoàn tác.'
+        )
+      } else {
+        setError(serverError || 'Không thể hoàn tác hành động AI này.')
+      }
+      return null
+    } finally {
+      setIsActionLoading(false)
+    }
+  }, [actionLog])
 
   const reset = useCallback(() => {
     setStatus('idle')
     setDescription('')
     setSummary(null)
     setTasks([])
+    setActionLog(null)
     setError(null)
     setHttpStatus(null)
   }, [])
@@ -213,6 +401,8 @@ export const useSmartSetup = (): UseSmartSetupResult => {
     summary,
     tasks,
     members,
+    actionLog,
+    isActionLoading,
     error,
     httpStatus,
     isLoadingMembers,
@@ -224,7 +414,10 @@ export const useSmartSetup = (): UseSmartSetupResult => {
     addTask,
     addLabel,
     removeLabel,
-    confirm,
+    submitConfirm,
+    approveAction,
+    rejectAction,
+    undoAction,
     reset,
     backToPrompt,
   }
