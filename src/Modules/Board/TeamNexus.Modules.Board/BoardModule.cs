@@ -23,6 +23,12 @@ public static class BoardModule
         services.AddScoped<ICommentService, CommentService>();
         services.AddScoped<IBoardEventPublisher, BoardEventPublisher>();
 
+        // Activity log port (Phase 5 §2): Board declares it, module Ai registers the real EF
+        // adapter. That registration wins because Program.cs calls AddBoardModule before
+        // AddAiModule — without the no-op below the Board module alone could not resolve
+        // TaskService/CommentService.
+        services.AddScoped<IActivityLogWriter, NullActivityLogWriter>();
+
         // Real-time: BoardHub over WebSockets/SSE/long-polling (Phase 2 §3).
         services.AddSignalR();
 

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using TeamNexus.Modules.Board.DTOs;
 using TeamNexus.Persistence.Data;
 using TeamNexus.Persistence.Data.Entities;
@@ -26,15 +27,18 @@ public sealed class TaskService : ITaskService
     private readonly TeamNexusDbContext _db;
     private readonly IWorkspaceAccess _access;
     private readonly IBoardEventPublisher _events;
+    private readonly IActivityLogWriter _activityLog;
 
     public TaskService(
         TeamNexusDbContext db,
         IWorkspaceAccess access,
-        IBoardEventPublisher events)
+        IBoardEventPublisher events,
+        IActivityLogWriter activityLog)
     {
         _db = db;
         _access = access;
         _events = events;
+        _activityLog = activityLog;
     }
 
     public async Task<IReadOnlyList<TaskResponse>> GetTasksAsync(
@@ -124,6 +128,24 @@ public sealed class TaskService : ITaskService
 
         var response = DtoMapping.MapTask(task, []);
         await _events.TaskCreated(boardId, response, ct);
+
+        // Phase 5 §2.3: recorded after the write so the log reflects what was actually stored
+        // (columns: entity_id/board_id/workspace_id — payload only carries the short diff).
+        await _activityLog.RecordAsync(new ActivityLogEntry(
+            board.WorkspaceId,
+            boardId,
+            userId,
+            ObserverEntityTypes.Task,
+            task.Id,
+            ObserverActivityActions.TaskCreated,
+            ActivityPayload(new
+            {
+                columnId = column.Id,
+                assigneeId = request.AssigneeId,
+                priority = task.Priority?.ToString(),
+                isDone = column.IsDone,
+            })), ct);
+
         return response;
     }
 
@@ -133,7 +155,7 @@ public sealed class TaskService : ITaskService
         var task = await LoadTaskAsync(taskId, ct)
             ?? throw new NotFoundException("Task not found.");
 
-        await RequireMemberOfTaskBoardAsync(task, userId, ct);
+        var workspaceId = await RequireMemberOfTaskBoardWithWorkspaceAsync(task, userId, ct);
         ValidateTitle(request.Title);
 
         if (request.AssigneeId.HasValue
@@ -142,6 +164,11 @@ public sealed class TaskService : ITaskService
             throw new BadRequestException("Assignee does not exist.");
         }
 
+        // Capture the diff basis BEFORE mutating (Phase 5 §2.3 — text fields are reported as
+        // booleans so the log never stores the title/description content).
+        var titleChanged = !string.Equals(task.Title, request.Title.Trim(), StringComparison.Ordinal);
+        var descriptionChanged = !string.Equals(task.Description, TrimToNull(request.Description), StringComparison.Ordinal);
+
         task.Title = request.Title.Trim();
         task.Description = TrimToNull(request.Description);
         task.AssigneeId = request.AssigneeId;
@@ -149,6 +176,23 @@ public sealed class TaskService : ITaskService
         task.Priority = ParsePriority(request.Priority);
 
         await _db.SaveChangesAsync(ct);
+
+        await _activityLog.RecordAsync(new ActivityLogEntry(
+            workspaceId,
+            task.BoardId,
+            userId,
+            ObserverEntityTypes.Task,
+            task.Id,
+            ObserverActivityActions.TaskUpdated,
+            ActivityPayload(new
+            {
+                titleChanged,
+                descriptionChanged,
+                assigneeId = request.AssigneeId,
+                dueDate = request.DueDate,
+                priority = task.Priority?.ToString(),
+            })), ct);
+
         var response = await GetTaskByIdAsync(taskId, userId, ct);
         await _events.TaskUpdated(task.BoardId, response, ct);
         return response;
@@ -159,10 +203,11 @@ public sealed class TaskService : ITaskService
     {
         var task = await _db.Tasks
             .Include(t => t.Assignee)
+            .Include(t => t.Board)
             .FirstOrDefaultAsync(t => t.Id == taskId, ct)
             ?? throw new NotFoundException("Task not found.");
 
-        await RequireMemberOfTaskBoardAsync(task, userId, ct);
+        var workspaceId = await RequireMemberOfTaskBoardWithWorkspaceAsync(task, userId, ct);
 
         var targetColumn = await _db.BoardColumns
             .FirstOrDefaultAsync(c => c.Id == request.ColumnId, ct)
@@ -207,6 +252,35 @@ public sealed class TaskService : ITaskService
             new TaskMovedEventPayload(task.Id, fromColumnId, targetColumn.Id, insertIndex),
             ct);
 
+        // Phase 5 §2.3: MUST be after CommitAsync — an activity row must never be part of (or
+        // roll back with) the drag & drop transaction.
+        await _activityLog.RecordAsync(new ActivityLogEntry(
+            workspaceId,
+            task.BoardId,
+            userId,
+            ObserverEntityTypes.Task,
+            task.Id,
+            ObserverActivityActions.TaskMoved,
+            ActivityPayload(new
+            {
+                fromColumnId,
+                toColumnId = targetColumn.Id,
+                position = insertIndex,
+            })), ct);
+
+        // Entering an is_done column is a second, distinct event (set by the Board logic above).
+        if (targetColumn.IsDone)
+        {
+            await _activityLog.RecordAsync(new ActivityLogEntry(
+                workspaceId,
+                task.BoardId,
+                userId,
+                ObserverEntityTypes.Task,
+                task.Id,
+                ObserverActivityActions.TaskCompleted,
+                ActivityPayload(new { columnId = targetColumn.Id })), ct);
+        }
+
         // Reload with details (assignee/labels) for the response.
         return await GetTaskByIdAsync(taskId, userId, ct);
     }
@@ -214,19 +288,38 @@ public sealed class TaskService : ITaskService
     public async Task DeleteTaskAsync(Guid taskId, Guid userId, CancellationToken ct = default)
     {
         var task = await _db.Tasks
+            .Include(t => t.Board)
             .FirstOrDefaultAsync(t => t.Id == taskId, ct)
             ?? throw new NotFoundException("Task not found.");
 
-        await RequireMemberOfTaskBoardAsync(task, userId, ct);
+        var workspaceId = await RequireMemberOfTaskBoardWithWorkspaceAsync(task, userId, ct);
 
         var boardId = task.BoardId;
+        var columnId = task.ColumnId;
+
         task.DeletedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
 
         await _events.TaskDeleted(boardId, taskId, ct);
+
+        // Phase 5 §2.3: after the soft delete; workspaceId was captured before it because the
+        // task row (with its board navigation) is filtered out from now on.
+        await _activityLog.RecordAsync(new ActivityLogEntry(
+            workspaceId,
+            boardId,
+            userId,
+            ObserverEntityTypes.Task,
+            taskId,
+            ObserverActivityActions.TaskDeleted,
+            ActivityPayload(new { columnId })), ct);
     }
 
     // ---- helpers ----------------------------------------------------------
+
+    /// <summary>camelCase JSON for activity payloads (Phase 5 §2, decision A6).</summary>
+    private static readonly JsonSerializerOptions ActivityJson = new(JsonSerializerDefaults.Web);
+
+    private static string ActivityPayload(object value) => JsonSerializer.Serialize(value, ActivityJson);
 
     private async Task<BoardEntity> RequireVisibleBoardAsync(Guid boardId, Guid userId, CancellationToken ct)
     {
@@ -239,12 +332,23 @@ public sealed class TaskService : ITaskService
     }
 
     private async Task RequireMemberOfTaskBoardAsync(BoardTask task, Guid userId, CancellationToken ct)
+        => await RequireMemberOfTaskBoardWithWorkspaceAsync(task, userId, ct);
+
+    /// <summary>
+    /// Same authorization check, but also returns the task's workspace id so the Phase 5
+    /// activity-log hooks do not have to load the board a second time. (A tuple rather than an
+    /// <c>out</c> parameter — async methods cannot have <c>out</c> parameters.)
+    /// </summary>
+    private async Task<Guid> RequireMemberOfTaskBoardWithWorkspaceAsync(
+        BoardTask task, Guid userId, CancellationToken ct)
     {
         var board = await _db.Boards
+            .AsNoTracking()
             .FirstOrDefaultAsync(b => b.Id == task.BoardId, ct)
             ?? throw new NotFoundException("Task not found.");
 
         await _access.RequireMemberAsync(board.WorkspaceId, userId, ct);
+        return board.WorkspaceId;
     }
 
     private async Task<BoardTask?> LoadTaskAsync(Guid taskId, CancellationToken ct)
