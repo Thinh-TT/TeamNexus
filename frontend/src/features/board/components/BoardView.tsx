@@ -14,6 +14,7 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import {
   ArrowLeftOutlined,
+  BarChartOutlined,
   BellOutlined,
   HistoryOutlined,
   LoadingOutlined,
@@ -428,6 +429,25 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
                 }}
               >
                 AI Observer
+              </Button>
+            )}
+
+            {/* Reports (Manager/Admin only) */}
+            {isManagerOrAdmin && (
+              <Button
+                icon={<BarChartOutlined />}
+                onClick={() =>
+                  navigate(`/workspaces/${workspaceId}/reports?boardId=${boardId}`)
+                }
+                style={{
+                  borderRadius: 8,
+                  borderColor: '#818cf8',
+                  color: '#4338ca',
+                  fontWeight: 500,
+                  backgroundColor: '#eef2ff',
+                }}
+              >
+                Báo cáo
               </Button>
             )}
 

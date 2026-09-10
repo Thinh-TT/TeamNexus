@@ -5,6 +5,7 @@ import { DashboardPage } from '../features/auth/pages/DashboardPage'
 import { LoginPage } from '../features/auth/pages/LoginPage'
 import { BoardListPage } from '../features/board/pages/BoardListPage'
 import { BoardPage } from '../features/board/pages/BoardPage'
+import { ReportsPage } from '../features/reporting/pages/ReportsPage'
 
 export const AppRouter: React.FC = () => {
   return (
@@ -32,6 +33,14 @@ export const AppRouter: React.FC = () => {
           element={
             <ProtectedRoute>
               <BoardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/workspaces/:workspaceId/reports"
+          element={
+            <ProtectedRoute>
+              <ReportsPage />
             </ProtectedRoute>
           }
         />

@@ -6,6 +6,7 @@ using TeamNexus.Modules.Auth.Endpoints;
 using TeamNexus.Modules.Board;
 using TeamNexus.Modules.Board.Endpoints;
 using TeamNexus.Modules.Board.Hubs;
+using TeamNexus.Modules.Reporting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,6 +28,10 @@ builder.Services.AddBoardModule();
 
 // Ai module: DeepSeek config + DI wiring for AI Smart Setup (Phase 3 §1).
 builder.Services.AddAiModule(builder.Configuration);
+
+// Reporting module: báo cáo tiến độ/hiệu suất + xuất PDF/Excel on-demand (Phase 6).
+// Đăng ký SAU Board/Ai để không đổi thứ tự resolve của 2 module cũ (bất biến ở phase-5 §2).
+builder.Services.AddReportingModule(builder.Configuration);
 
 // ---- CORS ------------------------------------------------------------
 // Dev convenience: during Phase 1 the frontend (Vite, :5173) talks to this API
@@ -127,6 +132,16 @@ api.MapGet("/workspaces", async (TeamNexus.Persistence.Data.TeamNexusDbContext d
 app.MapAuthModuleEndpoints();
 app.MapBoardModuleEndpoints();
 app.MapAiModuleEndpoints();
+app.MapReportingModuleEndpoints();
 app.MapBoardHub();
 
 app.Run();
+
+/// <summary>
+/// Marker cho test/harness: <c>WebApplicationFactory&lt;Program&gt;</c> cần một type <c>public</c> của entry
+/// point (top-level statements sinh ra type <c>Program</c> là <c>internal</c>). Chỉ là khai báo partial
+/// rỗng — không thêm hành vi nào vào pipeline (Phase 6 §5, quyết định D29).
+/// </summary>
+public partial class Program
+{
+}

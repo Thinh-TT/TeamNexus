@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import {
   ArrowLeftOutlined,
+  BarChartOutlined,
   DeleteOutlined,
   EditOutlined,
   FolderOpenOutlined,
@@ -172,6 +173,13 @@ export const BoardListPage: React.FC = () => {
               <Tooltip title="Làm mới">
                 <Button icon={<ReloadOutlined />} onClick={fetchBoards} />
               </Tooltip>
+              <Button
+                icon={<BarChartOutlined />}
+                style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}
+                onClick={() => navigate(`/workspaces/${workspaceId}/reports`)}
+              >
+                Báo cáo
+              </Button>
               <Button
                 type="primary"
                 icon={<PlusOutlined />}

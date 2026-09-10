@@ -21,6 +21,7 @@
     <ProjectReference Include="..\Modules\Ai\TeamNexus.Modules.Ai\TeamNexus.Modules.Ai.csproj" />
     <ProjectReference Include="..\Modules\Board\TeamNexus.Modules.Board\TeamNexus.Modules.Board.csproj" />
     <ProjectReference Include="..\Modules\Auth\TeamNexus.Modules.Auth\TeamNexus.Modules.Auth.csproj" />
+    <ProjectReference Include="..\Modules\Reporting\TeamNexus.Modules.Reporting\TeamNexus.Modules.Reporting.csproj" />
     <ProjectReference Include="..\Shared\TeamNexus.Shared\TeamNexus.Shared.csproj" />
   </ItemGroup>
 
