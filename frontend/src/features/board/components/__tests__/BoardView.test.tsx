@@ -1,9 +1,11 @@
 import React from 'react'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { BoardView } from '../BoardView'
+import { aiActionApi } from '../../../ai/services/aiActionApi'
 import type { BoardResponse, ColumnResponse, TaskResponse } from '../../types/board.types'
+import type { AiActionLog } from '../../../ai/types/aiAction.types'
 
 const mockBoard: BoardResponse = {
   id: 'board-1',
@@ -85,9 +87,20 @@ vi.mock('../../hooks/useBoard', () => ({
   useBoard: () => mockUseBoardResult,
 }))
 
+vi.mock('../../../ai/services/aiActionApi', () => ({
+  aiActionApi: {
+    listAiActions: vi.fn(),
+    getAiAction: vi.fn(),
+    approveAiAction: vi.fn(),
+    rejectAiAction: vi.fn(),
+    undoAiAction: vi.fn(),
+  },
+}))
+
 describe('BoardView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(aiActionApi.listAiActions).mockResolvedValue([])
   })
 
   const renderComponent = () => {
@@ -138,5 +151,45 @@ describe('BoardView', () => {
       screen.getByPlaceholderText(/Xây dựng tính năng thông báo Real-time/i)
     ).toBeInTheDocument()
   })
-})
 
+  it('renders Lịch sử AI button and opens the history drawer on click', async () => {
+    const mockPendingLogs: AiActionLog[] = [
+      {
+        id: 'log-1',
+        action: 'CreateSubtasks',
+        entityType: 'Board',
+        entityId: 'board-1',
+        status: 'Pending',
+        requestedByUserId: 'u1',
+        requestedByName: 'Thinh',
+        decidedByUserId: null,
+        decidedByName: null,
+        decidedAt: null,
+        decisionNote: null,
+        taskCount: 3,
+        createdAt: '2026-09-10T08:00:00Z',
+        updatedAt: '2026-09-10T08:00:00Z',
+      },
+    ]
+
+    vi.mocked(aiActionApi.listAiActions).mockResolvedValue(mockPendingLogs)
+
+    renderComponent()
+
+    await waitFor(() => {
+      expect(aiActionApi.listAiActions).toHaveBeenCalledWith('board-1', {
+        status: 'Pending',
+        take: 100,
+      })
+    })
+
+    const historyBtn = screen.getByRole('button', { name: /Lịch sử AI/i })
+    expect(historyBtn).toBeInTheDocument()
+
+    fireEvent.click(historyBtn)
+
+    await waitFor(() => {
+      expect(screen.getByText('Lịch sử Hành động AI')).toBeInTheDocument()
+    })
+  })
+})

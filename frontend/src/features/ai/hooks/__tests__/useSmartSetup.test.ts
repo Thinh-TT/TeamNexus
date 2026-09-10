@@ -1,13 +1,24 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { smartSetupApi } from '../../services/smartSetupApi'
+import { aiActionApi } from '../../services/aiActionApi'
 import { useSmartSetup } from '../useSmartSetup'
 import type { SmartSetupProposal, WorkspaceMember } from '../../types/smartSetup.types'
+import type { AiActionLog, AiActionLogDetail } from '../../types/aiAction.types'
 
 vi.mock('../../services/smartSetupApi', () => ({
   smartSetupApi: {
     generateSmartSetup: vi.fn(),
     getWorkspaceMembers: vi.fn(),
+  },
+}))
+
+vi.mock('../../services/aiActionApi', () => ({
+  aiActionApi: {
+    confirmSmartSetup: vi.fn(),
+    approveAiAction: vi.fn(),
+    rejectAiAction: vi.fn(),
+    undoAiAction: vi.fn(),
   },
 }))
 
@@ -24,6 +35,7 @@ describe('useSmartSetup', () => {
     expect(result.current.summary).toBeNull()
     expect(result.current.tasks).toEqual([])
     expect(result.current.members).toEqual([])
+    expect(result.current.actionLog).toBeNull()
     expect(result.current.error).toBeNull()
     expect(result.current.httpStatus).toBeNull()
   })
@@ -192,16 +204,139 @@ describe('useSmartSetup', () => {
     expect(result.current.tasks[0].title).toBe('Công việc mới')
   })
 
-  it('supports confirm, backToPrompt, and reset state transitions', async () => {
+  it('submitConfirm calls aiActionApi.confirmSmartSetup and transitions to pending state', async () => {
+    const mockProposal: SmartSetupProposal = {
+      summary: 'Tóm tắt 1',
+      tasks: [
+        {
+          title: 'Task A',
+          description: 'Desc A',
+          priority: 'High',
+          labels: [],
+          assignee: null,
+        },
+      ],
+    }
+    vi.mocked(smartSetupApi.generateSmartSetup).mockResolvedValueOnce(mockProposal)
+
+    const mockLog: AiActionLog = {
+      id: 'log-1',
+      action: 'CreateSubtasks',
+      entityType: 'Board',
+      entityId: 'board-1',
+      status: 'Pending',
+      requestedByUserId: 'u1',
+      requestedByName: 'Thinh',
+      decidedByUserId: null,
+      decidedByName: null,
+      decidedAt: null,
+      decisionNote: null,
+      taskCount: 1,
+      createdAt: '2026-09-10T08:00:00Z',
+      updatedAt: '2026-09-10T08:00:00Z',
+    }
+    vi.mocked(aiActionApi.confirmSmartSetup).mockResolvedValueOnce(mockLog)
+
+    const { result } = renderHook(() => useSmartSetup())
+
+    await act(async () => {
+      await result.current.generate('board-1', 'Mô tả tính năng')
+    })
+
+    expect(result.current.status).toBe('ready')
+
+    let returnedLog: AiActionLog | null = null
+    await act(async () => {
+      returnedLog = await result.current.submitConfirm('board-1', 'col-1')
+    })
+
+    expect(aiActionApi.confirmSmartSetup).toHaveBeenCalledWith('board-1', {
+      description: 'Mô tả tính năng',
+      summary: 'Tóm tắt 1',
+      tasks: [
+        {
+          title: 'Task A',
+          description: 'Desc A',
+          priority: 'High',
+          labels: [],
+          assignee: null,
+        },
+      ],
+      columnId: 'col-1',
+    })
+
+    expect(returnedLog).toEqual(mockLog)
+    expect(result.current.status).toBe('pending')
+    expect(result.current.actionLog).toEqual(mockLog)
+  })
+
+  it('handles approveAction, rejectAction, undoAction on actionLog', async () => {
+    const mockLog: AiActionLog = {
+      id: 'log-1',
+      action: 'CreateSubtasks',
+      entityType: 'Board',
+      entityId: 'board-1',
+      status: 'Pending',
+      requestedByUserId: 'u1',
+      requestedByName: 'Thinh',
+      decidedByUserId: null,
+      decidedByName: null,
+      decidedAt: null,
+      decisionNote: null,
+      taskCount: 1,
+      createdAt: '2026-09-10T08:00:00Z',
+      updatedAt: '2026-09-10T08:00:00Z',
+    }
+
+    const mockApproved: AiActionLogDetail = {
+      ...mockLog,
+      status: 'Approved',
+      basis: null,
+      beforeSnapshot: null,
+      afterSnapshot: null,
+      appliedSnapshot: {
+        entityType: 'Board',
+        entityId: 'board-1',
+        createdTaskIds: ['t1'],
+        createdLabelIds: [],
+        warnings: [],
+        appliedAt: '2026-09-10T08:05:00Z',
+      },
+      createdTaskIds: ['t1'],
+    }
+
+    vi.mocked(smartSetupApi.generateSmartSetup).mockResolvedValueOnce({
+      summary: null,
+      tasks: [{ title: 'T1', description: null, priority: null, labels: [], assignee: null }],
+    })
+    vi.mocked(aiActionApi.confirmSmartSetup).mockResolvedValueOnce(mockLog)
+    vi.mocked(aiActionApi.approveAiAction).mockResolvedValueOnce(mockApproved)
+
+    const { result } = renderHook(() => useSmartSetup())
+
+    await act(async () => {
+      await result.current.generate('board-1', 'Mô tả')
+    })
+
+    await act(async () => {
+      await result.current.submitConfirm('board-1', null)
+    })
+
+    expect(result.current.actionLog?.status).toBe('Pending')
+
+    // Approve
+    await act(async () => {
+      const updated = await result.current.approveAction()
+      expect(updated?.status).toBe('Approved')
+    })
+    expect(result.current.actionLog?.status).toBe('Approved')
+  })
+
+  it('supports backToPrompt and reset state transitions', async () => {
     const { result } = renderHook(() => useSmartSetup())
 
     act(() => {
       result.current.setDescription('Mô tả thử nghiệm')
-      result.current.confirm()
-    })
-    expect(result.current.status).toBe('confirmed')
-
-    act(() => {
       result.current.backToPrompt()
     })
     expect(result.current.status).toBe('idle')
@@ -213,5 +348,6 @@ describe('useSmartSetup', () => {
     expect(result.current.status).toBe('idle')
     expect(result.current.description).toBe('')
     expect(result.current.tasks).toEqual([])
+    expect(result.current.actionLog).toBeNull()
   })
 })

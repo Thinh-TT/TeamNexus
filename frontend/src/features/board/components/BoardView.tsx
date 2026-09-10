@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   DndContext,
   type DragEndEvent,
@@ -14,6 +14,7 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import {
   ArrowLeftOutlined,
+  HistoryOutlined,
   LoadingOutlined,
   PlusOutlined,
   ReloadOutlined,
@@ -41,6 +42,8 @@ import type {
   TaskResponse,
 } from '../types/board.types'
 import { SmartSetupModal } from '../../ai/components/SmartSetupModal'
+import { AiActionHistoryDrawer } from '../../ai/components/AiActionHistoryDrawer'
+import { aiActionApi } from '../../ai/services/aiActionApi'
 import { BoardModal } from './BoardModal'
 import { ColumnModal } from './ColumnModal'
 import { KanbanColumn } from './KanbanColumn'
@@ -125,11 +128,39 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
   const [searchQuery, setSearchQuery] = useState('')
   const [priorityFilter, setPriorityFilter] = useState<TaskPriority | 'ALL'>('ALL')
 
-  // Modals state
+  // Modals and Drawer state
   const [columnModalOpen, setColumnModalOpen] = useState(false)
   const [editingColumn, setEditingColumn] = useState<ColumnResponse | null>(null)
   const [boardModalOpen, setBoardModalOpen] = useState(false)
   const [smartSetupModalOpen, setSmartSetupModalOpen] = useState(false)
+  const [aiHistoryOpen, setAiHistoryOpen] = useState(false)
+  const [pendingAiActionCount, setPendingAiActionCount] = useState<number>(0)
+
+  // Fetch pending AI actions count on mount / board change
+  const refreshPendingCount = useCallback(() => {
+    if (!boardId) return
+    aiActionApi
+      .listAiActions(boardId, { status: 'Pending', take: 100 })
+      .then((logs) => setPendingAiActionCount(logs.length))
+      .catch(() => {})
+  }, [boardId])
+
+  useEffect(() => {
+    let ignore = false
+    if (boardId) {
+      aiActionApi
+        .listAiActions(boardId, { status: 'Pending', take: 100 })
+        .then((logs) => {
+          if (!ignore) {
+            setPendingAiActionCount(logs.length)
+          }
+        })
+        .catch(() => {})
+    }
+    return () => {
+      ignore = true
+    }
+  }, [boardId])
 
   // Configure Dnd sensors (Pointer with 5px threshold to allow card clicks)
   const sensors = useSensors(
@@ -309,6 +340,21 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
               <Button icon={<ReloadOutlined />} onClick={refetch} />
             </Tooltip>
 
+            {/* AI History Button with Pending Badge */}
+            <Badge count={pendingAiActionCount} offset={[-4, 4]}>
+              <Button
+                icon={<HistoryOutlined />}
+                onClick={() => setAiHistoryOpen(true)}
+                style={{
+                  borderRadius: 8,
+                  borderColor: '#cbd5e1',
+                  color: '#475569',
+                }}
+              >
+                Lịch sử AI
+              </Button>
+            </Badge>
+
             <Button
               icon={<RobotOutlined />}
               onClick={() => setSmartSetupModalOpen(true)}
@@ -409,7 +455,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
         </DndContext>
       </div>
 
-      {/* Modals */}
+      {/* Modals & Drawers */}
       <TaskDetailModal
         open={!!activeTask}
         task={activeTask}
@@ -451,10 +497,31 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
 
       <SmartSetupModal
         open={smartSetupModalOpen}
-        onClose={() => setSmartSetupModalOpen(false)}
+        onClose={() => {
+          setSmartSetupModalOpen(false)
+          refreshPendingCount()
+        }}
         workspaceId={workspaceId}
         boardId={boardId}
         workspaceLabels={workspaceLabels}
+        columns={columns}
+        onApplied={() => {
+          refetch()
+          refreshPendingCount()
+        }}
+      />
+
+      <AiActionHistoryDrawer
+        open={aiHistoryOpen}
+        onClose={() => {
+          setAiHistoryOpen(false)
+          refreshPendingCount()
+        }}
+        boardId={boardId}
+        onBoardChanged={() => {
+          refetch()
+          refreshPendingCount()
+        }}
       />
     </div>
   )

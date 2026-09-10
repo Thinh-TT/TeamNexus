@@ -1,17 +1,8 @@
-# TeamNexus.Modules.Ai — AI Smart Setup (Phase 3)
+Module AI của TeamNexus (modular monolith):
+1. **AI Smart Setup (Phase 3):** biến mô tả công việc của trưởng nhóm thành **đề xuất** sub-tasks + nhãn + người phụ trách qua DeepSeek API để con người chỉnh sửa và xác nhận (không ghi DB).
+2. **Accountability Layer (Phase 4):** cổng trung gian kiểm soát mọi hành động AI ghi dữ liệu (`AiActionLog`, vòng đời `Pending → Approved / Rejected → Undone`). Nút "Xác nhận" tạo log `Pending`, chỉ khi con người **Duyệt** mới sinh `tasks`/`labels`/`task_labels` thật, và hỗ trợ **Hoàn tác** (soft-delete + dọn nhãn).
 
-Module AI của TeamNexus (modular monolith): biến mô tả công việc của trưởng nhóm thành
-**đề xuất** sub-tasks + nhãn + người phụ trách, qua DeepSeek API, để con người chỉnh sửa
-và xác nhận. **Giai đoạn 3 không ghi DB** — mọi hành động ghi thật đi qua Accountability
-Layer ở Giai đoạn 4.
-
-> Trạng thái: **backend Giai đoạn 3 (§1–§4) đã xong** — cấu hình/đăng ký module, `IAiProvider` &
-> DeepSeek/Fake, endpoint Smart Setup + DTO, và `SmartSetupService.GenerateAsync` 12 bước.
-> Còn lại **§5 frontend** và **§6 test** (bàn giao antigravity — xem ghi chú trong
-> `Project-Documents/tasks/phase-3-ai-smart-setup.md`).
->
-> Endpoint `POST /api/boards/{boardId}/smart-setup` đã chạy end-to-end: verify với cả DeepSeek thật
-> và `FakeAiProvider`, không ghi DB.
+> Trạng thái: **Giai đoạn 4 đã hoàn tất 100% (Backend + Frontend + Test 88/88 test PASS, 0 warning/error).**
 
 ## §1 — Cấu hình & đăng ký (đã hiện thực)
 
@@ -192,15 +183,29 @@ Context gửi AI chỉ gồm **tên**: board, cột, thành viên, nhãn — kh�
 4000 ký tự, `max_tokens`/`temperature` lấy từ config, `MaxTaskCount` chặn số task. Retry chỉ xảy ra khi JSON
 hỏng (tối đa 1 lần).
 
-## Contract bàn giao Giai đoạn 4 (Accountability Layer)
+## Phase 4 — Accountability Layer (đã hoàn tất 100%)
 
-- Đối tượng "confirmed" = `SmartSetupProposal` sau khi người dùng sửa trên UI.
-- §4 thêm endpoint `POST /api/boards/{boardId}/smart-setup/confirm` đi qua **một** service
-  `AiActionService`: tạo `ai_action_logs` (`action=CreateSubtasks`, `basis`=tóm tắt mô tả,
-  `after_snapshot`=proposal, `status=Pending`) → chỉ khi `Approved` mới tạo thật
-  `tasks`/`labels`/`task_labels`/`assignee_id`.
-- Bảng `ai_action_logs` đã thiết kế ở `04-database-design.md` §3.5 — Giai đoạn 3 **không**
-  tạo entity/migration nào.
+### Endpoints Accountability Layer
+
+| Endpoint | Quyền | Method | Thành công | Ghi chú |
+|---|---|---|---|---|
+| `/api/boards/{boardId}/smart-setup/confirm` | Manager/Admin | POST | 201 `AiActionLog` | Tạo log `Pending` — không ghi task |
+| `/api/boards/{boardId}/ai-actions` | Manager/Admin | GET | 200 `AiActionLog[]` | Filter `?status=` và `?take=`, sort `createdAt DESC` |
+| `/api/ai-actions/{logId}` | Manager/Admin | GET | 200 `AiActionLogDetail` | Trả chi tiết + snapshots |
+| `/api/ai-actions/{logId}/approve` | Manager/Admin | POST | 200 `AiActionLogDetail` | Duyệt và ghi DB thật qua Applier (409 nếu không Pending) |
+| `/api/ai-actions/{logId}/reject` | Manager/Admin | POST | 200 `AiActionLogDetail` | Từ chối (body `{ note? }`) |
+| `/api/ai-actions/{logId}/undo` | Manager/Admin | POST | 200 `AiActionLogDetail` | Hoàn tác (soft-delete tasks, dọn nhãn, 409 nếu không Approved) |
+
+### Vòng đời trạng thái
+```
+Pending → Approved → Undone
+Pending → Rejected
+```
+Mọi chuyển trạng thái khác trả **409 Conflict**.
+
+### Contract bàn giao Giai đoạn 5 (AI Observer)
+- Mọi hành động AI ghi dữ liệu mới **bắt buộc** đi qua `IAiActionService` và cài đặt một `IAiActionApplier` tương ứng.
+- Lớp AI Observer chỉ đọc (`ai_action_logs`, board data) và phát cảnh báo/notifications, không ghi đè dữ liệu nghiệp vụ.
 
 ## Verify §1 (đã chạy)
 
