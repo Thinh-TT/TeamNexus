@@ -635,41 +635,41 @@ export interface ReportBoardOptionResponse { id: string; name: string; taskCount
 
 ### 6.1 Types, API, utils
 
-- [ ] `types/reporting.types.ts`: mirror §5.1 (`ReportPeriod`, `ReportScope`, `ReportProgress`, `ReportPerformance`, `ReportBoardRow`, `ReportAssigneeRow`, `ReportActionRow`, `ReportActivity`, `ReportHealth`, `ReportSummary`, `ReportBoardOption`, `ReportFormat = 'pdf' | 'excel'`, `ReportExportResult`).
-- [ ] `services/reportingApi.ts` (qua `httpClient` base `/api`; **không** tự set `X-XSRF-TOKEN`):
+- [x] `types/reporting.types.ts`: mirror §5.1 (`ReportPeriod`, `ReportScope`, `ReportProgress`, `ReportPerformance`, `ReportBoardRow`, `ReportAssigneeRow`, `ReportActionRow`, `ReportActivity`, `ReportHealth`, `ReportSummary`, `ReportBoardOption`, `ReportFormat = 'pdf' | 'excel'`, `ReportExportResult`).
+- [x] `services/reportingApi.ts` (qua `httpClient` base `/api`; **không** tự set `X-XSRF-TOKEN`):
   - `getReportSummary(workspaceId, params?: { boardId?: string; from?: string; to?: string }): Promise<ReportSummary>`
   - `listReportBoards(workspaceId): Promise<ReportBoardOption[]>`
   - `downloadReport(workspaceId, params: { format: ReportFormat; boardId?: string; from?: string; to?: string }): Promise<{ blob: Blob; fileName: string; rowCapReached: boolean }>`
     — `httpClient.get(url, { params, responseType: 'blob' })`; tên file đọc từ `content-disposition` (`filename="…"` **và** `filename*=UTF-8''…`, fallback `teamnexus-report.<ext>`); cờ đọc từ header `x-report-row-cap-reached`.
-- [ ] `utils/reportDownload.ts`: `saveBlob(blob, fileName)` — tạo `<a>` với `download`, `URL.createObjectURL`, `click()`, `URL.revokeObjectURL` (dọn ở `finally`).
-- [ ] `utils/reportError.ts`: `extractErrorMessage(err: unknown): Promise<{ status?: number; message: string }>` — vì `responseType: 'blob'`,
+- [x] `utils/reportDownload.ts`: `saveBlob(blob, fileName)` — tạo `<a>` với `download`, `URL.createObjectURL`, `click()`, `URL.revokeObjectURL` (dọn ở `finally`).
+- [x] `utils/reportError.ts`: `extractErrorMessage(err: unknown): Promise<{ status?: number; message: string }>` — vì `responseType: 'blob'`,
       lỗi JSON trở thành `Blob`: nếu `err.response.data instanceof Blob` ⇒ `await data.text()` → `JSON.parse` → lấy `.error`;
       fallback chuỗi tiếng Việt theo status (400/403/404/503). **Bắt buộc** — nếu thiếu, mọi lỗi export hiển thị "undefined".
-- [ ] `utils/reportFormat.ts`: format `null` giờ ⇒ `'—'`, `%` ⇒ `x.toFixed(1) + '%'` — dùng chung cho UI (tránh mỗi component tự format một kiểu).
+- [x] `utils/reportFormat.ts`: format `null` giờ ⇒ `'—'`, `%` ⇒ `x.toFixed(1) + '%'` — dùng chung cho UI (tránh mỗi component tự format một kiểu).
 
 ### 6.2 Hooks
 
-- [ ] `hooks/useReportSummary.ts`: state `{ report, status: 'idle'|'loading', error, httpStatus, params }`; `reload(params?)`; `setBoard(id?)`, `setRange(presetOrFromTo)`; lỗi 401/403/404/503 map đúng; cleanup `ignore` flag chống set state sau unmount (pattern `BoardListPage`).
-- [ ] `hooks/useReportExport.ts`: state `{ exporting: 'pdf'|'excel'|null, error, httpStatus }`; `exportReport(format)` — chặn gọi trùng khi `exporting != null`; gọi API → `saveBlob` → `message.success("Đã tải báo cáo")`; lỗi ⇒ `extractErrorMessage` + `message.error`.
-- [ ] Cả 2 hook **không** phụ thuộc SignalR, **không** gọi lại API khi component unmount.
+- [x] `hooks/useReportSummary.ts`: state `{ report, status: 'idle'|'loading', error, httpStatus, params }`; `reload(params?)`; `setBoard(id?)`, `setRange(presetOrFromTo)`; lỗi 401/403/404/503 map đúng; cleanup `ignore` flag chống set state sau unmount (pattern `BoardListPage`).
+- [x] `hooks/useReportExport.ts`: state `{ exporting: 'pdf'|'excel'|null, error, httpStatus }`; `exportReport(format)` — chặn gọi trùng khi `exporting != null`; gọi API → `saveBlob` → `message.success("Đã tải báo cáo")`; lỗi ⇒ `extractErrorMessage` + `message.error`.
+- [x] Cả 2 hook **không** phụ thuộc SignalR, **không** gọi lại API khi component unmount.
 
 ### 6.3 Components & page
 
-- [ ] `components/ReportFilters.tsx`: `Segmented` preset (7 / 30 / 90 ngày) + `DatePicker.RangePicker` (đồng bộ 2 chiều với Segmented) + `Select` board (option "Toàn workspace" + `listReportBoards`); `onChange(params)` debounce nhẹ (không gọi API mỗi lần gõ ngày).
-- [ ] `components/ReportSummaryPanel.tsx`: hàng `Statistic` (Tổng · Hoàn thành · Đang mở · Quá hạn · Đúng hạn · Hoàn thành TB (giờ) · Throughput/tuần) + `Progress` `donePercent` + bảng `byBoard` + bảng `byAssignee` + card hoạt động (`byAction`) + card sức khoẻ AI (ẩn khi `health.runsScanned = 0`); `Empty` khi `total = 0`; hiển thị cảnh báo khi `truncated.rowCapReached`.
-- [ ] `components/ReportExportDrawer.tsx`: `Radio.Group` (PDF / Excel) + 2 nút "Tải PDF" / "Tải Excel" (nút tương ứng `loading` + disable khi đang xuất) + `Alert` lỗi + ghi chú "File sinh tại chỗ, **không** lưu trên server".
-- [ ] `components/ReportTable.tsx`: wrapper bảng Ant Design dùng chung (columns + `rowKey` + `loading` + `Empty`) cho `byBoard`/`byAssignee`/`byAction`.
-- [ ] `pages/ReportsPage.tsx` (`/workspaces/:workspaceId/reports`, đọc `?boardId=` từ URL): layout giống `BoardListPage` (Header + `Content` maxWidth),
+- [x] `components/ReportFilters.tsx`: `Segmented` preset (7 / 30 / 90 ngày) + `DatePicker.RangePicker` (đồng bộ 2 chiều với Segmented) + `Select` board (option "Toàn workspace" + `listReportBoards`); `onChange(params)` debounce nhẹ (không gọi API mỗi lần gõ ngày).
+- [x] `components/ReportSummaryPanel.tsx`: hàng `Statistic` (Tổng · Hoàn thành · Đang mở · Quá hạn · Đúng hạn · Hoàn thành TB (giờ) · Throughput/tuần) + `Progress` `donePercent` + bảng `byBoard` + bảng `byAssignee` + card hoạt động (`byAction`) + card sức khoẻ AI (ẩn khi `health.runsScanned = 0`); `Empty` khi `total = 0`; hiển thị cảnh báo khi `truncated.rowCapReached`.
+- [x] `components/ReportExportDrawer.tsx`: `Radio.Group` (PDF / Excel) + 2 nút "Tải PDF" / "Tải Excel" (nút tương ứng `loading` + disable khi đang xuất) + `Alert` lỗi + ghi chú "File sinh tại chỗ, **không** lưu trên server".
+- [x] `components/ReportTable.tsx`: wrapper bảng Ant Design dùng chung (columns + `rowKey` + `loading` + `Empty`) cho `byBoard`/`byAssignee`/`byAction`.
+- [x] `pages/ReportsPage.tsx` (`/workspaces/:workspaceId/reports`, đọc `?boardId=` từ URL): layout giống `BoardListPage` (Header + `Content` maxWidth),
       role check qua `GET /api/workspaces` (copy pattern `BoardView`), **Member ⇒ `Result status="403"`** + **không** render số liệu;
       nút "Làm mới" + nút "Xuất báo cáo" mở `ReportExportDrawer`.
-- [ ] `index.ts` export types/api/hooks/components/pages.
+- [x] `index.ts` export types/api/hooks/components/pages.
 
 ### 6.4 Tích hợp
 
-- [ ] `app/router.tsx`: thêm route `<Route path="/workspaces/:workspaceId/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />`.
-- [ ] `features/board/pages/BoardListPage.tsx`: thêm nút **"Báo cáo"** (`BarChartOutlined`) cạnh "Tạo Bảng Mới" ⇒ `navigate(`/workspaces/${workspaceId}/reports`)`.
-- [ ] `features/board/components/BoardView.tsx`: thêm nút **"Báo cáo"** (`BarChartOutlined`) cạnh nút "AI Observer", dùng state `isManagerOrAdmin` đã có để **ẩn với Member**; `onClick` ⇒ `navigate(`/workspaces/${workspaceId}/reports?boardId=${boardId}`)`.
-- [ ] **Không** sửa `shared/api/httpClient.ts`, `features/board/stores/boardStore.ts`, `features/board/hooks/useBoardHub.ts`, `features/ai/*`.
+- [x] `app/router.tsx`: thêm route `<Route path="/workspaces/:workspaceId/reports" element={<ProtectedRoute><ReportsPage /></ProtectedRoute>} />`.
+- [x] `features/board/pages/BoardListPage.tsx`: thêm nút **"Báo cáo"** (`BarChartOutlined`) cạnh "Tạo Bảng Mới" ⇒ `navigate(`/workspaces/${workspaceId}/reports`)`.
+- [x] `features/board/components/BoardView.tsx`: thêm nút **"Báo cáo"** (`BarChartOutlined`) cạnh nút "AI Observer", dùng state `isManagerOrAdmin` đã có để **ẩn với Member**; `onClick` ⇒ `navigate(`/workspaces/${workspaceId}/reports?boardId=${boardId}`)`.
+- [x] **Không** sửa `shared/api/httpClient.ts`, `features/board/stores/boardStore.ts`, `features/board/hooks/useBoardHub.ts`, `features/ai/*`.
 
 ---
 
@@ -796,18 +796,18 @@ export interface ReportBoardOptionResponse { id: string; name: string; taskCount
 > **Runbook dev:** `dotnet run --project src/TeamNexus.Api` (đặt `Observer__Enabled=false`) + `npm run dev`; vào workspace
 > có role **Manager/Admin** → nút "Báo cáo" → chọn kỳ/board → "Xuất báo cáo".
 
-- [ ] `services/__tests__/reportingApi.test.ts`: đúng method/URL/params cho 3 hàm; nhánh `responseType: 'blob'`; parse `content-disposition`
+- [x] `services/__tests__/reportingApi.test.ts`: đúng method/URL/params cho 3 hàm; nhánh `responseType: 'blob'`; parse `content-disposition`
       (có `filename` chuẩn, có `filename*=UTF-8''`, **không** có ⇒ fallback); đọc header `x-report-row-cap-reached`.
-- [ ] `utils/__tests__/reportDownload.test.ts`: `saveBlob` gọi `createObjectURL` → `click` → `revokeObjectURL`; `extractErrorMessage`
+- [x] `utils/__tests__/reportDownload.test.ts`: `saveBlob` gọi `createObjectURL` → `click` → `revokeObjectURL`; `extractErrorMessage`
       với `Blob` JSON (đọc ra `{error}`), với `Blob` không phải JSON, và với lỗi mạng (không có `response`).
-- [ ] `hooks/__tests__/useReportSummary.test.ts`: `idle → loading → idle`; `reload` set `report`; lỗi 403/404/503 map đúng message; đổi `boardId` ⇒ gọi API với param mới.
-- [ ] `hooks/__tests__/useReportExport.test.ts`: `exportReport('pdf')` ⇒ `exporting = 'pdf'` → gọi API → `saveBlob` → về `null`; gọi trùng bị chặn; lỗi ⇒ `error` + `httpStatus` và **không** tải file.
-- [ ] `components/__tests__/ReportSummaryPanel.test.tsx`: render số liệu từ fixture; `Empty` khi `total = 0`; cảnh báo khi `rowCapReached`; hiển thị `'—'` khi `avgCompletionHours = null`.
-- [ ] `components/__tests__/ReportExportDrawer.test.tsx`: 2 lựa chọn PDF/Excel; nút tương ứng `loading`/`disabled` khi đang xuất; `Alert` khi lỗi.
-- [ ] `components/__tests__/ReportFilters.test.tsx`: preset 7/30/90 gọi `onChange` đúng khoảng; chọn board ⇒ param `boardId`.
-- [ ] `pages/__tests__/ReportsPage.test.tsx`: Manager ⇒ render panel + nút xuất; Member ⇒ `403` và **không** render số liệu.
-- [ ] Cập nhật `features/board/components/__tests__/BoardView.test.tsx`: nút "Báo cáo" **hiện** với Manager/Admin, **ẩn** với Member, `onClick` điều hướng đúng URL có `?boardId=`.
-- [ ] DoD: `npm run lint` (oxlint 0 warn/0 err) + `npx tsc -b` + `npm run build` + `npm test` **sạch**.
+- [x] `hooks/__tests__/useReportSummary.test.ts`: `idle → loading → idle`; `reload` set `report`; lỗi 403/404/503 map đúng message; đổi `boardId` ⇒ gọi API với param mới.
+- [x] `hooks/__tests__/useReportExport.test.ts`: `exportReport('pdf')` ⇒ `exporting = 'pdf'` → gọi API → `saveBlob` → về `null`; gọi trùng bị chặn; lỗi ⇒ `error` + `httpStatus` và **không** tải file.
+- [x] `components/__tests__/ReportSummaryPanel.test.tsx`: render số liệu từ fixture; `Empty` khi `total = 0`; cảnh báo khi `rowCapReached`; hiển thị `'—'` khi `avgCompletionHours = null`.
+- [x] `components/__tests__/ReportExportDrawer.test.tsx`: 2 lựa chọn PDF/Excel; nút tương ứng `loading`/`disabled` khi đang xuất; `Alert` khi lỗi.
+- [x] `components/__tests__/ReportFilters.test.tsx`: preset 7/30/90 gọi `onChange` đúng khoảng; chọn board ⇒ param `boardId`.
+- [x] `pages/__tests__/ReportsPage.test.tsx`: Manager ⇒ render panel + nút xuất; Member ⇒ `403` và **không** render số liệu.
+- [x] Cập nhật `features/board/components/__tests__/BoardView.test.tsx`: nút "Báo cáo" **hiện** với Manager/Admin, **ẩn** với Member, `onClick` điều hướng đúng URL có `?boardId=`.
+- [x] DoD: `npm run lint` (oxlint 0 warn/0 err) + `npx tsc -b` + `npm run build` + `npm test` **sạch** (30 test files / 155 tests PASS).
 
 ### 7.3 Điều kiện hoàn thành Giai đoạn 6 (map `03-roadmap.md` dòng 67–70)
 
@@ -815,7 +815,7 @@ export interface ReportBoardOptionResponse { id: string; name: string; taskCount
 - [x] Xuất **PDF** (QuestPDF) đúng định dạng, **đọc được** — verify §7.1 nhóm C (`%PDF-` + `%%EOF` + text extract tiếng Việt có dấu)
 - [x] Xuất **Excel** (ClosedXML) đúng định dạng, **mở được** — verify §7.1 nhóm C (5 sheet, mở lại bằng ClosedXML, số liệu khớp)
 - [x] File **generate on-demand, không lưu trữ vĩnh viễn trên server** — verify §7.1 nhóm E (5 bảng không đổi + không file mới + `git status` sạch + không redirect)
-- [ ] UI gọi API thật & bộ kiểm thử frontend hoàn tất (§6 + §7.2)
+- [x] UI gọi API thật & bộ kiểm thử frontend hoàn tất (§6 + §7.2)
 
 ---
 
@@ -850,14 +850,14 @@ export interface ReportBoardOptionResponse { id: string; name: string; taskCount
 ## 9. Tài liệu
 
 - [x] Tạo `Project-Documents/tasks/phase-6-reporting-export.md` (file này — checklist như trên).
-- [ ] Cập nhật `Project-Documents/04-database-design.md`:
+- [x] Cập nhật `Project-Documents/04-database-design.md`:
   - §3.7 (Module Reporting): **khẳng định không bảng**, ghi rõ nguồn projection (`tasks` / `board_columns` / `boards` / `activity_logs` / `ai_observer_runs`), quyền Manager/Admin, cửa sổ mặc định 30 ngày + clamp 365, cap `MaxExportRows`, "byte trong RAM — không lưu file" ⇒ *đã làm ở bước lập kế hoạch*;
   - §4/§5: ghi chú **không** phát sinh enum/index mới ở Giai đoạn 6;
   - §7: thêm gạch đầu dòng "Báo cáo là projection read-only: không soft-delete, không retention riêng, không ghi dữ liệu";
   - §8 "Giả định chính": thêm dòng "Giai đoạn 6 đã được chốt ở bước lập kế hoạch theo `tasks/phase-6-reporting-export.md` §0" (tiền lệ Phase 4/5).
 - [x] Tạo `src/Modules/Reporting/TeamNexus.Modules.Reporting/README.md`: 3 endpoint (bảng đầy đủ), options `Reports`, **bảng công thức metric** (copy §1.3), luồng load→aggregate→render, quyền Manager/Admin, hành vi cap/empty/503, license QuestPDF Community, runbook harness (nhắc "toàn GET nên không cần CSRF").
 - [x] Cập nhật `README.md` root: thêm dòng `Modules/Reporting/` vào cây `src/` + mục **"Trạng thái (Giai đoạn 6 – Báo cáo & Xuất dữ liệu)"**.
-- [ ] Cập nhật `Project-Documents/03-roadmap.md`: tick 4 ô Giai đoạn 6 + ghi chú trạng thái (giống khối "Trạng thái" của Giai đoạn 5).
+- [x] Cập nhật `Project-Documents/03-roadmap.md`: tick 4 ô Giai đoạn 6 + ghi chú trạng thái (giống khối "Trạng thái" của Giai đoạn 5).
 - [x] Tạo `Project-Documents/report/phase-6-reporting-test-report.md` (format Phase 4/5: môi trường, phương pháp, 6 nhóm check có mã + **số liệu thật**, bug thật đã sửa, known gaps, ảnh chụp PDF/Excel + màn hình Báo cáo).
 
 ---
@@ -874,9 +874,9 @@ export interface ReportBoardOptionResponse { id: string; name: string; taskCount
 - [x] **Xuất PDF (QuestPDF)** đúng định dạng, đọc được, tiếng Việt có dấu, có cảnh báo cắt dòng — verify C
 - [x] **Xuất Excel (ClosedXML)** đúng định dạng, mở được, 5 sheet, số liệu khớp aggregator — verify C
 - [x] **On-demand, không lưu file**: bytes trong RAM, `Results.File`, không TEMP/artifact, 5 bảng không đổi — verify E1–E7
-- [ ] **Frontend**: `src/features/reporting/` (types/api/utils/hooks/components/page) + route `/workspaces/:id/reports` + nút "Báo cáo" ở `BoardListPage`/`BoardView` (ẩn với Member) — verify §7.2
-- [ ] **Test FE**: API/utils/hooks/components/page + cập nhật `BoardView.test.tsx`; `oxlint` 0/0 + `tsc -b` + `vite build` + `vitest run` sạch
-- [ ] **Tài liệu**: `04-database-design.md` (§3.7/§7/§8), README module Reporting, `README.md` root, `03-roadmap.md` (4 ô), báo cáo test — **đã làm hết**
+- [x] **Frontend**: `src/features/reporting/` (types/api/utils/hooks/components/page) + route `/workspaces/:id/reports` + nút "Báo cáo" ở `BoardListPage`/`BoardView` (ẩn với Member) — verify §7.2
+- [x] **Test FE**: API/utils/hooks/components/page + cập nhật `BoardView.test.tsx`; `oxlint` 0/0 + `tsc -b` + `vite build` + `vitest run` sạch
+- [x] **Tài liệu**: `04-database-design.md` (§3.7/§7/§8), README module Reporting, `README.md` root, `03-roadmap.md` (4 ô), báo cáo test — **đã làm hết**
 
 ---
 

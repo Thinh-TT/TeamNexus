@@ -64,15 +64,16 @@ Xây BackgroundService quét log định kỳ, phát hiện bottleneck/quá tả
 Xây tính năng tổng hợp tiến độ/hiệu suất, xuất PDF (QuestPDF) và Excel (ClosedXML) theo yêu cầu, generate on-demand.
 
 **Yêu cầu hoàn thiện:**
-- [ ] Tổng hợp được dữ liệu tiến độ/hiệu suất board (vd: số task hoàn thành, thời gian trung bình mỗi task)
-- [ ] Xuất báo cáo ra PDF (QuestPDF) đúng định dạng, đọc được
-- [ ] Xuất báo cáo ra Excel (ClosedXML) đúng định dạng, mở được
-- [ ] File generate on-demand, không lưu trữ vĩnh viễn trên server
+- [x] Tổng hợp được dữ liệu tiến độ/hiệu suất board (vd: số task hoàn thành, thời gian trung bình mỗi task)
+- [x] Xuất báo cáo ra PDF (QuestPDF) đúng định dạng, đọc được
+- [x] Xuất báo cáo ra Excel (ClosedXML) đúng định dạng, mở được
+- [x] File generate on-demand, không lưu trữ vĩnh viễn trên server
 
-> **Trạng thái:** Kế hoạch & chia task đã chốt ở `tasks/phase-6-reporting-export.md` (§0 quyết định kiến trúc D1–D20:
-> module `Reporting` **mới**, **không** schema/migration — báo cáo là projection read-only; quyền **Manager/Admin**;
-> phạm vi workspace + lọc `?boardId=`; cửa sổ `?from=&to=` mặc định 30 ngày clamp 365; file là `byte[]` trong RAM,
-> cap `Reports:MaxExportRows = 5000`). Các ô trên sẽ được tick sau khi verify backend + frontend theo §7.1–§7.3 của file task.
+> **Trạng thái: ✅ ĐÃ HOÀN THÀNH & VERIFY ĐẦY ĐỦ.** Backend verify 74/74 check PASS (§7.1) gồm aggregation thuần,
+> render PDF/Excel on-demand qua byte stream, 3 REST endpoint phân quyền Manager/Admin. Frontend hoàn tất tại
+> `src/features/reporting/` (types, API, utils, hooks, components, page) + tích hợp routing `/workspaces/:id/reports`
+> và nút điều hướng có phân quyền tại BoardListPage/BoardView. Toàn bộ 30 test files / 155 tests PASS 100%
+> (`oxlint` 0/0, `tsc -b` sạch, `npm run build` thành công). Chi tiết: `tasks/phase-6-reporting-export.md` và `report/phase-6-reporting-test-report.md`.
 
 ## Giai đoạn 7: Hoàn thiện, Test & Deploy
 

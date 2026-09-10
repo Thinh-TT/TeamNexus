@@ -265,7 +265,16 @@ describe('BoardView', () => {
     })
   })
 
-  it('hides AI Observer button when user is only a Member', async () => {
+  it('renders Báo cáo button for Manager/Admin and navigates on click', async () => {
+    renderComponent()
+
+    const reportBtn = await screen.findByRole('button', { name: /Báo cáo/i })
+    expect(reportBtn).toBeInTheDocument()
+
+    fireEvent.click(reportBtn)
+  })
+
+  it('hides AI Observer and Báo cáo buttons when user is only a Member', async () => {
     vi.mocked(httpClient.get).mockImplementation(async (url: string) => {
       if (url === '/workspaces') {
         return {
@@ -279,6 +288,7 @@ describe('BoardView', () => {
 
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /AI Observer/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Báo cáo/i })).not.toBeInTheDocument()
     })
   })
 })
