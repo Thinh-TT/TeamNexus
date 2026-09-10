@@ -207,6 +207,79 @@ Mọi chuyển trạng thái khác trả **409 Conflict**.
 - Mọi hành động AI ghi dữ liệu mới **bắt buộc** đi qua `IAiActionService` và cài đặt một `IAiActionApplier` tương ứng.
 - Lớp AI Observer chỉ đọc (`ai_action_logs`, board data) và phát cảnh báo/notifications, không ghi đè dữ liệu nghiệp vụ.
 
+## Phase 5 — AI Observer (đã hoàn tất, verify 178 check PASS)
+
+Observer chạy nền theo chu kỳ, phát hiện bất thường trên board và **chỉ báo cho Manager/Admin** qua
+notification trong app. Nó là lớp *đọc/cảnh báo*: chỉ ghi `activity_logs` / `notifications` /
+`ai_observer_runs`, **không** chạm `tasks`/`labels`/`task_labels` và **không** đi qua Accountability Layer.
+
+### Endpoints Phase 5
+
+| Endpoint | Quyền | Method | Thành công | Ghi chú |
+|---|---|---|---|---|
+| `/api/workspaces/{id}/observer/scan` | Manager/Admin | POST | 200 `ObserverScanResponse` | **Quét đồng bộ**; 403 Member; 404 workspace lạ; **502** nếu AI lỗi (run đã ghi `Failed`) |
+| `/api/workspaces/{id}/observer/runs?take=` | Manager/Admin | GET | 200 `ObserverRunResponse[]` | sort `startedAt DESC`; `take` 1–50 (default 20) |
+| `/api/observer/runs/{runId}` | Manager/Admin | GET | 200 `ObserverRunDetailResponse` | kèm `summary` + `findings[]` |
+| `/api/notifications?isRead=&take=` | mọi user (chỉ row của mình) | GET | 200 `NotificationListResponse` | `take` 1–100 (default 20); `isRead` strict (`bogus` ⇒ 400 `{error}`) |
+| `/api/notifications/{id}/read` | owner | POST | 200 `NotificationResponse` | idempotent (không đổi `readAt`); alert của người khác ⇒ **404** |
+| `/api/notifications/read-all` | mọi user | POST | 200 `{ updated: n }` | chỉ row của mình; gọi lại ⇒ `0` |
+
+`POST` cần `X-XSRF-TOKEN`; `GET` không cần. Body lỗi luôn `{ "error": "…" }` (trừ 400 ProblemDetails
+khi sai kiểu tham số, ví dụ `?take=abc`).
+
+### Luồng quét của `ObserverService.ScanAsync` (9 bước)
+
+1. `Enabled=false` + không chỉ định workspace ⇒ `Skipped` (`Disabled`), không ghi DB. Quét tay vẫn chạy.
+2. Giành lock: `SemaphoreSlim(1,1)` trong process + `pg_try_advisory_lock` trên connection riêng; thua ⇒ `Skipped` (`AlreadyRunning`); `finally` luôn unlock.
+3. Nạp workspace active có task mở, sắp theo hoạt động gần nhất, cap `MaxWorkspacesPerRun`.
+4. Nạp snapshot bounded: task + column (`IsDone`) + tên assignee + comment count/`max(created_at)`.
+5. `ObserverSignalDetector.Analyze` → 0 tín hiệu ⇒ `Completed`, `aiCalled=false`, **0 token**.
+6. `ObserverSummarizer.BuildRequest` → prompt tóm tắt (marker `{"agent":"observer"}` ở dòng đầu, JSON mode).
+7. Gọi `IAiProvider` (không retry); lỗi/JSON hỏng ⇒ run `Failed` + `summary.error`, 0 notification.
+8. `ObserverFindingValidator` (giao evidence với tín hiệu ⇒ chống hallucination).
+9. `NotifyManagersAsync` → ghi `ai_observer_runs` → prune `activity_logs` cũ theo retention.
+
+### Tín hiệu & ngưỡng (config section `Observer`)
+
+| Tín hiệu | Điều kiện | Severity | Ngưỡng |
+|---|---|---|---|
+| `OverdueTask` | task mở, `due_date < now` | High; **Critical** nếu `overdueDays > 2×` | `CriticalOverdueDays=3` |
+| `StalledTask` | `max(updated_at, lastCommentAt, created_at) < now − StalledDays` (**strict**) | Medium; **High** nếu `≥ 2×` | `StalledDays=7` |
+| `Overload` | 1 người: `openCount ≥ 5` **hoặc** `overdueCount ≥ 2` | High; **Critical** nếu `openCount ≥ 2×` | `OverloadMinOpenTasks=5`, `OverloadOverdueMin=2` |
+| `Bottleneck` | cột không done: `openCount ≥ 5` **và** `stalledInColumn ≥ 2` | Medium | `BottleneckMinTasks=5`, `BottleneckStalledMinTasks=2` |
+
+Mỗi **loại** tín hiệu được gom thành **một** signal (evidence bị cap `MaxEvidenceIdsPerSignal=10`);
+`MaxSignalsPerWorkspace=20` cắt khi có nhiều tín hiệu khác loại → `truncatedSignals` ghi vào `summary`.
+Thứ tự: severity giảm dần → weight giảm dần → thứ tự phát hiện.
+
+### Kiểm soát chi phí & vận hành
+
+| Key | Mặc định | Ghi chú |
+|---|---|---|
+| `Enabled` | `true` | `false` ⇒ timer không chạy (nút "Quét ngay" vẫn hoạt động) |
+| `IntervalMinutes` / `StartupDelaySeconds` | `30` / `60` | chu kỳ & trễ khởi động |
+| `LookbackHours` / `MaxLookbackDays` | `24` / `7` | `LookbackHours` là **sàn**, `MaxLookbackDays` là **trần** (host ngủ lâu ⇒ lùi tối đa 7 ngày) |
+| `MaxPromptCharacters` | `12000` | prompt bị cắt tín hiệu yếu nhất cho tới khi vừa; **JSON luôn hợp lệ** |
+| `MaxOutputTokens` / `Temperature` | `1500` / `0.0` | cap riêng của Observer; không retry |
+| `MaxNotificationsPerRun` / `MaxManagersPerWorkspace` | `50` / `10` | cap fan-out |
+| `DeduplicationWindowHours` | `24` | không lặp lại cùng `(workspace, type, taskIds, userIds)` |
+| `MinSeverityToNotify` | `Medium` | finding thấp hơn bị bỏ |
+| `RetentionDays` / `RetentionDeleteBatchSize` | `30` / `5000` | prune `activity_logs` cũ **theo workspace** cuối run thành công |
+
+**Hạn chế đã biết:** 2 tiến trình quét **thật sự đồng thời** có thể cùng ghi notification trước khi bên nào
+commit dedupe (nhịp 30 phút khiến thực tế không xảy ra). Trên free-tier, app sleep ⇒ Observer chỉ chạy khi
+app thức (xử lý ở Giai đoạn 7 bằng cron ngoài/keep-alive).
+
+**Kênh gửi:** hiện chỉ **in-app**. Email là hạng mục *tương lai* — thêm implementation mới bên cạnh
+`INotificationService` (gợi ý `INotificationChannel`), **không** sửa Observer.
+
+### `FakeAiProvider` — hai nhánh
+
+`CompleteAsync` nhận diện prompt Observer bằng marker `{"agent":"observer"}` ở đầu `UserPrompt` (sau khi
+`TrimStart`) ⇒ trả `{ "findings": [...] }` dùng **ID thật lấy từ `evidence` trong prompt** (luôn qua được
+validator). Không có marker ⇒ vẫn trả proposal Smart Setup như Phase 3. Payload hỏng ⇒ `findings: []` +
+`LogWarning` (không throw, không im lặng).
+
 ## Verify §1 (đã chạy)
 
 1. `dotnet build TeamNexus.sln` → Build succeeded, 0 warning / 0 error.
@@ -292,3 +365,25 @@ Harness tạm ngoài workspace (không commit, đã xoá sau khi chạy), chạy
 >
 > Case "provider lỗi/timeout → 502" đã verify ở §2 bằng stub handler (HTTP 429/timeout/JSON hỏng) và
 > logic retry-1-lần được verify qua code path; không cố tình tạo lỗi DeepSeek thật để tránh tốn token.
+
+## Verify §5 — AI Observer (đã chạy, 178 check PASS toàn Giai đoạn 5)
+
+| Nhóm | Kết quả |
+|---|---|
+| A. Schema & migration | **28/28** — 3 bảng, 3 jsonb, CHECK `ck_ai_observer_runs_status`, 6 FK `ON DELETE RESTRICT` (`23001`), `status='Bogus'` → `23514`, jsonb hỏng → `22P02` |
+| B. Detector + validator/summarizer thuần | **44/44** + **15/15** (+ **7/7** chạy lại `FakeAiProvider` sau fix) |
+| C. `ObserverBackgroundService` | **3/3** — `Enabled=false` ⇒ host start/stop sạch, 0 run; `Enabled=true` + delay 30s ⇒ không exception |
+| D. Scan end-to-end (DB thật) | **6/6** — `signalsDetected=4` (Overdue/Stalled/Overload/Bottleneck), `notifications = findings × manager`, `tasks`/`ai_action_logs` **không đổi** |
+| E. Token/chi phí | **3/3** — 0 tín hiệu ⇒ `aiCalled=false`, provider **không được gọi**, prompt 4133 ≤ 12000 ký tự, không chứa `description` |
+| F. HTTP API (§5) | **32/32** — xem bảng endpoint ở trên; Member ⇒ **403** cả 3 route Observer; 401/403/404/405/502/400 đúng |
+| G. Activity log | **31/31** — 6 loại sự kiện từ `TaskService`/`CommentService`, mutation thất bại không sinh log |
+| H/I/J. Dedupe, concurrency, failure modes | **2/2**, **3/3**, **4/4** — dedupe 24h; 1 `Completed` + 1 `Skipped(AlreadyRunning)`; JSON hỏng/provider lỗi ⇒ `Failed` + 0 notification |
+
+Harness đặt **ngoài workspace** (`%TEMP%`, đã xoá), API thật + PostgreSQL thật + `FakeAiProvider`/stub
+⇒ **không gọi DeepSeek, không tốn token**. Chi tiết: `Project-Documents/report/phase-5-ai-observer-test-report.md`.
+
+**Lưu ý khi viết harness cho module này:**
+1. Lấy lại token CSRF **sau** khi gắn JWT cookie (token ẩn danh 155 ký tự ≠ token đã bind identity 198 ký tự; echo token cũ ⇒ 403).
+2. Seed fixture bằng **raw SQL**: `TeamNexusDbContext.SaveChanges` tự stamp `created_at`/`updated_at` cho mọi `IAuditableEntity` khi insert ⇒ seed qua EF làm task "cũ" thành "vừa tạo".
+3. Boot API thật rồi stop trong **< 60s** (`StartupDelaySeconds`) hoặc đặt `Observer__Enabled=false` để observer không quét DB dev.
+4. Khi API bật, `AddAiModule` resolve `FakeAiProvider` nếu `DeepSeek:ApiKey` trống — đó là cấu hình đúng cho verify offline.
