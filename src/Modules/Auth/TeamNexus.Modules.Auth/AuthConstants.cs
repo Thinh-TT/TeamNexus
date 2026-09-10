@@ -5,7 +5,7 @@ public static class AuthConstants
 {
     // OAuth provider schemes.
     public const string GitHubScheme = "GitHub";
-    public const string GoogleScheme = "Google"; // enabled in a later step of Phase 1 §3
+    public const string GoogleScheme = "Google";
 
     // Temporary cookie scheme used between the OAuth callback and our own
     // /api/auth/external-login endpoint (classic external-login flow).
@@ -28,5 +28,6 @@ public static class AuthConstants
     public const string DefaultMemberRole = "Member";
 
     public const string GitHubCallbackPath = "/api/auth/callback/github";
+    public const string GoogleCallbackPath = "/api/auth/callback/google";
     public const string ExternalLoginPath = "/api/auth/external-login";
 }
