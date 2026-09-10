@@ -288,19 +288,25 @@ Vết dữ liệu cho **mọi hành động AI ghi dữ liệu** (theo `02` §2.
 |---|---|---|---|---|
 | `id` | uuid | — | PK | |
 | `action` | text | — | | Loại hành động (xem bộ giá trị gợi ý ở §4) |
-| `entity_type` | text | — | | Loại entity bị tác động (ví dụ `Task`) |
+| `entity_type` | text | — | | Loại entity bị tác động (`Board` cho hành động theo lô như `CreateSubtasks`; `Task` cho hành động trên một task) |
 | `entity_id` | uuid | null | | Id entity bị tác động (nếu đã sinh) |
 | `basis` | jsonb | — | | Tóm tắt prompt/dữ liệu đầu vào (cơ sở của hành động) |
 | `before_snapshot` | jsonb | null | | Dữ liệu trước khi áp dụng (dùng để revert/undo) |
 | `after_snapshot` | jsonb | null | | Dữ liệu đề xuất (sẽ áp dụng khi được duyệt) |
+| `applied_snapshot` | jsonb | null | | Dữ liệu **đã ghi thật** khi `Approved` (danh sách task/label id đã tạo + warnings) — cơ sở để `Undone` revert chính xác |
 | `status` | text | — | CHECK (`status` IN ('Pending','Approved','Rejected','Undone')) | Trạng thái vòng đời |
 | `requested_by_user_id` | uuid | — | FK→`users`, IX | Người khởi tạo yêu cầu AI |
 | `decided_by_user_id` | uuid | null | FK→`users` | Người duyệt/từ chối/undo |
 | `decided_at` | timestamptz | null | | Thời điểm ra quyết định |
+| `decision_note` | text | null | | Lý do từ chối/hoàn tác (tuỳ chọn, ≤ 500 ký tự) |
 | `created_at` | timestamptz | — | | |
 | `updated_at` | timestamptz | — | | |
 
-> **Luồng:** AI tạo log ở trạng thái `Pending` (chưa ghi dữ liệu thật) → người dùng `Approved` (áp dụng `after_snapshot`) hoặc `Rejected` → sau này có thể `Undone` (revert về `before_snapshot`). Mọi hành động AI ghi dữ liệu phải đi qua service `AiActionService` duy nhất.
+> **Luồng:** AI tạo log ở trạng thái `Pending` (chưa ghi dữ liệu thật) → người dùng `Approved` (áp dụng `after_snapshot`, lưu vết dữ liệu đã ghi vào `applied_snapshot`) hoặc `Rejected` → sau này có thể `Undone` (revert `applied_snapshot`, hoặc về `before_snapshot` nếu có). Mọi hành động AI ghi dữ liệu phải đi qua service `AiActionService` duy nhất.
+>
+> **Quy ước định vị log (Giai đoạn 4):** hành động `CreateSubtasks` lưu `entity_type = 'Board'` và `entity_id = boardId`, nhờ đó liệt kê lịch sử hành động AI theo board chỉ cần lọc `(entity_type, entity_id)` — **không** cần thêm cột `workspace_id`. Index `(entity_type, entity_id, created_at)` phục vụ truy vấn này (xem §5).
+>
+> **Ghi chú tinh chỉnh:** hai cột `applied_snapshot` và `decision_note` được bổ sung khi hiện thực Giai đoạn 4 (theo tinh thần "thiết kế sơ bộ, sẽ tinh chỉnh khi hiện thực" ở đầu tài liệu): `applied_snapshot` tách bạch "đề xuất" (`after_snapshot`) khỏi "đã ghi thật" nên Undo không phải suy diễn từ đề xuất; `decision_note` lưu lý do từ chối/hoàn tác cho mục đích giải trình. Chi tiết quyết định xem `tasks/phase-4-accountability-layer.md` §0.
 
 ### 3.6 Module AI — Observer (Giai đoạn 5)
 
@@ -385,6 +391,7 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 | `labels` | `(workspace_id, name)` | UQ | Tên nhãn duy nhất trong workspace |
 | `task_comments` | `task_id` | IX | Liệt kê bình luận theo task |
 | `ai_action_logs` | `requested_by_user_id` | IX | Liệt kê hành động AI theo người yêu cầu |
+| `ai_action_logs` | `(entity_type, entity_id, created_at)` | IX | Liệt kê lịch sử hành động AI theo board (Accountability Layer) |
 | `activity_logs` | `(workspace_id, created_at)` | IX | Observer quét theo chu kỳ |
 | `notifications` | `(recipient_user_id, is_read)` | IX | Lấy cảnh báo chưa đọc của Manager |
 | `ai_observer_runs` | `workspace_id` | IX | Audit theo workspace |
@@ -403,7 +410,7 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 ## 7. Toàn vẹn dữ liệu, edge cases & failure modes
 
 - **Refresh token rotate:** khi refresh, token cũ phải `revoked_at` ngay và token mới trỏ `replaced_by_token_id` về token cũ. Nếu một token đã revoke được sử dụng lại → phát hiện replay (revoke cả chuỗi con nếu cần) và trả `401`.
-- **Soft delete vs Undo:** `deleted_at` dùng để ẩn/phục hồi entity trong UI (workspace/board/column/task/comment). Undo cho **hành động AI** dùng `before_snapshot` trong `ai_action_logs` (revert dữ liệu đã áp dụng). Hai cơ chế này khác nhau và không thay thế lẫn nhau.
+- **Soft delete vs Undo:** `deleted_at` dùng để ẩn/phục hồi entity trong UI (workspace/board/column/task/comment). Undo cho **hành động AI** dùng `applied_snapshot` trong `ai_action_logs` (revert đúng những gì đã ghi thật; `before_snapshot` dùng cho loại hành động có dữ liệu gốc để khôi phục). Hai cơ chế này khác nhau và không thay thế lẫn nhau.
 - **Kanban đồng thời:** cập nhật `position`/`column_id` có thể xung đột giữa các client; chấp nhận **last-write-wins** ở giai đoạn này, client dùng optimistic update và đồng bộ lại khi server xác nhận (theo `02` §2.2).
 - **AI Smart Setup:** output JSON phải validate đúng schema trước khi ghi DB; không ghi thẳng — luôn qua `ai_action_logs` ở `Pending` rồi mới áp dụng (theo `02` §2.3).
 - **JSONB:** `basis`, `before/after_snapshot`, `payload`, `summary` chứa dữ liệu động; không dùng thay thế cột quan hệ cần lọc/truy vấn.
