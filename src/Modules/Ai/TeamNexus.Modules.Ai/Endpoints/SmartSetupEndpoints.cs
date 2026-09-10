@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -6,7 +5,6 @@ using Microsoft.AspNetCore.Routing;
 using TeamNexus.Modules.Ai.DTOs;
 using TeamNexus.Modules.Ai.Services;
 using TeamNexus.Modules.Board.Endpoints;
-using TeamNexus.Modules.Board.Services;
 using TeamNexus.Shared.Endpoints;
 
 namespace TeamNexus.Modules.Ai.Endpoints;
@@ -41,13 +39,9 @@ public static class SmartSetupEndpoints
         ISmartSetupService smartSetup,
         CancellationToken ct)
     {
-        // Board's RequireUserId helper is internal to that module, so read the claim here —
-        // same approach as Program.cs. A missing/invalid claim is 401 via UnauthorizedException.
-        var userIdClaim = http.User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(userIdClaim, out var userId))
-        {
-            throw new UnauthorizedException();
-        }
+        // Board's RequireUserId helper is internal to that module, so the Ai module keeps its own
+        // copy (AiEndpointHelpers). A missing/invalid claim is 401 via UnauthorizedException.
+        var userId = http.RequireUserId();
 
         // Manager/Admin is enforced inside the service (workspace-scoped role), matching the
         // Board module: authentication here, authorization there.

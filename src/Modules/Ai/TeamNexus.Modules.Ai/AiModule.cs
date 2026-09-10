@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using TeamNexus.Modules.Ai.Endpoints;
 using TeamNexus.Modules.Ai.Options;
 using TeamNexus.Modules.Ai.Services;
+using TeamNexus.Modules.Ai.Services.Appliers;
 using TeamNexus.Modules.Board.Endpoints;
 using TeamNexus.Shared.Endpoints;
 
@@ -66,6 +67,12 @@ public static class AiModule
         // logic lands in §4.3.
         services.AddScoped<ISmartSetupService, SmartSetupService>();
 
+        // ---- Accountability Layer (Phase 4 §2) -------------------------------
+        // AiActionService is the single gateway for AI write actions; every action type plugs in
+        // through its own IAiActionApplier (adding one = one class + one registration line).
+        services.AddScoped<IAiActionService, AiActionService>();
+        services.AddScoped<IAiActionApplier, CreateSubtasksApplier>();
+
         // ---- Endpoint filters (resolved from DI) -----------------------------
         // DomainExceptionFilter (Board) maps BoardModuleException → { error, status }
         // (bao gồm AiProviderException 502); AntiforgeryValidationEndpointFilter (Shared)
@@ -79,11 +86,13 @@ public static class AiModule
     }
 
     /// <summary>
-    /// Maps Ai module endpoint groups (Phase 3 §3.2): the Smart Setup proposal endpoint.
+    /// Maps Ai module endpoint groups: the Smart Setup proposal endpoint (Phase 3 §3.2) and the
+    /// Accountability Layer endpoints (Phase 4 §3).
     /// </summary>
     public static IEndpointRouteBuilder MapAiModuleEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapSmartSetupEndpoints();
+        endpoints.MapAiActionEndpoints();
 
         return endpoints;
     }
