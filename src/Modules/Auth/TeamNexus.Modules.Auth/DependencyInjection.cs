@@ -14,6 +14,7 @@ using TeamNexus.Modules.Auth.Services;
 using TeamNexus.Persistence;
 using TeamNexus.Persistence.Data;
 using TeamNexus.Persistence.Data.Entities;
+using TeamNexus.Shared.Endpoints;
 using AspNet.Security.OAuth.GitHub;
 
 namespace TeamNexus.Modules.Auth;
@@ -80,7 +81,19 @@ public static class DependencyInjection
                 {
                     OnMessageReceived = context =>
                     {
+                        // Primary: JWT in the HttpOnly cookie (REST calls).
                         var token = context.Request.Cookies[AuthConstants.AccessTokenCookie];
+
+                        // SignalR: browser WebSocket clients cannot set the Authorization
+                        // header, so the standard SignalR pattern passes the token as the
+                        // access_token query parameter. Accept it for /hubs/* only so REST
+                        // tokens never leak into URLs/logs.
+                        if (string.IsNullOrEmpty(token)
+                            && context.Request.Path.StartsWithSegments("/hubs"))
+                        {
+                            token = context.Request.Query["access_token"];
+                        }
+
                         if (!string.IsNullOrEmpty(token))
                         {
                             context.Token = token;

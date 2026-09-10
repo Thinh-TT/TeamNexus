@@ -1,6 +1,11 @@
+using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
+using TeamNexus.Modules.Ai;
 using TeamNexus.Modules.Auth;
 using TeamNexus.Modules.Auth.Endpoints;
+using TeamNexus.Modules.Board;
+using TeamNexus.Modules.Board.Endpoints;
+using TeamNexus.Modules.Board.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +21,12 @@ builder.Services.AddOpenApi();
 // Each module exposes one extension method, e.g. builder.Services.AddAuthModule(...).
 // Auth internals (DbContext, Identity, OAuth, JWT) arrive in Phase 1 §2–§3.
 builder.Services.AddAuthModule(builder.Configuration);
+
+// Board module: Kanban CRUD services + SignalR hub registration (Phase 2 §2–§3).
+builder.Services.AddBoardModule();
+
+// Ai module: DeepSeek config + DI wiring for AI Smart Setup (Phase 3 §1).
+builder.Services.AddAiModule(builder.Configuration);
 
 // ---- CORS ------------------------------------------------------------
 // Dev convenience: during Phase 1 the frontend (Vite, :5173) talks to this API
@@ -54,7 +65,7 @@ app.UseCors("WebFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
-// ---- Health check ----------------------------------------------------
+// ---- Health & Workspace endpoints -------------------------------------
 var api = app.MapGroup("/api");
 api.MapGet("/health", () => Results.Ok(new
 {
@@ -63,7 +74,59 @@ api.MapGet("/health", () => Results.Ok(new
     time = DateTimeOffset.UtcNow,
 }));
 
+api.MapGet("/workspaces", async (TeamNexus.Persistence.Data.TeamNexusDbContext db, HttpContext http, CancellationToken ct) =>
+{
+    var userIdClaim = http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+    if (!Guid.TryParse(userIdClaim, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var memberships = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
+        db.WorkspaceMembers
+            .Include(wm => wm.Workspace)
+            .Where(wm => wm.UserId == userId && wm.Workspace != null),
+        ct);
+
+    if (memberships.Count == 0)
+    {
+        var defaultWs = new TeamNexus.Persistence.Data.Entities.Workspace
+        {
+            Id = Guid.NewGuid(),
+            Name = "Không Gian Làm Việc Chính",
+            Description = "Workspace mặc định để quản lý bảng Kanban",
+            OwnerId = userId,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+        };
+        var defaultMember = new TeamNexus.Persistence.Data.Entities.WorkspaceMember
+        {
+            WorkspaceId = defaultWs.Id,
+            UserId = userId,
+            Role = TeamNexus.Persistence.Data.Entities.WorkspaceRole.Admin,
+            JoinedAt = DateTimeOffset.UtcNow,
+            Workspace = defaultWs,
+        };
+
+        db.Workspaces.Add(defaultWs);
+        db.WorkspaceMembers.Add(defaultMember);
+        await db.SaveChangesAsync(ct);
+        memberships.Add(defaultMember);
+    }
+
+    return Results.Ok(memberships.Select(wm => new
+    {
+        id = wm.WorkspaceId,
+        name = wm.Workspace?.Name ?? "Workspace",
+        description = wm.Workspace?.Description,
+        role = wm.Role.ToString(),
+    }));
+}).RequireAuthorization();
+
 // ---- Feature module endpoints -----------------------------------------
 app.MapAuthModuleEndpoints();
+app.MapBoardModuleEndpoints();
+app.MapAiModuleEndpoints();
+app.MapBoardHub();
 
 app.Run();

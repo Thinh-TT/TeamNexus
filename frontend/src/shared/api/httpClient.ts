@@ -101,6 +101,28 @@ httpClient.interceptors.response.use(
       }
     }
 
+    if (
+      error.response?.status === 403 &&
+      typeof error.response?.data?.error === 'string' &&
+      error.response.data.error.includes('CSRF') &&
+      originalRequest &&
+      !originalRequest._csrfRetry
+    ) {
+      originalRequest._csrfRetry = true
+      try {
+        await axios.get(`${import.meta.env.VITE_API_BASE_URL ?? '/api'}/auth/antiforgery`, {
+          withCredentials: true,
+        })
+        const freshToken = getCookie('XSRF-TOKEN')
+        if (freshToken) {
+          originalRequest.headers['X-XSRF-TOKEN'] = freshToken
+        }
+        return httpClient(originalRequest)
+      } catch (csrfError) {
+        return Promise.reject(csrfError)
+      }
+    }
+
     return Promise.reject(error)
   }
 )

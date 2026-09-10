@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Board module (Phase 2 §2–§3): Kanban CRUD endpoints + services; SignalR BoardHub
+       arrives in §3. References Shared (CSRF filter) + Persistence (single DbContext). -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Shared\TeamNexus.Shared\TeamNexus.Shared.csproj" />
+    <ProjectReference Include="..\..\..\TeamNexus.Persistence\TeamNexus.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

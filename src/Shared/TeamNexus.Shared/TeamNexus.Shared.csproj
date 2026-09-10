@@ -1,3 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- Shared contracts & cross-cutting helpers for the TeamNexus modular monolith.
+       Kept intentionally thin: shared endpoint filters (CSRF), later cross-module
+       contracts, common result/error types and constants. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
 </Project>

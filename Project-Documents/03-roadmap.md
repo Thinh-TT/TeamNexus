@@ -18,20 +18,20 @@ Khởi tạo project ASP.NET Core (Modular Monolith) + React, thiết kế schem
 Xây dựng CRUD cho Board/Task/Column, giao diện kéo-thả bằng @dnd-kit, tích hợp SignalR để đồng bộ trạng thái real-time giữa các client.
 
 **Yêu cầu hoàn thiện:**
-- [ ] CRUD đầy đủ cho Board, Column, Task
-- [ ] Giao diện kéo-thả task giữa các column hoạt động mượt
-- [ ] SignalR đồng bộ real-time: thay đổi ở client A phản ánh ngay ở client B (không cần reload)
-- [ ] SignalR group theo boardId, có xử lý auto-reconnect khi mất kết nối
+- [x] CRUD đầy đủ cho Board, Column, Task
+- [x] Giao diện kéo-thả task giữa các column hoạt động mượt
+- [x] SignalR đồng bộ real-time: thay đổi ở client A phản ánh ngay ở client B (không cần reload)
+- [x] SignalR group theo boardId, có xử lý auto-reconnect khi mất kết nối
 
 ## Giai đoạn 3: AI Smart Setup
 
 Tích hợp DeepSeek API qua interface IAiProvider, xây luồng: trưởng nhóm nhập mô tả → AI phân rã sub-tasks/nhãn/đề xuất người phụ trách → hiển thị để con người xác nhận.
 
 **Yêu cầu hoàn thiện:**
-- [ ] Interface `IAiProvider` triển khai xong cho DeepSeek
-- [ ] Nhập mô tả dự án/tính năng → AI trả về danh sách sub-tasks có nhãn và đề xuất người phụ trách (JSON đúng schema, có validate)
-- [ ] Giao diện hiển thị kết quả AI đề xuất, cho phép chỉnh sửa trước khi xác nhận
-- [ ] Chưa ghi thẳng vào DB — chờ xác nhận (liên kết Accountability Layer ở giai đoạn 4)
+- [x] Interface `IAiProvider` triển khai xong cho DeepSeek
+- [x] Nhập mô tả dự án/tính năng → AI trả về danh sách sub-tasks có nhãn và đề xuất người phụ trách (JSON đúng schema, có validate)
+- [x] Giao diện hiển thị kết quả AI đề xuất, cho phép chỉnh sửa trước khi xác nhận
+- [x] Chưa ghi thẳng vào DB — chờ xác nhận (liên kết Accountability Layer ở giai đoạn 4)
 
 ## Giai đoạn 4: Accountability Layer
 

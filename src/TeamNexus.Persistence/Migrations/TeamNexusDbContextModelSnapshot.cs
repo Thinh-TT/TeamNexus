@@ -346,6 +346,172 @@ namespace TeamNexus.Persistence.Migrations
                     b.ToTable("boards", (string)null);
                 });
 
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.BoardColumn", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BoardId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("board_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsDone")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_done");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasColumnName("position");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_board_columns");
+
+                    b.HasIndex("BoardId", "Position")
+                        .IsUnique()
+                        .HasDatabaseName("ix_board_columns_board_id_position");
+
+                    b.ToTable("board_columns", (string)null);
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.BoardTask", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AssigneeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("assignee_id");
+
+                    b.Property<Guid>("BoardId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("board_id");
+
+                    b.Property<Guid>("ColumnId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("column_id");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("description");
+
+                    b.Property<DateTimeOffset?>("DueDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("due_date");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasColumnName("position");
+
+                    b.Property<string>("Priority")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("priority");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_tasks");
+
+                    b.HasIndex("AssigneeId")
+                        .HasDatabaseName("ix_tasks_assignee_id");
+
+                    b.HasIndex("ColumnId")
+                        .HasDatabaseName("ix_tasks_column_id");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("ix_tasks_created_by");
+
+                    b.HasIndex("BoardId", "ColumnId", "Position")
+                        .HasDatabaseName("ix_tasks_board_id_column_id_position");
+
+                    b.ToTable("tasks", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_tasks_priority", "\"priority\" IN ('Low', 'Medium', 'High', 'Urgent')");
+                        });
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.Label", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(9)
+                        .HasColumnType("character varying(9)")
+                        .HasColumnName("color");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_labels");
+
+                    b.HasIndex("WorkspaceId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_labels_workspace_id_name");
+
+                    b.ToTable("labels", (string)null);
+                });
+
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.RefreshToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -393,6 +559,70 @@ namespace TeamNexus.Persistence.Migrations
                         .HasDatabaseName("ix_refresh_tokens_user_id");
 
                     b.ToTable("refresh_tokens", (string)null);
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.TaskComment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AuthorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("author_id");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("content");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("task_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_task_comments");
+
+                    b.HasIndex("AuthorId")
+                        .HasDatabaseName("ix_task_comments_author_id");
+
+                    b.HasIndex("TaskId")
+                        .HasDatabaseName("ix_task_comments_task_id");
+
+                    b.ToTable("task_comments", (string)null);
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.TaskLabel", b =>
+                {
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("task_id");
+
+                    b.Property<Guid>("LabelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("label_id");
+
+                    b.HasKey("TaskId", "LabelId")
+                        .HasName("pk_task_labels");
+
+                    b.HasIndex("LabelId")
+                        .HasDatabaseName("ix_task_labels_label_id");
+
+                    b.ToTable("task_labels", (string)null);
                 });
 
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.Workspace", b =>
@@ -539,6 +769,68 @@ namespace TeamNexus.Persistence.Migrations
                     b.Navigation("Workspace");
                 });
 
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.BoardColumn", b =>
+                {
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.Board", "Board")
+                        .WithMany()
+                        .HasForeignKey("BoardId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_board_columns_boards_board_id");
+
+                    b.Navigation("Board");
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.BoardTask", b =>
+                {
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.ApplicationUser", "Assignee")
+                        .WithMany()
+                        .HasForeignKey("AssigneeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_tasks_users_assignee_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.Board", "Board")
+                        .WithMany()
+                        .HasForeignKey("BoardId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_tasks_boards_board_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.BoardColumn", "Column")
+                        .WithMany()
+                        .HasForeignKey("ColumnId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_tasks_board_columns_column_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_tasks_users_created_by");
+
+                    b.Navigation("Assignee");
+
+                    b.Navigation("Board");
+
+                    b.Navigation("Column");
+
+                    b.Navigation("CreatedByUser");
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.Label", b =>
+                {
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_labels_workspaces_workspace_id");
+
+                    b.Navigation("Workspace");
+                });
+
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.RefreshToken", b =>
                 {
                     b.HasOne("TeamNexus.Persistence.Data.Entities.RefreshToken", "ReplacedByToken")
@@ -557,6 +849,48 @@ namespace TeamNexus.Persistence.Migrations
                     b.Navigation("ReplacedByToken");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.TaskComment", b =>
+                {
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.ApplicationUser", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_task_comments_users_author_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.BoardTask", "Task")
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_task_comments_tasks_task_id");
+
+                    b.Navigation("Author");
+
+                    b.Navigation("Task");
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.TaskLabel", b =>
+                {
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.Label", "Label")
+                        .WithMany()
+                        .HasForeignKey("LabelId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_task_labels_labels_label_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.BoardTask", "Task")
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_task_labels_tasks_task_id");
+
+                    b.Navigation("Label");
+
+                    b.Navigation("Task");
                 });
 
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.Workspace", b =>
