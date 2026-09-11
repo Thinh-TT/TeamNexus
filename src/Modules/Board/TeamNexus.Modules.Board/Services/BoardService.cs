@@ -23,11 +23,13 @@ public sealed class BoardService : IBoardService
 {
     private readonly TeamNexusDbContext _db;
     private readonly IWorkspaceAccess _access;
+    private readonly IAiAgentResolver _agents;
 
-    public BoardService(TeamNexusDbContext db, IWorkspaceAccess access)
+    public BoardService(TeamNexusDbContext db, IWorkspaceAccess access, IAiAgentResolver agents)
     {
         _db = db;
         _access = access;
+        _agents = agents;
     }
 
     public async Task<IReadOnlyList<BoardResponse>> GetBoardsAsync(
@@ -60,14 +62,24 @@ public sealed class BoardService : IBoardService
         var commentCounts = await LoadCommentCountsAsync(taskIds, ct);
         var labelsByTask = await LoadLabelsByTaskAsync(taskIds, ct);
 
+        // Phase 7 §3.3: the Kanban board is one of the THREE task-returning paths, so the new
+        // TaskResponse fields must be resolved here too — otherwise cards silently lose the agent
+        // badge (regression guarded by harness check I-2).
+        var activeRunIds = await AgentRunLookup.LoadActiveRunIdsAsync(_db, taskIds, ct);
+        var assigneeIsAiAgent = await ResolvePageAssigneeIsAiAgentAsync(board.WorkspaceId, tasks, ct);
+
         var columnResponses = columns.Select(c => new ColumnResponse(
             c.Id, c.BoardId, c.Name, c.Position, c.IsDone, c.CreatedAt, c.UpdatedAt,
             tasks.Where(t => t.ColumnId == c.Id)
                  .Select(t => DtoMapping.MapTask(
                      t,
                      labelsByTask.GetValueOrDefault(t.Id, []),
-                     commentCounts.GetValueOrDefault(t.Id)))
-                 .ToList())).ToList();
+                     commentCounts.GetValueOrDefault(t.Id),
+                     assigneeIsAiAgent,
+                     // TryGetValue, NOT GetValueOrDefault (Guid.Empty would leak as a fake run id).
+                     activeRunIds.TryGetValue(t.Id, out var runId) ? runId : null))
+                 .ToList(),
+            c.IsClarification)).ToList();
 
         return ToResponse(board, columnResponses);
     }
@@ -186,5 +198,27 @@ public sealed class BoardService : IBoardService
     {
         var trimmed = value?.Trim();
         return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+    }
+
+    /// <summary>
+    /// Phase 7 §3.3 — <c>AssigneeIsAiAgent</c> for a whole board. Exactly one agent per workspace
+    /// (partial unique index <c>uq_workspace_members_ai_agent</c>), so the resolver is asked once per
+    /// distinct assignee, never once per task.
+    /// </summary>
+    private async Task<bool> ResolvePageAssigneeIsAiAgentAsync(
+        Guid workspaceId, IReadOnlyList<BoardTask> tasks, CancellationToken ct)
+    {
+        foreach (var assigneeId in tasks
+                     .Where(t => t.AssigneeId.HasValue)
+                     .Select(t => t.AssigneeId!.Value)
+                     .Distinct())
+        {
+            if (await _agents.IsAiAgentAsync(workspaceId, assigneeId, ct))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

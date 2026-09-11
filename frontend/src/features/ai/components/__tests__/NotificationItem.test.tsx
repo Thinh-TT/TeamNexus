@@ -95,4 +95,33 @@ describe('NotificationItem', () => {
 
     expect(mockNavigate).toHaveBeenCalledWith('/workspaces/ws-1/boards/board-999')
   })
+
+  it('renders translated labels with raw codes for Phase 7 agent notifications', () => {
+    const typesToTest = [
+      { type: 'AgentRunFailed', expected: 'Agent thất bại (AgentRunFailed)' },
+      { type: 'AgentAwaitingClarification', expected: 'Agent chờ làm rõ (AgentAwaitingClarification)' },
+      { type: 'AgentOutputPending', expected: 'Agent chờ duyệt kết quả (AgentOutputPending)' },
+    ]
+
+    typesToTest.forEach(({ type, expected }) => {
+      const notif: NotificationResponse = {
+        ...mockNotification,
+        id: `n-${type}`,
+        type: type as any,
+      }
+
+      const { unmount } = render(
+        <MemoryRouter>
+          <NotificationItem
+            notification={notif}
+            onMarkRead={vi.fn()}
+            workspaceId="ws-1"
+          />
+        </MemoryRouter>
+      )
+
+      expect(screen.getByText(expected)).toBeInTheDocument()
+      unmount()
+    })
+  })
 })

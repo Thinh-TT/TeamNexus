@@ -29,6 +29,10 @@ public static class BoardModule
         // TaskService/CommentService.
         services.AddScoped<IActivityLogWriter, NullActivityLogWriter>();
 
+        // AI Agent identity port (Phase 7 §3.4, decision D7): same trick as IActivityLogWriter —
+        // Board declares the port, module Ai registers WorkspaceAiAgentResolver afterwards.
+        services.AddScoped<IAiAgentResolver, NullAiAgentResolver>();
+
         // Real-time: BoardHub over WebSockets/SSE/long-polling (Phase 2 §3).
         services.AddSignalR();
 

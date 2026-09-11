@@ -269,6 +269,164 @@ namespace TeamNexus.Persistence.Migrations
                     b.ToTable("activity_logs", (string)null);
                 });
 
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.AgentRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AgentUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_user_id");
+
+                    b.Property<Guid?>("AiActionLogId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ai_action_log_id");
+
+                    b.Property<Guid>("BoardId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("board_id");
+
+                    b.Property<Guid?>("ClarificationCommentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("clarification_comment_id");
+
+                    b.Property<string>("ClarificationQuestion")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("clarification_question");
+
+                    b.Property<int>("CompletionTokens")
+                        .HasColumnType("integer")
+                        .HasColumnName("completion_tokens");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("error");
+
+                    b.Property<DateTimeOffset?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<int>("LlmCallCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("llm_call_count");
+
+                    b.Property<bool>("NotificationSent")
+                        .HasColumnType("boolean")
+                        .HasColumnName("notification_sent");
+
+                    b.Property<string>("OutputKind")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("output_kind");
+
+                    b.Property<Guid?>("PreviousRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("previous_run_id");
+
+                    b.Property<int>("PromptTokens")
+                        .HasColumnType("integer")
+                        .HasColumnName("prompt_tokens");
+
+                    b.Property<Guid?>("ResolutionCommentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resolution_comment_id");
+
+                    b.Property<DateTimeOffset>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("StopReason")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("stop_reason");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("task_id");
+
+                    b.Property<int>("ToolCallCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("tool_call_count");
+
+                    b.Property<string>("ToolCallTrace")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("tool_call_trace");
+
+                    b.Property<bool>("TraceTruncated")
+                        .HasColumnType("boolean")
+                        .HasColumnName("trace_truncated");
+
+                    b.Property<Guid>("TriggeredByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("triggered_by_user_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_agent_runs");
+
+                    b.HasIndex("AgentUserId")
+                        .HasDatabaseName("ix_agent_runs_agent_user_id");
+
+                    b.HasIndex("AiActionLogId")
+                        .HasDatabaseName("ix_agent_runs_ai_action_log_id");
+
+                    b.HasIndex("BoardId")
+                        .HasDatabaseName("ix_agent_runs_board_id");
+
+                    b.HasIndex("ClarificationCommentId")
+                        .HasDatabaseName("ix_agent_runs_clarification_comment_id");
+
+                    b.HasIndex("PreviousRunId")
+                        .HasDatabaseName("ix_agent_runs_previous_run_id");
+
+                    b.HasIndex("ResolutionCommentId")
+                        .HasDatabaseName("ix_agent_runs_resolution_comment_id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_agent_runs_status")
+                        .HasFilter("\"status\" = 'Running'");
+
+                    b.HasIndex("TriggeredByUserId")
+                        .HasDatabaseName("ix_agent_runs_triggered_by_user_id");
+
+                    b.HasIndex("TaskId", "StartedAt")
+                        .HasDatabaseName("ix_agent_runs_task_id_started_at");
+
+                    b.HasIndex("WorkspaceId", "StartedAt")
+                        .HasDatabaseName("ix_agent_runs_workspace_id_started_at");
+
+                    b.ToTable("agent_runs", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_agent_runs_output_kind", "\"output_kind\" IS NULL OR \"output_kind\" IN ('Comment', 'Attachment')");
+
+                            t.HasCheckConstraint("ck_agent_runs_status", "\"status\" IN ('Running', 'AwaitingClarification', 'AwaitingApproval', 'Completed', 'Failed')");
+
+                            t.HasCheckConstraint("ck_agent_runs_stop_reason", "\"stop_reason\" IN ('DraftProduced', 'QuestionAsked', 'ToolLimit', 'TimeLimit', 'TokenBudget', 'ProviderError', 'Cancelled', 'TaskChanged', 'InternalError')");
+                        });
+                });
+
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.AiActionLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -561,6 +719,12 @@ namespace TeamNexus.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<bool>("IsClarification")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_clarification");
+
                     b.Property<bool>("IsDone")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -583,6 +747,11 @@ namespace TeamNexus.Persistence.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_board_columns");
+
+                    b.HasIndex("BoardId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_board_columns_clarification")
+                        .HasFilter("\"is_clarification\"");
 
                     b.HasIndex("BoardId", "Position")
                         .IsUnique()
@@ -826,6 +995,65 @@ namespace TeamNexus.Persistence.Migrations
                     b.ToTable("refresh_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.TaskAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("content");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("content_type");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("file_name");
+
+                    b.Property<int>("SizeBytes")
+                        .HasColumnType("integer")
+                        .HasColumnName("size_bytes");
+
+                    b.Property<Guid?>("SourceRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_run_id");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("task_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_task_attachments");
+
+                    b.HasIndex("CreatedByUserId")
+                        .HasDatabaseName("ix_task_attachments_created_by_user_id");
+
+                    b.HasIndex("SourceRunId")
+                        .HasDatabaseName("ix_task_attachments_source_run_id");
+
+                    b.HasIndex("TaskId")
+                        .HasDatabaseName("ix_task_attachments_task_id");
+
+                    b.ToTable("task_attachments", (string)null);
+                });
+
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.TaskComment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -943,9 +1171,22 @@ namespace TeamNexus.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
+                    b.Property<string>("AiAgentName")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("ai_agent_name");
+
                     b.Property<DateTimeOffset>("JoinedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("joined_at");
+
+                    b.Property<string>("MemberType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("human")
+                        .HasColumnName("member_type");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -959,8 +1200,15 @@ namespace TeamNexus.Persistence.Migrations
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_workspace_members_user_id");
 
+                    b.HasIndex("WorkspaceId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_workspace_members_ai_agent")
+                        .HasFilter("\"member_type\" = 'ai_agent'");
+
                     b.ToTable("workspace_members", null, t =>
                         {
+                            t.HasCheckConstraint("ck_workspace_members_member_type", "\"member_type\" IN ('human', 'ai_agent')");
+
                             t.HasCheckConstraint("ck_workspace_members_role", "\"role\" IN ('Admin', 'Manager', 'Member')");
                         });
                 });
@@ -1042,6 +1290,68 @@ namespace TeamNexus.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_activity_logs_workspaces_workspace_id");
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.AgentRun", b =>
+                {
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AgentUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_agent_runs_asp_net_users_agent_user_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.AiActionLog", null)
+                        .WithMany()
+                        .HasForeignKey("AiActionLogId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_agent_runs_ai_action_logs_ai_action_log_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.Board", null)
+                        .WithMany()
+                        .HasForeignKey("BoardId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_agent_runs_boards_board_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.TaskComment", null)
+                        .WithMany()
+                        .HasForeignKey("ClarificationCommentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_agent_runs_task_comments_clarification_comment_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.AgentRun", null)
+                        .WithMany()
+                        .HasForeignKey("PreviousRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_agent_runs_agent_runs_previous_run_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.TaskComment", null)
+                        .WithMany()
+                        .HasForeignKey("ResolutionCommentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_agent_runs_task_comments_resolution_comment_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.BoardTask", null)
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_agent_runs_tasks_task_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("TriggeredByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_agent_runs_asp_net_users_triggered_by_user_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_agent_runs_workspaces_workspace_id");
                 });
 
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.AiActionLog", b =>
@@ -1185,6 +1495,29 @@ namespace TeamNexus.Persistence.Migrations
                     b.Navigation("ReplacedByToken");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.TaskAttachment", b =>
+                {
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_task_attachments_users_created_by_user_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.AgentRun", null)
+                        .WithMany()
+                        .HasForeignKey("SourceRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_task_attachments_agent_runs_source_run_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.BoardTask", null)
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_task_attachments_tasks_task_id");
                 });
 
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.TaskComment", b =>

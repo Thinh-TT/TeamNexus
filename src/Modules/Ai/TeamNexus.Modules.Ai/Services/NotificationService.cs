@@ -21,6 +21,12 @@ public sealed record ObserverRunContext(
     int? CompletionTokens);
 
 /// <summary>
+/// One non-Observer alert to fan out to the workspace's Managers/Admins (Phase 7 §4.8d).
+/// <paramref name="PayloadJson"/> is the already-serialized jsonb payload.
+/// </summary>
+public sealed record AgentNotification(string Type, string Title, string Message, string PayloadJson);
+
+/// <summary>
 /// Writes and reads the Manager-facing alerts produced by the AI Observer (Phase 5 §4.4).
 /// <para>
 /// Notifications are the Observer's <b>only</b> output: one row per recipient (so read state is
@@ -39,6 +45,17 @@ public interface INotificationService
         Guid workspaceId,
         IReadOnlyList<ObserverFinding> findings,
         ObserverRunContext context,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Fan-out of ONE agent alert to the same Manager/Admin recipient set (Phase 7 §4.8d).
+    /// No deduplication window: the callers are already idempotent per event
+    /// (<c>notification_sent</c> / one alert per run), so a dedupe key would only suppress the
+    /// second genuine failure of a re-run.
+    /// </summary>
+    Task<int> NotifyManagersAsync(
+        Guid workspaceId,
+        AgentNotification notification,
         CancellationToken ct = default);
 
     /// <summary>Notifications of one recipient, newest first, optionally filtered by read state.</summary>
@@ -145,6 +162,54 @@ public sealed class NotificationService : INotificationService
         _db.Notifications.AddRange(toAdd);
         await _db.SaveChangesAsync(ct);
         return toAdd.Count;
+    }
+
+    // ---- agent alerts (Phase 7 §4.8d) --------------------------------------
+
+    /// <summary>
+    /// One alert per Manager/Admin of the workspace, reusing the Observer's recipient loader so the
+    /// cap, the deterministic ordering and the "agent is only a Member" exclusion all stay in one
+    /// place. A workspace without a Manager is logged, never thrown: the agent's run must not fail
+    /// because nobody could be told about it.
+    /// </summary>
+    public async Task<int> NotifyManagersAsync(
+        Guid workspaceId,
+        AgentNotification notification,
+        CancellationToken ct = default)
+    {
+        var recipients = await LoadManagerIdsAsync(workspaceId, ct);
+        if (recipients.Count == 0)
+        {
+            _logger.LogWarning(
+                "Agent notification {Type} could not be delivered: workspace {WorkspaceId} has no Manager/Admin.",
+                notification.Type,
+                workspaceId);
+
+            return 0;
+        }
+
+        var rows = recipients
+            .Select(userId => new Notification
+            {
+                WorkspaceId = workspaceId,
+                RecipientUserId = userId,
+                Type = notification.Type,
+                Title = notification.Title,
+                Message = notification.Message,
+                Payload = notification.PayloadJson,
+            })
+            .ToList();
+
+        _db.Notifications.AddRange(rows);
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "Agent notification {Type} written for {Recipients} recipient(s) of workspace {WorkspaceId}.",
+            notification.Type,
+            rows.Count,
+            workspaceId);
+
+        return rows.Count;
     }
 
     public async Task<NotificationListResponse> ListAsync(

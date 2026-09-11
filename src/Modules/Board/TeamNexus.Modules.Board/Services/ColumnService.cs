@@ -68,7 +68,10 @@ public sealed class ColumnService : IColumnService
             Name = request.Name.Trim(),
             Position = maxPosition + 1,
             IsDone = request.IsDone,
+            IsClarification = request.IsClarification ?? false,
         };
+
+        RequireOnlyOneSystemMeaning(column.IsDone, column.IsClarification);
 
         _db.BoardColumns.Add(column);
         await _db.SaveChangesAsync(ct);
@@ -94,6 +97,15 @@ public sealed class ColumnService : IColumnService
         {
             column.IsDone = request.IsDone.Value;
         }
+
+        if (request.IsClarification.HasValue)
+        {
+            column.IsClarification = request.IsClarification.Value;
+        }
+
+        // Checked on the values AFTER the merge so both directions are covered: turning on
+        // is_clarification over a column that is is_done, and the reverse (Phase 7 §3.5).
+        RequireOnlyOneSystemMeaning(column.IsDone, column.IsClarification);
 
         await _db.SaveChangesAsync(ct);
         var response = ToResponse(column, []);
@@ -141,6 +153,14 @@ public sealed class ColumnService : IColumnService
     {
         var column = await RequireVisibleColumnAsync(columnId, userId, ct);
         await _access.RequireManagerAsync(column.Board!.WorkspaceId, userId, ct);
+
+        // Phase 7 §3.5: the "Chờ làm rõ" column is managed by the AI Agent, so it cannot be deleted
+        // even while it is empty — unlike a normal column, which is only blocked by its tasks.
+        if (column.IsClarification)
+        {
+            throw new ConflictException(
+                "The 'Awaiting clarification' column is managed by the AI Agent and cannot be deleted.");
+        }
 
         // Tasks keep a Restrict FK to the column — including soft-deleted ones — so a
         // column that ever contained a task cannot be physically removed. Refuse with a
@@ -217,7 +237,21 @@ public sealed class ColumnService : IColumnService
         }
     }
 
+    /// <summary>
+    /// Phase 7 §3.5 — the two system meanings are mutually exclusive: a column cannot be both the
+    /// "Done" lane and the "Awaiting clarification" lane (400). Reporting/Observer treat only
+    /// <c>is_done</c> as completion, so an overlap would produce contradictory state.
+    /// </summary>
+    private static void RequireOnlyOneSystemMeaning(bool isDone, bool isClarification)
+    {
+        if (isDone && isClarification)
+        {
+            throw new BadRequestException(
+                "A column cannot be both Done and Awaiting clarification.");
+        }
+    }
+
     private static ColumnResponse ToResponse(BoardColumn column, IReadOnlyList<TaskResponse> tasks)
         => new(column.Id, column.BoardId, column.Name, column.Position, column.IsDone,
-            column.CreatedAt, column.UpdatedAt, tasks);
+            column.CreatedAt, column.UpdatedAt, tasks, column.IsClarification);
 }

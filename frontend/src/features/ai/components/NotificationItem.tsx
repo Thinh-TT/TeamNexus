@@ -53,6 +53,12 @@ const getTypeText = (type: NotificationType | string): string => {
       return 'Quá tải'
     case 'Bottleneck':
       return 'Nghẽn việc'
+    case 'AgentRunFailed':
+      return 'Agent thất bại (AgentRunFailed)'
+    case 'AgentAwaitingClarification':
+      return 'Agent chờ làm rõ (AgentAwaitingClarification)'
+    case 'AgentOutputPending':
+      return 'Agent chờ duyệt kết quả (AgentOutputPending)'
     default:
       return type
   }

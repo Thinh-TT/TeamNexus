@@ -4,12 +4,13 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TeamNexus.Modules.Ai.Options;
+using TeamNexus.Modules.Ai.Services.Agent;
 
 namespace TeamNexus.Modules.Ai.Services;
 
 /// <summary>
 /// Offline stand-in for <see cref="DeepSeekAiProvider"/> (Phase 3 §2.3), registered whenever
-/// <c>DeepSeek:ApiKey</c> is empty. It answers <b>two</b> prompt shapes with no network and no cost:
+/// <c>DeepSeek:ApiKey</c> is empty. It answers <b>three</b> prompt shapes with no network and no cost:
 /// <list type="number">
 ///   <item><b>Smart Setup</b> (Phase 3): a fixed proposal following the §4.1 schema, deliberately
 ///   spanning the normalization branches (invalid priority → null, a task with two labels, a named
@@ -18,9 +19,14 @@ namespace TeamNexus.Modules.Ai.Services;
 ///   <item><b>AI Observer</b> (Phase 5 §4.3): identified by <see cref="ObserverPrompts.AgentMarker"/>
 ///   on the first line of the user prompt. It emits a findings payload that reuses the ids parsed
 ///   out of the summarized prompt, so the sample always passes the server-side validator.</item>
+///   <item><b>AI Agent Executor</b> (Phase 7 §4.5, D16): identified by
+///   <see cref="AgentMarkers.Executor"/> on the first line of the <i>system</i> prompt. It replays a
+///   deterministic tool-call script so the whole loop, the guardrails and both appliers can be
+///   verified end-to-end offline at zero token cost. The scenario is selected by a
+///   <c>FAKE:*</c> sentinel in the prompt (see <see cref="AgentMarkers"/>).</item>
 /// </list>
 /// </summary>
-public sealed class FakeAiProvider : IAiProvider
+public sealed class FakeAiProvider : IAiProvider, IAiToolCallingProvider
 {
     /// <summary>Number of sample tasks; <see cref="DeepSeekOptions.MaxTaskCount"/> can trim it further.</summary>
     private const int SampleTaskCount = 3;
@@ -33,6 +39,9 @@ public sealed class FakeAiProvider : IAiProvider
     private const string DescriptionMarker = "Mô tả công việc của trưởng nhóm:";
 
     private const string InstructionMarker = "Hãy phân rã mô tả trên";
+
+    /// <summary>How long <c>FAKE:SLOW</c> stalls a round, so a 1s run timeout really fires (group F).</summary>
+    private static readonly TimeSpan SlowScenarioDelay = TimeSpan.FromSeconds(3);
 
     private const string TaskOne = """
         {
@@ -116,6 +125,193 @@ public sealed class FakeAiProvider : IAiProvider
 
         // No token accounting: this call never touches the network.
         return Task.FromResult(new AiCompletionResult(content, null, null));
+    }
+
+    // ---- Agent Executor branch (Phase 7 §4.5, D16) --------------------------
+
+    /// <summary>
+    /// Replays a deterministic tool-call script. Nothing here touches the network, and the token
+    /// counts are synthetic-but-deterministic <b>on this branch only</b> (Phase 3/5 keep returning
+    /// null) — without them <c>Agent:MaxRunTokens</c> could never be exercised in verification.
+    /// </summary>
+    public async Task<AiChatResult> ChatAsync(AiChatRequest request, CancellationToken ct = default)
+    {
+        if (!IsAgentPrompt(request.SystemPrompt))
+        {
+            throw new AiProviderException(
+                "FakeAiProvider: prompt không phải của AI Agent Executor (thiếu marker ở system prompt).");
+        }
+
+        if (HasSentinel(request, AgentMarkers.FakeSlow))
+        {
+            await Task.Delay(SlowScenarioDelay, ct);
+        }
+
+        // "Turn" = how many tool round-trips already happened. Read from the message history (not
+        // from instance state) so the provider stays stateless like the real one.
+        var turn = Math.Max(
+            request.Messages.Count(m => string.Equals(m.Role, "tool", StringComparison.Ordinal)),
+            request.Messages.Count(m => m.ToolCalls is { Count: > 0 }));
+
+        if (HasSentinel(request, AgentMarkers.FakeClarify))
+        {
+            return ClarificationTurn(request, turn);
+        }
+
+        if (HasSentinel(request, AgentMarkers.FakeUnknownTool) && turn == 0)
+        {
+            return ToolTurn(request, turn,
+                new AiToolInvocation("fake-call-1", "BogusTool", """{"whatever":true}"""),
+                "Gọi thử một tool không có trong whitelist.");
+        }
+
+        if (HasSentinel(request, AgentMarkers.FakeBadArguments) && turn == 0)
+        {
+            return ToolTurn(request, turn,
+                new AiToolInvocation("fake-call-1", "SearchSystemData", "{not valid json"),
+                "Gửi arguments hỏng để kiểm tra registry.");
+        }
+
+        if (HasSentinel(request, AgentMarkers.FakeAttach))
+        {
+            return AttachmentTurn(request, turn);
+        }
+
+        return DefaultTurn(request, turn);
+    }
+
+    /// <summary>Default script: read the board, search the web, then finish with a short comment draft.</summary>
+    private static AiChatResult DefaultTurn(AiChatRequest request, int turn) => turn switch
+    {
+        0 => ToolTurn(request, turn,
+            new AiToolInvocation("fake-call-1", "SearchSystemData", """{"scope":"board","limit":10}"""),
+            "Đọc dữ liệu board để nắm bối cảnh."),
+        1 => ToolTurn(request, turn,
+            new AiToolInvocation("fake-call-2", "WebSearch", """{"query":"TeamNexus AI agent executor","maxResults":2}"""),
+            "Tìm thêm thông tin tham khảo."),
+        _ => ToolTurn(request, turn,
+            new AiToolInvocation("fake-call-3", "DraftOutput",
+                JsonSerializer.Serialize(new
+                {
+                    content = "Kết quả chạy thử (FakeAiProvider): agent đã đọc board, tìm kiếm web và soạn xong kết quả ngắn cho task này.",
+                    fileName = (string?)null,
+                    contentType = (string?)null,
+                }, AiOutputJson)),
+            "Soạn kết quả và kết thúc."),
+    };
+
+    /// <summary>Attachment script: same first two turns, then a draft long enough to become a file.</summary>
+    private static AiChatResult AttachmentTurn(AiChatRequest request, int turn) => turn switch
+    {
+        0 => ToolTurn(request, turn,
+            new AiToolInvocation("fake-call-1", "SearchSystemData", """{"scope":"board","limit":10}"""),
+            "Đọc dữ liệu board để nắm bối cảnh."),
+        1 => ToolTurn(request, turn,
+            new AiToolInvocation("fake-call-2", "WebSearch", """{"query":"báo cáo tiến độ","maxResults":2}"""),
+            "Tìm thêm thông tin tham khảo."),
+        _ => ToolTurn(request, turn,
+            new AiToolInvocation("fake-call-3", "DraftOutput",
+                JsonSerializer.Serialize(new
+                {
+                    content = BuildLongDraft(),
+                    fileName = "bao-cao-ai.md",
+                    contentType = "text/markdown",
+                }, AiOutputJson)),
+            "Soạn báo cáo dài và kết thúc."),
+    };
+
+    /// <summary>Clarification script: the very first turn asks the team lead a question.</summary>
+    private static AiChatResult ClarificationTurn(AiChatRequest request, int turn)
+    {
+        // turn == 0 ⇒ the scripted question. If the caller somehow loops back, answering with a
+        // draft keeps the run finite instead of spinning until a guardrail trips.
+        if (turn == 0)
+        {
+            return ToolTurn(request, turn,
+                new AiToolInvocation("fake-call-1", "RequestClarification",
+                    JsonSerializer.Serialize(new
+                    {
+                        question = "Task này cần báo cáo theo định dạng nào và phạm vi thời gian nào ạ?",
+                        reason = "Thiếu thông tin để soạn kết quả đúng.",
+                    }, AiOutputJson)),
+                "Thiếu thông tin — hỏi lại trưởng nhóm.");
+        }
+
+        return ToolTurn(request, turn,
+            new AiToolInvocation("fake-call-2", "DraftOutput",
+                JsonSerializer.Serialize(new { content = "Cảm ơn anh/chị, em đã có đủ thông tin." }, AiOutputJson)),
+            "Kết thúc sau khi được trả lời.");
+    }
+
+    /// <summary>Builds a tool-call turn with the synthetic token accounting described on <see cref="ChatAsync"/>.</summary>
+    private static AiChatResult ToolTurn(
+        AiChatRequest request, int turn, AiToolInvocation call, string assistantNote)
+    {
+        var promptChars = request.SystemPrompt.Length
+                          + request.Messages.Sum(m => m.Content?.Length ?? 0);
+        var completionChars = assistantNote.Length + call.ArgumentsJson.Length;
+
+        return new AiChatResult(
+            assistantNote,
+            [call],
+            Math.Max(1, promptChars / 4),
+            Math.Max(1, completionChars / 4),
+            "tool_calls");
+    }
+
+    /// <summary>Deterministic markdown well above the default 2 000-char attachment threshold.</summary>
+    private static string BuildLongDraft()
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("# Báo cáo do AI Agent soạn (mẫu — FakeAiProvider)");
+        builder.AppendLine();
+        builder.AppendLine("Nội dung này cố tình dài để `AgentAttachmentFactory.ChooseKind` chọn **attachment**.");
+        builder.AppendLine();
+
+        for (var i = 1; i <= 40; i++)
+        {
+            builder.AppendLine($"## Mục {i}");
+            builder.AppendLine(
+                "Dòng nội dung mẫu dùng cho verify offline: không gọi mạng, không tốn token, "
+                + "kết quả tất định nên so sánh được giữa hai lần chạy.");
+            builder.AppendLine();
+        }
+
+        return builder.ToString();
+    }
+
+    private static bool IsAgentPrompt(string systemPrompt)
+        => systemPrompt.TrimStart().StartsWith(AgentMarkers.Executor, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Sentinel lookup over the system prompt and the USER messages only.
+    /// <para>
+    /// <b>Tool results are deliberately excluded.</b> They carry live workspace data (task titles,
+    /// comments) written by humans, so scanning them let any task whose title happened to contain a
+    /// sentinel hijack the scenario of an unrelated run — observed in the §4 harness, where
+    /// <c>SearchSystemData</c> returned every harness task's title and flipped a normal run into the
+    /// clarification branch. The sentinel must describe the task being executed, and the composed user
+    /// message is exactly that.
+    /// </para>
+    /// </summary>
+    private static bool HasSentinel(AiChatRequest request, string sentinel)
+    {
+        if (request.SystemPrompt.Contains(sentinel, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        foreach (var message in request.Messages)
+        {
+            if (string.Equals(message.Role, "user", StringComparison.Ordinal)
+                && message.Content is { } content
+                && content.Contains(sentinel, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // ---- Observer branch (Phase 5 §4.3) ------------------------------------

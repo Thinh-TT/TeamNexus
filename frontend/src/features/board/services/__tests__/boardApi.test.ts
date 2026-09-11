@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { httpClient } from '../../../../shared/api'
 import { boardApi } from '../boardApi'
 
+import { saveBlob } from '../../../reporting/utils/reportDownload'
+
 vi.mock('../../../../shared/api', () => ({
   httpClient: {
     get: vi.fn(),
@@ -9,6 +11,10 @@ vi.mock('../../../../shared/api', () => ({
     put: vi.fn(),
     delete: vi.fn(),
   },
+}))
+
+vi.mock('../../../reporting/utils/reportDownload', () => ({
+  saveBlob: vi.fn(),
 }))
 
 describe('boardApi', () => {
@@ -146,6 +152,32 @@ describe('boardApi', () => {
       vi.mocked(httpClient.delete).mockResolvedValueOnce({})
       await boardApi.deleteComment('t1', 'comm-1')
       expect(httpClient.delete).toHaveBeenCalledWith('/tasks/t1/comments/comm-1')
+    })
+  })
+
+  describe('Workspace Members & Attachments', () => {
+    it('getMembers calls GET /workspaces/{wsId}/members', async () => {
+      vi.mocked(httpClient.get).mockResolvedValueOnce({ data: [{ userId: 'u1' }] })
+      const res = await boardApi.getMembers('ws-1')
+      expect(httpClient.get).toHaveBeenCalledWith('/workspaces/ws-1/members')
+      expect(res).toEqual([{ userId: 'u1' }])
+    })
+
+    it('getTaskAttachments calls GET /tasks/{taskId}/attachments', async () => {
+      vi.mocked(httpClient.get).mockResolvedValueOnce({ data: [{ id: 'att-1' }] })
+      const res = await boardApi.getTaskAttachments('t-1')
+      expect(httpClient.get).toHaveBeenCalledWith('/tasks/t-1/attachments')
+      expect(res).toEqual([{ id: 'att-1' }])
+    })
+
+    it('downloadAttachment calls GET /tasks/{taskId}/attachments/{id}/download and saves blob', async () => {
+      const mockBlob = new Blob(['data'], { type: 'text/markdown' })
+      vi.mocked(httpClient.get).mockResolvedValueOnce({ data: mockBlob })
+      await boardApi.downloadAttachment('t-1', 'att-1', 'test.md')
+      expect(httpClient.get).toHaveBeenCalledWith('/tasks/t-1/attachments/att-1/download', {
+        responseType: 'blob',
+      })
+      expect(saveBlob).toHaveBeenCalledWith(mockBlob, 'test.md')
     })
   })
 })

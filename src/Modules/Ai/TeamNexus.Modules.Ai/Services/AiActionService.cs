@@ -13,7 +13,7 @@ using BoardEntity = TeamNexus.Persistence.Data.Entities.Board;
 namespace TeamNexus.Modules.Ai.Services;
 
 /// <summary>
-/// The single gateway every AI write action must pass through (Phase 4 §2, tech docs §2.4):
+/// The single gateway every AI write action must pass through (Phase 4 Â§2, tech docs Â§2.4):
 /// a Pending log is written first (no real data touched), and only Approve applies it through an
 /// <see cref="IAiActionApplier"/>. Reject/Undo are log-only state transitions.
 /// </summary>
@@ -41,6 +41,24 @@ public interface IAiActionService
 
     /// <summary>Reverts an Approved action; 409 unless the action is Approved.</summary>
     Task<AiActionLogDetailResponse> UndoAsync(Guid logId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Internal API for the AI Agent (Phase 7 Â§4.6, S4): records an agent output as a <c>Pending</c>
+    /// <c>PostComment</c>/<c>PostAttachment</c> action.
+    /// <para>
+    /// <b>Not exposed on any HTTP route.</b> The trust boundary is this in-process call, so instead of
+    /// <c>RequireManagerAsync</c> (which would 403 the agent, who is only a Member) it asserts that
+    /// the task is currently assigned to that agent and that the caller really is the workspace's
+    /// <c>member_type = 'ai_agent'</c> row.
+    /// </para>
+    /// </summary>
+    Task<AiActionLogResponse> RequestAgentOutputAsync(
+        Guid taskId,
+        Guid agentUserId,
+        string actionType,
+        string afterSnapshotJson,
+        string basisJson,
+        CancellationToken ct = default);
 }
 
 public sealed class AiActionService : IAiActionService
@@ -56,7 +74,7 @@ public sealed class AiActionService : IAiActionService
 
     public const int MaxListTake = 100;
 
-    /// <summary>camelCase JSON; also used for the jsonb snapshots (Phase 3 §4.1 pattern).</summary>
+    /// <summary>camelCase JSON; also used for the jsonb snapshots (Phase 3 Â§4.1 pattern).</summary>
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private readonly TeamNexusDbContext _db;
@@ -100,7 +118,7 @@ public sealed class AiActionService : IAiActionService
 
         await _access.RequireManagerAsync(board.WorkspaceId, userId, ct);
 
-        // Context is loaded read-only — the same sources the Smart Setup proposal was built from.
+        // Context is loaded read-only â€” the same sources the Smart Setup proposal was built from.
         var columns = await _columns.GetColumnsAsync(boardId, userId, ct);
         var members = await _members.GetMembersAsync(board.WorkspaceId, userId, ct);
         var labels = await LoadWorkspaceLabelsAsync(board.WorkspaceId, ct);
@@ -130,8 +148,80 @@ public sealed class AiActionService : IAiActionService
         return BuildResponse(log, names.GetValueOrDefault(userId));
     }
 
-    // ---- read --------------------------------------------------------------
+    // ---- request (agent output, internal â€” Phase 7 Â§4.6) --------------------
 
+    public async Task<AiActionLogResponse> RequestAgentOutputAsync(
+        Guid taskId,
+        Guid agentUserId,
+        string actionType,
+        string afterSnapshotJson,
+        string basisJson,
+        CancellationToken ct = default)
+    {
+        if (!string.Equals(actionType, AiActionTypes.PostComment, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(actionType, AiActionTypes.PostAttachment, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BadRequestException($"Unsupported agent output action: {actionType}.");
+        }
+
+        if (string.IsNullOrWhiteSpace(afterSnapshotJson))
+        {
+            throw new BadRequestException("The agent output has no after_snapshot.");
+        }
+
+        var task = await _db.Tasks
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == taskId, ct)
+            ?? throw new NotFoundException("Task not found.");
+
+        // S4: the agent is a Member, so RequireManagerAsync would 403 it. These two asserts are the
+        // replacement guard â€” "the task really is assigned to this agent" and "this really is the
+        // workspace's agent row" â€” and they cannot be reached from HTTP.
+        if (task.AssigneeId != agentUserId)
+        {
+            throw new ForbiddenException("The task is not assigned to this AI Agent.");
+        }
+
+        var board = await _db.Boards
+            .AsNoTracking()
+            .FirstOrDefaultAsync(b => b.Id == task.BoardId, ct)
+            ?? throw new NotFoundException("Board not found.");
+
+        var isAgent = await _db.WorkspaceMembers
+            .AsNoTracking()
+            .AnyAsync(wm => wm.WorkspaceId == board.WorkspaceId
+                            && wm.UserId == agentUserId
+                            && wm.MemberType == MemberType.AiAgent, ct);
+
+        if (!isAgent)
+        {
+            throw new ForbiddenException("The acting user is not the AI Agent of this workspace.");
+        }
+
+        var log = new AiActionLog
+        {
+            Action = actionType,
+            EntityType = AiEntityTypes.Task,
+            EntityId = taskId,
+            Basis = string.IsNullOrWhiteSpace(basisJson) ? "{}" : basisJson,
+            AfterSnapshot = afterSnapshotJson,
+            Status = AiActionStatus.Pending,
+            RequestedByUserId = agentUserId,
+        };
+
+        // ONLY the log row; approving it is what writes the comment/attachment.
+        _db.AiActionLogs.Add(log);
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "AI action {Action} requested by the AI Agent as Pending (log {LogId}, task {TaskId}).",
+            log.Action, log.Id, taskId);
+
+        var names = await LoadUserNamesAsync([agentUserId], ct);
+        return BuildResponse(log, names.GetValueOrDefault(agentUserId));
+    }
+
+    // ---- read --------------------------------------------------------------
     public async Task<IReadOnlyList<AiActionLogResponse>> ListAsync(
         Guid boardId,
         AiActionStatus? status,
@@ -177,7 +267,7 @@ public sealed class AiActionService : IAiActionService
         Guid logId, Guid userId, CancellationToken ct = default)
     {
         var log = await LoadLogAsync(logId, ct);
-        await ResolveContextAsync(log, userId, ct);
+        await ResolveAsync(log, userId, ct);
         return await BuildDetailAsync(logId, ct);
     }
 
@@ -187,13 +277,13 @@ public sealed class AiActionService : IAiActionService
         Guid logId, Guid userId, CancellationToken ct = default)
     {
         var log = await LoadLogAsync(logId, ct);
-        var ctx = await ResolveContextAsync(log, userId, ct);
+        var ctx = await ResolveAsync(log, userId, ct);
         var applier = ResolveApplier(log.Action);
 
         await using var transaction = await _db.Database.BeginTransactionAsync(ct);
 
         // Compare-and-swap on the status column: without a concurrency token this is what makes
-        // "approve twice" impossible — the loser gets 0 affected rows and rolls back (409).
+        // "approve twice" impossible â€” the loser gets 0 affected rows and rolls back (409).
         var now = DateTimeOffset.UtcNow;
         var affected = await _db.AiActionLogs
             .Where(x => x.Id == logId && x.Status == AiActionStatus.Pending)
@@ -221,8 +311,11 @@ public sealed class AiActionService : IAiActionService
         await transaction.CommitAsync(ct);
 
         _logger.LogInformation(
-            "AI action {LogId} ({Action}) approved: {TaskCount} task(s), {LabelCount} new label(s), {WarningCount} warning(s).",
-            logId, log.Action, applied.CreatedTaskIds.Count, applied.CreatedLabelIds.Count, applied.Warnings.Count);
+            "AI action {LogId} ({Action}) approved: {TaskCount} task(s), {LabelCount} new label(s), "
+            + "{CommentCount} comment(s), {AttachmentCount} attachment(s), {WarningCount} warning(s).",
+            logId, log.Action, applied.CreatedTaskIds.Count, applied.CreatedLabelIds.Count,
+            applied.CreatedCommentId.HasValue ? 1 : 0, applied.CreatedAttachmentId.HasValue ? 1 : 0,
+            applied.Warnings.Count);
 
         return await BuildDetailAsync(logId, ct);
     }
@@ -231,7 +324,7 @@ public sealed class AiActionService : IAiActionService
         Guid logId, string? note, Guid userId, CancellationToken ct = default)
     {
         var log = await LoadLogAsync(logId, ct);
-        await ResolveContextAsync(log, userId, ct);
+        await ResolveAsync(log, userId, ct);
 
         var trimmedNote = TrimToNull(note);
         if (trimmedNote is { Length: > MaxDecisionNoteLength })
@@ -268,7 +361,7 @@ public sealed class AiActionService : IAiActionService
         Guid logId, Guid userId, CancellationToken ct = default)
     {
         var log = await LoadLogAsync(logId, ct);
-        var ctx = await ResolveContextAsync(log, userId, ct);
+        var ctx = await ResolveAsync(log, userId, ct);
         var applier = ResolveApplier(log.Action);
 
         await using var transaction = await _db.Database.BeginTransactionAsync(ct);
@@ -316,9 +409,39 @@ public sealed class AiActionService : IAiActionService
                .FirstOrDefaultAsync(x => x.Id == logId, ct)
            ?? throw new NotFoundException("AI action not found.");
 
-    /// <summary>Validates the log scope and requires Manager/Admin in the owning workspace.</summary>
-    private async Task<AiActionContext> ResolveContextAsync(AiActionLog log, Guid userId, CancellationToken ct)
+    /// <summary>
+    /// Validates the log scope and requires Manager/Admin in the owning workspace.
+    /// <para>
+    /// Phase 7 Â§4.6 adds the <c>Task</c> branch (<c>entity_type = 'Task'</c>, <c>entity_id</c> =
+    /// taskId). The <c>Board</c> branch is untouched â€” Phase 4 behaviour is what group I of the
+    /// verification run re-proves.
+    /// </para>
+    /// </summary>
+    private async Task<AiActionContext> ResolveAsync(AiActionLog log, Guid userId, CancellationToken ct)
     {
+        if (string.Equals(log.EntityType, AiEntityTypes.Task, StringComparison.OrdinalIgnoreCase))
+        {
+            if (log.EntityId is null)
+            {
+                throw new BadRequestException($"AI action {log.Id} is not scoped to a task.");
+            }
+
+            // The Tasks query filter makes a soft-deleted task a 404: its agent output has no target.
+            var task = await _db.Tasks
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == log.EntityId.Value, ct)
+                ?? throw new NotFoundException("Task not found.");
+
+            var taskBoard = await _db.Boards
+                .AsNoTracking()
+                .FirstOrDefaultAsync(b => b.Id == task.BoardId, ct)
+                ?? throw new NotFoundException("Board not found.");
+
+            await _access.RequireManagerAsync(taskBoard.WorkspaceId, userId, ct);
+
+            return new AiActionContext(taskBoard.Id, taskBoard.WorkspaceId, userId, task.Id);
+        }
+
         if (!string.Equals(log.EntityType, AiEntityTypes.Board, StringComparison.OrdinalIgnoreCase)
             || log.EntityId is null)
         {
@@ -382,7 +505,7 @@ public sealed class AiActionService : IAiActionService
     // ---- pure validation / JSON helpers (verify-friendly, no DB) -----------
 
     /// <summary>
-    /// Server-side validation of a confirmed proposal (Phase 4 §0 — D12). Throws
+    /// Server-side validation of a confirmed proposal (Phase 4 Â§0 â€” D12). Throws
     /// <see cref="BadRequestException"/> (400) on the first violation; nothing is written when it throws.
     /// </summary>
     public static void ValidateConfirmRequest(
@@ -397,7 +520,7 @@ public sealed class AiActionService : IAiActionService
         if (description is null || description.Length > SmartSetupService.MaxDescriptionLength)
         {
             throw new BadRequestException(
-                $"Description must be 1–{SmartSetupService.MaxDescriptionLength} characters.");
+                $"Description must be 1â€“{SmartSetupService.MaxDescriptionLength} characters.");
         }
 
         var tasks = request.Tasks;
@@ -431,7 +554,7 @@ public sealed class AiActionService : IAiActionService
             if (title is null || title.Length > SmartSetupService.MaxTitleLength)
             {
                 throw new BadRequestException(
-                    $"Sub-task title must be 1–{SmartSetupService.MaxTitleLength} characters.");
+                    $"Sub-task title must be 1â€“{SmartSetupService.MaxTitleLength} characters.");
             }
 
             if (task.Description is { Length: > SmartSetupService.MaxTaskDescriptionLength })
@@ -459,7 +582,7 @@ public sealed class AiActionService : IAiActionService
                 if (name is null || name.Length > SmartSetupService.MaxLabelLength)
                 {
                     throw new BadRequestException(
-                        $"Label name must be 1–{SmartSetupService.MaxLabelLength} characters.");
+                        $"Label name must be 1â€“{SmartSetupService.MaxLabelLength} characters.");
                 }
 
                 if (label.Exists && label.LabelId.HasValue && !labelIds.Contains(label.LabelId.Value))
@@ -505,7 +628,11 @@ public sealed class AiActionService : IAiActionService
         => JsonSerializer.Serialize(
             request with { Summary = CapLength(request.Summary, MaxSummaryLength) }, Json);
 
-    /// <summary>jsonb <c>applied_snapshot</c>: what the applier actually wrote (Undo's basis).</summary>
+    /// <summary>
+    /// jsonb <c>applied_snapshot</c>: what the applier actually wrote (Undo's basis). Phase 7 added
+    /// the two nullable output ids; <c>createdTaskIds</c>/<c>createdLabelIds</c> keep their names and
+    /// meaning so the Phase 4 <c>CreateSubtasks</c> undo path reads exactly what it always did.
+    /// </summary>
     public static string BuildAppliedSnapshotJson(AiActionAppliedResult result)
         => JsonSerializer.Serialize(new
         {
@@ -513,13 +640,15 @@ public sealed class AiActionService : IAiActionService
             entityId = result.EntityId,
             createdTaskIds = result.CreatedTaskIds,
             createdLabelIds = result.CreatedLabelIds,
+            createdCommentId = result.CreatedCommentId,
+            createdAttachmentId = result.CreatedAttachmentId,
             warnings = result.Warnings,
             appliedAt = DateTimeOffset.UtcNow,
         }, Json);
 
     /// <summary>
     /// Adds the undo warnings to an existing <c>applied_snapshot</c>. Works on parsed JSON because
-    /// PostgreSQL normalises <c>jsonb</c> (key order/whitespace) — string equality is never safe here.
+    /// PostgreSQL normalises <c>jsonb</c> (key order/whitespace) â€” string equality is never safe here.
     /// </summary>
     public static string MergeUndoWarnings(string? appliedSnapshot, IReadOnlyList<string> warnings)
     {
@@ -538,7 +667,7 @@ public sealed class AiActionService : IAiActionService
         return JsonSerializer.Serialize(merged, Json);
     }
 
-    /// <summary>Defensive jsonb parse: absent/invalid JSON ⇒ null (never throws).</summary>
+    /// <summary>Defensive jsonb parse: absent/invalid JSON â‡’ null (never throws).</summary>
     public static JsonElement? ParseJson(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
@@ -589,6 +718,23 @@ public sealed class AiActionService : IAiActionService
 
         return ids;
     }
+
+    /// <summary>
+    /// Reads one GUID out of a snapshot (camelCase). Used by the Phase 7 appliers to find what they
+    /// wrote (<c>createdCommentId</c>/<c>createdAttachmentId</c>) when Undo runs later.
+    /// </summary>
+    public static Guid? ReadGuid(string? snapshotJson, string propertyName)
+        => TryGetProperty(snapshotJson, propertyName, out var value)
+           && value.ValueKind == JsonValueKind.String
+           && Guid.TryParse(value.GetString(), out var id)
+            ? id
+            : null;
+
+    /// <summary>Reads one string out of a snapshot (camelCase); absent/blank ⇒ <c>null</c>.</summary>
+    public static string? ReadString(string? snapshotJson, string propertyName)
+        => TryGetProperty(snapshotJson, propertyName, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     public static AiActionLogResponse BuildResponse(
         AiActionLog log, string? requestedByName, string? decidedByName = null)

@@ -45,6 +45,11 @@ public class TeamNexusDbContext
 
     public DbSet<AiObserverRun> AiObserverRuns => Set<AiObserverRun>();
 
+    // AI Agent Executor (Phase 7 §2): append-only run journal + agent output files.
+    public DbSet<AgentRun> AgentRuns => Set<AgentRun>();
+
+    public DbSet<TaskAttachment> TaskAttachments => Set<TaskAttachment>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

@@ -8,6 +8,8 @@ using Microsoft.Extensions.Options;
 using TeamNexus.Modules.Ai.Endpoints;
 using TeamNexus.Modules.Ai.Options;
 using TeamNexus.Modules.Ai.Services;
+using TeamNexus.Modules.Ai.Services.Agent;
+using TeamNexus.Modules.Ai.Services.Agent.Agents;
 using TeamNexus.Modules.Ai.Services.Appliers;
 using TeamNexus.Modules.Board.Endpoints;
 using TeamNexus.Modules.Board.Services;
@@ -29,6 +31,9 @@ public static class AiModule
 {
     /// <summary>Name of the <see cref="IHttpClientFactory"/> client used for DeepSeek calls.</summary>
     public const string HttpClientName = "DeepSeek";
+
+    /// <summary>Name of the <see cref="IHttpClientFactory"/> client used for Tavily web search (Phase 7 §4.3).</summary>
+    public const string TavilyHttpClientName = "Tavily";
 
     public static IServiceCollection AddAiModule(
         this IServiceCollection services,
@@ -78,7 +83,6 @@ public static class AiModule
         // Real adapter for the port declared by the Board module (which registers a no-op
         // default). This line must stay AFTER AddBoardModule in Program.cs to win the resolve.
         services.AddScoped<IActivityLogWriter, ActivityLogWriter>();
-
         // ---- AI Observer (Phase 5 §5.4) --------------------------------------
         // Options are bound here (the POCO itself lives in §3); the notification writer and the
         // scan service are scoped, and the periodic driver is a hosted service so it starts with
@@ -89,6 +93,72 @@ public static class AiModule
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IObserverService, ObserverService>();
         services.AddHostedService<ObserverBackgroundService>();
+
+        // ---- AI Agent Executor (Phase 7 §4.11) -------------------------------
+        // §4.11 registers the agent's options, transports, tools, orchestrator and reaper here so
+        // Program.cs never changes again (it already calls AddAiModule + MapAiModuleEndpoints).
+        services.AddOptions<AgentOptions>()
+            .Bind(configuration.GetSection(AgentOptions.SectionName));
+        services.AddOptions<TavilyOptions>()
+            .Bind(configuration.GetSection(TavilyOptions.SectionName));
+
+        // Separate named client: Tavily has its own host, timeout and (optional) auth header.
+        services.AddHttpClient(TavilyHttpClientName, (provider, client) =>
+        {
+            var options = provider.GetRequiredService<IOptions<TavilyOptions>>().Value;
+            client.Timeout = options.Timeout;
+        });
+
+        // Function-calling port: the same HasApiKey switch as IAiProvider. Registered separately, so
+        // the two interfaces get two instances — acceptable because both providers are stateless
+        // transports (the FakeAiProvider scenario is derived from the message history, not from state).
+        services.AddSingleton<IAiToolCallingProvider>(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<DeepSeekOptions>>().Value;
+
+            return options.HasApiKey
+                ? ActivatorUtilities.CreateInstance<DeepSeekAiProvider>(provider)
+                : ActivatorUtilities.CreateInstance<FakeAiProvider>(provider);
+        });
+
+        // Web search: real Tavily when a key is configured, offline sample results otherwise.
+        services.AddSingleton<IWebSearchProvider>(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<TavilyOptions>>().Value;
+
+            return options.HasApiKey
+                ? ActivatorUtilities.CreateInstance<TavilyWebSearchProvider>(provider)
+                : ActivatorUtilities.CreateInstance<FakeWebSearchProvider>(provider);
+        });
+
+        // Agent identity port (Phase 7 D7): Board declares it + registers NullAiAgentResolver, and this
+        // line — which MUST stay after AddBoardModule in Program.cs — overrides it, exactly like
+        // IActivityLogWriter above.
+        services.AddScoped<IAiAgentResolver, WorkspaceAiAgentResolver>();
+
+        // Tool whitelist: one registration per tool + the dispatcher.
+        services.AddScoped<IAgentTool, SearchSystemDataTool>();
+        services.AddScoped<IAgentTool, WebSearchTool>();
+        services.AddScoped<IAgentTool, DraftOutputTool>();
+        services.AddScoped<IAgentTool, RequestClarificationTool>();
+        services.AddScoped<IAgentToolRegistry, AgentToolRegistry>();
+
+        // Agent output → Accountability Layer, and the two appliers that apply it once approved.
+        services.AddScoped<IAgentOutputService, AgentOutputService>();
+        services.AddScoped<IAiActionApplier, PostCommentApplier>();
+        services.AddScoped<IAiActionApplier, PostAttachmentApplier>();
+
+        // Orchestrator: registered as the concrete type too, because the background scope resolves it
+        // directly to acquire the per-task advisory lock on that scope's own connection.
+        services.AddScoped<AgentRunOrchestrator>();
+        services.AddScoped<IAgentRunService>(provider => provider.GetRequiredService<AgentRunOrchestrator>());
+        services.AddScoped<IAgentAttachmentService, AgentAttachmentService>();
+
+        // Singleton: the cancellation/reservation table must be shared by every request scope, and the
+        // reaper must run even when Agent:Enabled is false.
+        services.AddSingleton<AgentRunCancellationRegistry>();
+        services.AddHostedService<AgentRunReaper>();
+
 
         // ---- Endpoint filters (resolved from DI) -----------------------------
         // DomainExceptionFilter (Board) maps BoardModuleException → { error, status }
@@ -113,6 +183,8 @@ public static class AiModule
         endpoints.MapAiActionEndpoints();
         endpoints.MapObserverEndpoints();
         endpoints.MapNotificationEndpoints();
+        endpoints.MapAgentRunEndpoints();
+        endpoints.MapAttachmentEndpoints();
 
         return endpoints;
     }
@@ -161,5 +233,27 @@ public static class AiModule
             observer.LookbackHours,
             observer.DeduplicationWindowHours,
             observer.MinSeverityToNotify);
+
+        // AI Agent Executor (Phase 7 §4.11): exactly ONE line, so it is obvious at a glance whether
+        // the agent is on and how aggressive its guardrails are. Contains no secret.
+        var agent = configuration.GetSection(AgentOptions.SectionName).Get<AgentOptions>()
+                    ?? new AgentOptions();
+        var tavily = configuration.GetSection(TavilyOptions.SectionName).Get<TavilyOptions>()
+                     ?? new TavilyOptions();
+        var effectiveAgent = agent.Effective;
+
+        logger.LogInformation(
+            "Ai module: Agent enabled={Enabled}, provider={Provider}, webSearch={WebSearch}, "
+            + "maxToolCalls={MaxToolCalls}, timeout={TimeoutSeconds}s, tokenBudget={MaxRunTokens}, "
+            + "llmCalls={MaxRunLlmCalls}, maxAttachmentKB={MaxAttachmentKB}, tavilyAuth={TavilyAuthMode}.",
+            agent.Enabled,
+            options.HasApiKey ? nameof(DeepSeekAiProvider) : nameof(FakeAiProvider),
+            tavily.HasApiKey ? nameof(TavilyWebSearchProvider) : nameof(FakeWebSearchProvider),
+            effectiveAgent.MaxToolCalls,
+            effectiveAgent.RunTimeoutSeconds,
+            effectiveAgent.MaxRunTokens,
+            effectiveAgent.MaxRunLlmCalls,
+            effectiveAgent.MaxAttachmentBytes / 1024,
+            tavily.UseBearerAuth ? TavilyOptions.AuthModeBearer : TavilyOptions.AuthModeBody);
     }
 }

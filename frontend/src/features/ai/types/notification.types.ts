@@ -1,4 +1,11 @@
-export type NotificationType = 'OverdueTask' | 'StalledTask' | 'Overload' | 'Bottleneck'
+export type NotificationType =
+  | 'OverdueTask'
+  | 'StalledTask'
+  | 'Overload'
+  | 'Bottleneck'
+  | 'AgentRunFailed'
+  | 'AgentAwaitingClarification'
+  | 'AgentOutputPending'
 export type NotificationSeverity = 'Low' | 'Medium' | 'High' | 'Critical'
 export type ObserverRunStatus = 'Running' | 'Completed' | 'Skipped' | 'Failed'
 

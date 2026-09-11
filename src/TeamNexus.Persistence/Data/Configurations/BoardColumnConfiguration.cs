@@ -19,9 +19,20 @@ public sealed class BoardColumnConfiguration : IEntityTypeConfiguration<BoardCol
         builder.Property(c => c.IsDone)
             .HasDefaultValue(false);
 
+        builder.Property(c => c.IsClarification)
+            .HasDefaultValue(false);
+
         // Column order must be unique within a board (DB design §5).
         builder.HasIndex(c => new { c.BoardId, c.Position })
             .IsUnique();
+
+        // At most ONE "Chờ làm rõ" column per board (Phase 7 §2.2 / DB design §5). Enforced by a
+        // partial unique index, which is also the race guard when the Ai module lazily creates the
+        // column for the first time.
+        builder.HasIndex(c => c.BoardId)
+            .IsUnique()
+            .HasFilter("\"is_clarification\"")
+            .HasDatabaseName("uq_board_columns_clarification");
 
         builder.HasOne(c => c.Board)
             .WithMany()

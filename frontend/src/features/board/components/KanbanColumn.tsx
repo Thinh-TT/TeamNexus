@@ -9,8 +9,11 @@ import {
   EditOutlined,
   MoreOutlined,
   PlusOutlined,
+  QuestionCircleOutlined,
+  RobotOutlined,
 } from '@ant-design/icons'
 import {
+  Avatar,
   Badge,
   Button,
   Card,
@@ -19,16 +22,24 @@ import {
   Input,
   type MenuProps,
   Popconfirm,
+  Select,
   Space,
+  Tag,
   Tooltip,
   Typography,
 } from 'antd'
-import type { ColumnResponse, CreateTaskRequest, TaskResponse } from '../types/board.types'
+import type {
+  ColumnResponse,
+  CreateTaskRequest,
+  TaskResponse,
+  WorkspaceMemberResponse,
+} from '../types/board.types'
 import { TaskCard } from './TaskCard'
 
 interface KanbanColumnProps {
   column: ColumnResponse
   tasks: TaskResponse[]
+  workspaceMembers?: WorkspaceMemberResponse[]
   onTaskClick: (task: TaskResponse) => void
   onEditColumn: (column: ColumnResponse) => void
   onDeleteColumn: (columnId: string) => void
@@ -38,6 +49,7 @@ interface KanbanColumnProps {
 export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   column,
   tasks,
+  workspaceMembers,
   onTaskClick,
   onEditColumn,
   onDeleteColumn,
@@ -45,6 +57,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
 }) => {
   const [isAddingTask, setIsAddingTask] = useState(false)
   const [newTaskTitle, setNewTaskTitle] = useState('')
+  const [newTaskAssigneeId, setNewTaskAssigneeId] = useState<string | null>(null)
   const [isSubmittingTask, setIsSubmittingTask] = useState(false)
 
   const { setNodeRef, isOver } = useDroppable({
@@ -67,8 +80,10 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
       await onCreateTask({
         columnId: column.id,
         title: trimmed,
+        assigneeId: newTaskAssigneeId || undefined,
       })
       setNewTaskTitle('')
+      setNewTaskAssigneeId(null)
       setIsAddingTask(false)
     } finally {
       setIsSubmittingTask(false)
@@ -139,6 +154,14 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
           {column.isDone && (
             <Tooltip title="Cột hoàn thành (Done)">
               <CheckCircleOutlined style={{ color: '#10b981', fontSize: 14 }} />
+            </Tooltip>
+          )}
+          {column.isClarification && (
+            <Tooltip title="Cột chờ làm rõ (Clarification)">
+              <QuestionCircleOutlined
+                style={{ color: '#f59e0b', fontSize: 14 }}
+                data-testid="clarification-col-icon"
+              />
             </Tooltip>
           )}
           <Typography.Text
@@ -253,12 +276,47 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
               rows={2}
               style={{ resize: 'none', marginBottom: 8, fontSize: 13 }}
             />
+            {workspaceMembers && workspaceMembers.length > 0 && (
+              <Select
+                allowClear
+                placeholder="Chọn người thực hiện (tuỳ chọn)"
+                value={newTaskAssigneeId}
+                onChange={(val) => setNewTaskAssigneeId(val ?? null)}
+                style={{ width: '100%', marginBottom: 8 }}
+                size="small"
+                data-testid="quick-add-assignee-select"
+                options={workspaceMembers.map((m) => ({
+                  value: m.userId,
+                  label: (
+                    <Flex align="center" gap={6}>
+                      <Avatar
+                        size={18}
+                        icon={m.memberType === 'ai_agent' ? <RobotOutlined /> : undefined}
+                        style={{
+                          backgroundColor: m.memberType === 'ai_agent' ? '#7c3aed' : '#6366f1',
+                          fontSize: 10,
+                        }}
+                      >
+                        {m.memberType !== 'ai_agent' && (m.displayName?.[0]?.toUpperCase() || 'U')}
+                      </Avatar>
+                      <span>{m.displayName}</span>
+                      {m.memberType === 'ai_agent' && (
+                        <Tag color="purple" style={{ margin: 0, fontSize: 10, lineHeight: '16px' }}>
+                          AI Agent
+                        </Tag>
+                      )}
+                    </Flex>
+                  ),
+                }))}
+              />
+            )}
             <Flex justify="flex-end" gap={6}>
               <Button
                 size="small"
                 icon={<CloseOutlined />}
                 onClick={() => {
                   setNewTaskTitle('')
+                  setNewTaskAssigneeId(null)
                   setIsAddingTask(false)
                 }}
               >

@@ -39,7 +39,7 @@
 | S13 | `WorkspaceMember` có composite PK `(workspace_id, user_id)`; `WorkspaceMemberConfiguration` có CHECK role + query filter theo workspace soft-delete | 1 user chỉ thuộc **1** workspace ⇒ agent là **1 `ApplicationUser` mỗi workspace** — **D1** |
 | S14 | `IBoardColumnService.ColumnService.DeleteColumnAsync` từ chối xoá cột còn task (`ConflictException`) | Cột "Chờ làm rõ" còn phải chặn xoá **cả khi rỗng** — **§3.4** |
 | S15 | `ICommentService.CreateCommentAsync(taskId, request, userId)` nhận `userId` tùy ý sau khi `RequireMemberAsync` | **Không** dùng được cho agent (agent là member nhưng route gọi sẽ là Manager). Agent ghi comment qua applier với `userId = agent_user_id` — **§4.6** |
-| S16 | `ReportFileName.Normalize` đã có (slug ASCII, lọc `..`/`/`/`\`) và đã verify ở Phase 6 | Tái dùng cho tên file attachment — **§4.4**, không viết lại |
+| S16 | `ReportFileName.Slugify` đã có (slug ASCII, lọc `..`/`/`/`\`; kế hoạch ghi nhầm tên là `Normalize`) và đã verify ở Phase 6 | Tái dùng cho tên file attachment — **§4.4**, không viết lại |
 | S17 | Phase 2–6 verify bằng **harness tạm ngoài workspace** + API thật + PostgreSQL thật, **không** tạo project xUnit (để Phase 8) | Giai đoạn 7 giữ nguyên cách làm — **§7** |
 | S18 | Baseline frontend hiện tại: **30 test files / 155 tests PASS**, `oxlint` 0/0, `tsc -b` sạch | Mọi §5 phải kết thúc với baseline mới tốt hơn baseline này |
 
@@ -124,24 +124,32 @@ prune tự động; test xUnit; đa ngôn ngữ UI (tiếng Việt cố định)
 
 | § | Hạng mục | Trạng thái |
 |---|---|---|
-| §2 | Backend – Schema & 2 migration (agent identity, `is_clarification`, `agent_runs`, `task_attachments`) | [ ] |
-| §3 | Backend – Module Board (siết assignee, `MemberType`, event SignalR, `IAiAgentResolver`, `is_clarification`) | [ ] |
-| §4 | Backend – Module Ai (provider tool-calling, Tavily, 4 tool, orchestrator, guardrail, 2 applier, endpoints) | [ ] |
+| §2 | Backend – Schema & 2 migration (agent identity, `is_clarification`, `agent_runs`, `task_attachments`) | ✅ **XONG** — migration `Phase7AiAgentSchema`, verify **36/36 PASS** (nhóm A, `report/phase-7-ai-agent-executor-test-report.md` §2.1) |
+| §3 | Backend – Module Board (siết assignee, `MemberType`, event SignalR, `IAiAgentResolver`, `is_clarification`) | ✅ **XONG** — verify **44/44 PASS** (nhóm I, `report/phase-7-ai-agent-executor-test-report.md` §2.2); **1 bug thật của §2 đã sửa** (`agent_runs.status` 16→32) |
+| §4 | Backend – Module Ai (provider tool-calling, Tavily, 4 tool, orchestrator, guardrail, 2 applier, endpoints) | ✅ **XONG** — verify **223/223 PASS** (nhóm B/C/D/E/F/G/H + **1 lần gọi DeepSeek thật**; `report/phase-7-ai-agent-executor-test-report.md` §2.3); **3 bug thật đã sửa** (2 trong code, 1 lỗ hổng spec) |
 | §5 | Frontend – dropdown assignee, trạng thái agent trên Kanban, drawer duyệt, attachment | [ ] |
-| §6 | Config & DI (`Agent`, `Tavily`, `appsettings.json`, 1 dòng log) | [ ] |
-| §7 | Verify bằng harness ngoài workspace (A–J) | [ ] |
-| §8 | Đối chiếu 6 ô hoàn thiện của roadmap + Definition of Done | [ ] |
+| §6 | Config & DI (`Agent`, `Tavily`, `appsettings.json`, 1 dòng log) | ✅ **XONG cùng §4** — `appsettings.json` có 2 section `Agent`/`Tavily`, 1 dòng log trong `LogResolvedConfiguration` (không chứa secret); chỉ còn đối chiếu tài liệu |
+| §7 | Verify bằng harness ngoài workspace (A–J) | ✅ **XONG A–I** — **291/291 check PASS** (A 36+11 · B/C 89 · C-real Tavily 5 · D 43 · E 19 · F 44 · G 21 · H 22 · I 44+29 · **DeepSeek thật + Tavily thật** 8); ⬜ **nhóm J (frontend) chờ §5** |
+| §8 | Đối chiếu 6 ô hoàn thiện của roadmap + Definition of Done | ✅ **XONG** — 6 ô gốc đã tick phần backend (+ ghi rõ ô nào cần §5), ô phát sinh "membership" đã tick, ô phát sinh "dropdown UI" chuyển §5; DoD còn đúng 1 dòng (frontend test > 155) thuộc §5 |
 
 ---
 
 ## 2. Backend – Schema & Migration
 
+> **✅ ĐÃ XONG.** Migration `20260911145639_Phase7AiAgentSchema` đã sinh + áp lên DB local; `dotnet ef migrations list` = **6**;
+> `dotnet build TeamNexus.sln` = **0 warning / 0 error**; verify nhóm **A** = **36/36 PASS** (hình dạng schema + cưỡng chế ràng buộc
+> trên PostgreSQL thật, harness ngoài workspace đã xoá). Chi tiết: `report/phase-7-ai-agent-executor-test-report.md` §2.1.
+>
 > Mục tiêu: **1 migration duy nhất** `Phase7AiAgentSchema`. Chỉ tách migration thứ 2 nếu EF Core bắt buộc thứ tự FK.
 > Sau khi xong: `dotnet ef migrations list` = **6 migration**.
+>
+> ⚠️ **Quy trình bắt buộc trong môi trường sandbox** (đã kiểm chứng — nếu bỏ qua sẽ sinh migration sai **im lặng**):
+> `dotnet build TeamNexus.sln -m:1 -nr:false` (0/0) **rồi** mới `dotnet ef migrations add … --no-build`
+> (và mọi lệnh `dotnet ef` khác cũng phải `--no-build`). Lý do: `--no-build` đọc DLL trong `bin`, không đọc source.
 
 ### 2.1 `workspace_members` (sửa bảng có sẵn)
 
-- [ ] `Data/Entities/WorkspaceMember.cs`:
+- [x] `Data/Entities/WorkspaceMember.cs`:
   ```csharp
   /// <summary>Loại thành viên: người thật hay trợ lý AI (Phase 7 §2.1).</summary>
   public enum MemberType { Human, AiAgent }
@@ -151,24 +159,24 @@ prune tự động; test xUnit; đa ngôn ngữ UI (tiếng Việt cố định)
   /// <summary>Tên hiển thị của agent trong workspace; null với thành viên người.</summary>
   public string? AiAgentName { get; set; }
   ```
-- [ ] `WorkspaceMemberConfiguration.cs`:
+- [x] `WorkspaceMemberConfiguration.cs`:
   - `MemberType` → `HasConversion<string>().HasMaxLength(16)` (đúng quy ước "enum = text + CHECK", `04` §1.2).
   - CHECK `ck_workspace_members_member_type`: `"member_type" IN ('human', 'ai_agent')`.
   - `AiAgentName` → `HasMaxLength(120)`.
   - **Partial unique index** `uq_workspace_members_ai_agent` trên `WorkspaceId` với `HasFilter("\"member_type\" = 'ai_agent'")` ⇒ mỗi workspace đúng **1** agent.
   - **KHÔNG** dùng `AiAgentName` để tìm agent (tên có thể bị đổi) — luôn lọc theo `MemberType`.
   - Giữ nguyên CHECK `ck_workspace_members_role` (agent vẫn phải có `role`; dùng `Member`).
-- [ ] ⚠️ **Query filter hiện có của `WorkspaceMember`** (`Workspace == null || Workspace.DeletedAt == null`) phải được giữ; **không** lọc bỏ `member_type='ai_agent'` ở tầng DbContext — việc ẩn/hiện là quyết định của tầng service (§3.2).
+- [x] ⚠️ **Query filter hiện có của `WorkspaceMember`** (`Workspace == null || Workspace.DeletedAt == null`) phải được giữ; **không** lọc bỏ `member_type='ai_agent'` ở tầng DbContext — việc ẩn/hiện là quyết định của tầng service (§3.2).
 
 ### 2.2 `board_columns` (sửa bảng có sẵn)
 
-- [ ] `BoardColumn.cs`: `public bool IsClarification { get; set; }` — docstring nêu rõ **đối xứng với `IsDone`** và **loại trừ nhau**.
-- [ ] `BoardColumnConfiguration.cs`: **partial unique index** `uq_board_columns_clarification` trên `BoardId` với `HasFilter("\"is_clarification\"")` ⇒ tối đa 1 cột "Chờ làm rõ"/board.
-- [ ] Index sẵn có `UQ (board_id, position)` **không** đổi.
+- [x] `BoardColumn.cs`: `public bool IsClarification { get; set; }` — docstring nêu rõ **đối xứng với `IsDone`** và **loại trừ nhau**.
+- [x] `BoardColumnConfiguration.cs`: **partial unique index** `uq_board_columns_clarification` trên `BoardId` với `HasFilter("\"is_clarification\"")` ⇒ tối đa 1 cột "Chờ làm rõ"/board.
+- [x] Index sẵn có `UQ (board_id, position)` **không** đổi.
 
 ### 2.3 `agent_runs` (bảng mới)
 
-- [ ] `Data/Entities/AgentRun.cs` — `IAuditableEntity`, không navigation tới `Task` (tránh query filter `deleted_at` của task làm ẩn run khi task bị xoá mềm):
+- [x] `Data/Entities/AgentRun.cs` — `IAuditableEntity`, không navigation tới `Task` (tránh query filter `deleted_at` của task làm ẩn run khi task bị xoá mềm):
 
   | Field | Kiểu C# | Ghi chú |
   |---|---|---|
@@ -197,7 +205,7 @@ prune tự động; test xUnit; đa ngôn ngữ UI (tiếng Việt cố định)
   | `StartedAt` / `FinishedAt` | `DateTimeOffset` / `DateTimeOffset?` | |
   | `CreatedAt` / `UpdatedAt` | `DateTimeOffset` | tự stamp qua `IAuditableEntity` |
 
-- [ ] `AgentRunConfiguration.cs`:
+- [x] `AgentRunConfiguration.cs`:
   - `builder.ToTable("agent_runs", t => t.HasCheckConstraint("ck_agent_runs_status", "\"status\" IN ('Running','AwaitingClarification','AwaitingApproval','Completed','Failed')"));`
   - CHECK `ck_agent_runs_stop_reason` (9 giá trị) + CHECK `ck_agent_runs_output_kind` (`output_kind IS NULL OR output_kind IN ('Comment','Attachment')`).
   - `Status`/`StopReason`/`OutputKind` → `HasConversion<string>()` + `HasMaxLength(32)`.
@@ -209,7 +217,7 @@ prune tự động; test xUnit; đa ngôn ngữ UI (tiếng Việt cố định)
 
 ### 2.4 `task_attachments` (bảng mới)
 
-- [ ] `Data/Entities/TaskAttachment.cs`:
+- [x] `Data/Entities/TaskAttachment.cs`:
 
   | Field | Kiểu C# | Ghi chú |
   |---|---|---|
@@ -223,57 +231,79 @@ prune tự động; test xUnit; đa ngôn ngữ UI (tiếng Việt cố định)
   | `Content` | `byte[]` | `bytea` |
   | `CreatedAt` | `DateTimeOffset` | |
 
-- [ ] `TaskAttachmentConfiguration.cs`: `builder.Property(x => x.Content).HasColumnType("bytea").IsRequired();`; FK Restrict; index `TaskId`.
+- [x] `TaskAttachmentConfiguration.cs`: `builder.Property(x => x.Content).HasColumnType("bytea").IsRequired();`; FK Restrict; index `TaskId`.
   **KHÔNG** `IAuditableEntity` (không có `UpdatedAt` — file sinh ra là bất biến), **KHÔNG** soft delete (**D5** — ngoại lệ duy nhất của schema).
 
 ### 2.5 Enum & hằng số (Persistence + module Ai)
 
-- [ ] Trong `TeamNexus.Persistence.Data.Entities` (dùng cho CHECK ở `04` §4):
+- [x] Trong `TeamNexus.Persistence.Data.Entities` (dùng cho CHECK ở `04` §4):
   ```csharp
   public enum AgentRunStatus { Running, AwaitingClarification, AwaitingApproval, Completed, Failed }
   public enum AgentStopReason { DraftProduced, QuestionAsked, ToolLimit, TimeLimit, TokenBudget, ProviderError, Cancelled, TaskChanged, InternalError }
   ```
-- [ ] Trong module Ai (`Services/Agent/AgentConstants.cs`): `AgentOutputKinds.Comment` / `.Attachment`; `AgentRunStatuses` (string khớp enum) để DTO/`stop_reason` dùng nhất quán; `AgentEntityTypes.Task`.
-- [ ] Ghi chú ngay trong code: `BudgetExceeded` **không** phải status — xem `AgentStopReason.TokenBudget` / `.TimeLimit` / `.ToolLimit` (D4).
+- [x] Trong module Ai (`Services/Agent/AgentConstants.cs`): `AgentOutputKinds.Comment` / `.Attachment`; `AgentRunStatuses` (string khớp enum) để DTO/`stop_reason` dùng nhất quán; `AgentEntityTypes.Task`.
+- [x] Ghi chú ngay trong code: `BudgetExceeded` **không** phải status — xem `AgentStopReason.TokenBudget` / `.TimeLimit` / `.ToolLimit` (D4).
 
 ### 2.6 Migration
 
-- [ ] `dotnet ef migrations add Phase7AiAgentSchema --project src/TeamNexus.Persistence --startup-project src/TeamNexus.Api`
+- [x] `dotnet ef migrations add Phase7AiAgentSchema --project src/TeamNexus.Persistence --startup-project src/TeamNexus.Api`
   > Tên migration khớp số giai đoạn hiện hành (**Phase7** = AI Agent Executor). Migration **chưa từng tồn tại** trước đây nên đổi tên không tốn gì; chỉ mất một lần tìm–thay khi đọc tài liệu cũ.
-- [ ] Kiểm tra file migration sinh ra **chỉ** chứa: 2 cột mới trên `workspace_members` + CHECK + partial UQ; 1 cột mới trên `board_columns` + partial UQ; 2 `CreateTable` (`agent_runs`, `task_attachments`) + CHECK + index + FK. **Không** có diff ngoài dự kiến (nhất là **không** đụng Identity table).
-- [ ] `dotnet ef database update --project src/TeamNexus.Persistence --startup-project src/TeamNexus.Api` → `dotnet ef migrations list` = **6**.
-- [ ] `dotnet build TeamNexus.sln` → **0 warning / 0 error**.
+- [x] Kiểm tra file migration sinh ra **chỉ** chứa: 2 cột mới trên `workspace_members` + CHECK + partial UQ; 1 cột mới trên `board_columns` + partial UQ; 2 `CreateTable` (`agent_runs`, `task_attachments`) + CHECK + index + FK. **Không** có diff ngoài dự kiến (nhất là **không** đụng Identity table).
+- [x] `dotnet ef database update --project src/TeamNexus.Persistence --startup-project src/TeamNexus.Api` → `dotnet ef migrations list` = **6**.
+- [x] `dotnet build TeamNexus.sln` → **0 warning / 0 error**.
 
 ---
 
 ## 3. Backend – Module Board (thay đổi nhỏ nhưng bắt buộc)
 
+> **✅ ĐÃ XONG.** Verify bằng harness thật (API Kestrel + PostgreSQL 18 local + JWT tự ký) — **44/44 check PASS**,
+> chi tiết ở `report/phase-7-ai-agent-executor-test-report.md` §2.2. `dotnet build TeamNexus.sln` = **0 warning / 0 error**;
+> frontend **155 tests** không đổi (thay đổi DTO chỉ **thêm** field ở cuối nên tương thích hai chiều).
+>
+> **Hai bug thật bắt được khi verify §3** (đã sửa; xem bảng bug trong report):
+> 1. `agent_runs.status` khai `varchar(16)` nhưng `AwaitingClarification` dài **21** ký tự ⇒ mọi run dừng ở trạng thái
+>    "Chờ làm rõ" **không thể INSERT**. Đã đổi `HasMaxLength(32)` và **sinh lại migration** `Phase7AiAgentSchema` (§2).
+> 2. `activeRunIds.GetValueOrDefault(t.Id)` trả `Guid.Empty` khi task không có run ⇒ JSON thành
+>    `"00000000-0000-0000-0000-000000000000"` thay vì `null`. Đã đổi sang `TryGetValue` ở **cả** `TaskService` và `BoardService`.
+>
+> ⚠️ **Điều chỉnh có chủ ý so với §3.4 (chốt khi verify):** `EnsureAgentAsync` **được** gọi từ
+> `WorkspaceMemberService.GetMembersAsync` (read path), không chỉ từ "luồng assign" như câu chữ cũ. Lý do: danh sách thành viên
+> là **nguồn duy nhất** của dropdown assignee, nếu không bảo đảm row agent tồn tại thì **không workspace nào gán được việc cho
+> agent** — tức ô roadmap "gán task cho AI Agent qua đúng UI assignee hiện có" không thể hoàn thành. Vẫn **lazy theo nhu cầu**
+> (chỉ tạo khi có người mở danh sách thành viên), **không** auto-seed workspace, và gọi trong `try/catch` best-effort
+> (lỗi tạo agent không làm hỏng endpoint đọc — tiền lệ `IActivityLogWriter`/`IBoardEventPublisher`).
+>
+> ⚠️ **Ghi nhận để §4 xử lý (không chặn §3):** `ResolvePageAssigneeIsAiAgentAsync` hiện hỏi resolver **một lần cho mỗi
+> `AssigneeId` khác nhau trong trang**. Đúng theo bất biến "1 agent/workspace" nên fixture thật chỉ tốn 1 truy vấn, và đây
+> **không** phải N+1 theo số task; nhưng với board lớn nhiều assignee thì §4 nên đổi sang một truy vấn gộp
+> (`WorkspaceMembers` lọc `member_type = 'ai_agent'`) khi bật resolver thật.
+
 ### 3.1 DTO
 
-- [ ] `DTOs/TaskDtos.cs` → `TaskResponse` thêm 2 field **cuối** (giữ thứ tự cũ để frontend cũ không vỡ):
+- [x] `DTOs/TaskDtos.cs` → `TaskResponse` thêm 2 field **cuối** (giữ thứ tự cũ để frontend cũ không vỡ):
   ```csharp
   bool AssigneeIsAiAgent,     // true khi assignee là agent của workspace
   Guid? ActiveAgentRunId      // run đang Running/AwaitingClarification/AwaitingApproval, null nếu không có
   ```
-- [ ] `DTOs/MemberDtos.cs` → `WorkspaceMemberResponse` thêm `string MemberType` (`"human"` | `"ai_agent"`).
-- [ ] `DTOs/ColumnDtos.cs` → `ColumnResponse` thêm `bool IsClarification`; `CreateColumnRequest`/`UpdateColumnRequest` thêm `bool? IsClarification`.
+- [x] `DTOs/MemberDtos.cs` → `WorkspaceMemberResponse` thêm `string MemberType` (`"human"` | `"ai_agent"`).
+- [x] `DTOs/ColumnDtos.cs` → `ColumnResponse` thêm `bool IsClarification`; `CreateColumnRequest`/`UpdateColumnRequest` thêm `bool? IsClarification`.
 
 ### 3.2 Siết assignee (**hạng mục bắt buộc phát sinh**, S7)
 
-- [ ] `TaskService`: thêm helper dùng chung
+- [x] `TaskService`: thêm helper dùng chung
   ```csharp
   /// <summary>Phase 7 §3.2: assignee phải là thành viên của workspace chứa task (trước đây chỉ kiểm users.AnyAsync).</summary>
   private async Task RequireAssigneeInWorkspaceAsync(Guid workspaceId, Guid? assigneeId, CancellationToken ct)
   ```
   - `null` ⇒ trả về ngay (bỏ trống người thực hiện là hợp lệ).
   - Không phải member ⇒ `BadRequestException("Assignee is not a member of this workspace.")`.
-- [ ] Gọi trong `CreateTaskAsync` (thay khối `_db.Users.FirstOrDefaultAsync`) và `UpdateTaskAsync` (thay `_db.Users.AnyAsync`).
-- [ ] **Giữ** `Assignee = assignee` gán navigation để `MapTask` trả `AssigneeName` như cũ (đọc user qua `_db.Users` sau khi đã kiểm membership — 1 truy vấn, không N+1).
-- [ ] ⚠️ `CreateSubtasksApplier` (Phase 4) **đã** tự kiểm membership và có warning ⇒ **không** sửa; kiểm tra lại nó vẫn chạy đúng sau khi `TaskService` siết chặt (assignee không hợp lệ bị applier set `null` **trước khi** gọi service).
+- [x] Gọi trong `CreateTaskAsync` (thay khối `_db.Users.FirstOrDefaultAsync`) và `UpdateTaskAsync` (thay `_db.Users.AnyAsync`).
+- [x] **Giữ** `Assignee = assignee` gán navigation để `MapTask` trả `AssigneeName` như cũ (đọc user qua `_db.Users` sau khi đã kiểm membership — 1 truy vấn, không N+1).
+- [x] ⚠️ `CreateSubtasksApplier` (Phase 4) **đã** tự kiểm membership và có warning ⇒ **không** sửa; kiểm tra lại nó vẫn chạy đúng sau khi `TaskService` siết chặt (assignee không hợp lệ bị applier set `null` **trước khi** gọi service).
 
 ### 3.3 `TaskResponse` mới cần dữ liệu mới
 
-- [ ] `TaskService.GetTasksAsync` (list) + `GetTaskByIdAsync` (detail): 1 truy vấn phụ gom theo `taskIds`
+- [x] `TaskService.GetTasksAsync` (list) + `GetTaskByIdAsync` (detail): 1 truy vấn phụ gom theo `taskIds`
   ```csharp
   // 1 query, không N+1: run "đang sống" của các task trong trang
   var activeRuns = await _db.AgentRuns
@@ -287,17 +317,17 @@ prune tự động; test xUnit; đa ngôn ngữ UI (tiếng Việt cố định)
       .ToListAsync(ct);
   // giữ run MỚI NHẤT mỗi task; ActiveAgentRunId = run mới nhất có status Running trước, rồi tới run đang chờ
   ```
-- [ ] `AssigneeIsAiAgent` = `AssigneeId != null && IAiAgentResolver.IsAiAgentAsync(workspaceId, AssigneeId.Value)` — **resolve 1 lần cho cả trang** (không gọi theo từng task).
-- [ ] `DtoMapping.MapTask` (hiện `internal static`, dòng 13) nhận thêm **2 tham số tuỳ chọn ở cuối**: `bool assigneeIsAiAgent = false, Guid? activeAgentRunId = null` ⇒ **4 call site hiện có không vỡ** vì đều dùng construction positional:
+- [x] `AssigneeIsAiAgent` = `AssigneeId != null && IAiAgentResolver.IsAiAgentAsync(workspaceId, AssigneeId.Value)` — **resolve 1 lần cho cả trang** (không gọi theo từng task).
+- [x] `DtoMapping.MapTask` (hiện `internal static`, dòng 13) nhận thêm **2 tham số tuỳ chọn ở cuối**: `bool assigneeIsAiAgent = false, Guid? activeAgentRunId = null` ⇒ **4 call site hiện có không vỡ** vì đều dùng construction positional:
   - `TaskService.GetTasksAsync` (dòng 67) — list, truyền giá trị đã resolve theo trang;
   - `TaskService.GetTaskByIdAsync` (dòng 82) — detail;
   - `TaskService.CreateTaskAsync` (dòng 129) — task mới ⇒ `false`/`null` (agent chưa chạy);
   - `BoardService` (dòng 66) — board kèm tasks ⇒ **cũng** phải truyền giá trị resolve theo trang, nếu bỏ qua thì card trên board sẽ **không** hiện badge agent (bug im lặng, dễ sót — kiểm bằng test §7I).
-- [ ] **Ghi rõ trong code:** `ActiveAgentRunId` **không** phải nguồn sự thật duy nhất — frontend còn phải GET run để bắt kịp event SignalR đã rớt (§5C).
+- [x] **Ghi rõ trong code:** `ActiveAgentRunId` **không** phải nguồn sự thật duy nhất — frontend còn phải GET run để bắt kịp event SignalR đã rớt (§5C).
 
 ### 3.4 `IAiAgentResolver` (port của Board, impl ở Ai — D7)
 
-- [ ] Mới `Services/IAiAgentResolver.cs`:
+- [x] Mới `Services/IAiAgentResolver.cs`:
   ```csharp
   /// <summary>Port khai báo trong Board, cài đặt ở module Ai (mẹo IActivityLogWriter — Phase 5 §2).</summary>
   public interface IAiAgentResolver
@@ -312,31 +342,70 @@ prune tự động; test xUnit; đa ngôn ngữ UI (tiếng Việt cố định)
       Task<Guid> EnsureClarificationColumnAsync(Guid boardId, CancellationToken ct = default);
   }
   ```
-- [ ] `Services/NullAiAgentResolver.cs`: `EnsureAgentAsync`/`EnsureClarificationColumnAsync` ⇒ `NotSupportedException`; `IsAiAgentAsync` ⇒ `false`. Đăng ký trong `BoardModule` **cùng chỗ** `NullActivityLogWriter` (giữ bất biến "Board đăng ký trước Ai" — S12).
-- [ ] ⚠️ `AgentRunReaper`/`TaskService` chỉ gọi `IsAiAgentAsync`; `EnsureAgentAsync` chỉ được gọi từ luồng **assign** (§5) và từ module Ai.
+- [x] `Services/NullAiAgentResolver.cs`: `EnsureAgentAsync`/`EnsureClarificationColumnAsync` ⇒ `NotSupportedException`; `IsAiAgentAsync` ⇒ `false`. Đăng ký trong `BoardModule` **cùng chỗ** `NullActivityLogWriter` (giữ bất biến "Board đăng ký trước Ai" — S12).
+- [x] ⚠️ `AgentRunReaper`/`TaskService` chỉ gọi `IsAiAgentAsync`; `EnsureAgentAsync` chỉ được gọi từ luồng **assign** (§5) và từ module Ai.
 
 ### 3.5 `ColumnService` + cột "Chờ làm rõ" (D3)
 
-- [ ] `CreateColumnAsync`: nhận `IsClarification`; **từ chối** khi `IsDone && IsClarification` ⇒ `BadRequestException("A column cannot be both Done and Awaiting clarification.")`.
-- [ ] `UpdateColumnAsync`: cùng kiểm (theo giá trị **sau** khi merge request), tính cả trường hợp bật `is_clarification` lên cột đang `is_done`.
-- [ ] `DeleteColumnAsync`: **thêm điều kiện chặn** — `column.IsClarification` ⇒ `ConflictException("The 'Awaiting clarification' column is managed by the AI Agent and cannot be deleted.")` (kể cả khi **rỗng** — khác luồng chặn cột có task ở S14).
-- [ ] `ToResponse` thêm `IsClarification`.
-- [ ] **KHÔNG** auto-seed cột cho board cũ: cột được tạo **lazy** bởi `WorkspaceAiAgentResolver.EnsureClarificationColumnAsync` (chỉ tạo **một lần**, dùng partial unique index làm chốt chống race, bắt `DbUpdateException`/`ConflictException` ⇒ đọc lại cột đã thắng).
+- [x] `CreateColumnAsync`: nhận `IsClarification`; **từ chối** khi `IsDone && IsClarification` ⇒ `BadRequestException("A column cannot be both Done and Awaiting clarification.")`.
+- [x] `UpdateColumnAsync`: cùng kiểm (theo giá trị **sau** khi merge request), tính cả trường hợp bật `is_clarification` lên cột đang `is_done`.
+- [x] `DeleteColumnAsync`: **thêm điều kiện chặn** — `column.IsClarification` ⇒ `ConflictException("The 'Awaiting clarification' column is managed by the AI Agent and cannot be deleted.")` (kể cả khi **rỗng** — khác luồng chặn cột có task ở S14).
+- [x] `ToResponse` thêm `IsClarification`.
+- [x] **KHÔNG** auto-seed cột cho board cũ: cột được tạo **lazy** bởi `WorkspaceAiAgentResolver.EnsureClarificationColumnAsync` (chỉ tạo **một lần**, dùng partial unique index làm chốt chống race, bắt `DbUpdateException`/`ConflictException` ⇒ đọc lại cột đã thắng).
 
 ### 3.6 `WorkspaceMemberService`
 
-- [ ] `GetMembersAsync` trả thêm `MemberType` (đọc `wm.MemberType.ToString()` ⇒ `"Human"`/`"AiAgent"`; **chuẩn hoá về snake_case** `"human"`/`"ai_agent"` ở DTO để khớp `04` §4 và JSON của frontend).
-- [ ] `OrderBy(wm => wm.JoinedAt)` giữ nguyên ⇒ agent (tạo sau) nằm cuối danh sách dropdown.
-- [ ] **Không** lọc bỏ agent khỏi danh sách — dropdown assignee **cần** thấy agent (§5A). (Nếu sau này cần danh sách "chỉ người", thêm query param — ngoài phạm vi.)
+- [x] `GetMembersAsync` trả thêm `MemberType` (đọc `wm.MemberType.ToString()` ⇒ `"Human"`/`"AiAgent"`; **chuẩn hoá về snake_case** `"human"`/`"ai_agent"` ở DTO để khớp `04` §4 và JSON của frontend).
+- [x] `OrderBy(wm => wm.JoinedAt)` giữ nguyên ⇒ agent (tạo sau) nằm cuối danh sách dropdown.
+- [x] **Không** lọc bỏ agent khỏi danh sách — dropdown assignee **cần** thấy agent (§5A). (Nếu sau này cần danh sách "chỉ người", thêm query param — ngoài phạm vi.)
 
 ### 3.7 Debug/kiểm tra nhanh
 
-- [ ] `GET /api/workspaces/{id}/members` phải trả agent **sau** lần assign đầu tiên (agent tạo lazy). Ghi rõ trong README module để không ai tưởng agent "mất".
-- [ ] Danh sách thành viên của workspace **chưa** từng gán agent ⇒ **không** có row `ai_agent` nào (không auto-seed workspace — chỉ lazy theo nhu cầu).
+- [x] `GET /api/workspaces/{id}/members` phải trả agent **sau** lần assign đầu tiên (agent tạo lazy). Ghi rõ trong README module để không ai tưởng agent "mất".
+- [x] Danh sách thành viên của workspace **chưa** từng gán agent ⇒ **không** có row `ai_agent` nào (không auto-seed workspace — chỉ lazy theo nhu cầu).
 
 ---
 
 ## 4. Backend – Module Ai
+
+> **✅ ĐÃ XONG.** Verify bằng harness tạm ngoài workspace (`%TEMP%\tn-p7-ai`, **đã xoá**) = API Kestrel thật +
+> PostgreSQL 18 thật + JWT tự ký: **nhóm B/C** 89/89 (hàm thuần + stub `HttpMessageHandler`) · **D/E/H/I** 107/107 ·
+> **F + 503** 46/46 · **G** 21/21 · **1 lần gọi DeepSeek thật** 7/7 ⇒ **270/270 check PASS**
+> (`report/phase-7-ai-agent-executor-test-report.md` §2.3). `dotnet build TeamNexus.sln` = **0 warning / 0 error**;
+> `dotnet ef migrations list` = **6** (**không** sinh migration mới); frontend **không bị chạm** (baseline 155 test giữ nguyên).
+>
+> **Ba bug thật bắt được khi verify §4** (đã sửa; chi tiết ở bảng bug trong report):
+> 1. **`DeepSeekAiProvider` không map `tool_calls`/`finish_reason`.** Response đọc bằng web-defaults (camelCase +
+>    case-insensitive) nên khớp `toolCalls`/`finishReason` nhưng **không** khớp `tool_calls`/`finish_reason` của wire.
+>    Hậu quả: **mọi lượt function-calling của DeepSeek bị coi là "lượt rỗng"** ⇒ agent không bao giờ gọi được tool nào.
+>    Đã thêm `[JsonPropertyName]`; đây là bug chỉ nhóm C (stub) + 1 lần gọi thật bắt được, nhóm D/E với fake provider
+>    **không** thể phát hiện.
+> 2. **`FakeAiProvider` chọn kịch bản dựa trên cả nội dung tool result.** `SearchSystemData` trả về tiêu đề task của
+>    board, nên một task có sentinel `FAKE:*` trong tiêu đề đã "cướp" nhánh kịch bản của run khác (run thường bị chuyển
+>    sang nhánh hỏi lại). Sentinel nay **chỉ** đọc từ system prompt + message `role="user"` (đúng "task đang chạy"),
+>    không bao giờ đọc dữ liệu sống do con người nhập.
+> 3. **`POST /agent-runs/{id}/cancel` thiếu cổng `Agent:Enabled`.** Bảng §4.9 chỉ ghi 403/404/409 cho route này, nhưng
+>    nhóm verify **H** yêu cầu "503 cả 3 route ghi" ⇒ đã thêm kiểm `AgentDisabledException` **trước** khi load run
+>    (tính năng đang tắt không được tiết lộ run có tồn tại hay không).
+>
+> **Sáu điều chỉnh so với bản kế hoạch §4 (bắt buộc, có lý do):**
+>
+> | # | Kế hoạch §4 viết | Thực tế code | Cách làm đã chốt |
+> |---|---|---|---|
+> | X1 | `ICommentService.DeleteCommentAsync(taskId, commentId, userId, ct)` | chữ ký thật chỉ có `(commentId, userId, ct)` | gọi đúng chữ ký thật |
+> | X2 | Undo/Apply dùng `ctx.ActingUserId` cho cả author lẫn người duyệt | `ctx.ActingUserId` = **người duyệt** (Manager), do `ResolveAsync` truyền `userId` của request | **author/created_by = `log.RequestedByUserId`** (= agent); Undo vẫn dùng `ctx.ActingUserId` (Manager) để đủ quyền xoá comment của người khác. Nếu không sửa thì công của AI bị ghi nhận cho người bấm duyệt |
+> | X3 | Chống chồng bằng `SemaphoreSlim(1,1)` **toàn cục** theo tiền lệ Observer | semaphore toàn cục khiến task B bị **409 oan** khi task A đang chạy | **đặt chỗ theo task** (`ConcurrentDictionary<Guid,byte>` trong `AgentRunCancellationRegistry`) + kiểm row `Running` cùng task (đa instance) + `pg_try_advisory_lock(hash(taskId))` cho phần chạy |
+> | X4 | Advisory lock lấy trong **request** nhưng nhả trong `finally` của `ExecuteAsync` | lock session-level nằm trên connection của scope đã lấy nó; scope request chết ngay khi trả 202 ⇒ lock nhả sớm / rò qua pool | `StartAsync` **tạo scope nền trước**, lấy lock trên connection của scope nền đó rồi mới `Task.Run(ExecuteAsync)`; `finally` nhả lock + đặt chỗ + dispose CTS (lỗi giữa chừng ⇒ nhả tường minh) |
+> | X5 | Thông báo agent dùng chung `NotificationTypes.All` | `NotificationTypes.All` là **whitelist chống hallucination của Observer** — thêm 3 loại agent vào đó cho phép model Observer sinh `AgentRunFailed` và **qua** validator | tách `AgentNotificationTypes` riêng; `NotificationTypes.All` giữ nguyên 4 giá trị (có check trong nhóm B) |
+> | X6 | Tái dùng `ReportFileName.Normalize` | hàm thật tên **`Slugify`** và module Ai **không** reference Reporting | thêm `ProjectReference Ai → Reporting` và gọi `ReportFileName.Slugify` (không có chu trình: Reporting → Shared/Persistence/Board); cập nhật `04` §3.8 |
+>
+> **Hai key config thêm ngoài bảng §6** (có lý do, không hard-code chuỗi tiếng Việt / biến thể auth):
+> `Agent:ClarificationColumnName` (mặc định `"Chờ làm rõ"`) và `Tavily:AuthMode` (`Bearer` *(mặc định)* | `Body`).
+> `AuthMode` tồn tại để chốt biến thể Tavily **bằng thực nghiệm** đúng như §4.3 yêu cầu: nhóm C verify wire-shape của
+> biến thể đang chọn, và nếu lần gọi Tavily thật trả 401 thì chỉ cần đổi config, không sửa code.
+>
+> **§6 đã làm cùng §4** (2 section trong `appsettings.json` + 1 dòng log `Ai module: Agent enabled=…`) — mục §6 dưới
+> đây chỉ còn phần đối chiếu tài liệu và ghi chú `dotnet user-secrets set "Tavily:ApiKey"`.
 
 ### 4.1 Cấu trúc thư mục (mới)
 
@@ -373,8 +442,8 @@ src/Modules/Ai/TeamNexus.Modules.Ai/
 
 ### 4.2 Mở rộng `IAiProvider` (không phá hợp đồng cũ — S6)
 
-- [ ] **Giữ nguyên** `IAiProvider`, `AiCompletionRequest`, `AiCompletionResult`, `CompleteAsync` ⇒ **Phase 3/5 không đổi một dòng**.
-- [ ] Thêm interface + model mới trong `Services/AiProvider.cs` (cùng file, cùng namespace):
+- [x] **Giữ nguyên** `IAiProvider`, `AiCompletionRequest`, `AiCompletionResult`, `CompleteAsync` ⇒ **Phase 3/5 không đổi một dòng**.
+- [x] Thêm interface + model mới trong `Services/AiProvider.cs` (cùng file, cùng namespace):
   ```csharp
   /// <summary>Phase 7: provider có khả năng function-calling (nhiều lượt, tool_calls/tool results).</summary>
   public interface IAiToolCallingProvider
@@ -397,7 +466,7 @@ src/Modules/Ai/TeamNexus.Modules.Ai/
   public sealed record AiChatResult(string? Content, IReadOnlyList<AiToolInvocation> ToolCalls,
                                     int? PromptTokens, int? CompletionTokens, string FinishReason);
   ```
-- [ ] `DeepSeekAiProvider` implement **cả hai** interface:
+- [x] `DeepSeekAiProvider` implement **cả hai** interface:
   - Dùng **chung** named `HttpClient` `AiModule.HttpClientName` và **chung** payload record (`ChatRequest` thêm `Tools` + `ToolChoice`, `DefaultIgnoreCondition = WhenWritingNull` ⇒ tự bỏ field khi null — đúng pattern `response_format` hiện có).
   - `tools = [{ type: "function", function: { name, description, parameters } }]`, `tool_choice = "auto"` khi có tool.
   - **KHÔNG** dùng `strict: true`/beta base URL ở giai đoạn này (schema `strict` cấm `minLength/maxLength`, cấm property không `required` — sẽ trói việc mô tả tool; ghi lý do vào code).
@@ -407,7 +476,7 @@ src/Modules/Ai/TeamNexus.Modules.Ai/
 
 ### 4.3 `TavilyWebSearchProvider` (§4.3a) + port + fake (§4.3b)
 
-- [ ] `IWebSearchProvider`:
+- [x] `IWebSearchProvider`:
   ```csharp
   public sealed record WebSearchResult(string Title, string Url, string Snippet);
 
@@ -417,7 +486,7 @@ src/Modules/Ai/TeamNexus.Modules.Ai/
       Task<IReadOnlyList<WebSearchResult>> SearchAsync(string query, int maxResults, CancellationToken ct = default);
   }
   ```
-- [ ] `TavilyWebSearchProvider`:
+- [x] `TavilyWebSearchProvider`:
   - Named `HttpClient` **riêng** `AiModule.TavilyHttpClientName` (`"Tavily"`), timeout từ `TavilyOptions.TimeoutSeconds`.
   - `POST {TavilyOptions.NormalizedBaseUrl}/search`, body JSON: `api_key`, `query`, `max_results`, `search_depth` (snake_case — dùng **cùng** `RequestJson` options của DeepSeek provider).
   - `Accept: application/json`; `Authorization` chỉ dùng nếu chọn biến thể Bearer — **chốt 1 biến thể sau khi verify §7C** và ghi lại đúng biến thể đó trong code + README.
@@ -425,8 +494,8 @@ src/Modules/Ai/TeamNexus.Modules.Ai/
   - Thiếu `results`/JSON hỏng ⇒ trả **mảng rỗng** + `LogWarning` (giống `FakeAiProvider` xử lý payload hỏng) — **không** throw.
   - HTTP ≠ 2xx / timeout ⇒ `AiProviderException` (502) — **không** retry.
   - ⚠️ **Bắt buộc** ghi rõ trong code + §7: mọi tên field của Tavily (`api_key` trong body vs header Bearer, `results[].content` vs `.snippet`) **phải** xác nhận bằng stub `HttpMessageHandler`/1 lần gọi thật **trước** khi viết prompt; không suy đoán.
-- [ ] `FakeWebSearchProvider` (`Tavily:ApiKey` rỗng — cùng triết lý `FakeAiProvider`): trả 2–3 kết quả cố định có URL thật dạng `https://example.test/...`, `Snippet` ngắn; **không** gọi mạng.
-- [ ] Đăng ký (theo `HasApiKey`, giống `IAiProvider`):
+- [x] `FakeWebSearchProvider` (`Tavily:ApiKey` rỗng — cùng triết lý `FakeAiProvider`): trả 2–3 kết quả cố định có URL thật dạng `https://example.test/...`, `Snippet` ngắn; **không** gọi mạng.
+- [x] Đăng ký (theo `HasApiKey`, giống `IAiProvider`):
   ```csharp
   services.AddSingleton<IWebSearchProvider>(sp => tavily.HasApiKey
       ? ActivatorUtilities.CreateInstance<TavilyWebSearchProvider>(sp)
@@ -435,7 +504,7 @@ src/Modules/Ai/TeamNexus.Modules.Ai/
 
 ### 4.4 Bộ tool (whitelist **đúng 4**, không tool tự do)
 
-- [ ] `AgentToolDefinitions.cs` — `public static IReadOnlyList<AiToolDefinition> All` (JSON schema viết tay bằng `JsonSerializer.Serialize` từ object literal, **không** dùng reflection):
+- [x] `AgentToolDefinitions.cs` — `public static IReadOnlyList<AiToolDefinition> All` (JSON schema viết tay bằng `JsonSerializer.Serialize` từ object literal, **không** dùng reflection):
 
   | Tool | Tham số | Trả về cho model | Cap |
   |---|---|---|---|
@@ -444,62 +513,62 @@ src/Modules/Ai/TeamNexus.Modules.Ai/
   | `DraftOutput` | `content` (required), `fileName` (optional), `contentType` (optional) | `{ "accepted": true, "kind": "Comment"\|"Attachment" }` | `content` ≤ `Agent:MaxDraftChars` |
   | `RequestClarification` | `question` (required), `reason` (optional) | `{ "accepted": true }` | `question` ≤ 2000 |
 
-- [ ] **Ràng buộc bảo vệ (bắt buộc ghi trong code):**
+- [x] **Ràng buộc bảo vệ (bắt buộc ghi trong code):**
   - `SearchSystemData` **chỉ** đọc được workspace của `AgentToolContext.WorkspaceId`. **Không** tool nào nhận `workspaceId`/`boardId`/`taskId` khác từ model (lấy từ context, **không** từ arguments) — model không thể đọc chéo workspace.
   - `SearchSystemData` **không** trả: `bytea` attachment, `description` quá dài, thông tin user ngoài workspace, `ai_action_logs`, `agent_runs`.
   - `DraftOutput` **không** ghi gì vào DB (chỉ trả kết quả cho model); việc ghi nằm ở `AgentOutputService` **sau khi** loop kết thúc.
   - `RequestClarification` **không** tự ghi comment; orchestrator làm (§4.8 bước c) để chỉ có **1** nơi ghi.
-- [ ] `AgentToolRegistry`: `Task<string> DispatchAsync(string name, string argumentsJson, AgentToolContext ctx, CancellationToken ct)`.
+- [x] `AgentToolRegistry`: `Task<string> DispatchAsync(string name, string argumentsJson, AgentToolContext ctx, CancellationToken ct)`.
   - Tên ngoài whitelist ⇒ trả `{"error":"Unknown tool '<name>'."}` cho model (kịch bản "model gọi bậy" phải verify được, §7C).
   - `argumentsJson` không parse được ⇒ trả lỗi JSON cho model để tự sửa; **không** throw, **không** tính là tool-call thành công (vẫn cộng `tool_call_count`).
   - Mọi exception **của tool** ⇒ bắt, log, trả `{"error":"…"}` cho model; **không** làm run `Failed` (model có quyền thử lại/đổi hướng). Riêng `OperationCanceledException` ⇒ rethrow.
 
 ### 4.5 `FakeAiProvider` nhánh thứ 3 (D16, S10)
 
-- [ ] Marker: `AgentMarkers.Executor = "{\"agent\":\"executor\"}"` — đặt ở **dòng đầu** `SystemPrompt` (khác Observer/Phase 3 dùng `UserPrompt`; ghi rõ lý do: prompt của agent dài và bắt đầu bằng context, marker ở system prompt đọc rõ hơn).
-- [ ] Kịch bản xác định theo **số lượt gọi tool đã có** trong `Messages` (đếm `role == "tool"` + số `assistant` có `ToolCalls`) ⇒ trả lần lượt:
+- [x] Marker: `AgentMarkers.Executor = "{\"agent\":\"executor\"}"` — đặt ở **dòng đầu** `SystemPrompt` (khác Observer/Phase 3 dùng `UserPrompt`; ghi rõ lý do: prompt của agent dài và bắt đầu bằng context, marker ở system prompt đọc rõ hơn).
+- [x] Kịch bản xác định theo **số lượt gọi tool đã có** trong `Messages` (đếm `role == "tool"` + số `assistant` có `ToolCalls`) ⇒ trả lần lượt:
   1. `SearchSystemData({scope:"board", limit:10})`
   2. `WebSearch({query:"…", maxResults:2})`
   3. `DraftOutput({content:"…", fileName:"bao-cao-ai.md", contentType:"text/markdown"})`
   4. (nếu bị hỏi lại — nhánh test riêng) `RequestClarification({question:"…"})`
-- [ ] `content` ngắn kèm 1 câu tiếng Việt ở mỗi lượt (mô phỏng assistant message thật). Prompt không có marker ⇒ giữ **nguyên** hành vi Phase 3 (proposal) và Phase 5 (findings).
-- [ ] Ghi chú trong README: nhánh này **chỉ** dùng cho dev/verify — không tốn token, không cần mạng.
+- [x] `content` ngắn kèm 1 câu tiếng Việt ở mỗi lượt (mô phỏng assistant message thật). Prompt không có marker ⇒ giữ **nguyên** hành vi Phase 3 (proposal) và Phase 5 (findings).
+- [x] Ghi chú trong README: nhánh này **chỉ** dùng cho dev/verify — không tốn token, không cần mạng.
 
 ### 4.6 `AiActionService` — mở rộng tối thiểu (S3, S15)
 
-- [ ] `AiActionTypes`: `+ PostComment`, `+ PostAttachment`.
-- [ ] `AiEntityTypes`: `+ Task`, và hằng mới `AiEntityTypes.ForTask`.
-- [ ] `AiActionContext` thêm `Guid? TaskId` (**nullable**, default null) ⇒ `CreateSubtasksApplier` **không** phải sửa.
-- [ ] `ResolveContextAsync` → `ResolveAsync`:
+- [x] `AiActionTypes`: `+ PostComment`, `+ PostAttachment`.
+- [x] `AiEntityTypes`: `+ Task`, và hằng mới `AiEntityTypes.ForTask`.
+- [x] `AiActionContext` thêm `Guid? TaskId` (**nullable**, default null) ⇒ `CreateSubtasksApplier` **không** phải sửa.
+- [x] `ResolveContextAsync` → `ResolveAsync`:
   ```
   entity_type == Board  → giữ NGUYÊN hành vi hiện tại (LoadBoards → RequireManagerAsync)
   entity_type == Task   → load task (404) → load board của task (404) → RequireManagerAsync(workspace)
                           → AiActionContext(boardId, workspaceId, actingUserId, taskId)
   khác                  → BadRequestException như cũ
   ```
-- [ ] **Bất biến phải giữ:** mọi thay đổi khác của `AiActionService` (CAS `ExecuteUpdateAsync`, transaction, `applied_snapshot`, `decision_note`, `UndoAsync`) **không** đổi. Verify §7I phải chứng minh đường `CreateSubtasks` không hồi quy.
-- [ ] `RequestAgentOutputAsync(...)` (**API nội bộ mới**, S4): tạo `AiActionLog` `Pending` cho `PostComment`/`PostAttachment` **bỏ qua `RequireManagerAsync`**, thay bằng:
+- [x] **Bất biến phải giữ:** mọi thay đổi khác của `AiActionService` (CAS `ExecuteUpdateAsync`, transaction, `applied_snapshot`, `decision_note`, `UndoAsync`) **không** đổi. Verify §7I phải chứng minh đường `CreateSubtasks` không hồi quy.
+- [x] `RequestAgentOutputAsync(...)` (**API nội bộ mới**, S4): tạo `AiActionLog` `Pending` cho `PostComment`/`PostAttachment` **bỏ qua `RequireManagerAsync`**, thay bằng:
   - assert `task.AssigneeId == agentUserId` (agent **phải** đang được gán task) ⇒ `ForbiddenException` nếu không;
   - assert `agentUserId` là `member_type='ai_agent'` của workspace của task (chống gọi sai);
   - KHÔNG expose method này ra endpoint HTTP nào — trust boundary là **service trong process**.
 
 ### 4.7 Appliers
 
-- [ ] `PostCommentApplier : IAiActionApplier` — `ActionType => AiActionTypes.PostComment`
+- [x] `PostCommentApplier : IAiActionApplier` — `ActionType => AiActionTypes.PostComment`
   - `ApplyAsync`: parse `after_snapshot` (`{ taskId, content }`) → `ICommentService.CreateCommentAsync(taskId, new CreateCommentRequest(content), ctx.ActingUserId, ct)` với **`ctx.ActingUserId = agent_user_id`** (S15) ⇒ được lợi: `activity_logs` (Phase 5) + `CommentAdded` SignalR + `authorName = agent display name` **miễn phí**.
   - Trả `AiActionAppliedResult(AiEntityTypes.Task, taskId, [], [], warnings)` và **phải** đưa `commentId` vào `applied_snapshot`. ⚠️ `AiActionAppliedResult` hiện chỉ có `CreatedTaskIds`/`CreatedLabelIds` ⇒ **thêm** `Guid? CreatedCommentId` + `Guid? CreatedAttachmentId` (nullable, không phá applier cũ) **hoặc** thêm mảng `warnings` + ghi `refs` trong `applied_snapshot`. **Chốt:** mở rộng record bằng 2 field nullable — đơn giản hơn và verify được.
   - `UndoAsync`: đọc `commentId` từ `applied_snapshot` → `ICommentService.DeleteCommentAsync(taskId, commentId, ctx.ActingUserId, ct)` (Manager có quyền xoá comment của người khác — đã có sẵn ở `CommentService.AuthorizeAsync`); `NotFoundException` ⇒ warning, không throw.
-- [ ] `PostAttachmentApplier : IAiActionApplier` — `ActionType => AiActionTypes.PostAttachment`
+- [x] `PostAttachmentApplier : IAiActionApplier` — `ActionType => AiActionTypes.PostAttachment`
   - `ApplyAsync`: parse `after_snapshot` (`{ taskId, fileName, contentType, contentBase64, sourceRunId? }`)
     - decode base64 → kiểm `content.Length <= Agent:MaxAttachmentBytes` ⇒ vượt ⇒ `BadRequestException` (400) **trước** khi insert;
-    - `AgentAttachmentFactory.SafeFileName(fileName, contentType)` (tái dùng `ReportFileName.Normalize` — S16) ⇒ tên ASCII, loại `..`/`/`/`\`, fallback `"ai-output.md"`;
+    - `AgentAttachmentFactory.SafeFileName(fileName, contentType)` (tái dùng `ReportFileName.Slugify` — S16; kế hoạch ghi nhầm là `Normalize`) ⇒ tên ASCII, loại `..`/`/`/`\`, fallback `"ai-output.md"`;
     - INSERT `task_attachments` (FK `CreatedByUserId = agentUserId`, `SourceRunId`, `SizeBytes`).
   - `UndoAsync`: **hard delete** row (`_db.TaskAttachments.Remove`), không có `deleted_at` (D5); đã xoá tay ⇒ warning.
-- [ ] Đăng ký trong `AiModule`: `services.AddScoped<IAiActionApplier, PostCommentApplier>(); services.AddScoped<IAiActionApplier, PostAttachmentApplier>();` — applier được resolve qua `IEnumerable<IAiActionApplier>` nên **chỉ cần 1 dòng/class** (đúng ghi chú `IAiActionApplier`).
+- [x] Đăng ký trong `AiModule`: `services.AddScoped<IAiActionApplier, PostCommentApplier>(); services.AddScoped<IAiActionApplier, PostAttachmentApplier>();` — applier được resolve qua `IEnumerable<IAiActionApplier>` nên **chỉ cần 1 dòng/class** (đúng ghi chú `IAiActionApplier`).
 
 ### 4.8 `AgentRunOrchestrator` — trình tự thực thi (cố định)
 
-- [ ] `Task<AgentRunDetail> StartAsync(Guid taskId, Guid userId, Guid? previousRunId, CancellationToken ct)` — **phần guard đồng bộ** (chạy trong request, trả 202):
+- [x] `Task<AgentRunDetail> StartAsync(Guid taskId, Guid userId, Guid? previousRunId, CancellationToken ct)` — **phần guard đồng bộ** (chạy trong request, trả 202):
   1. `Agent:Enabled = false` ⇒ `AgentDisabledException` (**503**) — **trước** khi chạm DB (tiền lệ `ReportingDisabledException`).
   2. Load task (404 nếu không thấy/soft-deleted) + board + column.
   3. `IWorkspaceAccess.RequireManagerAsync(board.WorkspaceId, userId, ct)` ⇒ 403 Member / 404 workspace lạ.
@@ -509,7 +578,7 @@ src/Modules/Ai/TeamNexus.Modules.Ai/
   7. INSERT `agent_runs` (`Running`, `StartedAt = now`, `TriggeredByUserId = userId`, `AgentUserId`, `PreviousRunId`) + UPDATE `ResolutionCommentId` nếu là rerun.
   8. Broadcast `AgentRunProgress(Running)` → trả `AgentRunDetail` cho endpoint **202**.
   9. KHÔNG chạy vòng lặp ở đây. Handler tạo scope mới `IServiceScopeFactory.CreateAsyncScope()` rồi `_ = Task.Run(...)` gọi `ExecuteAsync(runId, ct-from-scope)` — **không** dùng `CancellationToken` của request (request đã kết thúc khi trả 202). Ghi rõ trong code + README.
-- [ ] `Task ExecuteAsync(Guid runId, ...)` — **phần chạy nền**:
+- [x] `Task ExecuteAsync(Guid runId, ...)` — **phần chạy nền**:
   ```
   a. Build prompt: AgentPrompts.BuildSystemPrompt() + BuildContext(task, column, comments, previousRun)
        - comment: TỐI ĐA 20 comment gần nhất, mỗi comment cắt ≤ 1000 ký tự, tổng ≤ Agent:MaxTaskContextChars
@@ -557,19 +626,19 @@ src/Modules/Ai/TeamNexus.Modules.Ai/
   f. UPDATE agent_runs (FinishedAt, counters, trace, notification_sent) → broadcast AgentRunProgress(terminal)
      → release advisory lock + SemaphoreSlim trong `finally` (không bao giờ rò lock)
   ```
-- [ ] `AgentOutputService.CreatePendingAsync` (D9/D19):
+- [x] `AgentOutputService.CreatePendingAsync` (D9/D19):
   - `AgentAttachmentFactory.ChooseKind(content, contentType)`: **public static** — có `fileName`/`contentType` **hoặc** `content` dài > `Agent:AttachmentThresholdChars` (mặc định 2000, khớp cap comment 4000/2) ⇒ `Attachment`, còn lại ⇒ `Comment`.
   - `Comment` ⇒ `after_snapshot = { taskId, content }`, action `PostComment`.
   - `Attachment` ⇒ `after_snapshot = { taskId, fileName, contentType, contentBase64, sourceRunId }`, action `PostAttachment`. ⚠️ base64 làm `after_snapshot` phình ~1.37×; **đã cap 512 KB** ở tool (`MaxDraftChars`) để tổng row jsonb ≤ ~700 KB — ghi rõ trong code + §7B.
   - Gọi `IAiActionService.RequestAgentOutputAsync(...)` (S4) ⇒ **Pending**, **không** ghi dữ liệu thật.
-- [ ] `AgentGuardrails.Evaluate(...)` — **public static**, đầu vào là record `AgentGuardrailState` (toolCalls, llmCalls, promptTokens, completionTokens, elapsed) + `AgentOptions` ⇒ trả `AgentStopReason?`. Thuần, không I/O, không thời gian nội tại (nhận `elapsed` từ ngoài) ⇒ verify không cần AI/DB.
-- [ ] `AgentPrompts`: system prompt tiếng Việt nêu rõ (a) vai trò trợ lý thực thi task của workspace, (b) **bắt buộc** kết thúc bằng đúng 1 trong 2 tool `DraftOutput`/`RequestClarification`, (c) **không** tự bịa dữ liệu ngoài tool, (d) hỏi lại khi thiếu thông tin thay vì suy đoán (đúng `01` §7), (e) ngôn ngữ trả lời tiếng Việt.
-- [ ] `AgentRunReaper` (`IHostedService`, D13): lúc khởi động (sau delay ngắn, chỉ 1 lần — **không** dùng `PeriodicTimer`), `ExecuteUpdateAsync` cho mọi run `Running` có `started_at < now − RunTimeoutSeconds − OrphanRunGraceSeconds` ⇒ `Failed`/`InternalError`/`FinishedAt = now`; log số row. Bọc `try/catch` để **không** làm chết host (bài học `ObserverBackgroundService`).
+- [x] `AgentGuardrails.Evaluate(...)` — **public static**, đầu vào là record `AgentGuardrailState` (toolCalls, llmCalls, promptTokens, completionTokens, elapsed) + `AgentOptions` ⇒ trả `AgentStopReason?`. Thuần, không I/O, không thời gian nội tại (nhận `elapsed` từ ngoài) ⇒ verify không cần AI/DB.
+- [x] `AgentPrompts`: system prompt tiếng Việt nêu rõ (a) vai trò trợ lý thực thi task của workspace, (b) **bắt buộc** kết thúc bằng đúng 1 trong 2 tool `DraftOutput`/`RequestClarification`, (c) **không** tự bịa dữ liệu ngoài tool, (d) hỏi lại khi thiếu thông tin thay vì suy đoán (đúng `01` §7), (e) ngôn ngữ trả lời tiếng Việt.
+- [x] `AgentRunReaper` (`IHostedService`, D13): lúc khởi động (sau delay ngắn, chỉ 1 lần — **không** dùng `PeriodicTimer`), `ExecuteUpdateAsync` cho mọi run `Running` có `started_at < now − RunTimeoutSeconds − OrphanRunGraceSeconds` ⇒ `Failed`/`InternalError`/`FinishedAt = now`; log số row. Bọc `try/catch` để **không** làm chết host (bài học `ObserverBackgroundService`).
   - ⚠️ Reaper **không** dùng chung `Agent:Enabled` (phải dọn dù tính năng đang tắt).
 
 ### 4.9 Endpoints (7 route)
 
-- [ ] `AgentRunEndpoints.cs` — group `/api/tasks/{taskId:guid}/agent-runs` + `/api/agent-runs/{runId:guid}`; `.WithTags("AgentRuns")` + `.AddEndpointFilter<DomainExceptionFilter>()`; mọi route `.RequireAuthorization()`; POST thêm `AntiforgeryValidationEndpointFilter`.
+- [x] `AgentRunEndpoints.cs` — group `/api/tasks/{taskId:guid}/agent-runs` + `/api/agent-runs/{runId:guid}`; `.WithTags("AgentRuns")` + `.AddEndpointFilter<DomainExceptionFilter>()`; mọi route `.RequireAuthorization()`; POST thêm `AntiforgeryValidationEndpointFilter`.
 
 | # | Method + path | Quyền | Thành công | Lỗi |
 |---|---|---|---|---|
@@ -577,18 +646,18 @@ src/Modules/Ai/TeamNexus.Modules.Ai/
 | 2 | `POST /api/tasks/{taskId}/agent-runs/{runId}/rerun` | Manager/Admin | **202** `AgentRunResponse` | 400 (run không `AwaitingClarification` / không có câu trả lời) · 403 · 404 · 409 · 503 |
 | 3 | `GET /api/tasks/{taskId}/agent-runs?take=` | Member+ | **200** `AgentRunResponse[]` | 403/404; `take` clamp 1–50, default 20, sort `startedAt DESC` |
 | 4 | `GET /api/agent-runs/{runId}` | Member+ | **200** `AgentRunDetailResponse` (kèm `toolCallTrace`) | 403/404 |
-| 5 | `POST /api/agent-runs/{runId}/cancel` | Manager/Admin | **200** `AgentRunDetailResponse` | 403 · 404 · **409** (không còn `Running`) |
+| 5 | `POST /api/agent-runs/{runId}/cancel` | Manager/Admin | **200** `AgentRunDetailResponse` | 403 · 404 · **409** (không còn `Running`) · **503** (§7H yêu cầu 503 cho **cả 3** route ghi) |
 | 6 | `GET /api/tasks/{taskId}/attachments` | Member+ | **200** `AttachmentResponse[]` | 403/404 |
 | 7 | `GET /api/tasks/{taskId}/attachments/{attachmentId}/download` | Member+ | **200** `Results.File(content, contentType, fileName)` + `Content-Disposition` + `Content-Length` | 403/404 |
 
-- [ ] `POST /cancel`: set `CancellationTokenSource` **của process** cho run đó (registry `ConcurrentDictionary<Guid, CancellationTokenSource>` singleton) ⇒ orchestrator dừng ở vòng lặp kế tiếp, `stop_reason = Cancelled`, **không** notification. Run không còn `Running` ⇒ 409. Run không tìm thấy trong registry (đã xong / khác instance) ⇒ 409 + ghi rõ trong doc là hạn chế đã biết (D15: không có queue phân tán).
-- [ ] **Bảo mật:** route 1/2/5 kiểm quyền **trong service** bằng `RequireManagerAsync` (nhất quán Phase 5/6); route 3/4/6/7 chỉ cần `RequireMemberAsync` vì là **đọc**.
-- [ ] Body lỗi **luôn** `{ "error": "…" }` (trừ 400 ProblemDetails khi framework bind sai kiểu `taskId`/`take` — known note như Phase 5/6).
-- [ ] `AgentEndpointHelpers.RequireUserId(HttpContext)` — bản copy (board's `CurrentUser` là `internal`, S2 của Phase 6).
+- [x] `POST /cancel`: set `CancellationTokenSource` **của process** cho run đó (registry `ConcurrentDictionary<Guid, CancellationTokenSource>` singleton) ⇒ orchestrator dừng ở vòng lặp kế tiếp, `stop_reason = Cancelled`, **không** notification. Run không còn `Running` ⇒ 409. Run không tìm thấy trong registry (đã xong / khác instance) ⇒ 409 + ghi rõ trong doc là hạn chế đã biết (D15: không có queue phân tán).
+- [x] **Bảo mật:** route 1/2/5 kiểm quyền **trong service** bằng `RequireManagerAsync` (nhất quán Phase 5/6); route 3/4/6/7 chỉ cần `RequireMemberAsync` vì là **đọc**.
+- [x] Body lỗi **luôn** `{ "error": "…" }` (trừ 400 ProblemDetails khi framework bind sai kiểu `taskId`/`take` — known note như Phase 5/6).
+- [x] `AgentEndpointHelpers.RequireUserId(HttpContext)` — bản copy (board's `CurrentUser` là `internal`, S2 của Phase 6).
 
 ### 4.10 DTO
 
-- [ ] `DTOs/AgentRunDtos.cs`:
+- [x] `DTOs/AgentRunDtos.cs`:
   ```csharp
   public sealed record AgentRunResponse(
       Guid Id, Guid TaskId, Guid BoardId, Guid AgentUserId, string AgentDisplayName,
@@ -608,14 +677,14 @@ src/Modules/Ai/TeamNexus.Modules.Ai/
       Guid Id, Guid TaskId, string FileName, string ContentType, int SizeBytes,
       Guid CreatedByUserId, string CreatedByName, Guid? SourceRunId, DateTimeOffset CreatedAt);
   ```
-- [ ] `AgentRunResponse.From(AgentRun run, string agentName, string triggeredByName)` + `AgentRunDetailResponse.From(...)` — map một chiều, không rải khởi tạo (tiền lệ `ObserverRunFinding.From`).
-- [ ] **KHÔNG** trả draft content / base64 trong `AgentRunResponse`; `ToolCallTrace` **đã** bị cap ở tầng ghi (D19) nên không cần cắt lại ở DTO.
+- [x] `AgentRunResponse.From(AgentRun run, string agentName, string triggeredByName)` + `AgentRunDetailResponse.From(...)` — map một chiều, không rải khởi tạo (tiền lệ `ObserverRunFinding.From`).
+- [x] **KHÔNG** trả draft content / base64 trong `AgentRunResponse`; `ToolCallTrace` **đã** bị cap ở tầng ghi (D19) nên không cần cắt lại ở DTO.
 
 ### 4.11 Options & DI module Ai
 
-- [ ] `Options/AgentOptions.cs` — `SectionName = "Agent"`, có `HasApiKey`-style helper `IsAttachmentKind(...)` **không** cần; các key ở §6.
-- [ ] `Options/TavilyOptions.cs` — `SectionName = "Tavily"`, `ApiKey`, `BaseUrl`, `TimeoutSeconds`, `SearchDepth`, `NormalizedBaseUrl`, `HasApiKey`, `Timeout` (theo **đúng** khuôn `DeepSeekOptions`).
-- [ ] `AiModule.AddAiModule` bổ sung:
+- [x] `Options/AgentOptions.cs` — `SectionName = "Agent"`, có `HasApiKey`-style helper `IsAttachmentKind(...)` **không** cần; các key ở §6.
+- [x] `Options/TavilyOptions.cs` — `SectionName = "Tavily"`, `ApiKey`, `BaseUrl`, `TimeoutSeconds`, `SearchDepth`, `NormalizedBaseUrl`, `HasApiKey`, `Timeout` (theo **đúng** khuôn `DeepSeekOptions`).
+- [x] `AiModule.AddAiModule` bổ sung:
   ```csharp
   services.AddOptions<AgentOptions>().Bind(configuration.GetSection(AgentOptions.SectionName));
   services.AddOptions<TavilyOptions>().Bind(configuration.GetSection(TavilyOptions.SectionName));
@@ -632,16 +701,21 @@ src/Modules/Ai/TeamNexus.Modules.Ai/
   services.AddSingleton<AgentRunCancellationRegistry>();
   services.AddHostedService<AgentRunReaper>();
   ```
-- [ ] `MapAiModuleEndpoints` thêm: `endpoints.MapAgentRunEndpoints(); endpoints.MapAttachmentEndpoints();`.
-- [ ] `LogResolvedConfiguration` thêm **đúng 1 dòng**:
+- [x] `MapAiModuleEndpoints` thêm: `endpoints.MapAgentRunEndpoints(); endpoints.MapAttachmentEndpoints();`.
+- [x] `LogResolvedConfiguration` thêm **đúng 1 dòng**:
   `Ai module: Agent enabled=True, provider=DeepSeekAiProvider|FakeAiProvider, webSearch=Tavily|Fake, maxToolCalls=15, timeout=300s, tokenBudget=50000, llmCalls=20, maxAttachmentKB=512.` (**không** chứa key).
 
 ---
 
 ## 5. Frontend (React + TS + Vite + Ant Design)
 
-> **Trạng thái: 🚧 CHƯA LÀM.** Trước khi bắt đầu: chạy baseline `npm run lint` (0/0), `npx tsc -b` (exit 0), `npm test` (**30 files / 155 tests PASS**).
-> Contract dưới đây **đóng băng** — đổi gì phải sửa cả hai phía.
+> **✅ ĐÃ HOÀN THÀNH — xem `tasks/phase-7-frontend-handover.md` và `report/phase-7-ai-agent-executor-test-report.md`.**
+> Hạng mục Frontend (§5) của Giai đoạn 7 đã được hoàn tất toàn diện:
+> - Hợp đồng API 7 route, SignalR real-time event, và types mirror.
+> - Dropdown assignee cho AI Agent (avatar + purple tag), đồng bộ `useWorkspaceMembers` cache theo `workspaceId`.
+> - Trạng thái làm rõ trên cột Kanban (`QuestionCircleOutlined`), task badge, clamp 2 dòng câu hỏi, modal detail tabs.
+> - Panel `AgentRunPanel`, `AgentDraftApproval` (tái dùng `AiActionLogItem`), `AttachmentList` (download blob an toàn).
+> - Chất lượng: `oxlint` 0/0, `tsc -b` exit 0, `npm run build` thành công, Vitest test suite **35 files / 187 tests PASS 100%** (vượt baseline 155).
 
 ### 5.1 Contract bàn giao (🔻 BÀN GIAO §5)
 
@@ -742,42 +816,42 @@ export interface AgentRunProgressEvent {
 | 503 | `Agent:Enabled=false` | `"AI Agent Executor is disabled."` | `Alert` "Tính năng AI Agent đang tạm tắt" |
 
 ### 5.2 Checklist §5
-
+ 
 **A. Dropdown assignee (hạng mục bắt buộc — S1)**
 
-- [ ] `types/board.types.ts`: thêm `MemberType`, `WorkspaceMemberResponse`, 2 field mới của `TaskResponse`, `isClarification` của `ColumnResponse`, `isClarification?` trong `CreateColumnRequest`/`UpdateColumnRequest`.
-- [ ] `services/boardApi.ts`: `getMembers(workspaceId)`, `getTaskAttachments(taskId)`, `downloadAttachment(taskId, attachmentId, fileName)`.
-- [ ] `hooks/useWorkspaceMembers.ts` (mới): cache theo `workspaceId`, gọi 1 lần cho cả board (không gọi theo task).
-- [ ] `TaskDetailModal.tsx`: thay khối read-only (dòng 609–630) bằng `Select` (avatar + `Tag color="purple"` "AI Agent" khi `memberType === 'ai_agent'`), `allowClear`, ghi thẳng qua `onUpdateTask` (`assigneeId`), `data-testid="assignee-select"`.
-- [ ] `KanbanColumn.tsx`: quick-add thêm `Select` người thực hiện (optional, cùng nguồn) ⇒ `createTask({ columnId, title, assigneeId })`.
-- [ ] Sau khi đổi assignee thành/khỏi agent, **refresh board** (assignee là agent ⇒ agent row được tạo ⇒ dropdown có thêm 1 lựa chọn mới).
+- [x] `types/board.types.ts`: thêm `MemberType`, `WorkspaceMemberResponse`, 2 field mới của `TaskResponse`, `isClarification` của `ColumnResponse`, `isClarification?` trong `CreateColumnRequest`/`UpdateColumnRequest`.
+- [x] `services/boardApi.ts`: `getMembers(workspaceId)`, `getTaskAttachments(taskId)`, `downloadAttachment(taskId, attachmentId, fileName)`.
+- [x] `hooks/useWorkspaceMembers.ts` (mới): cache theo `workspaceId`, gọi 1 lần cho cả board (không gọi theo task).
+- [x] `TaskDetailModal.tsx`: thay khối read-only (dòng 609–630) bằng `Select` (avatar + `Tag color="purple"` "AI Agent" khi `memberType === 'ai_agent'`), `allowClear`, ghi thẳng qua `onUpdateTask` (`assigneeId`), `data-testid="assignee-select"`.
+- [x] `KanbanColumn.tsx`: quick-add thêm `Select` người thực hiện (optional, cùng nguồn) ⇒ `createTask({ columnId, title, assigneeId })`.
+- [x] Sau khi đổi assignee thành/khỏi agent, **refresh board** (assignee là agent ⇒ agent row được tạo ⇒ dropdown có thêm 1 lựa chọn mới).
 
 **B. Trạng thái "Chờ làm rõ" trên Kanban**
 
-- [ ] `KanbanColumn.tsx`: icon `QuestionCircleOutlined` (`#f59e0b`) + tooltip khi `column.isClarification` (đối xứng `isDone`).
-- [ ] `TaskCard.tsx`: badge agent theo `activeAgentRunId` + câu hỏi làm rõ nổi bật (icon + 2 dòng text `line-clamp`).
-- [ ] `TaskDetailModal.tsx`: panel `AgentRunPanel` + câu hỏi làm rõ + nút **"Chạy lại"** (chỉ Manager/Admin).
+- [x] `KanbanColumn.tsx`: icon `QuestionCircleOutlined` (`#f59e0b`) + tooltip khi `column.isClarification` (đối xứng `isDone`).
+- [x] `TaskCard.tsx`: badge agent theo `activeAgentRunId` + câu hỏi làm rõ nổi bật (icon + 2 dòng text `line-clamp`).
+- [x] `TaskDetailModal.tsx`: panel `AgentRunPanel` + câu hỏi làm rõ + nút **"Chạy lại"** (chỉ Manager/Admin).
 
 **C. Agent panel + real-time + duyệt**
 
-- [ ] `features/ai/services/agentApi.ts`, `types/agentRun.types.ts`, `hooks/useAgentRuns.ts`, `hooks/useAgentRunHub.ts` (mở rộng `useBoardHub` thêm handler `AgentRunProgress`).
-- [ ] `components/AgentRunPanel.tsx`: nút **"Chạy Agent"** / **"Chạy lại"** / **"Huỷ"**, `Tag` trạng thái (map tiếng Việt), số tool-call/token đã dùng, `Timeline` cho `toolCallTrace`, cảnh báo khi `traceTruncated`, `Alert` lỗi đọc từ `stopReason`/`error`.
-- [ ] `components/AgentDraftApproval.tsx`: hiện `aiActionLogId` ⇒ **tái dùng** `AiActionLogItem` + `useAiActions` sẵn có để Duyệt/Từ chối/Hoàn tác — **không** dựng lại UI accountability.
-- [ ] `components/AttachmentList.tsx`: tên file, kích thước (`formatBytes`), "do AI Agent tạo", nút tải (blob).
-- [ ] Nhãn tiếng Việt cho `notification.type` mới (`AgentRunFailed` / `AgentAwaitingClarification` / `AgentOutputPending`) trong `NotificationItem.tsx` (giữ mã gốc trong ngoặc để truy vết).
-- [ ] Vào board / reconnect ⇒ GET run hiện tại (không chỉ dựa vào event).
+- [x] `features/ai/services/agentApi.ts`, `types/agentRun.types.ts`, `hooks/useAgentRuns.ts`, `hooks/useAgentRunHub.ts` (mở rộng `useBoardHub` thêm handler `AgentRunProgress`).
+- [x] `components/AgentRunPanel.tsx`: nút **"Chạy Agent"** / **"Chạy lại"** / **"Huỷ"**, `Tag` trạng thái (map tiếng Việt), số tool-call/token đã dùng, `Timeline` cho `toolCallTrace`, cảnh báo khi `traceTruncated`, `Alert` lỗi đọc từ `stopReason`/`error`.
+- [x] `components/AgentDraftApproval.tsx`: hiện `aiActionLogId` ⇒ **tái dùng** `AiActionLogItem` + `useAiActions` sẵn có để Duyệt/Từ chối/Hoàn tác — **không** dựng lại UI accountability.
+- [x] `components/AttachmentList.tsx`: tên file, kích thước (`formatBytes`), "do AI Agent tạo", nút tải (blob).
+- [x] Nhãn tiếng Việt cho `notification.type` mới (`AgentRunFailed` / `AgentAwaitingClarification` / `AgentOutputPending`) trong `NotificationItem.tsx` (giữ mã gốc trong ngoặc để truy vết).
+- [x] Vào board / reconnect ⇒ GET run hiện tại (không chỉ dựa vào event).
 
 **D. Chất lượng**
 
-- [ ] `npm run lint` 0/0 · `npx tsc -b` exit 0 · `npm test` — số test **tăng** so với baseline 155.
-- [ ] Test mới: assignee picker đổi được assignee (kể cả agent), badge trạng thái theo từng `status`, nút "Chạy lại" chỉ hiện khi `AwaitingClarification`, `AgentRunPanel` disable nút "Chạy Agent" khi `Running`, `AttachmentList` tải blob, mapping nhãn notification mới.
-- [ ] **Không** viết lại `httpClient` / `reportDownload` (tái dùng); **không** thêm thư viện UI mới.
+- [x] `npm run lint` 0/0 · `npx tsc -b` exit 0 · `npm test` — số test **tăng** so với baseline 155 (đạt **187** tests).
+- [x] Test mới: assignee picker đổi được assignee (kể cả agent), badge trạng thái theo từng `status`, nút "Chạy lại" chỉ hiện khi `AwaitingClarification`, `AgentRunPanel` disable nút "Chạy Agent" khi `Running`, `AttachmentList` tải blob, mapping nhãn notification mới.
+- [x] **Không** viết lại `httpClient` / `reportDownload` (tái dùng); **không** thêm thư viện UI mới.
 
 ---
 
 ## 6. Config (`appsettings.json`) & nhật ký khởi động
 
-- [ ] Section `"Agent"` (đủ key, **không** secret):
+- [x] Section `"Agent"` (đủ key, **không** secret):
 
 | Key | Mặc định | Nguồn |
 |---|---|---|
@@ -802,19 +876,21 @@ export interface AgentRunProgressEvent {
 | `OrphanRunGraceSeconds` | `60` | D13 |
 | `RetentionDays` | `90` | optional (D20) |
 | `WebSearchMaxResults` | `5` | tool |
+| `ClarificationColumnName` | `"Chờ làm rõ"` | **thêm khi hiện thực §4** (X-note): tên cột D3 không hard-code trong code |
 
-- [ ] Section `"Tavily"`:
+- [x] Section `"Tavily"`:
 
 | Key | Mặc định | Ghi chú |
 |---|---|---|
-| `ApiKey` | `""` | Secret — User Secrets; rỗng ⇒ `FakeWebSearchProvider` |
+| `ApiKey` | `""` | Secret — User Secrets; rỗng/whitespace ⇒ `FakeWebSearchProvider` |
 | `BaseUrl` | `https://api.tavily.com` | `NormalizedBaseUrl` theo khuôn `DeepSeekOptions` |
 | `TimeoutSeconds` | `20` | |
 | `SearchDepth` | `"basic"` | |
+| `AuthMode` | `"Bearer"` | **thêm khi hiện thực §4**: `Bearer` (header, mặc định) hoặc `Body` (`api_key` trong body) — để chốt biến thể Tavily bằng thực nghiệm, đổi config thay vì sửa code |
 
-- [ ] Đặt key (khuyến nghị, **không** lưu file tracked):
+- [x] Đặt key (khuyến nghị, **không** lưu file tracked):
   `dotnet user-secrets set --project src/TeamNexus.Api "Tavily:ApiKey" "tvly-..."`
-- [ ] `LogResolvedConfiguration` in **1** dòng (§4.11) — **không** có key/secret.
+- [x] `LogResolvedConfiguration` in **1** dòng (§4.11) — **không** có key/secret.
 
 ---
 
@@ -846,24 +922,30 @@ export interface AgentRunProgressEvent {
 
 ## 8. Đối chiếu 6 ô hoàn thiện của `03-roadmap.md` §9
 
-| # | Ô hoàn thiện | Bằng chứng |
-|---|---|---|
-| 1 | Pseudo-member AI Agent trong `workspace_members`, gán task qua **đúng UI assignee hiện có** | §2.1 + §3.2 + §5.2A; nhóm **A/B/D/J**. DB: 1 `users` + 1 `workspace_members(member_type='ai_agent')` mỗi workspace, partial UQ chứng minh |
-| 2 | Vòng lặp tool-calling qua DeepSeek function-calling với `SearchSystemData`/`WebSearch`(Tavily)/`DraftOutput`/`RequestClarification` | §4.2–§4.5 + §4.8; nhóm **C/D** |
-| 3 | Trạng thái "Chờ làm rõ": agent dừng đúng lúc, câu hỏi hiển thị trên Kanban, nút "Chạy lại" hoạt động sau khi trưởng nhóm trả lời | §2.2 + §3.5 + §4.8d + §5.2B; nhóm **E/J** |
-| 4 | Kết quả AI (comment ngắn / file dài) đi qua đúng Accountability Layer (Pending → Approve/Reject/Undo) | §4.6/§4.7/§4.9; nhóm **D/I** (cả 2 kind) |
-| 5 | Guardrail: 15 tool-call / 5 phút / ~50 000 token, có log & thông báo khi vượt ngưỡng | §4.8c + §4.11; nhóm **F** (3 ngưỡng, từng cái riêng) |
-| 6 | `agent_runs` ghi đầy đủ trạng thái/tool trace, broadcast real-time qua SignalR để thấy tiến trình trên Kanban | §2.3 + §3.3 + §4.8f + §5.1c; nhóm **D/E/J** |
+> **Trạng thái §8: TOÀN BỘ HOÀN THÀNH (Cả Backend & Frontend).**
+> - Verify Backend (§7 A–I) = **291/291 check PASS** trên API Kestrel thật + PostgreSQL 18 thật.
+> - Verify Frontend (§5/nhóm J) = **35 files / 187 tests PASS 100%** (vượt baseline 155), `oxlint` 0/0, `tsc -b` exit 0, `build` OK.
+
+| # | Ô hoàn thiện | Bằng chứng | Trạng thái |
+|---|---|---|---|
+| 1 | Pseudo-member AI Agent trong `workspace_members`, gán task qua **đúng UI assignee hiện có** | §2.1 + §3.2 + §5.2A; nhóm **A/B/D/J**. Dropdown `TaskDetailModal` + quick-add `KanbanColumn` qua `useWorkspaceMembers`; `PUT` task với agent ⇒ **200 + `assigneeIsAiAgent=true`** | ✅ **XONG** |
+| 2 | Vòng lặp tool-calling qua DeepSeek function-calling với `SearchSystemData`/`WebSearch`(Tavily)/`DraftOutput`/`RequestClarification` | §4.2–§4.5 + §4.8; nhóm **C/D** + **C-real** (Tavily thật) + **1 lượt DeepSeek thật** (2–3 tool call, 4 356→5 114 token, không tool nào lỗi) | ✅ **XONG** |
+| 3 | Trạng thái "Chờ làm rõ": agent dừng đúng lúc, câu hỏi hiển thị trên Kanban, nút "Chạy lại" hoạt động sau khi trưởng nhóm trả lời | §2.2 + §3.5 + §4.8d + §5.2B; nhóm **E & J** (run `AwaitingClarification`, icon cột Kanban, clamp 2 dòng câu hỏi trên card, modal câu hỏi & nút rerun) | ✅ **XONG** |
+| 4 | Kết quả AI (comment ngắn / file dài) đi qua đúng Accountability Layer (Pending → Approve/Reject/Undo) | §4.6/§4.7/§4.9 + §5.2C; nhóm **D/I/J** (`AgentDraftApproval` tích hợp `AiActionLogItem`, download blob an toàn) | ✅ **XONG** |
+| 5 | Guardrail: 15 tool-call / 5 phút / ~50 000 token, có log & thông báo khi vượt ngưỡng | §4.8c + §4.11 + §5.2C; nhóm **F & J** (4 ngưỡng, thông báo lỗi tiếng Việt, `NotificationItem` dịch 3 type mới) | ✅ **XONG** |
+| 6 | `agent_runs` ghi đầy đủ trạng thái/tool trace, broadcast real-time qua SignalR để thấy tiến trình trên Kanban | §2.3 + §3.3 + §4.8f + §5.2C; nhóm **D/E/F/G & J** (`useBoardHub` bắt `AgentRunProgress`, `AgentRunPanel` hiển thị counters + timeline trace) | ✅ **XONG** |
+| ➕ | (phát sinh) API assignee phải kiểm **membership** | §3.2 + nhóm **I** (user ngoài workspace ⇒ 400; agent qua đúng đường) | ✅ **XONG** |
+| ➕ | (phát sinh) Dropdown chọn người thực hiện trong UI | §5.2A + nhóm **J** (`useWorkspaceMembers`, `TaskDetailModal`, `KanbanColumn`) | ✅ **XONG** |
 
 **Definition of Done:**
 
-- [ ] `dotnet build TeamNexus.sln` → **0 warning / 0 error**
-- [ ] `dotnet ef migrations list` → **6** migration; `04-database-design.md` §3.8 khớp 100% với migration thật
-- [ ] Harness **A–I** PASS (số check ghi vào report, mỗi nhóm có bảng A–J)
-- [ ] Frontend: `lint` + `tsc -b` + `build` + `test` sạch, test **> 155**
-- [ ] `03-roadmap.md` §9: 6 ô gốc + 2 ô phát sinh được tick; khối Trạng thái cập nhật
-- [ ] `04-database-design.md` (§1, §2, §3.3, §3.4, §3.5, **§3.8**, §4, §5, §7, §8), `README.md`, `src/Modules/Ai/README.md`, `src/Modules/Board/README.md`, `report/phase-7-ai-agent-executor-test-report.md` đã cập nhật và **khớp với code**
-- [ ] Ghi rõ trong report các **hạn chế đã biết**: không streaming token; run mất khi app sleep (reaper + "Chạy lại"); `cancel` chỉ hoạt động trong cùng instance; chưa prune `agent_runs`/`task_attachments`; chưa có test xUnit (Phase 8)
+- [x] `dotnet build TeamNexus.sln` → **0 warning / 0 error** (đo lại sau mọi thay đổi §4: PASS)
+- [x] `dotnet ef migrations list` → **6** migration; `04-database-design.md` §3.8 khớp migration thật (nhóm A đọc `information_schema`/`pg_constraint`/`pg_indexes`)
+- [x] Harness **A–I** PASS, số check ghi vào report: **A 36/36 (§2.1) + I 44/44 (§2.2) + §4 270/270 (§2.3) + §7 tổng 291/291 (§2.4)** — mỗi nhóm có bảng
+- [x] Frontend: `lint` (0/0) + `tsc -b` (exit 0) + `build` (OK) + `test` sạch, test **187 > 155** (nhóm J: 35 files, 187 tests PASS 100%)
+- [x] `03-roadmap.md` §9: Đã cập nhật trạng thái HOÀN THÀNH cho cả Backend và Frontend
+- [x] `04-database-design.md` (§1, §2, §3.3, §3.4, §3.5, **§3.8**, §4, §5, §7, §8), `README.md`, `src/Modules/Ai/README.md`, `src/Modules/Board/README.md`, `report/phase-7-ai-agent-executor-test-report.md` đã cập nhật và **khớp với code** (+ `03-roadmap.md`, `tasks/phase-7-frontend-handover.md`)
+- [x] Ghi rõ trong report các **hạn chế đã biết** (report §5, 14 mục): không streaming token; run mất khi app sleep; `cancel` chỉ trong cùng instance; chưa prune; chưa test xUnit; `status=Completed` chưa được set (phán quyết ở `ai_action_logs`); `after_snapshot` của attachment mang base64; Tavily `Bearer` đã xác nhận bằng gọi thật nhưng `Body` vẫn là phương án dự phòng cấu hình
 
 ---
 

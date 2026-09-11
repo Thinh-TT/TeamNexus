@@ -34,3 +34,67 @@ public sealed record AiCompletionResult(
     string Content,
     int? PromptTokens,
     int? CompletionTokens);
+
+/// <summary>
+/// Provider capable of OpenAI-compatible <b>function calling</b> (Phase 7 §4.2, decision S6).
+/// <para>
+/// Deliberately a SECOND port instead of an extra member on <see cref="IAiProvider"/>: the
+/// Smart Setup / Observer flows (Phase 3/5) must keep compiling and behaving byte-identically, and
+/// the two shapes genuinely differ — between turns the caller has to send back both the assistant
+/// message that carried <c>tool_calls</c> and one <c>tool</c> message per
+/// <c>tool_call_id</c>.
+/// </para>
+/// </summary>
+public interface IAiToolCallingProvider
+{
+    /// <summary>
+    /// Runs one multi-turn chat round. Transport failures (HTTP ≠ 2xx, timeout, unparsable JSON)
+    /// map to <see cref="AiProviderException"/> (502) exactly like <see cref="IAiProvider"/>; the
+    /// API key never reaches a log or an exception message and there is no retry.
+    /// <para>
+    /// Unlike <see cref="IAiProvider"/>, an empty <c>content</c> is NOT an error: a turn that only
+    /// emitted tool calls legitimately has none.
+    /// </para>
+    /// </summary>
+    Task<AiChatResult> ChatAsync(AiChatRequest request, CancellationToken ct = default);
+}
+
+/// <summary>One tool advertised to the model. <paramref name="ParametersJsonSchema"/> is raw JSON Schema.</summary>
+public sealed record AiToolDefinition(string Name, string Description, string ParametersJsonSchema);
+
+/// <summary>One tool call as emitted by the model (or echoed back in the assistant message).</summary>
+public sealed record AiToolInvocation(string Id, string Name, string ArgumentsJson);
+
+/// <summary>
+/// One chat message. <c>role</c> ∈ {system, user, assistant, tool}.
+/// <list type="bullet">
+///   <item><c>tool</c> ⇒ <see cref="ToolCallId"/> is required (which call it answers).</item>
+///   <item><c>assistant</c> ⇒ may carry <see cref="ToolCalls"/> (and then usually a null content).</item>
+/// </list>
+/// </summary>
+public sealed record AiChatMessage(
+    string Role,
+    string? Content,
+    string? ToolCallId = null,
+    string? Name = null,
+    IReadOnlyList<AiToolInvocation>? ToolCalls = null);
+
+/// <summary>One chat round request: system prompt, full message history, the tool whitelist and sampling knobs.</summary>
+public sealed record AiChatRequest(
+    string SystemPrompt,
+    IReadOnlyList<AiChatMessage> Messages,
+    IReadOnlyList<AiToolDefinition> Tools,
+    double Temperature,
+    int MaxTokens);
+
+/// <summary>
+/// One chat round result. <paramref name="FinishReason"/> is the provider's raw value
+/// (<c>"stop"</c> | <c>"tool_calls"</c> | <c>"length"</c>); <c>"length"</c> is NOT an error — the
+/// orchestrator maps it to <c>AgentStopReason.TokenBudget</c> (Phase 7 §4.8).
+/// </summary>
+public sealed record AiChatResult(
+    string? Content,
+    IReadOnlyList<AiToolInvocation> ToolCalls,
+    int? PromptTokens,
+    int? CompletionTokens,
+    string FinishReason);

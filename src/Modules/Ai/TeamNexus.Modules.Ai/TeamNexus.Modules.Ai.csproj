@@ -3,7 +3,10 @@
   <!-- Ai module (Phase 3): AI Smart Setup qua DeepSeek API.
        §1 = cấu hình DeepSeek + đăng ký DI (options, named HttpClient, endpoint filters).
        References Shared (CSRF filter) + Persistence (single DbContext) + Board
-       (IWorkspaceAccess, BoardModuleException, DomainExceptionFilter — dùng ở §2/§4). -->
+       (IWorkspaceAccess, BoardModuleException, DomainExceptionFilter — dùng ở §2/§4).
+       Phase 7 §4: + Reporting, CHỈ để gọi lại `ReportFileName.Slugify` cho tên file attachment
+       (S16/§0.3: không viết lại logic slug, không refactor nó thành thư viện chung). Không có
+       chu trình: Reporting → Shared/Persistence/Board, và Reporting không tham chiếu Ai. -->
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
@@ -12,6 +15,7 @@
     <ProjectReference Include="..\..\..\Shared\TeamNexus.Shared\TeamNexus.Shared.csproj" />
     <ProjectReference Include="..\..\..\TeamNexus.Persistence\TeamNexus.Persistence.csproj" />
     <ProjectReference Include="..\..\Board\TeamNexus.Modules.Board\TeamNexus.Modules.Board.csproj" />
+    <ProjectReference Include="..\..\Reporting\TeamNexus.Modules.Reporting\TeamNexus.Modules.Reporting.csproj" />
   </ItemGroup>
 
 </Project>
