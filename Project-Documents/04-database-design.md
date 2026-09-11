@@ -1,8 +1,8 @@
 # TeamNexus – Tài liệu Thiết kế Database
 
-> Tài liệu mô tả toàn bộ schema PostgreSQL cho dự án TeamNexus. Phạm vi phủ đủ 6 giai đoạn chức năng (Auth/RBAC, Kanban real-time, AI Smart Setup, Accountability Layer, AI Observer, Reporting).
+> Tài liệu mô tả toàn bộ schema PostgreSQL cho dự án TeamNexus. Phạm vi phủ đủ **7 giai đoạn chức năng** (Auth/RBAC, Kanban real-time, AI Smart Setup, Accountability Layer, AI Observer, Reporting, **AI Agent Executor**).
 >
-> Các bảng thuộc **Giai đoạn 1 (Auth & Workspace)** được thiết kế chi tiết theo `tasks/phase-1-auth.md`. Các bảng thuộc **Giai đoạn 2–6** là thiết kế sơ bộ, sẽ được tinh chỉnh khi hiện thực từng giai đoạn; mỗi bảng đều gắn nhãn giai đoạn tương ứng theo `03-roadmap.md`.
+> Các bảng thuộc **Giai đoạn 1 (Auth & Workspace)** được thiết kế chi tiết theo `tasks/phase-1-auth.md`. Các bảng thuộc **Giai đoạn 2–9** là thiết kế sơ bộ, sẽ được tinh chỉnh khi hiện thực từng giai đoạn; mỗi bảng đều gắn nhãn giai đoạn tương ứng theo `03-roadmap.md`.
 
 ---
 
@@ -18,7 +18,8 @@
 | Timestamp | `timestamptz` | `created_at`/`updated_at`; thêm cột riêng ở chỗ cần |
 | Enum | Cột `text` + `CHECK` constraint | Map sang .NET enum lưu dạng string; không dùng native ENUM type |
 | Soft delete | Cột `deleted_at` (nullable) + global query filter | Cho workspace/board/column/task/comment |
-| JSON linh hoạt | `jsonb` | Chỉ cho payload động (AI basis, snapshot, activity payload) |
+| JSON linh hoạt | `jsonb` | Chỉ cho payload động (AI basis, snapshot, activity payload, tool trace) |
+| Binary file | `bytea` | **Chỉ** cho `task_attachments.content` (Giai đoạn 7) — cap 512 KB, không dùng blob/disk/S3 |
 
 ### 1.1 DbContext & Migration
 
@@ -41,6 +42,8 @@ public class TeamNexusDbContext : IdentityDbContext<ApplicationUser, IdentityRol
 - Mọi entity nghiệp vụ (không phải bảng junction thuần) có `created_at`; phần lớn có `updated_at` (đặt tự động ở app layer hoặc `SaveChanges` override).
 - Không dùng cascade delete vật lý mặc định ở cấp DB; việc xóa tuân theo soft delete (`deleted_at`) hoặc ràng buộc app layer.
 - `jsonb` chỉ dùng cho dữ liệu động; dữ liệu cần truy vấn/lọc phải tách thành cột quan hệ.
+- **Phân biệt "người thật" và "AI Agent" (Giai đoạn 7):** `workspace_members.member_type` là dấu hiệu **duy nhất** phân biệt thành viên con người với trợ lý AI. Mọi truy vấn "thành viên" khi cần lọc/tách phải dùng cột này — **không** suy đoán qua tên hiển thị hay qua việc user có `password_hash` hay không.
+- **Actor của mọi bản ghi do AI Agent tạo phải nêu rõ:** comment do agent đăng dùng `author_id = agent_user_id` (row `users` thật), hành động ghi dữ liệu dùng `ai_action_logs.requested_by_user_id = agent_user_id`. Nhờ vậy truy vết "việc này do agent hay do người làm" chỉ cần so Guid, không cần bảng ánh xạ.
 
 ---
 
@@ -69,14 +72,22 @@ erDiagram
     workspaces ||--o{ notifications : ""
     users ||--o{ notifications : "recipient"
     workspaces ||--o{ ai_observer_runs : ""
+    tasks ||--o{ agent_runs : ""
+    workspaces ||--o{ agent_runs : ""
+    users ||--o{ agent_runs : "triggered/agent"
+    agent_runs ||--o{ task_attachments : "source"
+    tasks ||--o{ task_attachments : ""
+    users ||--o{ task_attachments : "created"
+    ai_action_logs ||--o{ task_attachments : "approved by"
 ```
 
 Quan hệ chính:
 - Một `workspace` có nhiều `board`; mỗi `board` thuộc đúng một `workspace`.
-- Một `workspace` có nhiều `workspace_members`; vai trò (`Admin`/`Manager`/`Member`) lưu trên từng membership.
-- Một `board` có nhiều `board_columns`; mỗi `task` nằm trong một `board_columns` (trạng thái hiện tại).
+- Một `workspace` có nhiều `workspace_members`; vai trò (`Admin`/`Manager`/`Member`) lưu trên từng membership, loại thành viên (`human`/`ai_agent`) lưu trên `member_type`.
+- Một `board` có nhiều `board_columns`; mỗi `task` nằm trong một `board_columns` (trạng thái hiện tại). Hai cột mang ngữ nghĩa hệ thống: `is_done` (hoàn thành) và `is_clarification` (Chờ làm rõ — Giai đoạn 7).
 - `task` có thể gắn nhiều `labels` qua bảng junction `task_labels`.
 - Mọi hành động ghi dữ liệu do AI khởi tạo đều qua `ai_action_logs` (Accountability Layer).
+- Mỗi lượt AI Agent thực thi một task là **một row** `agent_runs` (theo dõi tiến trình, **không** phải log quyết định ghi dữ liệu); kết quả dài của agent lưu ở `task_attachments`.
 
 ---
 
@@ -193,9 +204,18 @@ Bảng junction giữa workspace và user, mang vai trò **theo từng workspace
 | `workspace_id` | uuid | — | PK (composite), FK→`workspaces` | |
 | `user_id` | uuid | — | PK (composite), FK→`users` | |
 | `role` | text | — | CHECK (`role` IN ('Admin','Manager','Member')) | Vai trò trong workspace này |
+| `member_type` | text | — | CHECK (`member_type` IN ('human','ai_agent')), default `'human'` | **Giai đoạn 7** — phân biệt thành viên người với trợ lý AI |
+| `ai_agent_name` | text | null | | **Giai đoạn 7** — tên hiển thị của agent (null với thành viên người) |
 | `joined_at` | timestamptz | — | | |
 
 > **Mô hình phân quyền hai lớp:** `roles` + `user_roles` (Identity) quản lý vai trò **toàn cục** đưa vào claim JWT cho Policy-based authorization; `workspace_members.role` quản lý vai trò **trong phạm vi workspace** (một user có thể là `Admin` ở workspace A nhưng chỉ là `Member` ở workspace B). Composite PK đảm bảo một user chỉ có một vai trò duy nhất trong một workspace.
+>
+> **Ghi chú tinh chỉnh (Giai đoạn 7 — chốt ở bước lập kế hoạch, chi tiết `tasks/phase-7-ai-agent-executor.md` §0 D1):**
+> - **AI Agent là một "pseudo-member" có row `users` thật.** Không thể tránh: `tasks.assignee_id` FK→`users` và `task_comments.author_id` FK→**NOT NULL** `users`, nên nếu agent không phải user thật thì phải sửa `Guid` → kiểu mới ở cả 3 module đồng thời. `member_type` là **discriminator nhỏ nhất** giúp UI/API phân biệt agent với người thật.
+> - **Agent là 1 user riêng cho MỖI workspace**, sinh **lazy** ở lần đầu một task được gán cho agent trong workspace đó. Lý do bắt buộc: composite PK `(workspace_id, user_id)` ⇒ một user chỉ thuộc **một** workspace; nếu dùng chung 1 user toàn cục thì agent không thể là thành viên của nhiều workspace cùng lúc.
+> - **Partial unique index** `uq_workspace_members_ai_agent` trên `workspace_id` **WHERE** `member_type = 'ai_agent'` ⇒ mỗi workspace có **đúng một** agent. Luôn tìm agent qua `member_type`, **không** qua `ai_agent_name` (tên có thể bị đổi).
+> - **Agent là user "ảo", không thể đăng nhập:** row `users` của agent sinh với `email = null`, `password_hash = null`, `lockout_enabled = true`, `two_factor_enabled = true`, và **không** có `user_logins`. Đây là ràng buộc **bảo mật**, không phải chi tiết kỹ thuật.
+> - `role` của agent: `Member` — agent **không** phải Manager/Admin; quyền ghi dữ liệu thật đi qua Accountability Layer và do con người duyệt, không qua `role`.
 
 ### 3.4 Module Kanban — Board (Giai đoạn 2)
 
@@ -220,8 +240,16 @@ Cột Kanban (trạng thái) của một board.
 | `board_id` | uuid | — | FK→`boards`, IX | |
 | `name` | text | — | | Ví dụ: To Do / In Progress / Done |
 | `position` | int | — | UQ `(board_id, position)` | Thứ tự hiển thị cột |
+| `is_done` | boolean | — | default false | Cột "hoàn thành": task vào đây được set `completed_at` |
+| `is_clarification` | boolean | — | default false | **Giai đoạn 7** — cột "Chờ làm rõ", nơi AI Agent tạm dừng task để hỏi lại trưởng nhóm |
 | `created_at` | timestamptz | — | | |
 | `updated_at` | timestamptz | — | | |
+
+> **Ghi chú tinh chỉnh (Giai đoạn 7 — `tasks/phase-7-ai-agent-executor.md` §0 D3):**
+> - Trạng thái Kanban **là cột**, không phải enum trên `tasks` (`tasks.column_id` mới là "trạng thái hiện tại"). `is_clarification` đi đúng đường của tiền lệ `is_done` (thêm ở Giai đoạn 2 bằng migration `Phase2BoardColumnIsDone`) — **không** thêm enum `TaskStatus` để tránh hai nguồn sự thật với `column_id`.
+> - **Partial unique index** `uq_board_columns_clarification` trên `board_id` **WHERE** `is_clarification` ⇒ tối đa **một** cột "Chờ làm rõ" mỗi board.
+> - Cột được **tạo lazy** ở lần đầu Agent cần (không auto-seed cho board cũ, không bắt mọi board phải có), đặt ở `position = max + 1`, và **không cho xoá** (kể cả khi rỗng) vì hệ thống phụ thuộc vào nó.
+> - `is_done` và `is_clarification` **loại trừ nhau**: app layer từ chối bật đồng thời (400). Cột `is_clarification` **không** được coi là "done" khi tính `completed_at` hay thống kê báo cáo.
 
 #### `tasks`
 
@@ -233,7 +261,7 @@ Cột Kanban (trạng thái) của một board.
 | `title` | text | — | | |
 | `description` | text | null | | |
 | `position` | int | — | IX `(board_id, column_id, position)` | Thứ tự task trong cột |
-| `assignee_id` | uuid | null | FK→`users`, IX | Người phụ trách (MVP: 1 assignee) |
+| `assignee_id` | uuid | null | FK→`users`, IX | Người phụ trách (MVP: 1 assignee). **Giai đoạn 7:** có thể là AI Agent (`workspace_members.member_type = 'ai_agent'`) |
 | `due_date` | timestamptz | null | | Hạn hoàn thành |
 | `priority` | text | null | CHECK (`priority` IN ('Low','Medium','High','Urgent')) | Độ ưu tiên |
 | `created_by` | uuid | — | FK→`users` | Người tạo task |
@@ -273,7 +301,7 @@ Bình luận trên task — đồng thời là nguồn "bối cảnh giao tiếp
 |---|---|---|---|---|
 | `id` | uuid | — | PK | |
 | `task_id` | uuid | — | FK→`tasks`, IX | |
-| `author_id` | uuid | — | FK→`users`, IX | |
+| `author_id` | uuid | — | FK→`users`, IX | **Giai đoạn 7:** câu hỏi của AI Agent cũng là comment với `author_id = agent_user_id` |
 | `content` | text | — | | |
 | `created_at` | timestamptz | — | | |
 | `updated_at` | timestamptz | — | | |
@@ -307,6 +335,10 @@ Vết dữ liệu cho **mọi hành động AI ghi dữ liệu** (theo `02` §2.
 > **Quy ước định vị log (Giai đoạn 4):** hành động `CreateSubtasks` lưu `entity_type = 'Board'` và `entity_id = boardId`, nhờ đó liệt kê lịch sử hành động AI theo board chỉ cần lọc `(entity_type, entity_id)` — **không** cần thêm cột `workspace_id`. Index `(entity_type, entity_id, created_at)` phục vụ truy vấn này (xem §5).
 >
 > **Ghi chú tinh chỉnh:** hai cột `applied_snapshot` và `decision_note` được bổ sung khi hiện thực Giai đoạn 4 (theo tinh thần "thiết kế sơ bộ, sẽ tinh chỉnh khi hiện thực" ở đầu tài liệu): `applied_snapshot` tách bạch "đề xuất" (`after_snapshot`) khỏi "đã ghi thật" nên Undo không phải suy diễn từ đề xuất; `decision_note` lưu lý do từ chối/hoàn tác cho mục đích giải trình. Chi tiết quyết định xem `tasks/phase-4-accountability-layer.md` §0.
+>
+> **Quy ước định vị log mở rộng (Giai đoạn 7):** hai hành động mới `PostComment` (kết quả ngắn) và `PostAttachment` (kết quả dài dưới dạng file) lưu `entity_type = 'Task'` và `entity_id = taskId`. `requested_by_user_id` = **`agent_user_id`** (actor thật sự khởi tạo hành động — đúng `04` §1.2 "actor của bản ghi do AI tạo phải nêu rõ"), `decided_by_user_id` = Manager/Admin duyệt. Truy vấn lịch sử theo task dùng **đúng** index sẵn có `(entity_type, entity_id, created_at)` ⇒ **không** cần index mới cho `ai_action_logs`.
+>
+> **Không cần cột mới cho Giai đoạn 7:** `basis` giữ tóm tắt input (id task + số tool-call + token đã dùng, **không** dump prompt); `after_snapshot` giữ nội dung đề xuất (comment hoặc base64 của file, đã cap); `applied_snapshot` giữ `commentId`/`attachmentId` thật để Undo revert chính xác. Cả hai applier mới tái dùng **nguyên** vòng đời `Pending → Approved/Rejected → Undone` và cơ chế CAS chống duyệt trùng của Giai đoạn 4.
 
 ### 3.6 Module AI — Observer (Giai đoạn 5)
 
@@ -378,6 +410,91 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 > - **Không** index/cột mới: các truy vấn dùng đúng index hiện có (`tasks.board_id`, `tasks.assignee_id`,
 >   `activity_logs (workspace_id, created_at)`, `boards.workspace_id`).
 
+### 3.8 Module AI — Agent Executor (Giai đoạn 7)
+
+Nâng AI lên vai trò **thực thi**: Agent là một thành viên ảo của workspace (`member_type = 'ai_agent'`, xem §3.3), được gán task
+như một người thật, tự chạy vòng lặp tool-calling, và mọi kết quả ghi dữ liệu đều đi qua Accountability Layer (`ai_action_logs`, §3.5).
+Hai bảng mới + một cột mới trên `board_columns` (§3.4) là toàn bộ thay đổi schema của giai đoạn này.
+
+#### `agent_runs`
+Theo dõi **mỗi lượt** AI Agent thực thi một task. Tách khỏi `ai_action_logs` vì **mục đích khác nhau**: `ai_action_logs` là **log quyết định
+ghi dữ liệu** (Pending → Approved/Rejected/Undone); `agent_runs` là **nhật ký tiến trình chạy** (vòng lặp tool-call, token, vì sao dừng).
+
+| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
+|---|---|---|---|---|
+| `id` | uuid | — | PK | |
+| `workspace_id` | uuid | — | FK→`workspaces`, IX `(workspace_id, started_at)` | Audit + prune theo workspace |
+| `board_id` | uuid | — | FK→`boards`, IX | Nhóm SignalR theo board để broadcast tiến trình |
+| `task_id` | uuid | — | FK→`tasks`, IX `(task_id, started_at)` | Task đang thực thi |
+| `agent_user_id` | uuid | — | FK→`users` | Row `users` của agent (§3.3) |
+| `triggered_by_user_id` | uuid | — | FK→`users` | Manager/Admin bấm "Chạy Agent" / "Chạy lại" |
+| `status` | text | — | CHECK (`status` IN ('Running','AwaitingClarification','AwaitingApproval','Completed','Failed')) | Vòng đời lượt chạy |
+| `stop_reason` | text | null | CHECK (`stop_reason` IN ('DraftProduced','QuestionAsked','ToolLimit','TimeLimit','TokenBudget','ProviderError','Cancelled','TaskChanged','InternalError')) | **Nguyên nhân** dừng (null khi đang chạy) |
+| `clarification_question` | text | null | | Câu hỏi Agent đặt khi cần làm rõ (≤ 2000) |
+| `clarification_comment_id` | uuid | null | FK→`task_comments` | Comment Agent đăng câu hỏi (để UI mở thẳng) |
+| `resolution_comment_id` | uuid | null | FK→`task_comments` | Comment trả lời của trưởng nhóm dùng cho lượt "Chạy lại" |
+| `previous_run_id` | uuid | null | FK→`agent_runs` (self) | Chuỗi run của cùng một task |
+| `tool_call_trace` | jsonb | — | default `[]` | Mảng compact: `name`, `arguments`, `resultSummary` (≤ 500 ký tự/entry), `isError`, `at`, `durationMs` |
+| `trace_truncated` | bool | — | default false | Cờ khi trace bị cắt theo `Agent:ToolTraceMaxEntries` |
+| `tool_call_count` | int | — | default 0 | Đối chiếu guardrail 15 tool-call |
+| `llm_call_count` | int | — | default 0 | Số lần gọi model |
+| `prompt_tokens` | int | — | default 0 | **Cộng dồn mọi lượt gọi** trong run |
+| `completion_tokens` | int | — | default 0 | |
+| `output_kind` | text | null | CHECK (`output_kind` IS NULL OR `output_kind` IN ('Comment','Attachment')) | Loại kết quả đề xuất |
+| `ai_action_log_id` | uuid | null | FK→`ai_action_logs` | Hành động `Pending` đã tạo — nối thẳng Accountability Layer |
+| `notification_sent` | bool | — | default false | Đã cảnh báo Manager khi dừng bất thường (chống spam) |
+| `error` | text | null | | Chi tiết lỗi/nguyên nhân (≤ 2000) |
+| `started_at` | timestamptz | — | | |
+| `finished_at` | timestamptz | null | | |
+| `created_at` / `updated_at` | timestamptz | — | | Stamp tự động qua `IAuditableEntity` |
+
+> **Ghi chú tinh chỉnh (Giai đoạn 7 — chốt ở bước lập kế hoạch, chi tiết `tasks/phase-7-ai-agent-executor.md` §0):**
+> - **`status` tách khỏi `stop_reason` (D4).** Bản sơ bộ `02` §2.8 chỉ nêu `status` (5 giá trị) và yêu cầu "log `BudgetExceeded`". Nếu gộp
+>   "vượt ngân sách" thành một `status` riêng thì không phân biệt được *hết ngân sách* (chủ ý dừng) với *lỗi provider* (bất khả kháng) — trong
+>   khi Manager cần biết đúng để hành động. Vì vậy `status` giữ đúng 5 giá trị vòng đời, còn `BudgetExceeded` trở thành `stop_reason` trên
+>   `status = Failed`, đúng tiền lệ `ai_observer_runs.status = Skipped` **không phải lỗi** (Giai đoạn 5).
+> - **Append-only theo lượt chạy (D14).** "Chạy lại" **tạo row mới** với `previous_run_id` trỏ row cũ; row cũ **không** bao giờ bị sửa. Nhờ vậy
+>   lịch sử giải trình còn nguyên (`QuestionAsked` của lượt trước vẫn đọc được sau khi lượt sau thành công).
+> - **Chống chạy chồng (D11):** `pg_try_advisory_lock` theo `task_id` + `SemaphoreSlim(1,1)` trong process; không lấy được lock ⇒ **409**,
+>   không tạo row. Dùng đúng pattern `ObserverService.TryAcquireAdvisoryLockAsync`.
+> - **Run mồ côi (D13):** app free-tier có thể sleep/recycle giữa run ⇒ row kẹt `Running`. `AgentRunReaper` (`IHostedService`) chạy lúc khởi
+>   động, đóng mọi run `Running` có `started_at < now − Agent:RunTimeoutSeconds − Agent:OrphanRunGraceSeconds` thành `Failed` + `InternalError`.
+>   Index partial `(status) WHERE status = 'Running'` phục vụ đúng truy vấn này.
+> - **Không** có query filter và **không** soft-delete: bảng là nhật ký audit chỉ ghi thêm (giống `ai_action_logs`).
+> - **Guardrail ghi vào chính row này:** `tool_call_count` ≤ 15, thời gian chạy ≤ 5 phút (wall-clock), `prompt_tokens + completion_tokens`
+>   ≤ ~50 000 (`04` §7). Vượt ngưỡng ⇒ dừng + `stop_reason` tương ứng + **một** `notifications` cho Manager (`notification_sent = true`).
+
+#### `task_attachments`
+Kết quả **dài** của Agent (báo cáo, tài liệu, file có định dạng) — `02` §2.8 chốt: nội dung ngắn là **comment**, nội dung dài là **tệp đính kèm**.
+
+| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
+|---|---|---|---|---|
+| `id` | uuid | — | PK | |
+| `task_id` | uuid | — | FK→`tasks`, IX | |
+| `created_by_user_id` | uuid | — | FK→`users` | Đợt này luôn = `agent_user_id` của run sinh ra file |
+| `source_run_id` | uuid | null | FK→`agent_runs` | Truy vết "file do lượt chạy nào sinh" |
+| `file_name` | text | — | | Tên ASCII đã chuẩn hoá (dùng lại `ReportFileName.Normalize` của Giai đoạn 6) |
+| `content_type` | text | — | | `text/markdown`, `text/plain`, `text/csv`, … |
+| `size_bytes` | int | — | | = `length(content)`; app layer chặn > `Agent:MaxAttachmentBytes` |
+| `content` | bytea | — | | **`bytea`**, cap **512 KB** (`Agent:MaxAttachmentBytes` = 524288) |
+| `created_at` | timestamptz | — | | |
+
+> **Ghi chú tinh chỉnh (Giai đoạn 7 — D5):**
+> - **Vì sao `bytea` trong PostgreSQL, không blob/S3/disk.** Repo **không** có bất kỳ hạ tầng lưu file nào, và `02` §3 + `04` §7 đã chốt
+>   "generate on-demand, **không** lưu file lâu dài trên server" để tiết kiệm free-tier. `bytea` giữ đúng bất biến đó, trả file bằng đúng
+>   pattern `Results.File(byte[], contentType, fileName)` đã verify ở Giai đoạn 6, và xoá được **vật lý** khi Undo.
+> - **Đây là bảng DUY NHẤT không có soft delete.** File chỉ tồn tại **sau khi** con người `Approved`; `Rejected` ⇒ không có row nào;
+>   `Undone` ⇒ xoá hẳn row (không có `deleted_at`). Lý do: `bytea` để lại rác là tiêu quota thật, và Undo của AI phải trả workspace về
+>   đúng trạng thái trước đó. Hệ quả cần chấp nhận: file đã Undo **không thể** khôi phục — khác với soft delete của task/comment.
+> - **Ước lượng quota:** cap 512 KB/row và chỉ sinh khi được duyệt ⇒ vài chục file ≈ vài MB, nằm trong free-tier Neon/Supabase.
+> - **Không** có `IAuditableEntity` (`updated_at` vô nghĩa với file bất biến) ⇒ dùng đúng field `created_at`.
+> - **Không** prune tự động: file là nội dung người dùng đã duyệt, chỉ biến mất khi Undo hoặc khi task bị xoá (soft) — xem §7.
+
+#### `notifications.type` — bộ giá trị mở rộng
+
+Ba loại mới (text tự do, **không** CHECK — §4): `AgentRunFailed` (dừng bất thường / vượt ngưỡng), `AgentAwaitingClarification`
+(Agent cần trưởng nhóm trả lời), `AgentOutputPending` (có kết quả chờ duyệt). Fan-out giữ nguyên "1 row / 1 người nhận (Manager/Admin)".
+
 ---
 
 ## 4. Enum & giá trị hợp lệ
@@ -388,13 +505,19 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 | `WorkspaceRole` | `text` + CHECK | `Admin`, `Manager`, `Member` | `workspace_members.role` |
 | `TaskPriority` | `text` + CHECK | `Low`, `Medium`, `High`, `Urgent` | `tasks.priority` |
 | `AiActionStatus` | `text` + CHECK | `Pending`, `Approved`, `Rejected`, `Undone` | `ai_action_logs.status` |
-| `AiActionType` | `text` (tự do, bộ gợi ý) | `CreateSubtasks`, `AssignMember`, `SetLabels`, `MoveTasks`, … | `ai_action_logs.action` |
+| `AiActionType` | `text` (tự do, bộ gợi ý) | `CreateSubtasks`, `AssignMember`, `SetLabels`, `MoveTasks`, `PostComment`, `PostAttachment`, … | `ai_action_logs.action` |
 | `ActivityAction` | `text` (tự do, bộ gợi ý) | `TaskCreated`, `TaskUpdated`, `TaskMoved`, `TaskCompleted`, `TaskDeleted`, `CommentAdded`, … | `activity_logs.action` |
-| `NotificationType` | `text` (tự do, bộ gợi ý) | `OverdueTask`, `StalledTask`, `Overload`, `Bottleneck`, … | `notifications.type` |
+| `NotificationType` | `text` (tự do, bộ gợi ý) | `OverdueTask`, `StalledTask`, `Overload`, `Bottleneck`, `AgentRunFailed`, `AgentAwaitingClarification`, `AgentOutputPending`, … | `notifications.type` |
 | `NotificationSeverity` | `text` (tự do, bộ gợi ý) | `Low`, `Medium`, `High`, `Critical` | `notifications.payload.severity` (không phải cột) |
 | `ObserverRunStatus` | `text` + CHECK | `Running`, `Completed`, `Skipped`, `Failed` | `ai_observer_runs.status` |
+| `MemberType` | `text` + CHECK | `human`, `ai_agent` | `workspace_members.member_type` |
+| `AgentRunStatus` | `text` + CHECK | `Running`, `AwaitingClarification`, `AwaitingApproval`, `Completed`, `Failed` | `agent_runs.status` |
+| `AgentStopReason` | `text` + CHECK | `DraftProduced`, `QuestionAsked`, `ToolLimit`, `TimeLimit`, `TokenBudget`, `ProviderError`, `Cancelled`, `TaskChanged`, `InternalError` | `agent_runs.stop_reason` |
+| `AgentOutputKind` | `text` + CHECK | `Comment`, `Attachment` | `agent_runs.output_kind` |
 
 > Nguyên tắc: enum có tập giá trị cố định (role, priority, status) dùng `CHECK`; enum dự kiến mở rộng (action type, notification type) dùng `text` tự do kèm bộ giá trị gợi ý để không phải sửa constraint mỗi lần thêm loại mới.
+>
+> **`AgentStopReason` — vì sao KHÔNG có `BudgetExceeded` (Giai đoạn 7, D4):** yêu cầu "vượt ngân sách ⇒ dừng + log" của `03-roadmap.md` được đáp ứng bằng `status = Failed` + `stop_reason` **phân biệt được nguyên nhân**: `ToolLimit` (quá 15 tool-call), `TimeLimit` (quá 5 phút), `TokenBudget` (quá ~50 000 token). Một giá trị `BudgetExceeded` gộp chung sẽ không nói được Manager cần làm gì tiếp theo (giảm phạm vi task hay kiểm tra provider), và sẽ trái tiền lệ `Skipped` của Giai đoạn 5 (trạng thái "không phải lỗi" tách khỏi lỗi thật).
 
 ---
 
@@ -404,8 +527,10 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 |---|---|---|---|
 | `refresh_tokens` | `user_id` | IX | Tra cứu token theo user |
 | `workspace_members` | `(workspace_id, user_id)` | PK | Đảm bảo vai trò duy nhất/workspace |
+| `workspace_members` | `workspace_id` WHERE `member_type = 'ai_agent'` | UQ (partial) | **Giai đoạn 7** — mỗi workspace có đúng một AI Agent |
 | `boards` | `workspace_id` | IX | Liệt kê board theo workspace |
 | `board_columns` | `(board_id, position)` | UQ | Thứ tự cột, chống trùng vị trí |
+| `board_columns` | `board_id` WHERE `is_clarification` | UQ (partial) | **Giai đoạn 7** — tối đa một cột "Chờ làm rõ" mỗi board |
 | `tasks` | `board_id` | IX | Query task theo board (SignalR group) |
 | `tasks` | `column_id` | IX | Query task theo cột |
 | `tasks` | `(board_id, column_id, position)` | IX | Sắp xếp kéo-thả trong cột |
@@ -417,8 +542,14 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 | `activity_logs` | `(workspace_id, created_at)` | IX | Observer quét theo chu kỳ |
 | `notifications` | `(recipient_user_id, is_read)` | IX | Lấy cảnh báo chưa đọc của Manager |
 | `ai_observer_runs` | `workspace_id` | IX | Audit theo workspace |
+| `agent_runs` | `(task_id, started_at)` | IX | **Giai đoạn 7** — lịch sử lượt chạy của một task (nút "Chạy lại") |
+| `agent_runs` | `(workspace_id, started_at)` | IX | Audit + prune theo workspace |
+| `agent_runs` | `status` WHERE `status = 'Running'` | IX (partial) | Reaper tìm run mồ côi sau restart |
+| `task_attachments` | `task_id` | IX | Liệt kê tệp đính kèm của task |
 
-> Các FK còn lại (`activity_logs.board_id`/`user_id`, `notifications.workspace_id`, `ai_observer_runs.workspace_id`, …) **không** khai báo tường minh: EF Core sinh index theo FK convention (đúng tiền lệ Phase 4 §1.2 — FK `decided_by_user_id` cũng sinh index phụ, chấp nhận).
+> Các FK còn lại (`activity_logs.board_id`/`user_id`, `notifications.workspace_id`, `ai_observer_runs.workspace_id`, `agent_runs.agent_user_id`/`triggered_by_user_id`/`previous_run_id`, `task_attachments.created_by_user_id`/`source_run_id`, …) **không** khai báo tường minh: EF Core sinh index theo FK convention (đúng tiền lệ Phase 4 §1.2 — FK `decided_by_user_id` cũng sinh index phụ, chấp nhận).
+>
+> **Giai đoạn 7 không cần index mới cho `ai_action_logs`:** log của `PostComment`/`PostAttachment` dùng đúng index sẵn có `(entity_type, entity_id, created_at)` với `entity_type = 'Task'` (xem §3.5).
 
 ---
 
@@ -428,6 +559,19 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 - Một chuỗi migration duy nhất từ `TeamNexusDbContext` (xem §1.1).
 - Seed dữ liệu nền trong migration/`OnModelCreating`: 3 role `Admin`, `Manager`, `Member`.
 - Migration áp dụng lên PostgreSQL local để dev, sau đó lên Neon/Supabase (theo `phase-1-auth.md` §2.1).
+
+**Chuỗi migration đã áp dụng (tính tới Giai đoạn 7):**
+
+| # | Migration | Giai đoạn |
+|---|---|---|
+| 1 | `InitialSchema` | 1 |
+| 2 | `Phase2KanbanSchema` | 2 |
+| 3 | `Phase2BoardColumnIsDone` | 2 |
+| 4 | `Phase4AccountabilityLayer` | 4 |
+| 5 | `Phase5AiObserverSchema` | 5 |
+| 6 | `Phase7AiAgentSchema` | **7** — `member_type`/`ai_agent_name`, `is_clarification`, `agent_runs`, `task_attachments` |
+
+> Giai đoạn 3 (AI Smart Setup) **không** có migration (chỉ đọc/đề xuất, không ghi DB); Giai đoạn 6 (Reporting) **không** có migration (projection read-only); Giai đoạn 8 (Test & Deploy) và 9 (Flutter) **không** có migration. Dùng `dotnet ef migrations list` để đối chiếu — hiện tại phải là **6**.
 
 ---
 
@@ -442,6 +586,13 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 - **AI Observer (Giai đoạn 5):** Observer là lớp **đọc/cảnh báo** — chỉ ghi `activity_logs`/`notifications`/`ai_observer_runs`, **không** ghi `tasks`/`labels`/`task_labels` và **không** đi qua `ai_action_logs`. Chống chạy chồng bằng `pg_try_advisory_lock` (1 run/workspace tại một thời điểm, toàn hệ thống); chống cảnh báo trùng bằng cửa sổ dedupe `(workspace_id, type, entity)` mặc định 24h; `ai_observer_runs.status = Skipped` khi Observer tắt hoặc không lấy được lock (không phải lỗi).
 - **Bất biến của log:** `activity_logs` **không** có query filter và **không** soft-delete — đây là event store chỉ ghi thêm; việc dọn dữ liệu chỉ theo chính sách retention ở trên. `notifications` cũng không soft-delete (lịch sử cảnh báo giữ nguyên kể cả khi Manager rời workspace; quyền đọc được lọc theo `recipient_user_id`).
 - **Reporting (Giai đoạn 6):** báo cáo là **projection read-only** trên `tasks`/`boards`/`board_columns`/`activity_logs`/`ai_observer_runs` — không bảng mới, không soft-delete, không retention riêng, không ghi dữ liệu, không đi qua `ai_action_logs`. File export sinh trong RAM rồi trả về client; **không** lưu trên server (xem §3.7).
+- **AI Agent Executor (Giai đoạn 7) — bảo mật danh tính agent:** row `users` của agent **không thể đăng nhập** (`password_hash = null`, `email = null`, `lockout_enabled = true`, `two_factor_enabled = true`, không có `user_logins`). `member_type = 'ai_agent'` là **discriminator duy nhất**; mọi truy vấn lọc thành viên phải dùng cột này. Agent có `role = 'Member'` — quyền ghi dữ liệu thật đi qua Accountability Layer và **do con người duyệt**, không qua `role`.
+- **Giai đoạn 7 — gán người thực hiện phải kiểm membership (siết mới):** mọi lần gán/đổi `tasks.assignee_id` (create task, update task, và applier `AssignMember` sau này) phải kiểm assignee **là thành viên của workspace chứa task**. Trước Giai đoạn 7, `TaskService` chỉ kiểm `users.AnyAsync` theo bảng `users`, tức là có thể gán cho user **ngoài** workspace. Agent không phải ngoại lệ — và chính vì agent là một `users` row nên nếu không siết, agent sẽ trở thành đường vào mới cho lỗi này.
+- **Giai đoạn 7 — `agent_runs` là nhật ký append-only theo lượt chạy:** "Chạy lại" **tạo row mới** (`previous_run_id` trỏ row cũ), **không** sửa row cũ; nhờ vậy lịch sử giải trình của lượt "hỏi lại" còn nguyên sau khi lượt sau thành công. Chống chạy chồng bằng `pg_try_advisory_lock` theo `task_id` + `SemaphoreSlim` trong process (không lấy được lock ⇒ `409`, **không** ghi row). **Run mồ côi** (app free-tier sleep/recycle giữa run) được `AgentRunReaper` đóng lúc khởi động: `status = Failed`, `stop_reason = InternalError`, set `finished_at` — nếu không, card Kanban sẽ kẹt "Đang chạy" vĩnh viễn.
+- **Giai đoạn 7 — guardrail ghi ngay trong `agent_runs`:** `tool_call_count` ≤ 15, wall-clock ≤ 5 phút, `prompt_tokens + completion_tokens` ≤ ~50 000 (mọi ngưỡng cấu hình được ở section `Agent`). Vượt ngưỡng ⇒ dừng, `status = Failed` + `stop_reason` tương ứng (`ToolLimit`/`TimeLimit`/`TokenBudget`), `error` ghi rõ đã dùng bao nhiêu, và **đúng một** `notifications` cho Manager/Admin (`notification_sent = true` chống spam). Không lặp vô hạn, không phát sinh chi phí ngoài kiểm soát.
+- **Giai đoạn 7 — `task_attachments` là NGOẠI LỆ duy nhất không soft-delete:** file (bytea, cap 512 KB) chỉ được sinh khi con người `Approved`; `Undone` ⇒ **xoá vật lý** row (không có `deleted_at`). Lý do: `bytea` để lại là tiêu quota thật, và Undo của AI phải trả workspace về đúng trạng thái trước đó. Hệ quả cần chấp nhận: file đã Undo **không thể khôi phục**. **Không** prune tự động `task_attachments` (file là nội dung người dùng đã duyệt). Prune `agent_runs` cũ hơn `Agent:RetentionDays` (mặc định 90 ngày) là hạng mục **optional** — chỉ audit, không phải nội dung nghiệp vụ.
+- **Giai đoạn 7 — hệ quả lên Reporting/Observer (hành vi mong muốn, ghi rõ để không bị coi là bug):** vì agent là `users` row bình thường, task do agent thực hiện **sẽ** xuất hiện trong `byAssignee` của báo cáo và **sẽ** được tính vào tín hiệu `Overload` nếu agent có nhiều task mở. Đây là hành vi đúng (task của agent cũng là task đang mở, cần được nhìn thấy). Nếu sau này muốn tách "hiệu suất của agent" khỏi "hiệu suất của người", hãy thêm cờ ở module `Reporting` — **không** thay đổi schema `tasks`.
+- **Giai đoạn 7 — `is_clarification` và `is_done` loại trừ nhau:** app layer từ chối bật đồng thời (400). Cột `is_clarification` **không** được coi là "done" khi set `completed_at` hay khi thống kê `progress`/`overdue` của báo cáo. Cột "Chờ làm rõ" **không xoá được** (kể cả khi rỗng) vì luồng agent phụ thuộc vào nó — khác luồng chặn xoá cột đang có task.
 - **Nhất quán `tasks.board_id` / `tasks.column_id`:** app layer phải đảm bảo task luôn thuộc cột thuộc đúng board; khuyến nghị validate ở service thay vì trigger để giữ logic tập trung.
 - **Cascade delete:** không dùng cascade vật lý; việc xóa workspace/board phải xử lý mềm (soft delete) và cân nhắc chính sách xóa các entity con.
 
@@ -452,10 +603,12 @@ Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng l�
 **Giả định chính:**
 - Dữ liệu văn bản (name/description/title/content) không giới hạn độ dài cứng ở cấp DB trong tài liệu này; sẽ ràng buộc `varchar(n)`/`maxLength` cụ thể khi hiện thực nếu cần.
 - MVP dùng 1 assignee/task; đa assignee để giai đoạn sau.
-- Bảng giai đoạn 2–6 là thiết kế sơ bộ, có thể thay đổi khi hiện thực từng giai đoạn. Riêng **Giai đoạn 5 (§3.6)** đã được tinh chỉnh ở bước lập kế hoạch theo `tasks/phase-5-ai-observer.md` §0 (thêm `Skipped`, chốt fan-out notification, retention, advisory lock). **Giai đoạn 6 (§3.7)** đã chốt ở bước lập kế hoạch theo `tasks/phase-6-reporting-export.md` §0 (không bảng mới, quyền Manager/Admin, cửa sổ 30 ngày clamp 365, cap `MaxExportRows`, file trong RAM).
+- Bảng giai đoạn 2–9 là thiết kế sơ bộ, có thể thay đổi khi hiện thực từng giai đoạn. Riêng **Giai đoạn 5 (§3.6)** đã được tinh chỉnh ở bước lập kế hoạch theo `tasks/phase-5-ai-observer.md` §0 (thêm `Skipped`, chốt fan-out notification, retention, advisory lock). **Giai đoạn 6 (§3.7)** đã chốt ở bước lập kế hoạch theo `tasks/phase-6-reporting-export.md` §0 (không bảng mới, quyền Manager/Admin, cửa sổ 30 ngày clamp 365, cap `MaxExportRows`, file trong RAM). **Giai đoạn 7 (§3.3, §3.4, §3.5, §3.8)** đã chốt ở bước lập kế hoạch theo `tasks/phase-7-ai-agent-executor.md` §0 (agent là `users` row per-workspace + `member_type`; `agent_runs.status` tách khỏi `stop_reason`; `task_attachments` dùng `bytea` cap 512 KB và là ngoại lệ không soft-delete; `board_columns.is_clarification` đi theo tiền lệ `is_done`).
+- **Giai đoạn 7 chưa chốt (cố ý để ngỏ, ghi rõ để không ai tưởng là sót):** cơ chế prune `agent_runs` theo retention (bảng đã có `Agent:RetentionDays` nhưng việc dọn chỉ làm sau khi phần chính ổn định); API tải/lưu attachment ngoài PostgreSQL (nếu một ngày vượt 512 KB/file, sẽ là **migration + storage mới**, không phải sửa cột hiện có).
 
 **Tài liệu nguồn:**
 - `Project-Documents/01-system-specification.md`
 - `Project-Documents/02-tech-stack-decisions.md`
 - `Project-Documents/03-roadmap.md`
 - `Project-Documents/tasks/phase-1-auth.md`
+- `Project-Documents/tasks/phase-7-ai-agent-executor.md`

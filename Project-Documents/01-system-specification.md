@@ -26,3 +26,12 @@ Thu thập log hệ thống và bối cảnh giao tiếp để nhận diện s�
 
 ### 6. Xuất Báo cáo Đa định dạng
 Tự động tổng hợp dữ liệu tiến độ và hiệu suất thành các tệp PDF hoặc Excel trực quan.
+
+### 7. AI Agent Executor (Thành viên ảo thực thi công việc) — Giai đoạn 7
+Nâng AI từ vai trò "đề xuất/quan sát" lên vai trò "thực thi". AI Agent được gán task trực tiếp như một thành viên thật (qua đúng thao tác assign/kéo-thả sẵn có) và tự thực hiện các task đặc thù được trưởng nhóm giao.
+ 
+- **Phạm vi công việc:** kết hợp soạn thảo tài liệu/báo cáo nội bộ, tóm tắt & tổng hợp thông tin từ task/comment trong hệ thống, và nghiên cứu qua web khi cần.
+- **Nguồn dữ liệu:** vừa truy cập dữ liệu nội bộ (task, comment, file đính kèm) vừa có khả năng tìm kiếm thông tin ngoài qua web search.
+- **Khi thiếu thông tin:** Agent tạm dừng, chuyển task sang trạng thái "Chờ làm rõ" và hỏi lại trưởng nhóm thay vì tự suy đoán; sau khi trưởng nhóm trả lời (comment), cần thao tác thủ công "Chạy lại" để Agent tiếp tục.
+- **Kết quả đầu ra:** nội dung ngắn thể hiện dưới dạng bình luận trên task, nội dung dài thể hiện dưới dạng tệp đính kèm — cả hai đều phải qua Accountability Layer (mục 5) để trưởng nhóm duyệt trước khi coi là hoàn thành.
+- **Giới hạn an toàn:** mỗi lượt thực thi bị giới hạn số bước gọi công cụ, thời gian chạy và ngân sách token để tránh vòng lặp vô hạn và phát sinh chi phí ngoài kiểm soát.

@@ -29,7 +29,7 @@
 | **D13** | Liệt kê log theo **board**: `GET /api/boards/{boardId}/ai-actions` dùng `entity_type='Board'` + `entity_id=boardId`. **Không** thêm cột `workspace_id` | Đủ cho UI (drawer trong BoardView); queue pending xuyên workspace để Giai đoạn 5 nếu cần |
 | **D14** | Màu nhãn auto-create: palette cố định xoay vòng theo index — `#6366F1`, `#10B981`, `#F59E0B`, `#EF4444`, `#8B5CF6` | `SmartSetupLabelSuggestion` không mang màu; không mở rộng UI Phase 3 |
 | **D15** | **Không** thêm SignalR event riêng cho AI action: drawer tự `reload()` khi mở và sau mỗi thao tác; task mới đã real-time sẵn qua `TaskCreated` (`useBoardHub`) | Tránh sửa module Board; broadcast event cho AI action là hạng mục optional (§5.3) |
-| **D16** | **Không** tạo project xUnit (để Giai đoạn 7). Verify backend bằng harness probe tạm ngoài workspace + API thật + PostgreSQL thật (đúng cách Phase 2–3) | Nhất quán repo |
+| **D16** | **Không** tạo project xUnit (để Giai đoạn 8). Verify backend bằng harness probe tạm ngoài workspace + API thật + PostgreSQL thật (đúng cách Phase 2–3) | Nhất quán repo |
 
 **Non-goals Giai đoạn 4 (ghi rõ để không over-scope):** sửa/thu hồi một log `Pending` (phải `Reject` rồi confirm lại); separation of duties; time-window cho Undo; queue pending xuyên workspace; SignalR event riêng cho AI action; test xUnit; undo cho action khác ngoài `CreateSubtasks`.
 
@@ -204,7 +204,7 @@ POST /boards/{id}/smart-setup/confirm    → AiActionLog { Pending }   ← KHÔN
 - [x] `public static string BuildAppliedSnapshotJson(AiActionAppliedResult result)` → `{ "entityType": "Board", "entityId": "…", "createdTaskIds": [...], "createdLabelIds": [...], "warnings": [...], "appliedAt": "…" }`.
 - [x] `public static string MergeUndoWarnings(string? appliedSnapshot, IReadOnlyList<string> warnings)` → thêm khoá `undoWarnings` vào snapshot cũ trên `JsonElement` (không nối chuỗi).
 - [x] `public static JsonElement? ParseJson` / `CountTasks` / `ReadGuidArray` / `BuildResponse` / `BuildDetailResponse` — phòng thủ (JSON hỏng ⇒ `null`/`0`, không ném).
-- [x] Các hàm trên để `public static` (đúng pattern `SmartSetupService.BuildProposal/NormalizeTasks`) để verify logic chuẩn hoá mà không cần dựng API — và làm điểm tựa cho test backend ở Giai đoạn 7.
+- [x] Các hàm trên để `public static` (đúng pattern `SmartSetupService.BuildProposal/NormalizeTasks`) để verify logic chuẩn hoá mà không cần dựng API — và làm điểm tựa cho test backend ở Giai đoạn 8.
 - [x] Khi đọc snapshot từ DB để so sánh/merge (vd. merge `Warnings` vào `applied_snapshot` ở §2.3 `UndoAsync`): **parse `JsonElement` rồi so sánh ngữ nghĩa**, không so sánh chuỗi — `jsonb` đã bị PostgreSQL chuẩn hoá thứ tự key/khoảng trắng (ghi chú §1.2).
 
 ### 2.6 Đăng ký DI (`AiModule.cs`)

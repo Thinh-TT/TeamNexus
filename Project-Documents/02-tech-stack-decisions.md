@@ -58,6 +58,25 @@
 - **Công nghệ:** Flutter, gọi chung API với web.
 - **Lưu ý:** Khi triển khai, dùng package `signalr_netcore` để kết nối SignalR từ Flutter; áp dụng lại kinh nghiệm cấu hình network (LAN config, cleartext HTTP cho môi trường dev) đã từng xử lý ở UniShare nếu cần test trên thiết bị thật.
 
+### 2.8. AI Agent Executor (Phase 7)
+- **Gán task cho Agent:** thêm pseudo-member `member_type = 'ai_agent'` trong `workspace_members` — gán qua đúng dropdown/kéo-thả assignee hiện có, không xây UI riêng.
+- **Vòng lặp thực thi:** mở rộng `IAiProvider`/`DeepSeekAiProvider` để hỗ trợ function-calling (tool-calling loop: plan → gọi tool → quan sát → lặp), khác với luồng gọi 1 lần của Smart Setup.
+- **Bộ tool (whitelist, không cho tool tự do):**
+  - `SearchSystemData` — truy vấn task/comment/board nội bộ.
+  - `WebSearch` — qua **Tavily API** (free tier 1.000 credit/tháng, không cần thẻ, output đã tối ưu sẵn cho LLM agent nên không cần thêm bước scrape riêng).
+  - `DraftOutput` — sinh nội dung kết quả (comment hoặc file tuỳ độ dài).
+  - `RequestClarification` — chuyển task sang trạng thái chờ làm rõ kèm câu hỏi.
+- **Trạng thái task mới:** thêm `Chờ làm rõ` vào enum trạng thái của module `Board`. Khi trưởng nhóm trả lời (comment), Agent **không** tự động chạy lại — cần thao tác thủ công nút "Chạy lại" để tránh việc mọi comment vô tình trigger AI.
+- **Kết quả đầu ra & duyệt:** tái dùng Accountability Layer (mục 2.4) — thêm 2 applier mới `PostCommentApplier` (nội dung ngắn) và `PostAttachmentApplier` (nội dung dài dưới dạng file), đi qua đúng luồng Pending → Approve/Reject/Undo đã có, không xây accountability riêng cho Agent.
+- **Theo dõi tiến trình thực thi:** bảng mới `agent_runs` (tách khỏi `ai_action_logs` vì mục đích khác — theo dõi tiến trình chạy, không phải log quyết định ghi dữ liệu): `task_id`, `status` (`Running/AwaitingClarification/AwaitingApproval/Completed/Failed`), `tool_call_trace` (jsonb), `tokens_used`, `started_at`/`finished_at`.
+- **Guardrail bắt buộc (mặc định, cấu hình được qua `appsettings`):**
+  - Tối đa **15 tool-call** mỗi lượt chạy.
+  - Timeout **5 phút** wall-clock mỗi task.
+  - Ngân sách **~50.000 token** mỗi lượt chạy.
+  - Vượt ngưỡng → tự dừng, log `BudgetExceeded`, thông báo cho trưởng nhóm qua hệ thống `notifications` sẵn có — không lặp vô hạn.
+- **Real-time:** broadcast thay đổi trạng thái `agent_runs` qua `BoardHub` (SignalR) đã có, để trưởng nhóm thấy card đổi trạng thái ngay khi Agent bắt đầu/dừng/hỏi lại.
+
+
 ## 3. Database & Hosting (free-tier)
 
 | Thành phần | Lựa chọn | Lưu ý |

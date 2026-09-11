@@ -151,7 +151,7 @@ Ngoài ra phát hiện 2 bug công thức đã sửa ở §3/§4 (ghi trong file
 2. **Nhóm G không chạy lại** sau §5 — §5 không chạm `TaskService`/`CommentService`/`IActivityLogWriter` (đã xác nhận bằng `git status`); giá trị 31/31 là từ lần chạy §2.
 3. **502 được verify qua app tối giản + stub** (F24) thay vì tạo lỗi DeepSeek thật — tránh tốn token; J1/J2 đã chứng minh run `Failed` đúng ở tầng service.
 4. **Tick nhóm C không chờ đủ 70s** để thấy timer chạy thật; "exception không giết host" được bao phủ bằng `try/catch` toàn bộ `ExecuteAsync` + start/stop host thật.
-5. **Chưa có test xUnit** (để Giai đoạn 7): các hàm `public static` (`Analyze`, `Validate`, `BuildPayload`, `ComputeWindow`) là điểm tựa chuyển đổi.
+5. **Chưa có test xUnit** (để Giai đoạn 8): các hàm `public static` (`Analyze`, `Validate`, `BuildPayload`, `ComputeWindow`) là điểm tựa chuyển đổi.
 6. **DB dev chứa rác lịch sử Phase 1–4** (board `deleted_at != null`, task soft-deleted) ⇒ assert dùng "mutation delta" thay vì tổng tuyệt đối của bảng.
 7. **Frontend §6/§7.2 chưa có** — đã bàn giao antigravity kèm contract chốt bằng JSON thật.
 

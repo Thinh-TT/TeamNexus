@@ -13,7 +13,7 @@ src/                        # Backend (.NET)
   TeamNexus.Persistence/    #   Single DbContext + entities + EF migrations (one migration chain)
   Modules/Auth/TeamNexus.Modules.Auth/   #   Module Auth (Identity, OAuth, JWT – Phase 1)
   Modules/Board/TeamNexus.Modules.Board/ #   Module Board (Kanban CRUD + SignalR – Phase 2)
-  Modules/Ai/TeamNexus.Modules.Ai/       #   Module Ai (Smart Setup, Accountability, Observer – Phase 3–5)
+  Modules/Ai/TeamNexus.Modules.Ai/       #   Module Ai (Smart Setup, Accountability, Observer, Agent Executor – Phase 3–5, 7)
   Modules/Reporting/TeamNexus.Modules.Reporting/  #   Module Reporting (PDF/Excel on-demand – Phase 6, xem tasks/phase-6-reporting-export.md)
   Shared/TeamNexus.Shared/  #   Contracts & helpers dùng chung
 frontend/                   # Web (React + TS + Vite + Ant Design)
@@ -90,4 +90,24 @@ npm run dev
 - [x] §6 Frontend – `src/features/reporting/` + route `/workspaces/:id/reports` + nút "Báo cáo" ở `BoardListPage`/`BoardView` (ẩn với Member) — **bàn giao antigravity**, contract chốt tại `tasks/phase-6-reporting-export.md` mục "🔻 BÀN GIAO §6" + hướng dẫn verify ở §7.2 (baseline FE trước khi làm: oxlint 0/0, `tsc -b` exit 0, **122 tests PASS**)
 - [x] §7.1 Verify backend — **264/264 check PASS** qua 5 đợt harness ngoài workspace (§1 thuần 76 · §3 loader+DB 37 · §4 renderer 43 · §5 HTTP 34 · §7.1 chốt A–F 74); 3 bug thật đã bắt & sửa (đếm trùng `activeUsers`, hai mốc thời gian trong một request, header en dash làm mọi export 500) + 1 lỗi hạ tầng (`dotnet ef` hỏng vì thiếu implementation `IReportExportService`) — chi tiết ở `report/phase-6-reporting-test-report.md`
 - [x] §7.2 Test frontend (Vitest) — thuộc phần bàn giao antigravity; DoD: `lint` + `tsc -b` + `build` + `test` sạch kèm số test thật
+
+## Trạng thái (Giai đoạn 7 – AI Agent Executor) — 🔄 ĐANG LÀM (bước tiếp theo)
+
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đang làm)** → 8 → 9. Giai đoạn 8 (test/CI/deploy) và 9 (Flutter) **không bị bỏ**, chỉ được lùi
+> vì không chặn Giai đoạn 7 (xem `Project-Documents/03-roadmap.md` phần đầu tài liệu).
+> Kế hoạch chi tiết + bảng quyết định kiến trúc (D1–D20): `Project-Documents/tasks/phase-7-ai-agent-executor.md`.
+> Schema đã chốt: `Project-Documents/04-database-design.md` §3.3, §3.4, §3.5, **§3.8**.
+
+- [ ] §2 Schema & migration `Phase7AiAgentSchema` — `workspace_members.member_type`/`ai_agent_name` (+ partial UQ 1 agent/workspace), `board_columns.is_clarification` (+ partial UQ), 2 bảng mới `agent_runs` (`jsonb` tool trace, token, `status`/`stop_reason`) và `task_attachments` (`bytea`, cap 512 KB) — `dotnet ef migrations list` = **6**
+- [ ] §3 Module Board — siết gán người thực hiện theo **membership** (trước đây chỉ kiểm bảng `users`), `TaskResponse` thêm `assigneeIsAiAgent`/`activeAgentRunId`, port `IAiAgentResolver`, cột "Chờ làm rõ" (không xoá được, loại trừ với `is_done`), event SignalR `AgentRunProgress`
+- [ ] §4 Module Ai — provider **function-calling** (mở rộng `IAiProvider`, không phá `CompleteAsync`), `TavilyWebSearchProvider` + fake offline, whitelist **4 tool** (`SearchSystemData`/`WebSearch`/`DraftOutput`/`RequestClarification`), orchestrator + **guardrail 15 tool-call / 5 phút / 50 000 token**, 2 applier mới (`PostComment`/`PostAttachment`) đi qua Accountability Layer sẵn có, **7 endpoint**, reaper cho run mồ côi
+- [ ] §5 Frontend — **dropdown chọn người thực hiện** (task detail + thêm thẻ nhanh; hiện UI chỉ hiển thị, chưa đổi được), badge/panel tiến trình Agent trên Kanban, câu hỏi làm rõ + nút **"Chạy lại"**, danh sách tệp đính kèm, nhãn notification mới
+- [ ] §6 Config `Agent` + `Tavily` (không hard-code ngưỡng; `Agent:Enabled=false` ⇒ 503)
+- [ ] §7 Verify bằng harness tạm ngoài workspace (A–J): schema, hàm thuần, tool contract (stub handler), loop end-to-end, "Chờ làm rõ"/"Chạy lại", guardrail, failure/concurrency, HTTP+quyền, bất biến (không hồi quy `CreateSubtasks` của Giai đoạn 4), frontend Vitest
+- [ ] §8 Đối chiếu 6 ô hoàn thiện + 2 hạng mục bắt buộc phát sinh của roadmap; cập nhật `report/phase-7-ai-agent-executor-test-report.md`
+
+**Hai hạng mục bắt buộc phát sinh** (phát hiện khi khảo sát code — nếu không làm thì ô "gán task cho AI Agent qua đúng UI assignee hiện có" không thể hoàn thành):
+
+- UI **chưa có** đường đổi người thực hiện: `TaskDetailModal` chỉ render `assigneeName` và luôn gửi lại `assigneeId` cũ; `KanbanColumn` quick-add không có assignee ⇒ phải thêm dropdown (nguồn `GET /api/workspaces/{id}/members`).
+- `TaskService.CreateTask/UpdateTask` hiện chỉ kiểm `users.AnyAsync` — **không** kiểm membership ⇒ phải siết lại để không gán task cho user ngoài workspace.
 

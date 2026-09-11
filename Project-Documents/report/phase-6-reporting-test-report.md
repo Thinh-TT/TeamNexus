@@ -106,7 +106,7 @@ thật trước khi xét fallback (D21) ⇒ không còn phụ thuộc thứ tự
 4. **QuestPDF Community license** là self-declaration, set trong `ReportPdfRenderer` — không có key/activation.
 5. **Frontend chưa có** (§6): chưa có `src/features/reporting/`, chưa có route `/workspaces/:id/reports`, chưa có
    nút "Báo cáo" ở `BoardListPage`/`BoardView`. Harness đã verify **backend**; UI cần verify riêng (§7.2).
-6. **Chưa có project xUnit** (để Giai đoạn 7 — D17): các harness ngoài workspace là **điểm tựa** để chuyển thành
+6. **Chưa có project xUnit** (để Giai đoạn 8 — D17): các harness ngoài workspace là **điểm tựa** để chuyển thành
    test xUnit vì `ReportAggregator`/`ReportThresholds`/`ReportFileName`/`ReportLabels` đều là hàm `public static` thuần.
 7. **Không có test cho PDF engine của QuestPDF** (không verify pixel-level); chỉ verify cấu trúc + text extract +
    tên file + số trang.

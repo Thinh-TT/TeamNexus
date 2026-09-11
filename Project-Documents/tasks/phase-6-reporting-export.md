@@ -40,7 +40,7 @@
 |---|---|---|
 | **D1** | **Tạo module mới `TeamNexus.Modules.Reporting`** tại `src/Modules/Reporting/TeamNexus.Modules.Reporting/`; thêm vào `TeamNexus.sln` (folder solution `Reporting`) + 2 dòng trong `Program.cs` | Đã chốt sẵn ở `02` §1 ("`Auth`, `Board`, `Ai`, `Reporting`") và `04` §1 (cùng dòng "Module `Auth`, `Board`, `Ai`, `Reporting`") |
 | **D2** | **KHÔNG migration, KHÔNG entity, KHÔNG bảng/bảng audit báo cáo.** Báo cáo là **projection read-only** trên `tasks`, `boards`, `board_columns`, `activity_logs`, `ai_observer_runs` | Đúng `04` §3.7 ("Không tạo bảng lưu trữ") và tinh thần "tránh over-scope" của `02` §5 |
-| **D3** | **Aggregation là hàm thuần** `ReportAggregator.Build(...)`: không `DbContext`, không `HttpClient`, không `DateTime.Now` (nhận `Now` từ snapshot), không I/O | Cùng pattern `ObserverSignalDetector.Analyze` (Phase 5 §3) ⇒ verify không cần DB/AI, là điểm tựa test xUnit ở Giai đoạn 7 |
+| **D3** | **Aggregation là hàm thuần** `ReportAggregator.Build(...)`: không `DbContext`, không `HttpClient`, không `DateTime.Now` (nhận `Now` từ snapshot), không I/O | Cùng pattern `ObserverSignalDetector.Analyze` (Phase 5 §3) ⇒ verify không cần DB/AI, là điểm tựa test xUnit ở Giai đoạn 8 |
 | **D4** | Reporting tham chiếu **Shared + Persistence + Board** (dùng `IWorkspaceAccess`, `DomainExceptionFilter`, hằng enum chung) và **có bản copy hằng số riêng** (`ReportActionTypes`, `ReportSeverities`); **KHÔNG** tham chiếu module Ai | Tránh coupling `Reporting → Ai` (module Ai không đổi một dòng nào ở Giai đoạn 6). Chi phí: 1 file hằng số nhỏ, đã ghi giá trị khớp `activity_logs.action` |
 | **D5** | **Quyền: Manager/Admin** cho **cả 3** endpoint; enforce **trong service** bằng `IWorkspaceAccess.RequireManagerAsync` (Member ⇒ **403**, workspace lạ ⇒ **404**) | Quyết định của người dùng + nhất quán tuyệt đối với Observer (Phase 5 §5.3) |
 | **D6** | **Phạm vi: workspace, lọc tuỳ chọn `?boardId=`** (quyết định của người dùng). `boardId` không thuộc workspace/không thấy ⇒ **404** | Một implementation dùng cho cả trang Báo cáo (toàn workspace) và nút xuất trên từng board |
@@ -54,7 +54,7 @@
 | **D14** | **QuestPDF Community**: đặt `QuestPDF.Settings.License = LicenseType.Community` **một lần duy nhất** trong `ReportingModule.AddReportingModule` + ghi rõ điều kiện license trong README module | Bắt buộc về mặt kỹ thuật (QuestPDF ném exception nếu chưa set license) |
 | **D15** | **ClosedXML không có chart native** ⇒ dùng **data bar + autofilter + freeze pane + format số/ngày**; **không** hứa biểu đồ Excel | Tránh hứa hẹn không làm được |
 | **D16** | Xuất báo cáo **không** ghi `activity_logs` / `notifications` / `ai_action_logs`; **không** đi qua Accountability Layer | Báo cáo là lớp *đọc*; tránh tự nhiễm dữ liệu cho Observer |
-| **D17** | **Không** tạo project xUnit (để Giai đoạn 7). Verify backend bằng **harness tạm ngoài workspace** + API thật + PostgreSQL thật | Nhất quán Phase 2–5 (Phase 5 §0 D18) |
+| **D17** | **Không** tạo project xUnit (để Giai đoạn 8). Verify backend bằng **harness tạm ngoài workspace** + API thật + PostgreSQL thật | Nhất quán Phase 2–5 (Phase 5 §0 D18) |
 | **D18** | Mọi ngưỡng/cap nằm trong config section `Reports` (**không** hard-code); có `Reports:Enabled` (mặc định `true`) làm công tắc an toàn ⇒ `false` trả **503** | Demo/tinh chỉnh không cần build lại; tắt nhanh trên production |
 | **D19** | Thứ tự đăng ký trong `Program.cs`: `AddBoardModule()` → `AddAiModule()` → **`AddReportingModule()`** | Giữ nguyên bất biến "Board đăng ký trước Ai" (bẫy DI đã ghi ở Phase 5 §2); Reporting thêm **sau** cùng để không đổi resolve của 2 module cũ |
 | **D20** | `Reports:Enabled=false` ⇒ **503** `{ error: "Reporting is disabled." }` (không phải 404/403) | UI phân biệt được "tính năng đang tắt" với "không có quyền" |
@@ -115,7 +115,7 @@ ReportService (nơi DUY NHẤT chạm DB)
 
 ### 1.1 Snapshot contract (`Services/ReportSnapshots.cs`)
 
-Tạo các record **public** (để harness thuần + test Giai đoạn 7 dùng được):
+Tạo các record **public** (để harness thuần + test Giai đoạn 8 dùng được):
 
 ```csharp
 // ReportRange có thêm Label (nhãn hiển thị sẵn cho PDF/Excel/filename) so với bản sơ bộ.
@@ -819,7 +819,7 @@ export interface ReportBoardOptionResponse { id: string; name: string; taskCount
 
 ---
 
-## 8. Edge cases, failure modes & bàn giao Giai đoạn 7
+## 8. Edge cases, failure modes & bàn giao Giai đoạn 8
 
 **Edge cases / failure modes:**
 - **Workspace 0 board / 0 task** ⇒ report "rỗng" hợp lệ (không 500); PDF/Excel vẫn sinh được (bảng rỗng + dòng "Không có dữ liệu").
@@ -839,7 +839,7 @@ export interface ReportBoardOptionResponse { id: string; name: string; taskCount
 - **Xuất báo cáo không sinh dữ liệu mới** ⇒ không `activity_logs`, không `notifications`, không `ai_action_logs` (D16 + verify E).
 - **`ai_observer_runs.summary` hỏng/rỗng** ⇒ bỏ qua run đó, phần `health` vẫn trả 200 (không 500).
 
-**Bàn giao Giai đoạn 7 (Test & Deploy):**
+**Bàn giao Giai đoạn 8 (Test & Deploy):**
 - Harness §7.1 nhóm B là **điểm tựa** chuyển thành test xUnit: `ReportAggregator.Build`, `ReportFileName.Build`, `ReportThresholds`/`EffectiveRange` đều là hàm `public static`/thuần.
 - Renderer có thể test bằng xUnit chỉ với **byte signature + `ClosedXML` đọc lại** (không cần DB).
 - `Reports:Enabled=false` là công tắc an toàn cho CI; PDF/Excel render là CPU-bound ⇒ cân nhắc `MaxExportRows` thấp hơn trên free-tier khi deploy.
@@ -864,7 +864,7 @@ export interface ReportBoardOptionResponse { id: string; name: string; taskCount
 
 ## Checklist Hoàn thiện Giai đoạn 6
 
-> Tất cả các mục dưới đây phải ✅ trước khi chuyển sang Giai đoạn 7 (Hoàn thiện, Test & Deploy).
+> Tất cả các mục dưới đây phải ✅ trước khi chuyển sang Giai đoạn 8 (Hoàn thiện, Test & Deploy).
 
 - [x] **Module & DI**: project `TeamNexus.Modules.Reporting` trong `.sln`, `AddReportingModule`/`MapReportingModuleEndpoints` gọi trong `Program.cs` (sau Ai), `Program.cs` chỉ +2 dòng — verify nhóm A + F
 - [x] **Không schema**: 0 migration mới, snapshot **zero-diff**, module Board/Ai/Persistence **không đổi** — verify nhóm A

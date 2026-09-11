@@ -60,7 +60,7 @@ public sealed record ObserverSignalSet(
 
 /// <summary>
 /// Detection thresholds — already clamped to sane ranges by <see cref="ObserverOptions.ToThresholds"/>.
-/// A plain record so verification and Phase 7 unit tests can build one inline without DI/config.
+/// A plain record so verification and Phase 8 unit tests can build one inline without DI/config.
 /// </summary>
 public sealed record ObserverThresholds(
     int CriticalOverdueDays,
@@ -79,7 +79,7 @@ public sealed record ObserverThresholds(
 /// This class never reads the database, never calls the AI provider and never uses the system
 /// clock: <see cref="ObserverService"/> loads the data, builds an <see cref="ObserverWorkspaceSnapshot"/>
 /// and passes it here. Keeping the scoring logic pure is what makes it cheap to verify (and to
-/// port into xUnit in Phase 7).
+/// port into xUnit in Phase 8).
 /// </para>
 /// </summary>
 public static class ObserverSignalDetector

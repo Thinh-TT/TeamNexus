@@ -9,7 +9,7 @@ namespace TeamNexus.Modules.Reporting.Services;
 /// <b>Hàm THUẦN tuyệt đối</b> — cùng pattern <c>ObserverSignalDetector.Analyze</c> (Phase 5 §3):
 /// không <c>DateTime.Now</c> (dùng <c>snapshot.Now</c>), không <c>DbContext</c>, không <c>HttpClient</c>,
 /// không <c>Guid.NewGuid</c>, không random, không I/O. Cùng input ⇒ output giống hệt (tất định), nhờ vậy
-/// nhóm verify "B. Aggregation thuần" chạy được không cần DB/HTTP và Giai đoạn 7 có thể chuyển thẳng
+/// nhóm verify "B. Aggregation thuần" chạy được không cần DB/HTTP và Giai đoạn 8 có thể chuyển thẳng
 /// thành test xUnit.
 /// </para>
 /// <para>

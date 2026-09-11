@@ -39,7 +39,7 @@
 | **D15** | `IObserverService` đăng ký **cả** `AddScoped` (endpoint gọi tay) **và** `AddHostedService<ObserverBackgroundService>` | Cùng **một** code path cho quét định kỳ và quét on-demand (chống lệch hành vi) |
 | **D16** | Kênh gửi đợt này: **chỉ in-app**. Email là hạng mục **tương lai** (ghi rõ + gợi ý interface `INotificationChannel`), **không** hiện thực ở Giai đoạn 5 | Quyết định của người dùng: "note email cho tương lai" |
 | **D17** | **Không** thêm SignalR event cho notification: UI poll `unreadCount` mỗi 60s + refresh khi mở drawer / sau khi quét tay | Tránh sửa `BoardHub` (tránh rủi ro phải rebuild artifact Phase 2 khi đang làm Phase 5) |
-| **D18** | **Không** tạo project xUnit (để Giai đoạn 7). Verify backend bằng harness tạm ngoài workspace + API thật + PostgreSQL thật | Nhất quán Phase 2–4 |
+| **D18** | **Không** tạo project xUnit (để Giai đoạn 8). Verify backend bằng harness tạm ngoài workspace + API thật + PostgreSQL thật | Nhất quán Phase 2–4 |
 | **D19** | Mọi ngưỡng nằm trong config section `Observer`, **không** hard-code | Demo/tinh chỉnh không cần build lại; cũng là công tắc tắt an toàn cho production |
 
 **Non-goals Giai đoạn 5 (ghi rõ để không over-scope):** gửi email/push; AI tự tạo/sửa task; phân tích nội dung comment bằng AI (chỉ dùng **metadata** comment: số lượng + thời điểm); sentiment/conflict-detection nâng cao; quét real-time theo event; SignalR cho notification; test xUnit; đa ngôn ngữ UI.
@@ -226,7 +226,7 @@
 
 ### 3.1 Contract (`Services/ObserverSignalDetector.cs`)
 
-- [x] Định nghĩa (mọi thứ `public` để verify thuần + làm điểm tựa test Giai đoạn 7):
+- [x] Định nghĩa (mọi thứ `public` để verify thuần + làm điểm tựa test Giai đoạn 8):
   ```csharp
   public sealed record ObserverTaskSnapshot(
       Guid TaskId, Guid BoardId, Guid ColumnId, string Title,
@@ -799,7 +799,7 @@
 - **`Observer:Enabled = false`** → timer không chạy; **quét tay vẫn chạy** (phục vụ demo/verify) — ghi rõ trong README + verify C2.
 - **DB lỗi/timeout khi quét** → run `Failed`; `BackgroundService` catch **toàn bộ** để không làm host dừng (`BackgroundServiceExceptionBehavior` mặc định `StopHost`); lần chạy sau tiếp tục bình thường.
 - **Prompt vượt `MaxPromptCharacters`** → cắt theo severity ưu tiên + ghi `truncatedSignals` vào `summary` (không gửi prompt khổng lồ).
-- **Cold start / app sleep (free-tier Render/Railway)** → Observer chỉ chạy khi app thức ⇒ có thể bỏ lỡ chu kỳ; **known limitation**, xử lý ở Giai đoạn 7 (cron ngoài hoặc keep-alive).
+- **Cold start / app sleep (free-tier Render/Railway)** → Observer chỉ chạy khi app thức ⇒ có thể bỏ lỡ chu kỳ; **known limitation**, xử lý ở Giai đoạn 8 (cron ngoài hoặc keep-alive).
 - **`take`/`isRead` sai giá trị** → `take` clamp (không lỗi), `isRead` **400** `{ error }` (strict parse, không nhận giá trị số/lạ).
 - **Token/chi phí:** `MaxOutputTokens` riêng (1500) thấp hơn Smart Setup; `Temperature = 0`; **không retry** ở tầng Observer; **không** gọi AI khi 0 tín hiệu; token lưu trong `ai_observer_runs.summary` để theo dõi chi phí.
 
@@ -807,7 +807,7 @@
 - `activity_logs` (`action`, `payload`, `created_at`, index `(workspace_id, created_at)`) là nguồn sự kiện thô cho thống kê tiến độ/hiệu suất; `ai_observer_runs.summary` là nguồn "sức khoẻ dự án" theo thời gian.
 - `notifications` là kênh duy nhất để đẩy cảnh báo tới Manager — nếu Giai đoạn 6/7 thêm kênh khác (email), thêm implementation mới bên cạnh `INotificationService` (gợi ý `INotificationChannel`), **không** sửa Observer.
 
-**Bàn giao Giai đoạn 7 (Test & Deploy):**
+**Bàn giao Giai đoạn 8 (Test & Deploy):**
 - Harness verify §7.1 là **điểm tựa** để chuyển thành test xUnit (detector/validator/summary builder là hàm `public static`).
 - `Observer:Enabled=false` là công tắc an toàn cho CI; cân nhắc external cron/keep-alive để Observer chạy đúng chu kỳ trên free-tier.
 

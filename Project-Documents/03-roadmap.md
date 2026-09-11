@@ -2,6 +2,16 @@
 
 > Roadmap ở mức giai đoạn lớn (chưa chia task chi tiết). Mỗi giai đoạn kèm các yêu cầu hoàn thiện để coi là "xong" trước khi chuyển sang giai đoạn kế tiếp.
 
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đang làm)** → 8 → 9.
+>
+> Số giai đoạn đã được **đánh lại cho khớp thứ tự thi hành**: **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Mobile**. `01-system-specification.md` §7 và `02-tech-stack-decisions.md` §2.8 đã đổi theo.
+>
+> **Lưu ý khi đọc tài liệu cũ:** các tài liệu đã đóng băng của giai đoạn 4/5/6 (`tasks/phase-4..6-*.md`, `report/phase-5-*`, `report/phase-6-*`) vẫn dùng **cách đánh số cũ** khi nói "để Giai đoạn 7" ý là test xUnit — theo cách đánh số mới đó là **Giai đoạn 8**.
+>
+> **Vì sao làm 7 trước 8 và 9:** giai đoạn 1–6 đã hoàn tất & verify; giai đoạn 8 (test/CI/deploy) và 9 (Flutter mobile) **không chặn** giai đoạn 7, trong khi AI Agent Executor mới là
+> điểm khác biệt hoá thật của sản phẩm (đúng mục tiêu portfolio/CV ở `02` mục bối cảnh) và đang là mạch phát triển AI còn "nóng". Giai đoạn 7 xong sẽ quay lại 8 (test/CI/deploy trên bản đã đóng băng
+> API) rồi 9 (Flutter). Kế hoạch chi tiết từng bước: `tasks/phase-7-ai-agent-executor.md`.
+
 ## Giai đoạn 1: Nền tảng & Auth
 
 Khởi tạo project ASP.NET Core (Modular Monolith) + React, thiết kế schema PostgreSQL cơ bản, dựng ASP.NET Core Identity với OAuth Google/GitHub và JWT/Cookie, phân quyền Admin/Manager/Member.
@@ -75,7 +85,36 @@ Xây tính năng tổng hợp tiến độ/hiệu suất, xuất PDF (QuestPDF) 
 > và nút điều hướng có phân quyền tại BoardListPage/BoardView. Toàn bộ 30 test files / 155 tests PASS 100%
 > (`oxlint` 0/0, `tsc -b` sạch, `npm run build` thành công). Chi tiết: `tasks/phase-6-reporting-export.md` và `report/phase-6-reporting-test-report.md`.
 
-## Giai đoạn 7: Hoàn thiện, Test & Deploy
+## Giai đoạn 7: AI Agent Executor (đang làm — bước tiếp theo)
+
+Nâng AI từ vai trò đề xuất/quan sát lên vai trò thực thi thật: gán task cho AI Agent như một thành viên, xây vòng lặp tool-calling (soạn thảo, tóm tắt, web search qua Tavily), gắn kết quả vào Accountability Layer sẵn có, xử lý trạng thái "Chờ làm rõ" khi Agent thiếu thông tin.
+
+**Yêu cầu hoàn thiện:**
+- [ ] Thêm pseudo-member AI Agent vào `workspace_members`, gán được task qua đúng UI assignee hiện có
+- [ ] Vòng lặp tool-calling hoạt động qua DeepSeek function-calling với bộ tool: `SearchSystemData`, `WebSearch` (Tavily), `DraftOutput`, `RequestClarification`
+- [ ] Trạng thái task mới "Chờ làm rõ" hoạt động: Agent tạm dừng đúng lúc, hiển thị câu hỏi trên Kanban, nút "Chạy lại" hoạt động sau khi trưởng nhóm trả lời
+- [ ] Kết quả AI (comment ngắn hoặc file đính kèm dài) đi qua đúng luồng Accountability Layer (Pending → Approve/Reject/Undo)
+- [ ] Guardrail hoạt động đúng: dừng khi vượt 15 tool-call / 5 phút / ~50.000 token, có log & thông báo khi vượt ngưỡng
+- [ ] Bảng `agent_runs` ghi đầy đủ trạng thái/tool trace, broadcast real-time qua SignalR để thấy tiến trình Agent trên Kanban
+
+> **Trạng thái: 🔄 ĐANG LÀM — giai đoạn tiếp theo.** Chưa có mục nào được tick. Kế hoạch chi tiết + bảng quyết định kiến trúc (D1–D…) ở
+> `tasks/phase-7-ai-agent-executor.md`; phần schema đã chốt và ghi vào `04-database-design.md` §3.8.
+>
+> **Hạng mục bắt buộc phát sinh** (không có trong bản roadmap đầu, phát hiện khi khảo sát code — thiếu thì 2 ô dưới không thể hoàn thành):
+>
+> - [ ] Bổ sung dropdown chọn người thực hiện vào UI Kanban (task detail + thêm thẻ nhanh) — nguồn `GET /api/workspaces/{id}/members`.
+>       Hiện `TaskDetailModal` **chỉ hiển thị** `assigneeName` và luôn gửi lại `assigneeId` cũ ⇒ chưa có đường nào để gán/đổi người thực hiện,
+>       nên ô "gán task cho AI Agent qua đúng UI assignee" không thể làm được nếu thiếu việc này.
+> - [ ] API gán/đổi người thực hiện phải kiểm **membership** của workspace chứa task (`TaskService.CreateTask/UpdateTask` hiện chỉ kiểm
+>       `users.AnyAsync` theo bảng `users`) — nếu không, task có thể gán cho user ngoài workspace và AI Agent sẽ trở thành lỗ hổng mới.
+>
+> **Liên quan tới các giai đoạn sau:** giai đoạn 8 và 9 nằm sau giai đoạn 7 (xem "Thứ tự thi hành" ở đầu tài liệu) — chúng
+> **không phải** bị bỏ. Việc lùi là có chủ ý: feature 1–5 (điểm khác biệt hoá của sản phẩm) đã xong, còn deploy/CI nên chạy trên một API
+> đã đóng băng (tức sau khi giai đoạn 7 chốt contract), và Flutter thì "sau khi bản Web ổn định" — đúng như mô tả của chính giai đoạn 9.
+
+## Giai đoạn 8: Hoàn thiện, Test & Deploy
+
+> **Chưa bắt đầu — dự kiến sau Giai đoạn 9.** Nội dung giai đoạn không đổi; chỉ đổi thứ tự thi hành.
 
 Viết test (xUnit, Vitest), dọn UI/UX, cấu hình CI/CD bằng GitHub Actions, deploy backend/frontend/DB lên hạ tầng free-tier đã chọn, xử lý các vấn đề cold-start/SignalR reconnect.
 
@@ -86,7 +125,9 @@ Viết test (xUnit, Vitest), dọn UI/UX, cấu hình CI/CD bằng GitHub Action
 - [ ] Kiểm tra và xử lý ổn thỏa hiện tượng cold-start ảnh hưởng SignalR (reconnect UX chấp nhận được)
 - [ ] UI/UX rà soát lại tổng thể, sẵn sàng để demo/đưa vào CV
 
-## Giai đoạn 8: Mobile (Flutter)
+## Giai đoạn 9: Mobile (Flutter)
+
+> **Chưa bắt đầu — dự kiến sau Giai đoạn 7.** Nội dung giai đoạn không đổi; chỉ đổi thứ tự thi hành.
 
 Sau khi bản Web ổn định, xây app Flutter dùng chung API, tích hợp signalr_netcore cho real-time và kiểm thử trên thiết bị thật.
 
@@ -95,3 +136,5 @@ Sau khi bản Web ổn định, xây app Flutter dùng chung API, tích hợp si
 - [ ] Các màn hình chính (Board, Task, thông báo AI Observer) hoạt động trên Flutter
 - [ ] Real-time qua `signalr_netcore` hoạt động tương đương bản Web
 - [ ] Kiểm thử thành công trên thiết bị thật (không chỉ emulator)
+
+> **Kết thúc roadmap.** Giai đoạn 7 nằm ở trên (ngay sau Giai đoạn 6) theo "Thứ tự thi hành" ở đầu tài liệu.
