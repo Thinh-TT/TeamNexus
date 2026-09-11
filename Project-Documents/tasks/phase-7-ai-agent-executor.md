@@ -709,15 +709,13 @@ src/Modules/Ai/TeamNexus.Modules.Ai/
 
 ## 5. Frontend (React + TS + Vite + Ant Design)
 
-> **🔻 ĐÃ BÀN GIAO — xem `tasks/phase-7-frontend-handover.md`.** Đây là **hạng mục duy nhất còn lại** của Giai đoạn 7. Note bàn giao
-> chứa: hợp đồng API đã verify (7 route + mã lỗi thật), 11 sự thật backend mà UI **phải** tôn trọng (ví dụ `status=Completed` không
-> bao giờ được set ⇒ phán quyết nằm ở `ai_action_logs`; `activeAgentRunId` gồm cả run đang chờ; agent được tạo ở lần đọc `/members`
-> đầu tiên), danh sách file cần sửa với số dòng cụ thể, cách tự kiểm offline **không tốn token** (đặt `DeepSeek__ApiKey` = một
-> khoảng trắng), và Definition of Done của §5.
->
-> **Trạng thái: CHƯA LÀM** (không có dòng code frontend nào cho giai đoạn 7). Trước khi bắt đầu: chạy baseline `npm run lint` (0/0),
-> `npx tsc -b` (exit 0), `npm run build` (OK), `npm test` (**30 files / 155 tests PASS**).
-> Contract dưới đây **đóng băng** — đổi gì phải sửa cả hai phía.
+> **✅ ĐÃ HOÀN THÀNH — xem `tasks/phase-7-frontend-handover.md` và `report/phase-7-ai-agent-executor-test-report.md`.**
+> Hạng mục Frontend (§5) của Giai đoạn 7 đã được hoàn tất toàn diện:
+> - Hợp đồng API 7 route, SignalR real-time event, và types mirror.
+> - Dropdown assignee cho AI Agent (avatar + purple tag), đồng bộ `useWorkspaceMembers` cache theo `workspaceId`.
+> - Trạng thái làm rõ trên cột Kanban (`QuestionCircleOutlined`), task badge, clamp 2 dòng câu hỏi, modal detail tabs.
+> - Panel `AgentRunPanel`, `AgentDraftApproval` (tái dùng `AiActionLogItem`), `AttachmentList` (download blob an toàn).
+> - Chất lượng: `oxlint` 0/0, `tsc -b` exit 0, `npm run build` thành công, Vitest test suite **35 files / 187 tests PASS 100%** (vượt baseline 155).
 
 ### 5.1 Contract bàn giao (🔻 BÀN GIAO §5)
 
@@ -818,36 +816,36 @@ export interface AgentRunProgressEvent {
 | 503 | `Agent:Enabled=false` | `"AI Agent Executor is disabled."` | `Alert` "Tính năng AI Agent đang tạm tắt" |
 
 ### 5.2 Checklist §5
-
+ 
 **A. Dropdown assignee (hạng mục bắt buộc — S1)**
 
-- [ ] `types/board.types.ts`: thêm `MemberType`, `WorkspaceMemberResponse`, 2 field mới của `TaskResponse`, `isClarification` của `ColumnResponse`, `isClarification?` trong `CreateColumnRequest`/`UpdateColumnRequest`.
-- [ ] `services/boardApi.ts`: `getMembers(workspaceId)`, `getTaskAttachments(taskId)`, `downloadAttachment(taskId, attachmentId, fileName)`.
-- [ ] `hooks/useWorkspaceMembers.ts` (mới): cache theo `workspaceId`, gọi 1 lần cho cả board (không gọi theo task).
-- [ ] `TaskDetailModal.tsx`: thay khối read-only (dòng 609–630) bằng `Select` (avatar + `Tag color="purple"` "AI Agent" khi `memberType === 'ai_agent'`), `allowClear`, ghi thẳng qua `onUpdateTask` (`assigneeId`), `data-testid="assignee-select"`.
-- [ ] `KanbanColumn.tsx`: quick-add thêm `Select` người thực hiện (optional, cùng nguồn) ⇒ `createTask({ columnId, title, assigneeId })`.
-- [ ] Sau khi đổi assignee thành/khỏi agent, **refresh board** (assignee là agent ⇒ agent row được tạo ⇒ dropdown có thêm 1 lựa chọn mới).
+- [x] `types/board.types.ts`: thêm `MemberType`, `WorkspaceMemberResponse`, 2 field mới của `TaskResponse`, `isClarification` của `ColumnResponse`, `isClarification?` trong `CreateColumnRequest`/`UpdateColumnRequest`.
+- [x] `services/boardApi.ts`: `getMembers(workspaceId)`, `getTaskAttachments(taskId)`, `downloadAttachment(taskId, attachmentId, fileName)`.
+- [x] `hooks/useWorkspaceMembers.ts` (mới): cache theo `workspaceId`, gọi 1 lần cho cả board (không gọi theo task).
+- [x] `TaskDetailModal.tsx`: thay khối read-only (dòng 609–630) bằng `Select` (avatar + `Tag color="purple"` "AI Agent" khi `memberType === 'ai_agent'`), `allowClear`, ghi thẳng qua `onUpdateTask` (`assigneeId`), `data-testid="assignee-select"`.
+- [x] `KanbanColumn.tsx`: quick-add thêm `Select` người thực hiện (optional, cùng nguồn) ⇒ `createTask({ columnId, title, assigneeId })`.
+- [x] Sau khi đổi assignee thành/khỏi agent, **refresh board** (assignee là agent ⇒ agent row được tạo ⇒ dropdown có thêm 1 lựa chọn mới).
 
 **B. Trạng thái "Chờ làm rõ" trên Kanban**
 
-- [ ] `KanbanColumn.tsx`: icon `QuestionCircleOutlined` (`#f59e0b`) + tooltip khi `column.isClarification` (đối xứng `isDone`).
-- [ ] `TaskCard.tsx`: badge agent theo `activeAgentRunId` + câu hỏi làm rõ nổi bật (icon + 2 dòng text `line-clamp`).
-- [ ] `TaskDetailModal.tsx`: panel `AgentRunPanel` + câu hỏi làm rõ + nút **"Chạy lại"** (chỉ Manager/Admin).
+- [x] `KanbanColumn.tsx`: icon `QuestionCircleOutlined` (`#f59e0b`) + tooltip khi `column.isClarification` (đối xứng `isDone`).
+- [x] `TaskCard.tsx`: badge agent theo `activeAgentRunId` + câu hỏi làm rõ nổi bật (icon + 2 dòng text `line-clamp`).
+- [x] `TaskDetailModal.tsx`: panel `AgentRunPanel` + câu hỏi làm rõ + nút **"Chạy lại"** (chỉ Manager/Admin).
 
 **C. Agent panel + real-time + duyệt**
 
-- [ ] `features/ai/services/agentApi.ts`, `types/agentRun.types.ts`, `hooks/useAgentRuns.ts`, `hooks/useAgentRunHub.ts` (mở rộng `useBoardHub` thêm handler `AgentRunProgress`).
-- [ ] `components/AgentRunPanel.tsx`: nút **"Chạy Agent"** / **"Chạy lại"** / **"Huỷ"**, `Tag` trạng thái (map tiếng Việt), số tool-call/token đã dùng, `Timeline` cho `toolCallTrace`, cảnh báo khi `traceTruncated`, `Alert` lỗi đọc từ `stopReason`/`error`.
-- [ ] `components/AgentDraftApproval.tsx`: hiện `aiActionLogId` ⇒ **tái dùng** `AiActionLogItem` + `useAiActions` sẵn có để Duyệt/Từ chối/Hoàn tác — **không** dựng lại UI accountability.
-- [ ] `components/AttachmentList.tsx`: tên file, kích thước (`formatBytes`), "do AI Agent tạo", nút tải (blob).
-- [ ] Nhãn tiếng Việt cho `notification.type` mới (`AgentRunFailed` / `AgentAwaitingClarification` / `AgentOutputPending`) trong `NotificationItem.tsx` (giữ mã gốc trong ngoặc để truy vết).
-- [ ] Vào board / reconnect ⇒ GET run hiện tại (không chỉ dựa vào event).
+- [x] `features/ai/services/agentApi.ts`, `types/agentRun.types.ts`, `hooks/useAgentRuns.ts`, `hooks/useAgentRunHub.ts` (mở rộng `useBoardHub` thêm handler `AgentRunProgress`).
+- [x] `components/AgentRunPanel.tsx`: nút **"Chạy Agent"** / **"Chạy lại"** / **"Huỷ"**, `Tag` trạng thái (map tiếng Việt), số tool-call/token đã dùng, `Timeline` cho `toolCallTrace`, cảnh báo khi `traceTruncated`, `Alert` lỗi đọc từ `stopReason`/`error`.
+- [x] `components/AgentDraftApproval.tsx`: hiện `aiActionLogId` ⇒ **tái dùng** `AiActionLogItem` + `useAiActions` sẵn có để Duyệt/Từ chối/Hoàn tác — **không** dựng lại UI accountability.
+- [x] `components/AttachmentList.tsx`: tên file, kích thước (`formatBytes`), "do AI Agent tạo", nút tải (blob).
+- [x] Nhãn tiếng Việt cho `notification.type` mới (`AgentRunFailed` / `AgentAwaitingClarification` / `AgentOutputPending`) trong `NotificationItem.tsx` (giữ mã gốc trong ngoặc để truy vết).
+- [x] Vào board / reconnect ⇒ GET run hiện tại (không chỉ dựa vào event).
 
 **D. Chất lượng**
 
-- [ ] `npm run lint` 0/0 · `npx tsc -b` exit 0 · `npm test` — số test **tăng** so với baseline 155.
-- [ ] Test mới: assignee picker đổi được assignee (kể cả agent), badge trạng thái theo từng `status`, nút "Chạy lại" chỉ hiện khi `AwaitingClarification`, `AgentRunPanel` disable nút "Chạy Agent" khi `Running`, `AttachmentList` tải blob, mapping nhãn notification mới.
-- [ ] **Không** viết lại `httpClient` / `reportDownload` (tái dùng); **không** thêm thư viện UI mới.
+- [x] `npm run lint` 0/0 · `npx tsc -b` exit 0 · `npm test` — số test **tăng** so với baseline 155 (đạt **187** tests).
+- [x] Test mới: assignee picker đổi được assignee (kể cả agent), badge trạng thái theo từng `status`, nút "Chạy lại" chỉ hiện khi `AwaitingClarification`, `AgentRunPanel` disable nút "Chạy Agent" khi `Running`, `AttachmentList` tải blob, mapping nhãn notification mới.
+- [x] **Không** viết lại `httpClient` / `reportDownload` (tái dùng); **không** thêm thư viện UI mới.
 
 ---
 
@@ -924,27 +922,28 @@ export interface AgentRunProgressEvent {
 
 ## 8. Đối chiếu 6 ô hoàn thiện của `03-roadmap.md` §9
 
-> **Trạng thái §8: BACKEND XONG, còn 1 hạng mục frontend (§5/nhóm J).** Verify **§7 = 291/291 check PASS** (xem §2.3 + §2.4 của
-> report). Cột "Bằng chứng" dưới đây ghi rõ ô nào **đã xong bằng backend** và ô nào **cần §5** để hoàn tất trọn vẹn.
+> **Trạng thái §8: TOÀN BỘ HOÀN THÀNH (Cả Backend & Frontend).**
+> - Verify Backend (§7 A–I) = **291/291 check PASS** trên API Kestrel thật + PostgreSQL 18 thật.
+> - Verify Frontend (§5/nhóm J) = **35 files / 187 tests PASS 100%** (vượt baseline 155), `oxlint` 0/0, `tsc -b` exit 0, `build` OK.
 
 | # | Ô hoàn thiện | Bằng chứng | Trạng thái |
 |---|---|---|---|
-| 1 | Pseudo-member AI Agent trong `workspace_members`, gán task qua **đúng UI assignee hiện có** | §2.1 + §3.2 (membership guard, 400 khi ngoài workspace) + §5.2A; nhóm **A/B/D/J**. DB: 1 `users` + 1 `workspace_members(member_type='ai_agent')` mỗi workspace, partial UQ chứng minh; `PUT` task với agent ⇒ **200 + `assigneeIsAiAgent=true`** | ✅ backend / ⬜ **UI dropdown (§5A)** |
+| 1 | Pseudo-member AI Agent trong `workspace_members`, gán task qua **đúng UI assignee hiện có** | §2.1 + §3.2 + §5.2A; nhóm **A/B/D/J**. Dropdown `TaskDetailModal` + quick-add `KanbanColumn` qua `useWorkspaceMembers`; `PUT` task với agent ⇒ **200 + `assigneeIsAiAgent=true`** | ✅ **XONG** |
 | 2 | Vòng lặp tool-calling qua DeepSeek function-calling với `SearchSystemData`/`WebSearch`(Tavily)/`DraftOutput`/`RequestClarification` | §4.2–§4.5 + §4.8; nhóm **C/D** + **C-real** (Tavily thật) + **1 lượt DeepSeek thật** (2–3 tool call, 4 356→5 114 token, không tool nào lỗi) | ✅ **XONG** |
-| 3 | Trạng thái "Chờ làm rõ": agent dừng đúng lúc, câu hỏi hiển thị trên Kanban, nút "Chạy lại" hoạt động sau khi trưởng nhóm trả lời | §2.2 + §3.5 + §4.8d; nhóm **E** (run `AwaitingClarification`, cột lazy ở `max(position)+1`, comment của agent, notification Manager, rerun tạo run mới và run cũ **byte-identical**) | ✅ backend / ⬜ **hiển thị Kanban + nút "Chạy lại" (§5B)** |
-| 4 | Kết quả AI (comment ngắn / file dài) đi qua đúng Accountability Layer (Pending → Approve/Reject/Undo) | §4.6/§4.7/§4.9; nhóm **D/I** (cả 2 kind: comment **soft** delete, tệp **hard** delete; CAS 409; `author_id`/`created_by` = **agent**) | ✅ **XONG** |
-| 5 | Guardrail: 15 tool-call / 5 phút / ~50 000 token, có log & thông báo khi vượt ngưỡng | §4.8c + §4.11; nhóm **F** (**4** ngưỡng: `ToolLimit`/`TokenBudget`/`TimeLimit`/`MaxRunLlmCalls`, mỗi ngưỡng một lần boot; **đúng 1** notification + `notification_sent=true`; đọc lại run không sinh thêm) | ✅ **XONG** |
-| 6 | `agent_runs` ghi đầy đủ trạng thái/tool trace, broadcast real-time qua SignalR để thấy tiến trình trên Kanban | §2.3 + §3.3 + §4.8f; nhóm **D/E/F/G** (trace cap + `traceTruncated`, counters ghi **dần mỗi vòng**, `AgentRunProgress` broadcast 2 lần/run) | ✅ backend / ⬜ **tiêu thụ event + badge (§5C)** |
+| 3 | Trạng thái "Chờ làm rõ": agent dừng đúng lúc, câu hỏi hiển thị trên Kanban, nút "Chạy lại" hoạt động sau khi trưởng nhóm trả lời | §2.2 + §3.5 + §4.8d + §5.2B; nhóm **E & J** (run `AwaitingClarification`, icon cột Kanban, clamp 2 dòng câu hỏi trên card, modal câu hỏi & nút rerun) | ✅ **XONG** |
+| 4 | Kết quả AI (comment ngắn / file dài) đi qua đúng Accountability Layer (Pending → Approve/Reject/Undo) | §4.6/§4.7/§4.9 + §5.2C; nhóm **D/I/J** (`AgentDraftApproval` tích hợp `AiActionLogItem`, download blob an toàn) | ✅ **XONG** |
+| 5 | Guardrail: 15 tool-call / 5 phút / ~50 000 token, có log & thông báo khi vượt ngưỡng | §4.8c + §4.11 + §5.2C; nhóm **F & J** (4 ngưỡng, thông báo lỗi tiếng Việt, `NotificationItem` dịch 3 type mới) | ✅ **XONG** |
+| 6 | `agent_runs` ghi đầy đủ trạng thái/tool trace, broadcast real-time qua SignalR để thấy tiến trình trên Kanban | §2.3 + §3.3 + §4.8f + §5.2C; nhóm **D/E/F/G & J** (`useBoardHub` bắt `AgentRunProgress`, `AgentRunPanel` hiển thị counters + timeline trace) | ✅ **XONG** |
 | ➕ | (phát sinh) API assignee phải kiểm **membership** | §3.2 + nhóm **I** (user ngoài workspace ⇒ 400; agent qua đúng đường) | ✅ **XONG** |
-| ➕ | (phát sinh) Dropdown chọn người thực hiện trong UI | chưa làm — **§5A**, đã bàn giao ở `phase-7-frontend-handover.md` | ⬜ **§5** |
+| ➕ | (phát sinh) Dropdown chọn người thực hiện trong UI | §5.2A + nhóm **J** (`useWorkspaceMembers`, `TaskDetailModal`, `KanbanColumn`) | ✅ **XONG** |
 
 **Definition of Done:**
 
 - [x] `dotnet build TeamNexus.sln` → **0 warning / 0 error** (đo lại sau mọi thay đổi §4: PASS)
 - [x] `dotnet ef migrations list` → **6** migration; `04-database-design.md` §3.8 khớp migration thật (nhóm A đọc `information_schema`/`pg_constraint`/`pg_indexes`)
 - [x] Harness **A–I** PASS, số check ghi vào report: **A 36/36 (§2.1) + I 44/44 (§2.2) + §4 270/270 (§2.3) + §7 tổng 291/291 (§2.4)** — mỗi nhóm có bảng
-- [ ] Frontend: `lint` + `tsc -b` + `build` + `test` sạch, test **> 155** ⇒ **hạng mục §5 (nhóm J)**; baseline hiện tại **không đổi** vì §4 không chạm frontend
-- [x] `03-roadmap.md` §9: 6 ô gốc **backend** + ô phát sinh (membership) đã tick kèm ghi chú phần còn lại thuộc §5; khối Trạng thái cập nhật
+- [x] Frontend: `lint` (0/0) + `tsc -b` (exit 0) + `build` (OK) + `test` sạch, test **187 > 155** (nhóm J: 35 files, 187 tests PASS 100%)
+- [x] `03-roadmap.md` §9: Đã cập nhật trạng thái HOÀN THÀNH cho cả Backend và Frontend
 - [x] `04-database-design.md` (§1, §2, §3.3, §3.4, §3.5, **§3.8**, §4, §5, §7, §8), `README.md`, `src/Modules/Ai/README.md`, `src/Modules/Board/README.md`, `report/phase-7-ai-agent-executor-test-report.md` đã cập nhật và **khớp với code** (+ `03-roadmap.md`, `tasks/phase-7-frontend-handover.md`)
 - [x] Ghi rõ trong report các **hạn chế đã biết** (report §5, 14 mục): không streaming token; run mất khi app sleep; `cancel` chỉ trong cùng instance; chưa prune; chưa test xUnit; `status=Completed` chưa được set (phán quyết ở `ai_action_logs`); `after_snapshot` của attachment mang base64; Tavily `Bearer` đã xác nhận bằng gọi thật nhưng `Body` vẫn là phương án dự phòng cấu hình
 

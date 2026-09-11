@@ -27,6 +27,8 @@ describe('TaskCard', () => {
       { id: 'lbl-1', workspaceId: 'ws-1', name: 'Security', color: '#ef4444', createdAt: '2026-09-09T00:00:00Z' },
     ],
     commentCount: 5,
+    assigneeIsAiAgent: false,
+    activeAgentRunId: null,
   }
 
   it('renders task title, priority tag, and labels', () => {
@@ -60,5 +62,19 @@ describe('TaskCard', () => {
 
     renderWithDnd(<TaskCard task={unassignedTask} />)
     expect(screen.queryByText('Alex Tran')).not.toBeInTheDocument()
+  })
+
+  it('renders AI Agent active badge and agent assignee avatar when task is assigned to agent', () => {
+    const agentTask: TaskResponse = {
+      ...baseTask,
+      assigneeName: 'TeamNexus Agent',
+      assigneeIsAiAgent: true,
+      activeAgentRunId: 'run-99',
+    }
+
+    renderWithDnd(<TaskCard task={agentTask} />)
+
+    expect(screen.getByTestId('agent-active-badge')).toBeInTheDocument()
+    expect(screen.getByTestId('agent-assignee-avatar')).toBeInTheDocument()
   })
 })

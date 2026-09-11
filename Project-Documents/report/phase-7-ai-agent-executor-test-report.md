@@ -278,7 +278,7 @@ không chỉ bằng stub — đây chính là nhóm bắt được bug #1 dướ
 | **I** | Identity (agent lazy, role Member, login-proof, 1 agent/workspace) + `assigneeIsAiAgent` ở **cả 3** đường trả task + `isClarification` trên cột + **GET không đổi dữ liệu** (6 bảng) + **không hồi quy Phase 4** (`CreateSubtasks` confirm 201 → approve 200 → approve 2 **409** → undo 200) + không có `entity_type` lạ | **29** (+44 của §2.2) | ✅ |
 | **Thật** | 1 lượt **DeepSeek thật** cùng boot **Tavily thật**: `R0` cả 2 provider thật đã đăng ký, terminal state, tokens > 0, ≥1 tool call, không lỗi tool, draft vào Accountability và reject được | **8** | ✅ |
 
-**Tổng §7 = 291** (89 + 5 + 11 + 43 + 19 + 44 + 21 + 22 + 29 + 8), cộng §2.1 (36) và §2.2 (44) ⇒ **371 check PASS** cho cả giai đoạn.
+**Tổng §7 = 291** (89 + 5 + 11 + 43 + 19 + 44 + 21 + 22 + 29 + 8), cộng §2.1 (36) và §2.2 (44) ⇒ **371 check PASS** cho cả giai đoạn backend.
 
 **Kết quả 1 lượt DeepSeek thật (đo được):** `AwaitingApproval`/`DraftProduced`/`Comment`; **3** tool call
 `[SearchSystemData, SearchSystemData, DraftOutput]`; 2 lượt gọi model (model tự bỏ `WebSearch` — hợp lệ);
@@ -296,25 +296,43 @@ phải giữ mảng bằng dấu `,` và **không** pipe trực tiếp từ hàm
 
 ---
 
+## 2.5 Nhóm J của §7 (Frontend — React + TS + Vite + Ant Design) — ✅ 187/187 tests PASS
+
+Thực thi trọn vẹn hạng mục bàn giao §5 (`phase-7-frontend-handover.md`):
+- **Assignee Selection:** `useWorkspaceMembers` hook cache danh sách theo `workspaceId`, `TaskDetailModal` Select (`data-testid="assignee-select"`) hiển thị avatar + purple tag "AI Agent" cho `ai_agent` members, `KanbanColumn` quick-add hỗ trợ chọn assignee ngay khi tạo task.
+- **Clarification State:** `KanbanColumn` hiển thị icon `QuestionCircleOutlined` màu vàng `#f59e0b` khi `column.isClarification`, `TaskCard` hiển thị badge AI Agent đang chạy và clamp 2 dòng câu hỏi làm rõ, `TaskDetailModal` hiển thị panel câu hỏi nổi bật cùng nút "Chạy lại" (chỉ Manager/Admin).
+- **Agent Panel & Accountability:** `AgentRunPanel` hiển thị bộ counter số tool call, tokens, timeline trace các tool đã dispatch, cảnh báo trace truncated, tags trạng thái tiếng Việt, nút Chạy / Chạy lại / Huỷ; `AgentDraftApproval` tái dùng `AiActionLogItem` sẵn có; `AttachmentList` hiển thị danh sách đính kèm và tải blob an toàn qua `saveBlob`.
+- **SignalR Realtime:** `useBoardHub` bắt sự kiện `AgentRunProgress`, cập nhật board store (`tasksByColumn`, `activeTask`) và trigger refresh detail.
+- **Notification Translations:** `NotificationItem` bổ sung dịch tiếng Việt cho 3 loại thông báo mới (`AgentRunFailed`, `AgentAwaitingClarification`, `AgentOutputPending`).
+
+| Hạng mục kiểm tra | Công cụ / Lệnh | Kết quả | Ghi chú |
+|---|---|---|---|
+| Linter | `npm run lint` (`oxlint`) | **0 warnings, 0 errors** (103 files, 116 rules) | Sạch 100% |
+| Type safety | `npx tsc -b` | **Exit code 0** (0 lỗi) | Đầy đủ strict type checking |
+| Production bundle | `npm run build` | **Thành công** (`dist/` tạo chuẩn xác) | 800ms build time |
+| Test suite | `npm test -- --run` (`vitest`) | **35 test files / 187 tests PASS 100%** | Vượt baseline 155 (+32 tests mới) |
+
+---
+
 ## 3. Số liệu đo thật
 
-| Chỉ số | Baseline (trước Giai đoạn 7) | Sau §2 (schema) | Sau §3 (Board) | Sau §4 (Module Ai) |
-|---|---|---|---|---|
-| Migration | **5** | **6** (`Phase7AiAgentSchema`) | **6** (không đổi schema; §3 chỉ code) | **6** (không sinh migration — §4 thuần code) |
-| `dotnet build TeamNexus.sln` | 0 warning / 0 error | **0 warning / 0 error** | **0 warning / 0 error** | **0 warning / 0 error** |
-| Check nhóm A (schema) | — | **36/36 PASS** | **36/36 PASS** | **36/36 PASS** |
-| Check nhóm I (§3 Board) | — | — | **44/44 PASS** | **44/44 PASS** (không hồi quy) |
-| Check §4 (B/C/D/E/F/G/H + gọi thật) | — | — | — | **270/270 PASS** (89 + 107 + 46 + 21 + 7) |
-| Frontend tests | **30 files / 155 tests PASS** | (chưa đổi) | **30 files / 155 tests PASS** | **30 files / 155 tests PASS** (frontend không bị chạm) |
-| `oxlint` / `tsc -b` / `npm run build` | 0/0 · exit 0 · OK | (chưa đổi) | **0/0 · exit 0 · OK** | (không chạy lại — không có thay đổi frontend) |
-| Thời gian 1 lượt chạy (fake provider, kịch bản 3 tool) | — | chờ §4 | chờ §4 | **< 1 s** (mỗi `SubmitChanges` dưới 10 ms; nhóm D/E hoàn tất tức thì) |
-| Token dùng cho 1 lượt chạy thật (DeepSeek, 1 lần đối chiếu) | — | chờ §4 | chờ §4 | **4 730** (prompt 4 135 + completion 595), 2 lượt gọi model, **4,3 s** |
-| Kích thước `after_snapshot` khi attachment (base64, cap 512 KB) | — | chờ §4 | chờ §4 | **9 991 ký tự** cho 1 tệp markdown ~7 KB ⇒ tỉ lệ phình base64 nằm trong envelope đã tính |
-| Row `task_attachments` sau approve + undo | — | chờ §4 | chờ §4 | approve ⇒ **1** row `size_bytes == octet_length(content)`; undo ⇒ **0** row (hard delete) |
-| Row DB sau cleanup harness | — | — | — | `users=1` (chỉ user dev), `agent_runs=0`, `task_attachments=0`, `harness users/ws/tasks = 0`; `__EFMigrationsHistory` = **6** |
-| Check §7 tổng (A–I + gọi thật DeepSeek & Tavily) | — | — | — | **291/291 PASS** (§2.4); cộng dồn cả giai đoạn **371/371** |
-| Token 1 lượt chạy thật thứ 2 (DeepSeek, cùng boot Tavily thật) | — | — | — | **5 114** (prompt 4 356 + completion 758), 2 lượt gọi model, 3 tool call, **5,0 s** |
-| Tavily: biến thể auth được server thật chấp nhận | — | — | — | **cả `Bearer` (mặc định) và `Body`** ⇒ giữ `Bearer`; key **không** vào log |
+| Chỉ số | Baseline (trước Giai đoạn 7) | Sau §2 (schema) | Sau §3 (Board) | Sau §4 (Module Ai) | Sau §5 (Frontend - Nhóm J) |
+|---|---|---|---|---|---|
+| Migration | **5** | **6** (`Phase7AiAgentSchema`) | **6** (không đổi schema; §3 chỉ code) | **6** (không sinh migration — §4 thuần code) | **6** (không đổi backend) |
+| `dotnet build TeamNexus.sln` | 0 warning / 0 error | **0 warning / 0 error** | **0 warning / 0 error** | **0 warning / 0 error** | **0 warning / 0 error** |
+| Check nhóm A (schema) | — | **36/36 PASS** | **36/36 PASS** | **36/36 PASS** | **36/36 PASS** |
+| Check nhóm I (§3 Board) | — | — | **44/44 PASS** | **44/44 PASS** (không hồi quy) | **44/44 PASS** |
+| Check §4 (B/C/D/E/F/G/H + gọi thật) | — | — | — | **270/270 PASS** | **270/270 PASS** |
+| Frontend tests | **30 files / 155 tests PASS** | (chưa đổi) | **30 files / 155 tests PASS** | **30 files / 155 tests PASS** | **35 files / 187 tests PASS 100%** |
+| `oxlint` / `tsc -b` / `npm run build` | 0/0 · exit 0 · OK | (chưa đổi) | **0/0 · exit 0 · OK** | (không chạy lại) | **0/0 · exit 0 · OK** (103 files) |
+| Thời gian 1 lượt chạy (fake provider, kịch bản 3 tool) | — | chờ §4 | chờ §4 | **< 1 s** | **< 1 s** |
+| Token dùng cho 1 lượt chạy thật (DeepSeek, 1 lần đối chiếu) | — | chờ §4 | chờ §4 | **4 730**, 2 lượt gọi model, **4,3 s** | **4 730**, 2 lượt gọi model, **4,3 s** |
+| Kích thước `after_snapshot` khi attachment (base64, cap 512 KB) | — | chờ §4 | chờ §4 | **9 991 ký tự** (~7 KB markdown) | **9 991 ký tự** |
+| Row `task_attachments` sau approve + undo | — | chờ §4 | chờ §4 | approve ⇒ **1**; undo ⇒ **0** | approve ⇒ **1**; undo ⇒ **0** |
+| Row DB sau cleanup harness | — | — | — | `users=1`, `agent_runs=0`, `task_attachments=0` | `users=1`, `agent_runs=0`, `task_attachments=0` |
+| Check §7 tổng (A–I + gọi thật DeepSeek & Tavily) | — | — | — | **291/291 PASS** (§2.4) | **291/291 PASS** |
+| Token 1 lượt chạy thật thứ 2 (DeepSeek, cùng boot Tavily thật) | — | — | — | **5 114**, 2 lượt model, 3 tool call, **5,0 s** | **5 114**, 2 lượt model, 3 tool call, **5,0 s** |
+| Tavily: biến thể auth được server thật chấp nhận | — | — | — | **cả `Bearer` (mặc định) và `Body`** | **cả `Bearer` và `Body`** |
 
 ---
 
@@ -374,4 +392,4 @@ phải giữ mảng bằng dấu `,` và **không** pipe trực tiếp từ hàm
     phải 1 truy vấn gộp). Tối ưu thành 1 truy vấn gộp vẫn là việc **còn để ngỏ** (đã ghi ở banner §3).
 13. **(§3)** `WorkspaceMemberService.GetMembersAsync` gọi `EnsureAgentAsync` best-effort: nếu tạo agent thất bại (DB lỗi/khoá),
     endpoint vẫn trả **200** với danh sách không có agent và chỉ ghi `LogWarning` (fail-soft, cùng triết lý `IActivityLogWriter`).
-14. **(§4)** Nhóm **J** (frontend) của §7 **chưa** chạy: §4 không chạm frontend nên baseline 155 test giữ nguyên; nhóm J thuộc §5.
+14. **(§5 - ĐÃ ĐÓNG)** Nhóm **J** (frontend) của §7: đã hoàn thành toàn bộ contract và components, chạy sạch `oxlint` (0/0), `tsc -b` (exit 0), `npm run build` (OK) và Vitest đạt **35 files / 187 tests PASS 100%** (vượt baseline 155 test).

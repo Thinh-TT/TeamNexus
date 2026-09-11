@@ -16,6 +16,7 @@ describe('KanbanColumn', () => {
     name: 'Đang Thực Hiện',
     position: 0,
     isDone: false,
+    isClarification: false,
     createdAt: '2026-09-09T00:00:00Z',
     updatedAt: '2026-09-09T00:00:00Z',
     tasks: [],
@@ -32,6 +33,8 @@ describe('KanbanColumn', () => {
       updatedAt: '2026-09-09T00:00:00Z',
       labels: [],
       commentCount: 0,
+      assigneeIsAiAgent: false,
+      activeAgentRunId: null,
     },
   ]
 
@@ -100,5 +103,55 @@ describe('KanbanColumn', () => {
         title: 'New Test Task',
       })
     })
+  })
+
+  it('renders clarification icon when isClarification is true', () => {
+    const clarifyColumn: ColumnResponse = {
+      ...mockColumn,
+      name: 'Chờ làm rõ',
+      isClarification: true,
+    }
+
+    renderWithDnd(
+      <KanbanColumn
+        column={clarifyColumn}
+        tasks={[]}
+        onTaskClick={vi.fn()}
+        onEditColumn={vi.fn()}
+        onDeleteColumn={vi.fn()}
+        onCreateTask={vi.fn()}
+      />
+    )
+
+    expect(screen.getByTestId('clarification-col-icon')).toBeInTheDocument()
+  })
+
+  it('renders quick add assignee select when workspaceMembers are provided', () => {
+    const mockMembers = [
+      {
+        userId: 'agent-1',
+        displayName: 'TeamNexus Agent',
+        role: 'Member' as const,
+        avatarUrl: null,
+        memberType: 'ai_agent' as const,
+      },
+    ]
+
+    renderWithDnd(
+      <KanbanColumn
+        column={mockColumn}
+        tasks={[]}
+        workspaceMembers={mockMembers}
+        onTaskClick={vi.fn()}
+        onEditColumn={vi.fn()}
+        onDeleteColumn={vi.fn()}
+        onCreateTask={vi.fn()}
+      />
+    )
+
+    const addBtn = screen.getByText('Thêm thẻ mới')
+    fireEvent.click(addBtn)
+
+    expect(screen.getByTestId('quick-add-assignee-select')).toBeInTheDocument()
   })
 })

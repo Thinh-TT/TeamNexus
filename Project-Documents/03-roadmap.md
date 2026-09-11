@@ -2,7 +2,7 @@
 
 > Roadmap ở mức giai đoạn lớn (chưa chia task chi tiết). Mỗi giai đoạn kèm các yêu cầu hoàn thiện để coi là "xong" trước khi chuyển sang giai đoạn kế tiếp.
 
-> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (backend xong, còn §5 frontend)** → 8 → 9.
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đã hoàn thành)** → 8 → 9.
 >
 > Số giai đoạn đã được **đánh lại cho khớp thứ tự thi hành**: **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Mobile**. `01-system-specification.md` §7 và `02-tech-stack-decisions.md` §2.8 đã đổi theo.
 >
@@ -85,34 +85,28 @@ Xây tính năng tổng hợp tiến độ/hiệu suất, xuất PDF (QuestPDF) 
 > và nút điều hướng có phân quyền tại BoardListPage/BoardView. Toàn bộ 30 test files / 155 tests PASS 100%
 > (`oxlint` 0/0, `tsc -b` sạch, `npm run build` thành công). Chi tiết: `tasks/phase-6-reporting-export.md` và `report/phase-6-reporting-test-report.md`.
 
-## Giai đoạn 7: AI Agent Executor (🔄 backend xong — còn §5 frontend)
+## Giai đoạn 7: AI Agent Executor (✅ HOÀN THÀNH — cả Backend & Frontend)
 
 Nâng AI từ vai trò đề xuất/quan sát lên vai trò thực thi thật: gán task cho AI Agent như một thành viên, xây vòng lặp tool-calling (soạn thảo, tóm tắt, web search qua Tavily), gắn kết quả vào Accountability Layer sẵn có, xử lý trạng thái "Chờ làm rõ" khi Agent thiếu thông tin.
 
 **Yêu cầu hoàn thiện:**
-- [x] Thêm pseudo-member AI Agent vào `workspace_members`, **gán được task qua đúng API assignee hiện có** (`PUT /api/boards/{boardId}/tasks/{taskId}` — đã verify 200 + `assigneeIsAiAgent=true`). ⚠️ **Nửa UI còn lại (§5, nhóm J)** — dropdown assignee trong `TaskDetailModal`/`KanbanColumn` **chưa** làm, nên ô này chỉ được tick khi §5 xong; xem `tasks/phase-7-frontend-handover.md`
+- [x] Thêm pseudo-member AI Agent vào `workspace_members`, **gán được task qua đúng UI assignee hiện có** (`TaskDetailModal` Select và `KanbanColumn` quick-add, API `PUT /api/boards/{boardId}/tasks/{taskId}` — đã verify 200 + `assigneeIsAiAgent=true`)
 - [x] Vòng lặp tool-calling hoạt động qua DeepSeek function-calling với bộ tool: `SearchSystemData`, `WebSearch` (Tavily), `DraftOutput`, `RequestClarification` — verify nhóm **B/C/D** + **1 lượt DeepSeek thật** (2–3 tool call, 4 356→5 114 token) + **Tavily thật** qua tool `WebSearch`
-- [x] Trạng thái task mới "Chờ làm rõ" hoạt động: Agent tạm dừng đúng lúc (`AwaitingClarification` + comment câu hỏi + `board_columns.is_clarification` tạo lazy), nút "Chạy lại" hoạt động sau khi trưởng nhóm trả lời (verify nhóm **E**; append-only: run cũ byte-identical). ⚠️ Hiển thị trên Kanban là **§5**
-- [x] Kết quả AI (comment ngắn hoặc file đính kèm dài) đi qua đúng luồng Accountability Layer (Pending → Approve/Reject/Undo) — verify nhóm **D** (comment soft-delete khi undo, tệp **hard delete**), đúng CAS 409 của Phase 4
+- [x] Trạng thái task mới "Chờ làm rõ" hoạt động: Agent tạm dừng đúng lúc (`AwaitingClarification` + comment câu hỏi + `board_columns.is_clarification` tạo lazy), hiển thị nổi bật trên Kanban (icon, card clamp, modal câu hỏi), nút "Chạy lại" hoạt động sau khi trưởng nhóm trả lời (verify nhóm **E** & **J**; append-only: run cũ byte-identical)
+- [x] Kết quả AI (comment ngắn hoặc file đính kèm dài) đi qua đúng luồng Accountability Layer (Pending → Approve/Reject/Undo) — verify nhóm **D** (comment soft-delete khi undo, tệp **hard delete**), đúng CAS 409 của Phase 4, UI tích hợp `AgentDraftApproval` tái dùng `AiActionLogItem`
 - [x] Guardrail hoạt động đúng: dừng khi vượt 15 tool-call / 5 phút / ~50.000 token (+ 20 lượt gọi model), `error` ghi rõ ngưỡng bị vượt và số đã dùng, **đúng một** notification `AgentRunFailed` (`notification_sent=true` chống spam) — verify nhóm **F** (4 ngưỡng, mỗi ngưỡng một lần boot)
-- [x] Bảng `agent_runs` ghi đầy đủ trạng thái/tool trace (`tool_call_trace` jsonb có cap + cờ `trace_truncated`, counters cập nhật **dần sau mỗi vòng**), broadcast real-time qua SignalR (`AgentRunProgress`, 2 lần/run) — verify nhóm **D/E/F/G**. ⚠️ Tiêu thụ event + badge trên Kanban là **§5**
+- [x] Bảng `agent_runs` ghi đầy đủ trạng thái/tool trace (`tool_call_trace` jsonb có cap + cờ `trace_truncated`, counters cập nhật **dần sau mỗi vòng**), broadcast real-time qua SignalR (`AgentRunProgress`, 2 lần/run), hiển thị trực quan trên Kanban với `AgentRunPanel`, counters, timeline trace và download attachment blob
+- [x] Bổ sung dropdown chọn người thực hiện vào UI Kanban (task detail `TaskDetailModal` + thêm thẻ nhanh `KanbanColumn`) — nguồn `GET /api/workspaces/{id}/members` qua hook `useWorkspaceMembers` (cache theo workspaceId)
 
-> **Trạng thái: 🔄 BACKEND XONG (§2–§4 + §6).** Verify **§7 = 291/291 check PASS** (A 36+11 · B/C 89 · C-real Tavily 5 · D 43 ·
-> E 19 · F 44 · G 21 · H 22 · I 44+29 · gọi thật DeepSeek+Tavily 8) trên **API Kestrel thật + PostgreSQL 18 thật**; `dotnet build`
-> 0 warning/0 error; `migrations list` = **6**; DB về baseline sau cleanup. **3 bug thật đã sửa** (DeepSeek không map
-> `tool_calls`/`finish_reason`; fake provider bị dữ liệu tool result "cướp" kịch bản; route `cancel` thiếu cổng `Agent:Enabled`).
-> Chi tiết: `tasks/phase-7-ai-agent-executor.md` (§4 banner), `report/phase-7-ai-agent-executor-test-report.md` §2.3.
+> **Trạng thái: ✅ ĐÃ HOÀN THÀNH & VERIFY ĐẦY ĐỦ (Cả Backend & Frontend).**
+> - **Backend (§2–§4, §6):** Verify **§7 = 291/291 check PASS** trên **API Kestrel thật + PostgreSQL 18 thật**; `dotnet build` 0 warning/0 error; `migrations list` = **6**.
+> - **Frontend (§5, Nhóm J):** Đầy đủ components `AgentRunPanel`, `AgentDraftApproval`, `AttachmentList`, assignee select dropdown, clarification badge/indicator, SignalR real-time event hook, Vitest test suite đạt **35 test files / 187 tests PASS 100%** (vượt baseline 155), `npm run lint` **0/0**, `npx tsc -b` **exit 0**, `npm run build` thành công.
+> Chi tiết: `tasks/phase-7-ai-agent-executor.md` và `report/phase-7-ai-agent-executor-test-report.md`.
 >
-> **Còn lại duy nhất: §5 frontend (nhóm J)** ⇒ **đã bàn giao** ở `tasks/phase-7-frontend-handover.md` (hợp đồng API đã verify,
-> 11 sự thật backend UI phải tôn trọng, danh sách file cần sửa, cách tự kiểm). Giai đoạn 7 chưa thể "đóng" cho tới khi §5 xong.
+> **Hạng mục bắt buộc phát sinh:**
 >
-> **Hạng mục bắt buộc phát sinh** (không có trong bản roadmap đầu, phát hiện khi khảo sát code):
->
-> - [x] API gán/đổi người thực hiện phải kiểm **membership** của workspace chứa task — **đã siết** ở §3.2 (`RequireAssigneeInWorkspaceAsync`,
->       user ngoài workspace ⇒ **400**; agent đi qua đúng đường này) và verify ở nhóm I.
-> - [ ] Bổ sung dropdown chọn người thực hiện vào UI Kanban (task detail + thêm thẻ nhanh) — nguồn `GET /api/workspaces/{id}/members`.
->       Hiện `TaskDetailModal` **chỉ hiển thị** `assigneeName` (dòng ~615–621) và luôn gửi lại `assigneeId` cũ (dòng ~153) ⇒ chưa có đường
->       nào để gán/đổi người thực hiện trong UI. **Đây là hạng mục §5 (A)** — xem `tasks/phase-7-frontend-handover.md` §4A.
+> - [x] API gán/đổi người thực hiện phải kiểm **membership** của workspace chứa task — **đã siết** ở §3.2 (`RequireAssigneeInWorkspaceAsync`, user ngoài workspace ⇒ **400**; agent đi qua đúng đường này) và verify ở nhóm I.
+> - [x] Bổ sung dropdown chọn người thực hiện vào UI Kanban (task detail + thêm thẻ nhanh) — nguồn `GET /api/workspaces/{id}/members` đã hoàn tất tại `TaskDetailModal.tsx` và `KanbanColumn.tsx`.
 >
 > **Liên quan tới các giai đoạn sau:** giai đoạn 8 và 9 nằm sau giai đoạn 7 (xem "Thứ tự thi hành" ở đầu tài liệu) — chúng
 > **không phải** bị bỏ. Việc lùi là có chủ ý: feature 1–5 (điểm khác biệt hoá của sản phẩm) đã xong, còn deploy/CI nên chạy trên một API
@@ -143,4 +137,3 @@ Sau khi bản Web ổn định, xây app Flutter dùng chung API, tích hợp si
 - [ ] Real-time qua `signalr_netcore` hoạt động tương đương bản Web
 - [ ] Kiểm thử thành công trên thiết bị thật (không chỉ emulator)
 
-> **Kết thúc roadmap.** Giai đoạn 7 nằm ở trên (ngay sau Giai đoạn 6) theo "Thứ tự thi hành" ở đầu tài liệu.

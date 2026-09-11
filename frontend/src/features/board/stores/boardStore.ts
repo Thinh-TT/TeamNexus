@@ -9,6 +9,7 @@ import type {
   TaskMovedEventPayload,
   TaskResponse,
 } from '../types/board.types'
+import type { AgentRunProgressEvent } from '../../ai/types/agentRun.types'
 
 interface BoardState {
   board: BoardResponse | null
@@ -49,6 +50,7 @@ interface BoardState {
   applyColumnDeleted: (columnId: string) => void
   applyCommentAdded: (comment: CommentResponse) => void
   applyCommentDeleted: (commentId: string, taskId: string) => void
+  applyAgentRunProgress: (event: AgentRunProgressEvent) => void
 
   // ---- Local helpers for comments/labels ----
   attachLabelLocally: (taskId: string, label: LabelResponse) => void
@@ -276,6 +278,39 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set({
       tasksByColumn: newTasksByColumn,
       activeTask: activeTask?.id === taskId ? null : activeTask,
+    })
+  },
+
+  applyAgentRunProgress: (event) => {
+    const { tasksByColumn, activeTask } = get()
+    const isLive =
+      event.status === 'Running' ||
+      event.status === 'AwaitingClarification' ||
+      event.status === 'AwaitingApproval'
+    const newActiveRunId = isLive ? event.runId : null
+
+    const newTasksByColumn: Record<string, TaskResponse[]> = {}
+    let updatedActiveTask = activeTask
+
+    Object.entries(tasksByColumn).forEach(([colId, tasks]) => {
+      newTasksByColumn[colId] = tasks.map((t) => {
+        if (t.id === event.taskId) {
+          const updated = {
+            ...t,
+            activeAgentRunId: newActiveRunId,
+          }
+          if (activeTask?.id === t.id) {
+            updatedActiveTask = updated
+          }
+          return updated
+        }
+        return t
+      })
+    })
+
+    set({
+      tasksByColumn: newTasksByColumn,
+      activeTask: updatedActiveTask,
     })
   },
 

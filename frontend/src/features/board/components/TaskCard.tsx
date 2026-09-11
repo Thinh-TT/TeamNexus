@@ -5,11 +5,14 @@ import {
   CalendarOutlined,
   CheckCircleFilled,
   MessageOutlined,
+  QuestionCircleOutlined,
+  RobotOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import { Avatar, Card, Flex, Space, Tag, Tooltip, Typography } from 'antd'
 import dayjs from 'dayjs'
 import type { TaskPriority, TaskResponse } from '../types/board.types'
+import { agentApi } from '../../ai/services/agentApi'
 
 interface TaskCardProps {
   task: TaskResponse
@@ -76,6 +79,31 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const isOverdue =
     task.dueDate && !isCompleted && dayjs(task.dueDate).isBefore(dayjs(), 'day')
 
+  const [clarificationQuestion, setClarificationQuestion] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    let ignore = false
+    if (task.activeAgentRunId) {
+      agentApi
+        .listRuns(task.id, 1)
+        .then((runs) => {
+          if (!ignore) {
+            setClarificationQuestion(runs.length > 0 ? runs[0].clarificationQuestion || null : null)
+          }
+        })
+        .catch(() => {})
+    } else {
+      Promise.resolve().then(() => {
+        if (!ignore) {
+          setClarificationQuestion(null)
+        }
+      })
+    }
+    return () => {
+      ignore = true
+    }
+  }, [task.id, task.activeAgentRunId])
+
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onClick}>
       <Card
@@ -113,6 +141,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   {label.name}
                 </Tag>
               ))}
+              {task.activeAgentRunId && (
+                <Tag
+                  color="purple"
+                  icon={<RobotOutlined />}
+                  style={{ margin: 0, fontSize: 11, lineHeight: '18px', borderRadius: 4 }}
+                  data-testid="agent-active-badge"
+                >
+                  AI Agent
+                </Tag>
+              )}
             </Flex>
           )}
 
@@ -134,6 +172,38 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               {task.title}
             </Typography.Text>
           </Flex>
+
+          {/* Clarification question prompt if agent is awaiting clarification */}
+          {clarificationQuestion && (
+            <Flex
+              align="flex-start"
+              gap={6}
+              data-testid="task-card-clarification"
+              style={{
+                backgroundColor: '#fffbeb',
+                border: '1px solid #fde68a',
+                borderRadius: 6,
+                padding: '4px 8px',
+                marginTop: 2,
+              }}
+            >
+              <QuestionCircleOutlined style={{ color: '#d97706', fontSize: 12, marginTop: 2 }} />
+              <Typography.Paragraph
+                style={{
+                  margin: 0,
+                  fontSize: 11.5,
+                  color: '#92400e',
+                  lineHeight: 1.35,
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                }}
+              >
+                {clarificationQuestion}
+              </Typography.Paragraph>
+            </Flex>
+          )}
 
           {/* Bottom info: Due date, comments, assignee */}
           <Flex justify="space-between" align="center" style={{ marginTop: 2 }}>
@@ -168,7 +238,20 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               )}
             </Space>
 
-            {task.assigneeName ? (
+            {task.assigneeIsAiAgent ? (
+              <Tooltip title={`Người phụ trách: ${task.assigneeName || 'AI Agent'}`}>
+                <Avatar
+                  size={22}
+                  icon={<RobotOutlined />}
+                  style={{
+                    backgroundColor: '#7c3aed',
+                    color: '#ffffff',
+                    fontSize: 11,
+                  }}
+                  data-testid="agent-assignee-avatar"
+                />
+              </Tooltip>
+            ) : task.assigneeName ? (
               <Tooltip title={`Người phụ trách: ${task.assigneeName}`}>
                 <Avatar
                   size={22}

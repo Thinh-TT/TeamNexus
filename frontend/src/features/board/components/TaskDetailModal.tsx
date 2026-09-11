@@ -5,13 +5,16 @@ import {
   DeleteOutlined,
   EditOutlined,
   FlagOutlined,
+  LoadingOutlined,
   PlusOutlined,
+  RobotOutlined,
   SendOutlined,
   TagOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import {
   Avatar,
+  Badge,
   Button,
   Card,
   Col,
@@ -44,12 +47,18 @@ import type {
   LabelResponse,
   TaskResponse,
   UpdateTaskRequest,
+  WorkspaceMemberResponse,
 } from '../types/board.types'
+import { useWorkspaceMembers } from '../hooks/useWorkspaceMembers'
+import { AgentRunPanel, AttachmentList, useAgentRuns } from '../../ai'
 
 interface TaskDetailModalProps {
   task: TaskResponse | null
   columns: ColumnResponse[]
   workspaceLabels: LabelResponse[]
+  workspaceId?: string
+  workspaceMembers?: WorkspaceMemberResponse[]
+  isManagerOrAdmin?: boolean
   open: boolean
   onClose: () => void
   onUpdateTask: (taskId: string, data: UpdateTaskRequest) => Promise<unknown>
@@ -63,6 +72,7 @@ interface TaskDetailModalProps {
   onCreateLabel: (data: CreateLabelRequest) => Promise<LabelResponse | undefined>
   onAttachLabel: (taskId: string, labelId: string) => Promise<unknown>
   onDetachLabel: (taskId: string, labelId: string) => Promise<unknown>
+  onRefreshBoard?: () => void
 }
 
 const PRESET_LABEL_COLORS = [
@@ -82,6 +92,9 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   task,
   columns,
   workspaceLabels,
+  workspaceId,
+  workspaceMembers,
+  isManagerOrAdmin = false,
   open,
   onClose,
   onUpdateTask,
@@ -90,9 +103,26 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   onCreateLabel,
   onAttachLabel,
   onDetachLabel,
+  onRefreshBoard,
 }) => {
   const { user } = useAuth()
   const [form] = Form.useForm()
+
+  const { members: fetchedMembers, refetch: refetchMembers } = useWorkspaceMembers(
+    workspaceMembers ? undefined : workspaceId
+  )
+  const members = workspaceMembers || fetchedMembers
+
+  const {
+    currentRun,
+    runDetail,
+    loading: agentLoading,
+    actionLoading: agentActionLoading,
+    fetchRuns,
+    startRun,
+    rerun,
+    cancelRun,
+  } = useAgentRuns({ taskId: task?.id, autoFetch: open && !!task?.id })
 
   // Comments state
   const [comments, setComments] = useState<CommentResponse[]>([])
@@ -107,6 +137,16 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   const [newLabelName, setNewLabelName] = useState('')
   const [newLabelColor, setNewLabelColor] = useState('#6366f1')
 
+  const refreshComments = async () => {
+    if (!task?.id) return
+    try {
+      const data = await boardApi.getComments(task.id)
+      setComments(data)
+    } catch {
+      // ignore
+    }
+  }
+
   // Sync task data into form and fetch comments
   useEffect(() => {
     if (!task || !open) return
@@ -120,7 +160,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     })
 
     let ignore = false
-    const loadComments = async () => {
+    const fetchComments = async () => {
       setLoadingComments(true)
       try {
         const data = await boardApi.getComments(task.id)
@@ -132,7 +172,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
       }
     }
 
-    loadComments()
+    fetchComments()
 
     return () => {
       ignore = true
@@ -161,6 +201,28 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
       }
     } catch {
       // Form validation error
+    }
+  }
+
+  const handleAssigneeChange = async (newAssigneeId: string | null) => {
+    if (!task) return
+    const wasAiAgent = task.assigneeIsAiAgent
+    const values = form.getFieldsValue()
+    const updateData: UpdateTaskRequest = {
+      title: values.title ? values.title.trim() : task.title,
+      description: values.description ? values.description.trim() : task.description,
+      priority: values.priority || task.priority,
+      dueDate: values.dueDate ? values.dueDate.toISOString() : task.dueDate,
+      assigneeId: newAssigneeId,
+    }
+
+    await onUpdateTask(task.id, updateData)
+
+    const selectedMember = members.find((m) => m.userId === newAssigneeId)
+    const isNowAgent = selectedMember?.memberType === 'ai_agent'
+    if (wasAiAgent !== isNowAgent || isNowAgent) {
+      refetchMembers()
+      onRefreshBoard?.()
     }
   }
 
@@ -541,6 +603,44 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     </Flex>
                   ),
                 },
+                {
+                  key: 'agent',
+                  label: (
+                    <Space size={4}>
+                      <RobotOutlined style={{ color: '#7c3aed' }} />
+                      <span>AI Agent</span>
+                      {currentRun && currentRun.status === 'Running' && (
+                        <LoadingOutlined style={{ fontSize: 11, color: '#6366f1' }} spin />
+                      )}
+                      {currentRun && currentRun.status === 'AwaitingClarification' && (
+                        <Badge count="!" size="small" style={{ backgroundColor: '#f59e0b' }} />
+                      )}
+                    </Space>
+                  ),
+                  children: (
+                    <AgentRunPanel
+                      taskId={task.id}
+                      currentRun={currentRun}
+                      runDetail={runDetail}
+                      loading={agentLoading}
+                      actionLoading={agentActionLoading}
+                      isManagerOrAdmin={isManagerOrAdmin}
+                      onStartRun={startRun}
+                      onRerun={rerun}
+                      onCancelRun={cancelRun}
+                      onRefresh={() => {
+                        fetchRuns()
+                        refreshComments()
+                        onRefreshBoard?.()
+                      }}
+                    />
+                  ),
+                },
+                {
+                  key: 'attachments',
+                  label: 'Tệp đính kèm',
+                  children: <AttachmentList taskId={task.id} />,
+                },
               ]}
             />
           </Col>
@@ -611,22 +711,37 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                 <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
                   <UserOutlined style={{ marginRight: 4 }} /> Người thực hiện:
                 </Typography.Text>
-                <Flex align="center" gap={8} style={{ padding: '6px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e2e8f0' }}>
-                  {task.assigneeName ? (
-                    <>
-                      <Avatar size={24} style={{ backgroundColor: '#6366f1', fontSize: 11 }}>
-                        {task.assigneeName[0].toUpperCase()}
-                      </Avatar>
-                      <Typography.Text strong style={{ fontSize: 13 }}>
-                        {task.assigneeName}
-                      </Typography.Text>
-                    </>
-                  ) : (
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      Chưa phân công
-                    </Typography.Text>
-                  )}
-                </Flex>
+                <Select
+                  allowClear
+                  placeholder="Chọn người thực hiện"
+                  value={task.assigneeId || undefined}
+                  onChange={(val) => handleAssigneeChange(val ?? null)}
+                  style={{ width: '100%' }}
+                  data-testid="assignee-select"
+                  options={members.map((m) => ({
+                    value: m.userId,
+                    label: (
+                      <Flex align="center" gap={6}>
+                        <Avatar
+                          size={20}
+                          icon={m.memberType === 'ai_agent' ? <RobotOutlined /> : undefined}
+                          style={{
+                            backgroundColor: m.memberType === 'ai_agent' ? '#7c3aed' : '#6366f1',
+                            fontSize: 11,
+                          }}
+                        >
+                          {m.memberType !== 'ai_agent' && (m.displayName?.[0]?.toUpperCase() || 'U')}
+                        </Avatar>
+                        <span style={{ fontSize: 13 }}>{m.displayName}</span>
+                        {m.memberType === 'ai_agent' && (
+                          <Tag color="purple" style={{ margin: 0, fontSize: 10, lineHeight: '16px' }}>
+                            AI Agent
+                          </Tag>
+                        )}
+                      </Flex>
+                    ),
+                  }))}
+                />
               </div>
 
               {/* Status info */}

@@ -14,6 +14,7 @@ import type {
   TaskMovedEventPayload,
   TaskResponse,
 } from '../types/board.types'
+import type { AgentRunProgressEvent } from '../../ai/types/agentRun.types'
 
 /**
  * Hook to manage SignalR lifecycle for real-time board collaboration.
@@ -36,6 +37,7 @@ export const useBoardHub = (boardId: string | undefined) => {
     applyColumnDeleted,
     applyCommentAdded,
     applyCommentDeleted,
+    applyAgentRunProgress,
   } = useBoardStore()
 
   useEffect(() => {
@@ -101,6 +103,12 @@ export const useBoardHub = (boardId: string | undefined) => {
 
     connection.on('CommentDeleted', (payload: CommentDeletedEventPayload) => {
       applyCommentDeleted(payload.commentId, payload.taskId)
+    })
+
+    connection.on('AgentRunProgress', (event: AgentRunProgressEvent) => {
+      if (event.boardId === boardId) {
+        applyAgentRunProgress(event)
+      }
     })
 
     // ---- Lifecycle Callbacks ----
@@ -179,6 +187,7 @@ export const useBoardHub = (boardId: string | undefined) => {
     applyColumnDeleted,
     applyCommentAdded,
     applyCommentDeleted,
+    applyAgentRunProgress,
   ])
 
   return {

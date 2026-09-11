@@ -56,6 +56,7 @@ import { ColumnModal } from './ColumnModal'
 import { KanbanColumn } from './KanbanColumn'
 import { TaskCard } from './TaskCard'
 import { TaskDetailModal } from './TaskDetailModal'
+import { useWorkspaceMembers } from '../hooks/useWorkspaceMembers'
 
 interface BoardViewProps {
   workspaceId: string
@@ -127,6 +128,8 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
     attachLabel,
     detachLabel,
   } = useBoard(workspaceId, boardId)
+
+  const { members: workspaceMembers } = useWorkspaceMembers(workspaceId)
 
   // Drag & drop state
   const [activeDragTask, setActiveDragTask] = useState<TaskResponse | null>(null)
@@ -504,6 +507,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
               key={column.id}
               column={column}
               tasks={filteredTasksByColumn[column.id] || []}
+              workspaceMembers={workspaceMembers}
               onTaskClick={(task) => setActiveTask(task)}
               onEditColumn={(col) => {
                 setEditingColumn(col)
@@ -557,6 +561,9 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
         task={activeTask}
         columns={columns}
         workspaceLabels={workspaceLabels}
+        workspaceId={workspaceId}
+        workspaceMembers={workspaceMembers}
+        isManagerOrAdmin={isManagerOrAdmin}
         onClose={() => setActiveTask(null)}
         onUpdateTask={updateTask}
         onMoveTask={moveTask}
@@ -564,6 +571,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
         onCreateLabel={createLabel}
         onAttachLabel={attachLabel}
         onDetachLabel={detachLabel}
+        onRefreshBoard={refetch}
       />
 
       <ColumnModal
