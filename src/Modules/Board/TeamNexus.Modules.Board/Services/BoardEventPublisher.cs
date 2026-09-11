@@ -27,6 +27,12 @@ public interface IBoardEventPublisher
     // Comment events
     Task CommentAdded(Guid boardId, CommentResponse comment, CancellationToken ct = default);
     Task CommentDeleted(Guid boardId, Guid commentId, Guid taskId, CancellationToken ct = default);
+
+    /// <summary>
+    /// AI Agent run progress (Phase 7 D8). Published by the Ai module's orchestrator when a run
+    /// starts and when it reaches a terminal state — state changes only, never streamed tokens.
+    /// </summary>
+    Task AgentRunProgress(Guid boardId, AgentRunProgressEventPayload payload, CancellationToken ct = default);
 }
 
 public sealed class BoardEventPublisher : IBoardEventPublisher
@@ -69,6 +75,9 @@ public sealed class BoardEventPublisher : IBoardEventPublisher
 
     public Task CommentDeleted(Guid boardId, Guid commentId, Guid taskId, CancellationToken ct = default)
         => Publish(boardId, BoardHub.CommentDeleted, new { commentId, taskId }, ct);
+
+    public Task AgentRunProgress(Guid boardId, AgentRunProgressEventPayload payload, CancellationToken ct = default)
+        => Publish(boardId, BoardHub.AgentRunProgress, payload, ct);
 
     private async Task Publish(Guid boardId, string eventName, object payload, CancellationToken ct)
     {

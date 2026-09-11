@@ -8,6 +8,16 @@ export interface LabelResponse {
   createdAt: string
 }
 
+export type MemberType = 'human' | 'ai_agent'
+
+export interface WorkspaceMemberResponse {
+  userId: string
+  displayName: string
+  role: 'Admin' | 'Manager' | 'Member'
+  avatarUrl: string | null
+  memberType: MemberType
+}
+
 export interface TaskResponse {
   id: string
   boardId: string
@@ -24,6 +34,8 @@ export interface TaskResponse {
   completedAt: string | null
   labels: LabelResponse[]
   commentCount: number
+  assigneeIsAiAgent: boolean
+  activeAgentRunId: string | null
 }
 
 export interface ColumnResponse {
@@ -32,6 +44,7 @@ export interface ColumnResponse {
   name: string
   position: number
   isDone: boolean
+  isClarification: boolean
   createdAt: string
   updatedAt: string
   tasks: TaskResponse[]
@@ -72,11 +85,13 @@ export interface UpdateBoardRequest {
 export interface CreateColumnRequest {
   name: string
   isDone?: boolean
+  isClarification?: boolean
 }
 
 export interface UpdateColumnRequest {
   name?: string | null
   isDone?: boolean | null
+  isClarification?: boolean | null
 }
 
 export interface ColumnPositionItem {

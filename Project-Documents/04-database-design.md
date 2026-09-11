@@ -432,7 +432,7 @@ ghi dữ liệu** (Pending → Approved/Rejected/Undone); `agent_runs` là **nh�
 | `stop_reason` | text | null | CHECK (`stop_reason` IN ('DraftProduced','QuestionAsked','ToolLimit','TimeLimit','TokenBudget','ProviderError','Cancelled','TaskChanged','InternalError')) | **Nguyên nhân** dừng (null khi đang chạy) |
 | `clarification_question` | text | null | | Câu hỏi Agent đặt khi cần làm rõ (≤ 2000) |
 | `clarification_comment_id` | uuid | null | FK→`task_comments` | Comment Agent đăng câu hỏi (để UI mở thẳng) |
-| `resolution_comment_id` | uuid | null | FK→`task_comments` | Comment trả lời của trưởng nhóm dùng cho lượt "Chạy lại" |
+| `resolution_comment_id` | uuid | null | FK→`task_comments` | Comment trả lời của trưởng nhóm **được lượt chạy này dùng** — ghi trên **run MỚI** của "Chạy lại", **không** ghi ngược vào run cũ (giữ bất biến append-only D14) |
 | `previous_run_id` | uuid | null | FK→`agent_runs` (self) | Chuỗi run của cùng một task |
 | `tool_call_trace` | jsonb | — | default `[]` | Mảng compact: `name`, `arguments`, `resultSummary` (≤ 500 ký tự/entry), `isError`, `at`, `durationMs` |
 | `trace_truncated` | bool | — | default false | Cờ khi trace bị cắt theo `Agent:ToolTraceMaxEntries` |
@@ -473,7 +473,7 @@ Kết quả **dài** của Agent (báo cáo, tài liệu, file có định dạn
 | `task_id` | uuid | — | FK→`tasks`, IX | |
 | `created_by_user_id` | uuid | — | FK→`users` | Đợt này luôn = `agent_user_id` của run sinh ra file |
 | `source_run_id` | uuid | null | FK→`agent_runs` | Truy vết "file do lượt chạy nào sinh" |
-| `file_name` | text | — | | Tên ASCII đã chuẩn hoá (dùng lại `ReportFileName.Normalize` của Giai đoạn 6) |
+| `file_name` | text | — | | Tên ASCII đã chuẩn hoá (dùng lại `ReportFileName.Slugify` của Giai đoạn 6 — hàm thật tên là `Slugify`, không phải `Normalize`) |
 | `content_type` | text | — | | `text/markdown`, `text/plain`, `text/csv`, … |
 | `size_bytes` | int | — | | = `length(content)`; app layer chặn > `Agent:MaxAttachmentBytes` |
 | `content` | bytea | — | | **`bytea`**, cap **512 KB** (`Agent:MaxAttachmentBytes` = 524288) |
@@ -494,6 +494,11 @@ Kết quả **dài** của Agent (báo cáo, tài liệu, file có định dạn
 
 Ba loại mới (text tự do, **không** CHECK — §4): `AgentRunFailed` (dừng bất thường / vượt ngưỡng), `AgentAwaitingClarification`
 (Agent cần trưởng nhóm trả lời), `AgentOutputPending` (có kết quả chờ duyệt). Fan-out giữ nguyên "1 row / 1 người nhận (Manager/Admin)".
+
+> **Ba loại này KHÔNG nằm trong whitelist của Observer.** `NotificationTypes.All` (4 tín hiệu của Giai đoạn 5) là danh sách
+> **chống hallucination**: `ObserverFindingValidator` chỉ chấp nhận type có trong đó. Nếu thêm 3 loại agent vào `All` thì model
+> Observer có thể sinh `AgentRunFailed` và **qua** validator ⇒ module Ai dùng lớp hằng riêng (`AgentNotificationTypes`);
+> notification của agent do code của mình ghi nên không cần whitelist.
 
 ---
 

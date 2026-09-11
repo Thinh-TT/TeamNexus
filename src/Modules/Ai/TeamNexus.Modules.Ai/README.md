@@ -390,16 +390,49 @@ Harness đặt **ngoài workspace** (`%TEMP%`, đã xoá), API thật + PostgreS
 2. Seed fixture bằng **raw SQL**: `TeamNexusDbContext.SaveChanges` tự stamp `created_at`/`updated_at` cho mọi `IAuditableEntity` khi insert ⇒ seed qua EF làm task "cũ" thành "vừa tạo".
 3. Boot API thật rồi stop trong **< 60s** (`StartupDelaySeconds`) hoặc đặt `Observer__Enabled=false` để observer không quét DB dev.
 4. Khi API bật, `AddAiModule` resolve `FakeAiProvider` nếu `DeepSeek:ApiKey` trống — đó là cấu hình đúng cho verify offline.
+5. **(Phase 7) Env var RỖNG ≠ tắt cấu hình:** `.NET` coi `SetEnvironmentVariable(name, "")` là **xoá biến**, nên `DeepSeek__ApiKey=''`
+   **không** ép `FakeAiProvider` — User Secrets có key thật sẽ thắng trở lại và harness **gọi DeepSeek thật ngoài ý muốn**. Dùng
+   **một khoảng trắng** `' '` (`HasApiKey` dùng `IsNullOrWhiteSpace`). Và **clear** mọi key override trước mỗi lần boot, nếu không
+   ngưỡng của case trước rò sang case sau (đã gặp: `MaxRunTokens` của case TokenBudget làm hỏng case MaxRunLlmCalls).
+6. **(Phase 7) PowerShell 5.1:** script harness phải **ASCII-only** (một dấu `⇒` bị đọc theo ANSI thành `'` ⇒ **vỡ cú pháp** cả file);
+   `ConvertFrom-Json` trả **một object mảng** nên `@(hàm-JSON)` **lồng mảng** (dùng `@($x | ForEach-Object { $_ })`); `-Headers` của
+   một lần gọi **bám vào `WebSession`** (check "POST thiếu CSRF" phải dùng **session mới**, nếu không sẽ gửi lại header cũ và test
+   luôn PASS giả).
+7. **(Phase 7)** `AgentRunReaper` chạy lúc boot ⇒ seed run `Running` mồ côi **trước** khi boot; `POST /cancel` và "chạy chồng" cần
+   task `FAKE:SLOW` để run còn `Running` khi harness thao tác.
 
-## Phase 7 — AI Agent Executor (🔄 đang làm)
+## Phase 7 — AI Agent Executor (✅ đã xong §2–§4; §5 frontend còn lại)
 
 Nâng AI từ **đề xuất/quan sát** (Phase 3–5) lên **thực thi**: Agent là một **thành viên ảo** của workspace
 (`workspace_members.member_type = 'ai_agent'`, một row `users` riêng cho mỗi workspace) và được gán task bằng đúng thao tác
 assign sẵn có. Khi Manager bấm **"Chạy Agent"**, Agent chạy một vòng lặp tool-calling và **mọi kết quả ghi dữ liệu thật đều đi
 qua Accountability Layer** — không có cơ chế giải trình riêng cho Agent.
 
-> ⚠️ **Mục này mô tả thiết kế đã chốt ở bước lập kế hoạch, chưa phải code đang chạy.** Nguồn duy nhất:
-> `Project-Documents/tasks/phase-7-ai-agent-executor.md` (§0 bảng quyết định D1–D20). Schema: `04-database-design.md` §3.3, §3.4, §3.5, §3.8.
+> **Trạng thái: ✅ ĐÃ HIỆN THỰC & VERIFY (270/270 check PASS — nhóm B/C 89 · D/E/H/I 107 · F+503 46 · G 21 ·
+> 1 lần gọi DeepSeek thật 7).** `dotnet build` 0 warning / 0 error; `dotnet ef migrations list` = **6** (không sinh migration
+> mới); frontend không bị chạm. Chi tiết: `Project-Documents/report/phase-7-ai-agent-executor-test-report.md` §2.3.
+> Nguồn thiết kế: `Project-Documents/tasks/phase-7-ai-agent-executor.md` (§0 bảng quyết định D1–D20).
+>
+> **Sáu điều chỉnh khi hiện thực so với bản kế hoạch §4** (ghi ở đây để người đọc code không thấy lệch):
+> 1. **Kết quả thuộc về AGENT, không phải người duyệt.** `PostCommentApplier`/`PostAttachmentApplier` dùng
+>    `log.RequestedByUserId` (= agent) cho `task_comments.author_id`/`task_attachments.created_by_user_id`; `ctx.ActingUserId`
+>    là **Manager đã bấm duyệt** (đúng cho phân quyền Undo, sai cho việc ghi công).
+> 2. **Chống chạy chồng theo TASK, không dùng `SemaphoreSlim(1,1)` toàn cục** (khác `ObserverService`): `AgentRunCancellationRegistry`
+>    đặt chỗ theo `taskId`, cộng với kiểm row `Running` cùng task (đa instance) và `pg_try_advisory_lock(hash(taskId))` cho phần chạy.
+>    Semaphore toàn cục sẽ làm task B bị **409 oan** khi task A đang chạy.
+> 3. **Advisory lock thuộc scope nền, không thuộc request.** `StartAsync` tạo scope nền **trước**, lấy lock trên connection của
+>    scope đó, rồi mới `Task.Run(ExecuteAsync)`; lock nhả trong `finally` của `ExecuteAsync` (lấy trong request sẽ nhả ngay lúc trả 202).
+> 4. **`ResolutionCommentId` nằm trên run MỚI**, không ghi vào run cũ ⇒ bất biến append-only (D14) giữ nguyên vẹn
+>    ("run cũ không đổi byte nào"); guard cho rerun là `AwaitingClarification` + `ClarificationCommentId` ≠ null.
+> 5. **3 loại notification của agent tách khỏi `NotificationTypes`** (`AgentNotificationTypes`): `NotificationTypes.All` là
+>    whitelist chống hallucination của Observer — thêm loại agent vào đó sẽ cho phép model Observer sinh `AgentRunFailed`.
+> 6. **Tên file attachment dùng `ReportFileName.Slugify`** (module Reporting) ⇒ `Ai` có thêm `ProjectReference → Reporting`
+>    (S16/§0.3 "chỉ gọi lại hàm sẵn có", không viết lại logic slug). Hàm thật tên là `Slugify`, không phải `Normalize`.
+>
+> **Hai key cấu hình thêm** (ngoài bảng §6): `Agent:ClarificationColumnName` (mặc định `"Chờ làm rõ"`) và
+> `Tavily:AuthMode` (`Bearer` *(mặc định)* | `Body`) — key sau để chốt biến thể auth của Tavily **bằng thực nghiệm**
+> (đổi config thay vì sửa code), đúng yêu cầu "không suy đoán" của §4.3. Lưu ý `POST /agent-runs/{id}/cancel` **cũng** trả
+> **503** khi `Agent:Enabled=false` (§7H yêu cầu 503 cho **cả 3** route ghi — bảng §4.9 chỉ ghi 403/404/409).
 
 ### Danh tính Agent (D1)
 
@@ -420,31 +453,45 @@ qua Accountability Layer** — không có cơ chế giải trình riêng cho Age
 | Tool | Việc | Ghi chú an toàn |
 |---|---|---|
 | `SearchSystemData` | Truy vấn task/comment/board **nội bộ** | `workspaceId`/`boardId`/`taskId` lấy từ **context**, **không** từ arguments ⇒ model không đọc chéo workspace |
-| `WebSearch` | Web search qua Tavily (`api_key` trong body, `results[].content`) | `Tavily:ApiKey` rỗng ⇒ `FakeWebSearchProvider` (kết quả mẫu, offline) |
+| `WebSearch` | Web search qua Tavily (`results[].content`, fallback `snippet`) | `Tavily:ApiKey` rỗng/whitespace ⇒ `FakeWebSearchProvider`. Biến thể auth = config `Tavily:AuthMode` (`Bearer` mặc định ⇒ header, **không** đưa key vào body; `Body` ⇒ `api_key` trong body) |
 | `DraftOutput` | Kết quả ngắn → **comment**; dài → **attachment** | **Không** ghi DB; chỉ trả cho model để kết thúc loop |
 | `RequestClarification` | Hỏi lại trưởng nhóm khi thiếu thông tin | **Không** đi qua Accountability (là câu hỏi, không phải kết quả ghi dữ liệu) |
 
-Tên tool ngoài whitelist ⇒ trả `{"error": …}` cho model (kịch bản "model gọi bậy" phải verify được). Provider thứ 3 của
-`FakeAiProvider` (marker `{"agent":"executor"}`) chạy kịch bản tool-call **xác định** ⇒ verify end-to-end offline, **0 token**.
+Tên tool ngoài whitelist ⇒ trả `{"error": …}` cho model (đã verify end-to-end: run **vẫn hoàn thành**, trace entry có `isError=true`).
+Provider thứ 3 của `FakeAiProvider` (marker `{"agent":"executor"}` ở **dòng đầu system prompt**) chạy kịch bản tool-call **xác định** ⇒
+verify end-to-end offline, **0 token**; token count của nhánh này là **giả nhưng xác định** (điều kiện để test được `TokenBudget`).
+
+Kịch bản của provider offline chọn theo **sentinel** `FAKE:*`: mặc định = `SearchSystemData → WebSearch → DraftOutput (comment)`;
+`FAKE:ATTACH` = draft dài + `fileName`/`contentType` (⇒ attachment); `FAKE:CLARIFY` = `RequestClarification`; `FAKE:SLOW` = delay 3 s
+mỗi lượt (để test timeout/cancel); `FAKE:UNKNOWN`/`FAKE:BADJSON` = tool ngoài whitelist / `arguments` hỏng. Sentinel **chỉ** được đọc
+từ system prompt + message `role="user"` — **không** đọc tool result, vì tool result là dữ liệu sống do con người nhập và có thể
+"cướp" kịch bản của run khác (bug đã bắt được ở nhóm D/E, xem report §4 `AI-bug-2`).
 
 ### Vòng đời một lượt chạy (`agent_runs`)
 
 ```
 Running ──► AwaitingApproval      (DraftOutput ⇒ AiActionLog Pending, chờ Manager duyệt)
         ──► AwaitingClarification (RequestClarification ⇒ comment agent + task sang cột "Chờ làm rõ")
-        ──► Completed
         ──► Failed                (+ stop_reason: ToolLimit | TimeLimit | TokenBudget | ProviderError | Cancelled | TaskChanged | InternalError)
 ```
 
+- **`Completed` chưa được set ở giai đoạn này:** phán quyết nằm ở `ai_action_logs` (Approved/Rejected/Undone) và UI đọc qua
+  `agentRun.aiActionLogId`, nên run giữ `AwaitingApproval` sau khi con người duyệt (đã ghi ở §5 hạn chế của report).
 - **`status` tách khỏi `stop_reason` (D4):** `BudgetExceeded` **không** phải status riêng — nó là `stop_reason`
   (`ToolLimit`/`TimeLimit`/`TokenBudget`) trên `status = Failed`, theo đúng tiền lệ `ai_observer_runs.status = Skipped`
   **không phải lỗi** ở Phase 5. Nhờ vậy phân biệt được *hết ngân sách (chủ ý)* với *lỗi provider (bất khả kháng)*.
-- **Append-only (D14):** "Chạy lại" **tạo run mới** (`previous_run_id` trỏ run cũ); run cũ **không** bao giờ bị sửa.
-- **Guardrail (D12):** 15 tool-call · 5 phút wall-clock · ~50 000 token · 20 lượt gọi model — kiểm **sau mỗi vòng**, vượt ⇒
-  dừng + `stop_reason` + **đúng một** notification (`AgentRunFailed`, `notification_sent = true` chống spam).
-- **Chống chạy chồng (D11):** `pg_try_advisory_lock` theo `task_id` + `SemaphoreSlim(1,1)`; không lấy được lock ⇒ **409**.
+- **`MaxRunLlmCalls`** (20) không có stop reason riêng ⇒ vượt ⇒ `Failed`/`InternalError`; nó được kiểm **trước** mỗi lượt gọi model.
+- **Append-only (D14):** "Chạy lại" **tạo run mới** (`previous_run_id` trỏ run cũ, `resolution_comment_id` ghi trên run **mới**);
+  run cũ **không** bao giờ bị sửa — đã verify bằng so sánh **byte-identical** trước/sau rerun.
+- **Guardrail (D12):** 15 tool-call · 5 phút wall-clock · ~50 000 token · 20 lượt gọi model — kiểm **sau mỗi vòng** (và ngay sau
+  **mỗi** tool call, trước cả tín hiệu kết thúc), vượt ⇒ dừng + `stop_reason` + **đúng một** notification
+  (`AgentRunFailed`, `notification_sent = true` chống spam).
+- **Chống chạy chồng (D11):** đặt chỗ **theo task** trong process + kiểm row `Running` cùng task + `pg_try_advisory_lock` theo
+  `task_id` cho phần chạy; không lấy được ⇒ **409** (xem điều chỉnh #2/#3 ở banner trên).
+- **Tiến trình được ghi dần:** sau **mỗi vòng**, counters + `tool_call_trace` được persist (guard `WHERE status='Running'`) ⇒
+  Kanban GET giữa run thấy số thật, và run bị cancel/crash không mất toàn bộ counter.
 - **Reaper (D13):** app free-tier sleep/recycle giữa run ⇒ `AgentRunReaper` lúc khởi động đóng mọi run `Running` quá hạn
-  thành `Failed`/`InternalError`, nếu không card Kanban kẹt "Đang chạy" vĩnh viễn.
+  thành `Failed`/`InternalError`, nếu không card Kanban kẹt "Đang chạy" vĩnh viễn. Reaper **không** phụ thuộc `Agent:Enabled`.
 
 ### Kết quả & duyệt (tái dùng Phase 4)
 
@@ -453,10 +500,13 @@ Hai applier mới đi qua **nguyên** vòng đời `Pending → Approved/Rejecte
 
 | Action | Apply khi được duyệt | Undo |
 |---|---|---|
-| `PostComment` (`entity_type='Task'`) | `ICommentService.CreateCommentAsync(..., userId = agent_user_id)` ⇒ có luôn `activity_logs` + SignalR `CommentAdded` + `authorName` = tên agent | soft delete comment |
-| `PostAttachment` (`entity_type='Task'`) | INSERT `task_attachments` (`bytea`, cap **512 KB**) | **hard delete** (bảng duy nhất không soft-delete — file để lại là tiêu quota thật) |
+| `PostComment` (`entity_type='Task'`) | `ICommentService.CreateCommentAsync(..., userId = log.RequestedByUserId = agent_user_id)` ⇒ có luôn `activity_logs` + SignalR `CommentAdded` + `authorName` = tên agent | soft delete comment (bởi Manager duyệt, qua `ctx.ActingUserId`) |
+| `PostAttachment` (`entity_type='Task'`) | INSERT `task_attachments` (`bytea`, cap **512 KB**; `agent_runs.output_kind = 'Attachment'` khi draft có `fileName`/`contentType` hoặc dài > `AttachmentThresholdChars`) | **hard delete** (bảng duy nhất không soft-delete — file để lại là tiêu quota thật) |
 
 `requested_by_user_id = agent_user_id`, `decided_by_user_id` = Manager duyệt ⇒ truy vết "agent làm hay người làm" chỉ cần so Guid.
+`AiActionService` chỉ đổi **tối thiểu**: thêm nhánh `entity_type = 'Task'` trong `ResolveAsync`, thêm
+`RequestAgentOutputAsync` (**API nội bộ, không có route HTTP**: tin cậy bằng assert "task đang gán cho agent" + "agent đúng là
+`member_type='ai_agent'` của workspace"), và thêm 2 field nullable vào `applied_snapshot`.
 
 ### Endpoint của Phase 7 (7 route)
 
@@ -464,15 +514,15 @@ Hai applier mới đi qua **nguyên** vòng đời `Pending → Approved/Rejecte
 |---|---|---|
 | `POST /api/tasks/{taskId}/agent-runs` | Manager/Admin | **202** `AgentRunResponse` (chạy ở scope nền) |
 | `POST /api/tasks/{taskId}/agent-runs/{runId}/rerun` | Manager/Admin | **202** — nút **"Chạy lại"** |
-| `GET /api/tasks/{taskId}/agent-runs?take=` | Member+ | 200 `AgentRunResponse[]` |
+| `GET /api/tasks/{taskId}/agent-runs?take=` | Member+ | 200 `AgentRunResponse[]` (`take` clamp 1–50, mặc định 20, `startedAt DESC`) |
 | `GET /api/agent-runs/{runId}` | Member+ | 200 `AgentRunDetailResponse` (kèm `toolCallTrace`) |
 | `POST /api/agent-runs/{runId}/cancel` | Manager/Admin | 200 (409 nếu không còn `Running`) |
 | `GET /api/tasks/{taskId}/attachments` | Member+ | 200 `AttachmentResponse[]` |
-| `GET /api/tasks/{taskId}/attachments/{id}/download` | Member+ | 200 file bytes (`Results.File`) |
+| `GET /api/tasks/{taskId}/attachments/{id}/download` | Member+ | 200 file bytes (`Results.File`, có `Content-Length` + `Content-Disposition` ASCII) |
 
-`Agent:Enabled=false` ⇒ **503** ở cả 3 route ghi (tiền lệ `Reports:Enabled`). Real-time: event **`AgentRunProgress`** broadcast
-qua `IBoardEventPublisher` có sẵn (thêm 1 method; **không** sửa `BoardHub` constants) — chỉ **thay đổi trạng thái**, **không**
-stream token.
+`Agent:Enabled=false` ⇒ **503** ở cả **3** route ghi (tiền lệ `Reports:Enabled`; route đọc vẫn 200). Real-time: event
+**`AgentRunProgress`** broadcast qua `IBoardEventPublisher` có sẵn (thêm 1 method; **không** sửa `BoardHub` constants) — chỉ
+**thay đổi trạng thái**, **không** stream token.
 
 ### Hạn chế đã biết của Phase 7 (ghi trước để không ai tưởng là bug)
 
@@ -482,3 +532,13 @@ stream token.
 4. Chưa prune `agent_runs`/`task_attachments` (file là nội dung người dùng đã duyệt).
 5. Task do agent thực hiện **sẽ** xuất hiện trong `byAssignee` của báo cáo và tín hiệu `Overload` — đây là **hành vi mong muốn**.
 6. Chưa có test xUnit (để Phase 8); verify bằng harness tạm ngoài workspace như Phase 2–6.
+7. `status = Completed` **chưa** được set: phán quyết duyệt nằm ở `ai_action_logs`, run giữ `AwaitingApproval` (xem mục vòng đời trên).
+8. `Tavily:AuthMode` mặc định `Bearer` **chưa** được xác nhận bằng 1 lần gọi Tavily thật (máy dev không có key) — nhóm C mới
+   verify wire-shape; nếu server trả 401 thì đổi config sang `Body`.
+9. `after_snapshot` của `PostAttachment` mang base64 (cap 512 KB ⇒ row jsonb ≤ ~700 KB) nên `GET /api/ai-actions/{logId}` trả payload đó.
+10. Nhóm **J** (frontend) chưa chạy — thuộc §5; §4 **không** chạm frontend (baseline 155 test giữ nguyên).
+
+> **Bàn giao §5 frontend:** `Project-Documents/tasks/phase-7-frontend-handover.md` — hợp đồng API đã verify (7 route + mã lỗi
+> thật), 11 sự thật backend mà UI phải tôn trọng (ví dụ `status=Completed` không bao giờ được set ⇒ phán quyết nằm ở
+> `ai_action_logs`; `activeAgentRunId` gồm cả run đang chờ), danh sách file cần sửa kèm số dòng, và cách verify offline
+> **không tốn token**.

@@ -31,6 +31,13 @@ public sealed class BoardHub : Hub
     public const string CommentAdded = nameof(CommentAdded);
     public const string CommentDeleted = nameof(CommentDeleted);
 
+    /// <summary>
+    /// AI Agent progress (Phase 7 D8). Only the event name lives here — the broadcast is made by
+    /// the Ai module through <c>IBoardEventPublisher.AgentRunProgress</c>; the Board module never
+    /// knows about agent runs.
+    /// </summary>
+    public const string AgentRunProgress = nameof(AgentRunProgress);
+
     public static string GroupName(Guid boardId) => $"{GroupPrefix}{boardId}";
 
     private readonly IServiceScopeFactory _scopeFactory;

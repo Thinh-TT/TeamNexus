@@ -16,3 +16,16 @@ public sealed class AiProviderException : BoardModuleException
     {
     }
 }
+
+/// <summary>
+/// AI Agent Executor đang tắt (<c>Agent:Enabled = false</c>) → <b>503 Service Unavailable</b>
+/// (Phase 7 D18), đúng tiền lệ <c>ReportingDisabledException</c>. Chỉ áp cho 3 route ghi
+/// (chạy / chạy lại / huỷ): route đọc vẫn phục vụ lịch sử run đã có.
+/// </summary>
+public sealed class AgentDisabledException : BoardModuleException
+{
+    public AgentDisabledException()
+        : base(StatusCodes.Status503ServiceUnavailable, "AI Agent Executor is disabled.")
+    {
+    }
+}

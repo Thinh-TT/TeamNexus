@@ -28,17 +28,20 @@ public sealed class TaskService : ITaskService
     private readonly IWorkspaceAccess _access;
     private readonly IBoardEventPublisher _events;
     private readonly IActivityLogWriter _activityLog;
+    private readonly IAiAgentResolver _agents;
 
     public TaskService(
         TeamNexusDbContext db,
         IWorkspaceAccess access,
         IBoardEventPublisher events,
-        IActivityLogWriter activityLog)
+        IActivityLogWriter activityLog,
+        IAiAgentResolver agents)
     {
         _db = db;
         _access = access;
         _events = events;
         _activityLog = activityLog;
+        _agents = agents;
     }
 
     public async Task<IReadOnlyList<TaskResponse>> GetTasksAsync(
@@ -63,9 +66,17 @@ public sealed class TaskService : ITaskService
         var taskIds = tasks.Select(t => t.Id).ToList();
         var counts = await LoadCommentCountsAsync(taskIds, ct);
         var labelsByTask = await LoadLabelsByTaskAsync(taskIds, ct);
+        var activeRunIds = await AgentRunLookup.LoadActiveRunIdsAsync(_db, taskIds, ct);
+        var assigneeIsAiAgent = await ResolvePageAssigneeIsAiAgentAsync(board.WorkspaceId, tasks, ct);
 
         return tasks.Select(t => DtoMapping.MapTask(
-            t, labelsByTask.GetValueOrDefault(t.Id, []), counts.GetValueOrDefault(t.Id))).ToList();
+            t,
+            labelsByTask.GetValueOrDefault(t.Id, []),
+            counts.GetValueOrDefault(t.Id),
+            assigneeIsAiAgent,
+            // TryGetValue, NOT GetValueOrDefault: the latter returns Guid.Empty for a missing
+            // task, which would serialize as "00000000-..." instead of null (real bug, §3 harness).
+            activeRunIds.TryGetValue(t.Id, out var runId) ? runId : null)).ToList();
     }
 
     public async Task<TaskResponse> GetTaskByIdAsync(Guid taskId, Guid userId, CancellationToken ct = default)
@@ -73,13 +84,22 @@ public sealed class TaskService : ITaskService
         var task = await LoadTaskAsync(taskId, ct)
             ?? throw new NotFoundException("Task not found.");
 
-        await RequireMemberOfTaskBoardAsync(task, userId, ct);
+        var workspaceId = await RequireMemberOfTaskBoardWithWorkspaceAsync(task, userId, ct);
 
         var count = await _db.TaskComments
             .CountAsync(c => c.TaskId == taskId, ct);
 
         var labels = await LoadLabelsByTaskAsync([taskId], ct);
-        return DtoMapping.MapTask(task, labels.GetValueOrDefault(taskId, []), count);
+        var activeRunIds = await AgentRunLookup.LoadActiveRunIdsAsync(_db, [taskId], ct);
+        var assigneeIsAiAgent = await ResolvePageAssigneeIsAiAgentAsync(workspaceId, [task], ct);
+
+        return DtoMapping.MapTask(
+            task,
+            labels.GetValueOrDefault(taskId, []),
+            count,
+            assigneeIsAiAgent,
+            // See the note in GetTasksAsync: GetValueOrDefault would produce Guid.Empty, not null.
+            activeRunIds.TryGetValue(taskId, out var detailRunId) ? detailRunId : null);
     }
 
     public async Task<TaskResponse> CreateTaskAsync(
@@ -101,12 +121,9 @@ public sealed class TaskService : ITaskService
             .Where(t => t.ColumnId == column.Id)
             .MaxAsync(t => (int?)t.Position, ct) ?? -1;
 
-        ApplicationUser? assignee = null;
-        if (request.AssigneeId.HasValue)
-        {
-            assignee = await _db.Users.FirstOrDefaultAsync(u => u.Id == request.AssigneeId.Value, ct)
-                ?? throw new BadRequestException("Assignee does not exist.");
-        }
+        // Phase 7 §3.2: the assignee must be a workspace member, not merely an existing user.
+        await RequireAssigneeInWorkspaceAsync(board.WorkspaceId, request.AssigneeId, ct);
+        var assignee = await LoadAssigneeAsync(request.AssigneeId, ct);
 
         var task = new BoardTask
         {
@@ -126,6 +143,7 @@ public sealed class TaskService : ITaskService
         _db.Tasks.Add(task);
         await _db.SaveChangesAsync(ct);
 
+        // A brand-new task has no agent run yet, so the defaults (false / null) are correct.
         var response = DtoMapping.MapTask(task, []);
         await _events.TaskCreated(boardId, response, ct);
 
@@ -158,11 +176,9 @@ public sealed class TaskService : ITaskService
         var workspaceId = await RequireMemberOfTaskBoardWithWorkspaceAsync(task, userId, ct);
         ValidateTitle(request.Title);
 
-        if (request.AssigneeId.HasValue
-            && !await _db.Users.AnyAsync(u => u.Id == request.AssigneeId.Value, ct))
-        {
-            throw new BadRequestException("Assignee does not exist.");
-        }
+        // Phase 7 §3.2: same membership rule as create — a task may only be assigned to a member
+        // of its own workspace (previously this only checked the users table).
+        await RequireAssigneeInWorkspaceAsync(workspaceId, request.AssigneeId, ct);
 
         // Capture the diff basis BEFORE mutating (Phase 5 §2.3 — text fields are reported as
         // booleans so the log never stores the title/description content).
@@ -321,6 +337,63 @@ public sealed class TaskService : ITaskService
 
     private static string ActivityPayload(object value) => JsonSerializer.Serialize(value, ActivityJson);
 
+    /// <summary>
+    /// Phase 7 §3.2 — the assignee must be a member of the workspace that owns the task, not merely
+    /// an existing <c>users</c> row. Before Phase 7 this check did not exist, so a task could be
+    /// assigned to a user who was never in the workspace; the AI Agent (a real <c>users</c> row)
+    /// would have become a new entry point for that bug.
+    /// </summary>
+    /// <remarks>A <c>null</c> assignee (unassigned) is always valid and costs no query.</remarks>
+    private async Task RequireAssigneeInWorkspaceAsync(
+        Guid workspaceId, Guid? assigneeId, CancellationToken ct)
+    {
+        if (assigneeId is null)
+        {
+            return;
+        }
+
+        var isMember = await _db.WorkspaceMembers
+            .AnyAsync(wm => wm.WorkspaceId == workspaceId && wm.UserId == assigneeId.Value, ct);
+
+        if (!isMember)
+        {
+            throw new BadRequestException("Assignee is not a member of this workspace.");
+        }
+    }
+
+    /// <summary>
+    /// Loads the assignee for the <c>Assignee</c> navigation so <c>MapTask</c> can return
+    /// <c>AssigneeName</c>. Always called AFTER <see cref="RequireAssigneeInWorkspaceAsync"/>, so
+    /// one query per task write and no N+1.
+    /// </summary>
+    private Task<ApplicationUser?> LoadAssigneeAsync(Guid? assigneeId, CancellationToken ct)
+        => assigneeId is null
+            ? Task.FromResult<ApplicationUser?>(null)
+            : _db.Users.FirstOrDefaultAsync(u => u.Id == assigneeId.Value, ct);
+
+    /// <summary>
+    /// Phase 7 §3.3 — <c>AssigneeIsAiAgent</c> for a whole page. There is exactly ONE agent per
+    /// workspace (partial unique index <c>uq_workspace_members_ai_agent</c>), so the resolver is
+    /// asked once per distinct assignee in the page rather than once per task. If a workspace ever
+    /// gets several agents this must become a set-based lookup.
+    /// </summary>
+    private async Task<bool> ResolvePageAssigneeIsAiAgentAsync(
+        Guid workspaceId, IReadOnlyList<BoardTask> tasks, CancellationToken ct)
+    {
+        foreach (var assigneeId in tasks
+                     .Where(t => t.AssigneeId.HasValue)
+                     .Select(t => t.AssigneeId!.Value)
+                     .Distinct())
+        {
+            if (await _agents.IsAiAgentAsync(workspaceId, assigneeId, ct))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private async Task<BoardEntity> RequireVisibleBoardAsync(Guid boardId, Guid userId, CancellationToken ct)
     {
         var board = await _db.Boards
@@ -331,13 +404,11 @@ public sealed class TaskService : ITaskService
         return board;
     }
 
-    private async Task RequireMemberOfTaskBoardAsync(BoardTask task, Guid userId, CancellationToken ct)
-        => await RequireMemberOfTaskBoardWithWorkspaceAsync(task, userId, ct);
-
     /// <summary>
-    /// Same authorization check, but also returns the task's workspace id so the Phase 5
-    /// activity-log hooks do not have to load the board a second time. (A tuple rather than an
-    /// <c>out</c> parameter — async methods cannot have <c>out</c> parameters.)
+    /// Authorization check that also returns the task's workspace id so the Phase 5 activity-log
+    /// hooks (and the Phase 7 membership check) do not have to load the board a second time.
+    /// (A tuple rather than an <c>out</c> parameter — async methods cannot have <c>out</c>
+    /// parameters.)
     /// </summary>
     private async Task<Guid> RequireMemberOfTaskBoardWithWorkspaceAsync(
         BoardTask task, Guid userId, CancellationToken ct)

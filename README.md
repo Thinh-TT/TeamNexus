@@ -35,8 +35,28 @@ npm install
 npm run dev
 ```
 
-### Cấu hình & secrets
+### Migration (EF Core)
 
+Một chuỗi migration duy nhất trên `TeamNexusDbContext` (xem `Project-Documents/04-database-design.md` §1.1). Hiện có **6** migration, mới nhất là `Phase7AiAgentSchema` (Giai đoạn 7 — agent identity, `board_columns.is_clarification`, `agent_runs`, `task_attachments`).
+
+```bash
+dotnet ef migrations list   --project src/TeamNexus.Persistence --startup-project src/TeamNexus.Api
+dotnet ef database update   --project src/TeamNexus.Persistence --startup-project src/TeamNexus.Api
+```
+
+> ⚠️ **Trong môi trường sandbox/agent** (named pipe của MSBuild bị chặn), `dotnet build` mặc định **fail im lặng** với
+> "0 Warning(s) / 0 Error(s)", và `dotnet ef` (tự build nội bộ) cũng fail theo. Khi đó dùng đúng quy trình sau — nếu bỏ qua,
+> `migrations add --no-build` sẽ đọc **DLL cũ trong `bin`** và sinh migration **sai một cách im lặng**:
+>
+> ```bash
+> dotnet build TeamNexus.sln -m:1 -nr:false    # bắt buộc: chạy 1 node, không tái dùng node
+> dotnet ef migrations add <Tên> --project src/TeamNexus.Persistence --startup-project src/TeamNexus.Api --no-build
+> dotnet ef database update      --project src/TeamNexus.Persistence --startup-project src/TeamNexus.Api --no-build
+> ```
+>
+> Thứ tự bắt buộc: **sửa source → build 0/0 → mới `migrations add`**.
+
+### Cấu hình & secrets
 - Mọi secret local (OAuth Client ID/Secret, connection string, JWT key) đặt trong **User Secrets**:
   `dotnet user-secrets init --project src/TeamNexus.Api` rồi `dotnet user-secrets set "<Key>" "<Value>"`.
 - Connection string PostgreSQL đọc từ `ConnectionStrings:DefaultConnection`, ví dụ:
@@ -91,23 +111,29 @@ npm run dev
 - [x] §7.1 Verify backend — **264/264 check PASS** qua 5 đợt harness ngoài workspace (§1 thuần 76 · §3 loader+DB 37 · §4 renderer 43 · §5 HTTP 34 · §7.1 chốt A–F 74); 3 bug thật đã bắt & sửa (đếm trùng `activeUsers`, hai mốc thời gian trong một request, header en dash làm mọi export 500) + 1 lỗi hạ tầng (`dotnet ef` hỏng vì thiếu implementation `IReportExportService`) — chi tiết ở `report/phase-6-reporting-test-report.md`
 - [x] §7.2 Test frontend (Vitest) — thuộc phần bàn giao antigravity; DoD: `lint` + `tsc -b` + `build` + `test` sạch kèm số test thật
 
-## Trạng thái (Giai đoạn 7 – AI Agent Executor) — 🔄 ĐANG LÀM (bước tiếp theo)
+## Trạng thái (Giai đoạn 7 – AI Agent Executor) — 🔄 BACKEND XONG, còn §5 frontend
 
-> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đang làm)** → 8 → 9. Giai đoạn 8 (test/CI/deploy) và 9 (Flutter) **không bị bỏ**, chỉ được lùi
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (backend xong, còn §5 frontend)** → 8 → 9. Giai đoạn 8 (test/CI/deploy) và 9 (Flutter) **không bị bỏ**, chỉ được lùi
 > vì không chặn Giai đoạn 7 (xem `Project-Documents/03-roadmap.md` phần đầu tài liệu).
 > Kế hoạch chi tiết + bảng quyết định kiến trúc (D1–D20): `Project-Documents/tasks/phase-7-ai-agent-executor.md`.
 > Schema đã chốt: `Project-Documents/04-database-design.md` §3.3, §3.4, §3.5, **§3.8**.
+> **Bàn giao §5 frontend (hạng mục cuối cùng): `Project-Documents/tasks/phase-7-frontend-handover.md`.**
 
-- [ ] §2 Schema & migration `Phase7AiAgentSchema` — `workspace_members.member_type`/`ai_agent_name` (+ partial UQ 1 agent/workspace), `board_columns.is_clarification` (+ partial UQ), 2 bảng mới `agent_runs` (`jsonb` tool trace, token, `status`/`stop_reason`) và `task_attachments` (`bytea`, cap 512 KB) — `dotnet ef migrations list` = **6**
-- [ ] §3 Module Board — siết gán người thực hiện theo **membership** (trước đây chỉ kiểm bảng `users`), `TaskResponse` thêm `assigneeIsAiAgent`/`activeAgentRunId`, port `IAiAgentResolver`, cột "Chờ làm rõ" (không xoá được, loại trừ với `is_done`), event SignalR `AgentRunProgress`
-- [ ] §4 Module Ai — provider **function-calling** (mở rộng `IAiProvider`, không phá `CompleteAsync`), `TavilyWebSearchProvider` + fake offline, whitelist **4 tool** (`SearchSystemData`/`WebSearch`/`DraftOutput`/`RequestClarification`), orchestrator + **guardrail 15 tool-call / 5 phút / 50 000 token**, 2 applier mới (`PostComment`/`PostAttachment`) đi qua Accountability Layer sẵn có, **7 endpoint**, reaper cho run mồ côi
-- [ ] §5 Frontend — **dropdown chọn người thực hiện** (task detail + thêm thẻ nhanh; hiện UI chỉ hiển thị, chưa đổi được), badge/panel tiến trình Agent trên Kanban, câu hỏi làm rõ + nút **"Chạy lại"**, danh sách tệp đính kèm, nhãn notification mới
-- [ ] §6 Config `Agent` + `Tavily` (không hard-code ngưỡng; `Agent:Enabled=false` ⇒ 503)
-- [ ] §7 Verify bằng harness tạm ngoài workspace (A–J): schema, hàm thuần, tool contract (stub handler), loop end-to-end, "Chờ làm rõ"/"Chạy lại", guardrail, failure/concurrency, HTTP+quyền, bất biến (không hồi quy `CreateSubtasks` của Giai đoạn 4), frontend Vitest
-- [ ] §8 Đối chiếu 6 ô hoàn thiện + 2 hạng mục bắt buộc phát sinh của roadmap; cập nhật `report/phase-7-ai-agent-executor-test-report.md`
+- [x] §2 Schema & migration `Phase7AiAgentSchema` — `workspace_members.member_type`/`ai_agent_name` (+ CHECK `ck_workspace_members_member_type` + partial UQ 1 agent/workspace), `board_columns.is_clarification` (+ partial UQ), 2 bảng mới `agent_runs` (`jsonb` tool trace, token, `status`/`stop_reason`, 3 CHECK, 3 index, 8 FK RESTRICT) và `task_attachments` (`bytea`, cap 512 KB, FK RESTRICT, **không** soft-delete/`updated_at`) — `dotnet ef migrations list` = **6**, `dotnet build` 0/0; verify **36/36 check PASS** trên PostgreSQL thật (nhóm A — `report/phase-7-ai-agent-executor-test-report.md` §2.1)
+- [x] §3 Module Board — `TaskService` siết **membership** của assignee (400 khi ngoài workspace; agent đi qua đúng đường này), `TaskResponse` thêm `assigneeIsAiAgent`/`activeAgentRunId` (điền ở **cả 3** đường trả task), cột `board_columns.is_clarification` (400 khi trùng cờ `is_done`, 409 khi xoá), `WorkspaceMemberResponse.memberType` + agent tạo **lazy** để dropdown assignee thật sự có lựa chọn agent, port `IAiAgentResolver` (+ `NullAiAgentResolver`) và hợp đồng SignalR `AgentRunProgress` — verify **44/44 check PASS** (nhóm I) trên API thật + PostgreSQL thật; **2 bug thật đã sửa** (`agent_runs.status` 16→32 ký tự làm run "Chờ làm rõ" không insert được; `GetValueOrDefault` trả `Guid.Empty` thay vì `null` cho `activeAgentRunId`) — chi tiết `report/phase-7-ai-agent-executor-test-report.md` §2.2
+- [x] §4 Module Ai — provider **function-calling** (`IAiToolCallingProvider.ChatAsync` song song `IAiProvider`, `CompleteAsync` **không** đổi), `TavilyWebSearchProvider` (+ `Tavily:AuthMode` chọn biến thể auth) + `FakeWebSearchProvider` offline, whitelist **4 tool** (`SearchSystemData`/`WebSearch`/`DraftOutput`/`RequestClarification`), `AgentRunOrchestrator` + **guardrail** (`MaxToolCalls`/`RunTimeoutSeconds`/`MaxRunTokens`/`MaxRunLlmCalls`), 2 applier mới (`PostComment`/`PostAttachment`) đi qua Accountability Layer sẵn có, **7 endpoint**, `AgentRunReaper` cho run mồ côi, `WorkspaceAiAgentResolver` (impl thật của port Board) — verify **270/270 check PASS** (nhóm B/C 89 · D/E/H/I 107 · F+503 46 · G 21 · **1 lần gọi DeepSeek thật** 7) trên API thật + PostgreSQL thật; **3 bug thật đã sửa** (DeepSeek **không** map `tool_calls`/`finish_reason` ⇒ mọi lượt function-calling bị coi là "lượt rỗng"; `FakeAiProvider` bị "cướp" kịch bản bởi tiêu đề task trong tool result; `POST /cancel` thiếu cổng `Agent:Enabled` ⇒ trả 404 thay vì 503) — chi tiết `report/phase-7-ai-agent-executor-test-report.md` §2.3
+- [ ] §5 Frontend — **dropdown chọn người thực hiện** (task detail + thêm thẻ nhanh; hiện UI chỉ hiển thị, chưa đổi được), badge/panel tiến trình Agent trên Kanban, câu hỏi làm rõ + nút **"Chạy lại"**, danh sách tệp đính kèm, nhãn notification mới — **hạng mục duy nhất còn lại, đã bàn giao ở `Project-Documents/tasks/phase-7-frontend-handover.md`** (kèm hợp đồng API đã verify + 11 sự thật backend UI phải tôn trọng + danh sách file cần sửa)
+- [x] §6 Config `Agent` + `Tavily` (không hard-code ngưỡng; `Agent:Enabled=false` ⇒ 503) — 2 section trong `appsettings.json` (22 + 5 key, có `ClarificationColumnName`/`AuthMode`) + **1 dòng log khởi động** không chứa secret; đã làm cùng §4
+- [x] §7 Verify bằng harness tạm ngoài workspace **A–I** — **291/291 check PASS** ở đợt verify tổng (A 36+11 · B/C 89 · **C-real Tavily thật** 5 · D 43 · E 19 · F 44 · G 21 · H 22 · I 44+29 · **DeepSeek thật + Tavily thật** 8) trên API Kestrel thật + PostgreSQL 18 thật ⇒ **371/371** cộng dồn cả giai đoạn; **nhóm J (frontend Vitest) chờ §5**
+- [x] §8 Đối chiếu 6 ô hoàn thiện + 2 hạng mục bắt buộc phát sinh của roadmap — 6 ô tick **phần backend** (ghi rõ ô nào cần §5 để hoàn tất trọn vẹn), ô phát sinh "siết membership" đã tick, ô phát sinh "dropdown UI" chuyển §5; DoD còn đúng 1 dòng (frontend test > 155) thuộc §5 — `report/phase-7-ai-agent-executor-test-report.md` §2.4 + `03-roadmap.md` Giai đoạn 7
 
-**Hai hạng mục bắt buộc phát sinh** (phát hiện khi khảo sát code — nếu không làm thì ô "gán task cho AI Agent qua đúng UI assignee hiện có" không thể hoàn thành):
+**Hai hạng mục bắt buộc phát sinh** (phát hiện khi khảo sát code):
 
-- UI **chưa có** đường đổi người thực hiện: `TaskDetailModal` chỉ render `assigneeName` và luôn gửi lại `assigneeId` cũ; `KanbanColumn` quick-add không có assignee ⇒ phải thêm dropdown (nguồn `GET /api/workspaces/{id}/members`).
-- `TaskService.CreateTask/UpdateTask` hiện chỉ kiểm `users.AnyAsync` — **không** kiểm membership ⇒ phải siết lại để không gán task cho user ngoài workspace.
+- `TaskService.CreateTask/UpdateTask` chỉ kiểm `users.AnyAsync` — **không** kiểm membership ⇒ **đã siết** ở §3.2 (`RequireAssigneeInWorkspaceAsync`: user ngoài workspace ⇒ **400**; agent đi qua đúng đường này) và verify ở nhóm I.
+- UI **chưa có** đường đổi người thực hiện: `TaskDetailModal` chỉ render `assigneeName` (dòng ~615–621) và luôn gửi lại `assigneeId` cũ (dòng ~153); `KanbanColumn` quick-add không có assignee ⇒ **còn lại: §5A** — thêm dropdown (nguồn `GET /api/workspaces/{id}/members`), xem note bàn giao.
+
+**Môi trường đã có key thật (không commit):** `DeepSeek:ApiKey` + **`Tavily:ApiKey`** nằm trong User Secrets của
+`src/TeamNexus.Api`; biến thể auth Tavily đã xác nhận bằng gọi thật (`Tavily:AuthMode=Bearer`, `Body` là phương án dự phòng).
+Để verify offline **không tốn token**, đặt env `DeepSeek__ApiKey` = **một khoảng trắng** `' '` (env rỗng bị .NET coi là "unset"
+nên User Secrets sẽ thắng trở lại).
 

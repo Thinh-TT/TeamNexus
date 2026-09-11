@@ -10,7 +10,19 @@ internal static class DtoMapping
     /// Maps a task loaded with the <c>Assignee</c> navigation. Labels and comment count
     /// are provided from grouped queries per task set (never N+1).
     /// </summary>
-    public static TaskResponse MapTask(BoardTask task, IReadOnlyList<LabelResponse> labels, int commentCount = 0)
+    /// <param name="assigneeIsAiAgent">
+    /// Phase 7 §3.3 — resolved ONCE per page by the caller (there is exactly one agent per
+    /// workspace), not per task. Optional/trailing so the original call sites keep compiling.
+    /// </param>
+    /// <param name="activeAgentRunId">
+    /// Phase 7 §3.3 — newest live agent run of this task, from <see cref="AgentRunLookup"/>.
+    /// </param>
+    public static TaskResponse MapTask(
+        BoardTask task,
+        IReadOnlyList<LabelResponse> labels,
+        int commentCount = 0,
+        bool assigneeIsAiAgent = false,
+        Guid? activeAgentRunId = null)
         => new(
             task.Id,
             task.BoardId,
@@ -26,7 +38,9 @@ internal static class DtoMapping
             task.UpdatedAt,
             task.CompletedAt,
             labels,
-            commentCount);
+            commentCount,
+            assigneeIsAiAgent,
+            activeAgentRunId);
 
     public static LabelResponse MapLabel(Label label)
         => new(label.Id, label.WorkspaceId, label.Name, label.Color, label.CreatedAt);

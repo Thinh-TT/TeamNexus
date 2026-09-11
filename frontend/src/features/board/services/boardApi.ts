@@ -17,7 +17,10 @@ import type {
   UpdateColumnRequest,
   UpdateCommentRequest,
   UpdateTaskRequest,
+  WorkspaceMemberResponse,
 } from '../types/board.types'
+import type { AttachmentResponse } from '../../ai/types/agentRun.types'
+import { saveBlob } from '../../reporting/utils/reportDownload'
 
 export const boardApi = {
   // ---- Boards ----
@@ -169,4 +172,29 @@ export const boardApi = {
   deleteComment: async (taskId: string, commentId: string): Promise<void> => {
     await httpClient.delete(`/tasks/${taskId}/comments/${commentId}`)
   },
+
+  // ---- Workspace Members ----
+  getMembers: async (workspaceId: string): Promise<WorkspaceMemberResponse[]> => {
+    const res = await httpClient.get<WorkspaceMemberResponse[]>(`/workspaces/${workspaceId}/members`)
+    return res.data
+  },
+
+  // ---- Attachments ----
+  getTaskAttachments: async (taskId: string): Promise<AttachmentResponse[]> => {
+    const res = await httpClient.get<AttachmentResponse[]>(`/tasks/${taskId}/attachments`)
+    return res.data
+  },
+
+  downloadAttachment: async (
+    taskId: string,
+    attachmentId: string,
+    fileName?: string
+  ): Promise<void> => {
+    const res = await httpClient.get<Blob>(
+      `/tasks/${taskId}/attachments/${attachmentId}/download`,
+      { responseType: 'blob' }
+    )
+    saveBlob(res.data, fileName ?? 'attachment')
+  },
 }
+
