@@ -113,7 +113,7 @@ dotnet ef database update   --project src/TeamNexus.Persistence --startup-projec
 
 ## Trạng thái (Giai đoạn 7 – AI Agent Executor) — ✅ HOÀN THÀNH (Cả Backend & Frontend)
 
-> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đã hoàn thành)** → 8 → 9. Giai đoạn 8 (test/CI/deploy) và 9 (Flutter) **không bị bỏ**, chỉ được lùi
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đã hoàn thành)** → **8 (đang làm)** → 9. Giai đoạn 8 (test/CI/deploy) và 9 (Flutter) **không bị bỏ**, chỉ được lùi
 > vì không chặn Giai đoạn 7 (xem `Project-Documents/03-roadmap.md` phần đầu tài liệu).
 > Kế hoạch chi tiết + bảng quyết định kiến trúc (D1–D20): `Project-Documents/tasks/phase-7-ai-agent-executor.md`.
 > Schema đã chốt: `Project-Documents/04-database-design.md` §3.3, §3.4, §3.5, **§3.8**.
@@ -136,4 +136,36 @@ dotnet ef database update   --project src/TeamNexus.Persistence --startup-projec
 `src/TeamNexus.Api`; biến thể auth Tavily đã xác nhận bằng gọi thật (`Tavily:AuthMode=Bearer`, `Body` là phương án dự phòng).
 Để verify offline **không tốn token**, đặt env `DeepSeek__ApiKey` = **một khoảng trắng** `' '` (env rỗng bị .NET coi là "unset"
 nên User Secrets sẽ thắng trở lại).
+
+## Trạng thái (Giai đoạn 8 – Hoàn thiện, Test & Deploy) — 🔄 ĐANG LÀM
+
+> **Đây không phải giai đoạn feature.** Phần lớn công việc là test, hạ tầng và cấu hình; chỉ có **3 vá mã nguồn nhỏ** là bắt buộc để bản
+> deploy thật sự chạy được. Kế hoạch chi tiết đã chia task (kèm hướng dẫn deploy từng bước cho người **chưa từng dùng**
+> Render/Neon/Vercel/Railway/Supabase/Netlify/GitHub Actions):
+> `Project-Documents/tasks/phase-8-completion-test-deploy.md`.
+> Baseline frontend phải giữ hoặc vượt: **35 test files / 187 tests PASS**, `oxlint` 0/0, `tsc -b` exit 0, `npm run build` OK.
+> Schema đã đóng băng ở Giai đoạn 7 (**6 migration**) — giai đoạn này **không** thêm migration.
+
+- [ ] §2 Test backend — project `tests/TeamNexus.Api.Tests` (xUnit + `WebApplicationFactory<Program>` + PostgreSQL thật, **không** dùng EF InMemory); ưu tiên 1 là các hàm thuần đã được viết `public static` từ Phase 4–7
+- [ ] §2b Test frontend bổ sung — `hubUrl`, `reconnectPolicy`, `useBoardHub` reconnect, nút "Kết nối lại"
+- [ ] §3 **3 vá bắt buộc**: cookie cross-site (`Auth:CookieSameSite`, áp cho **cả** antiforgery cookie) · SignalR URL theo `VITE_API_BASE_URL` · reconnect vô hạn có trần + refetch khi reconnect
+- [ ] §4 CI/CD — `.github/workflows/ci-backend.yml` (.NET 10 + `postgres:18`) và `ci-web.yml` (Node 22: `lint` → `tsc` → `test` → `build`) + badge; **không** secret trong CI
+- [ ] §5 Deploy — **Neon** (Postgres) → **Render** (API, `/api/health`) → **Vercel** (FE) + cập nhật redirect URI Google/GitHub + migrate thủ công bằng `dotnet ef` + checklist nghiệm thu 10 bước
+- [ ] §6 Cold-start — retry vô hạn (hiện tại chỉ thử 5 lần trong ~47 s, thua cold-start ~60 s), refetch board khi reconnect, thông báo UX tiếng Việt; tiêu chí: tự phục hồi ≤ 90 s sau ≥ 20 phút rỗi, không cần F5
+- [ ] §7 Rà soát UI/UX 1 vòng toàn app + sửa các mục trong danh sách chốt + chuẩn bị demo/CV (link demo, ảnh chụp, kịch bản trình bày)
+- [ ] §9 Báo cáo `Project-Documents/report/phase-8-completion-test-deploy-report.md` — số test thật, link CI, URL production, thời gian cold-start đo được, bug thật bắt được
+
+### Chạy test (sau khi §2 xong)
+
+```bash
+# Backend — cần PostgreSQL thật; đặt TEAMNEXUS_TEST_DB nếu không dùng default localhost
+$env:TEAMNEXUS_TEST_DB = "Host=localhost;Port=5432;Database=TeamNexus_Test;Username=postgres;Password=postgres"
+dotnet test TeamNexus.sln
+# Không có DB ⇒ nhóm test thuần (ưu tiên 1) vẫn xanh, nhóm cần DB tự skip kèm thông báo
+
+# Frontend
+cd frontend
+npm run lint && npx tsc -b && npm test && npm run build
+```
+
 

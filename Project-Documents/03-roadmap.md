@@ -2,15 +2,15 @@
 
 > Roadmap ở mức giai đoạn lớn (chưa chia task chi tiết). Mỗi giai đoạn kèm các yêu cầu hoàn thiện để coi là "xong" trước khi chuyển sang giai đoạn kế tiếp.
 
-> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đã hoàn thành)** → 8 → 9.
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đã hoàn thành)** → **8 (đang làm)** → 9.
 >
 > Số giai đoạn đã được **đánh lại cho khớp thứ tự thi hành**: **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Mobile**. `01-system-specification.md` §7 và `02-tech-stack-decisions.md` §2.8 đã đổi theo.
 >
 > **Lưu ý khi đọc tài liệu cũ:** các tài liệu đã đóng băng của giai đoạn 4/5/6 (`tasks/phase-4..6-*.md`, `report/phase-5-*`, `report/phase-6-*`) vẫn dùng **cách đánh số cũ** khi nói "để Giai đoạn 7" ý là test xUnit — theo cách đánh số mới đó là **Giai đoạn 8**.
 >
 > **Vì sao làm 7 trước 8 và 9:** giai đoạn 1–6 đã hoàn tất & verify; giai đoạn 8 (test/CI/deploy) và 9 (Flutter mobile) **không chặn** giai đoạn 7, trong khi AI Agent Executor mới là
-> điểm khác biệt hoá thật của sản phẩm (đúng mục tiêu portfolio/CV ở `02` mục bối cảnh) và đang là mạch phát triển AI còn "nóng". Giai đoạn 7 xong sẽ quay lại 8 (test/CI/deploy trên bản đã đóng băng
-> API) rồi 9 (Flutter). Kế hoạch chi tiết từng bước: `tasks/phase-7-ai-agent-executor.md`.
+> điểm khác biệt hoá thật của sản phẩm (đúng mục tiêu portfolio/CV ở `02` mục bối cảnh) và đang là mạch phát triển AI còn "nóng". Giai đoạn 7 đã xong ⇒ **đang quay lại 8** (test/CI/deploy
+> trên bản đã đóng băng API, xong sẽ tới 9 Flutter). Kế hoạch chi tiết từng bước: `tasks/phase-7-ai-agent-executor.md` và `tasks/phase-8-completion-test-deploy.md`.
 
 ## Giai đoạn 1: Nền tảng & Auth
 
@@ -114,7 +114,8 @@ Nâng AI từ vai trò đề xuất/quan sát lên vai trò thực thi thật: g
 
 ## Giai đoạn 8: Hoàn thiện, Test & Deploy
 
-> **Chưa bắt đầu — dự kiến sau Giai đoạn 9.** Nội dung giai đoạn không đổi; chỉ đổi thứ tự thi hành.
+> **Đang làm — tiếp ngay sau Giai đoạn 7.** Nội dung giai đoạn không đổi. Kế hoạch chi tiết đã chia task:
+> `tasks/phase-8-completion-test-deploy.md` (gồm cả hướng dẫn deploy từng bước cho người chưa từng dùng Render/Neon/Vercel/Railway/Supabase/Netlify/GitHub Actions).
 
 Viết test (xUnit, Vitest), dọn UI/UX, cấu hình CI/CD bằng GitHub Actions, deploy backend/frontend/DB lên hạ tầng free-tier đã chọn, xử lý các vấn đề cold-start/SignalR reconnect.
 
@@ -127,7 +128,7 @@ Viết test (xUnit, Vitest), dọn UI/UX, cấu hình CI/CD bằng GitHub Action
 
 ## Giai đoạn 9: Mobile (Flutter)
 
-> **Chưa bắt đầu — dự kiến sau Giai đoạn 7.** Nội dung giai đoạn không đổi; chỉ đổi thứ tự thi hành.
+> **Chưa bắt đầu — dự kiến sau Giai đoạn 8.** Nội dung giai đoạn không đổi; chỉ đổi thứ tự thi hành.
 
 Sau khi bản Web ổn định, xây app Flutter dùng chung API, tích hợp signalr_netcore cho real-time và kiểm thử trên thiết bị thật.
 
