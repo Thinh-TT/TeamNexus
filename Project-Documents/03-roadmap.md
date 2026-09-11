@@ -7,11 +7,11 @@
 Khởi tạo project ASP.NET Core (Modular Monolith) + React, thiết kế schema PostgreSQL cơ bản, dựng ASP.NET Core Identity với OAuth Google/GitHub và JWT/Cookie, phân quyền Admin/Manager/Member.
 
 **Yêu cầu hoàn thiện:**
-- [ x] Project backend (Modular Monolith) và frontend (React/Vite) khởi tạo, build/run được
-- [ x] Schema PostgreSQL cơ bản (User, Role, Workspace/Board) đã migrate
-- [ x] Đăng nhập được qua Google và GitHub OAuth
-- [ x] JWT + refresh token qua HttpOnly Cookie hoạt động, có rotate refresh token
-- [ x] Phân quyền Policy-based cho 3 role (Admin/Manager/Member) áp dụng được trên ít nhất 1 endpoint mẫu
+- [x] Project backend (Modular Monolith) và frontend (React/Vite) khởi tạo, build/run được
+- [x] Schema PostgreSQL cơ bản (User, Role, Workspace/Board) đã migrate
+- [x] Đăng nhập được qua Google và GitHub OAuth
+- [x] JWT + refresh token qua HttpOnly Cookie hoạt động, có rotate refresh token
+- [x] Phân quyền Policy-based cho 3 role (Admin/Manager/Member) áp dụng được trên ít nhất 1 endpoint mẫu
 
 ## Giai đoạn 2: Kanban Core (CRUD + Real-time)
 
