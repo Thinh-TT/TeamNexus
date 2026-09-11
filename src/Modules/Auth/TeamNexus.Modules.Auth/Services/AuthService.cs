@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Security.Claims;
+using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -238,18 +240,50 @@ public sealed class AuthService
 
     private async Task<string> CreateUniqueUserNameAsync(string providerKey, List<Claim> claims, CancellationToken ct)
     {
-        var baseName = FindFirst(claims, "login", "urn:github:login", ClaimTypes.Name)
-                       ?? $"github_{providerKey}";
+        var email = FindFirst(claims, ClaimTypes.Email, "email");
+        var emailPrefix = !string.IsNullOrWhiteSpace(email) ? email.Split('@')[0] : null;
+        var rawName = FindFirst(claims, "login", "urn:github:login") ?? emailPrefix ?? FindFirst(claims, ClaimTypes.Name) ?? providerKey;
+
+        var baseName = SanitizeUserName(rawName);
+        if (string.IsNullOrWhiteSpace(baseName))
+        {
+            baseName = $"user_{providerKey}";
+        }
+
         var candidate = baseName;
         var suffix = 2;
 
         while (await _userManager.FindByNameAsync(candidate) is not null)
         {
-            candidate = baseName.Length > 240 ? baseName[..240] : baseName;
-            candidate = $"{candidate}_{suffix++}";
+            var truncated = baseName.Length > 230 ? baseName[..230] : baseName;
+            candidate = $"{truncated}_{suffix++}";
         }
 
         return candidate;
+    }
+
+    private static string SanitizeUserName(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return string.Empty;
+        }
+
+        var normalized = input.Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder();
+        foreach (var c in normalized)
+        {
+            var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(c);
+            if (unicodeCategory != UnicodeCategory.NonSpacingMark)
+            {
+                if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.')
+                {
+                    sb.Append(c);
+                }
+            }
+        }
+
+        return sb.ToString();
     }
 
     private async Task RevokeAllActiveForUserAsync(Guid userId, CancellationToken ct)

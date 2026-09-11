@@ -107,13 +107,13 @@ public static class AuthEndpoints
             return Results.Redirect($"{frontendBaseUrl}?auth=error");
         }
 
+        var provider = result.Properties?.Items.TryGetValue("login_provider", out var value) == true
+                       && !string.IsNullOrEmpty(value)
+            ? value!
+            : AuthConstants.GitHubScheme;
+
         try
         {
-            var provider = result.Properties?.Items.TryGetValue("login_provider", out var value) == true
-                           && !string.IsNullOrEmpty(value)
-                ? value!
-                : AuthConstants.GitHubScheme;
-
             var (user, _) = await authService.HandleExternalLoginAsync(
                 provider, result.Principal.Claims, http.RequestAborted);
 
@@ -126,7 +126,7 @@ public static class AuthEndpoints
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "External login failed for {Provider}.", AuthConstants.GitHubScheme);
+            logger.LogError(ex, "External login failed for {Provider}.", provider);
             await http.SignOutAsync(AuthConstants.ExternalScheme);
             return Results.Redirect($"{frontendBaseUrl}?auth=error");
         }
