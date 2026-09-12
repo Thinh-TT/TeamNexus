@@ -89,8 +89,10 @@ describe('ReportsPage', () => {
       expect(screen.getByText('Báo Cáo & Xuất Dữ Liệu')).toBeInTheDocument()
     })
 
-    expect(screen.getByRole('button', { name: /Xuất Báo Cáo/i })).toBeInTheDocument()
-    expect(screen.getByText('Tổng số Task')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Xuất Báo Cáo/i })).toBeInTheDocument()
+      expect(screen.getByText('Tổng số Task')).toBeInTheDocument()
+    })
   })
 
   it('opens export drawer when clicking Xuất Báo Cáo button', async () => {

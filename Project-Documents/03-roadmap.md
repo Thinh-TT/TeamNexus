@@ -120,10 +120,14 @@ Nâng AI từ vai trò đề xuất/quan sát lên vai trò thực thi thật: g
 Viết test (xUnit, Vitest), dọn UI/UX, cấu hình CI/CD bằng GitHub Actions, deploy backend/frontend/DB lên hạ tầng free-tier đã chọn, xử lý các vấn đề cold-start/SignalR reconnect.
 
 **Yêu cầu hoàn thiện:**
-- [ ] Test cơ bản cho các luồng chính (Auth, Kanban CRUD, AI Smart Setup) bằng xUnit/Vitest
-- [ ] CI/CD pipeline qua GitHub Actions chạy build/test tự động
+- [x] Test cơ bản cho các luồng chính (Auth, Kanban CRUD, AI Smart Setup) bằng xUnit/Vitest
+      — backend **172 test** (xUnit v3 + `WebApplicationFactory<Program>` + PostgreSQL 18 thật), frontend **206 test** (Vitest + Testing Library)
+- [x] CI/CD pipeline qua GitHub Actions chạy build/test tự động
+      — `ci-backend` (.NET 10 + `postgres:18`) và `ci-web` (Node 24: lint → tsc → test → build); **không** giữ secret nào;
+      cả hai workflow **xanh** trên run thật; có cổng chặn "test bị skip" và "số test tụt"
 - [ ] Backend deploy thành công lên Railway/Render, Database trên Neon/Supabase, Frontend trên Vercel/Netlify
 - [ ] Kiểm tra và xử lý ổn thỏa hiện tượng cold-start ảnh hưởng SignalR (reconnect UX chấp nhận được)
+      — phần frontend **đã xong** (retry vô hạn có trần + nút "Kết nối lại" + refetch khi reconnect); còn đo cold-start thật sau khi deploy
 - [ ] UI/UX rà soát lại tổng thể, sẵn sàng để demo/đưa vào CV
 
 ## Giai đoạn 9: Mobile (Flutter)

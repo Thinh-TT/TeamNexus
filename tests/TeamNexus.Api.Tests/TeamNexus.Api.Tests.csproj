@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- xUnit v3 ships its own test runner host, so the test project is an executable.
+         This is what makes runtime (dynamic) skipping possible via Assert.Skip — needed by
+         decision D4: DB-backed suites must skip with a loud message when no PostgreSQL is
+         reachable, while the priority-1 pure suites always run. -->
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- xUnit v3 ships an analyzer (xUnit1051) that wants TestContext.Current.CancellationToken
+         threaded through every HTTP/EF call. These are short, deterministic in-process tests, so the
+         rule is noise here; suppressing it keeps "0 warning" meaningful for real problems. -->
+    <NoWarn>$(NoWarn);xUnit1051</NoWarn>
+    <!-- Required by RunnerUtility to locate the assembly under test on .NET 10. -->
+    <GenerateProgramFile>false</GenerateProgramFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="3.0.1" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <!-- Declared explicitly because the test infrastructure builds its own DbContext, which must
+         use the exact same snake_case naming convention as the application's registration. -->
+    <PackageReference Include="EFCore.NamingConventions" Version="10.0.0" />
+    <!-- Npgsql version must be >= the one Npgsql.EntityFrameworkCore.PostgreSQL (via the Auth
+         module) requires, otherwise restore fails with NU1605 package downgrade. -->
+    <PackageReference Include="Npgsql" Version="10.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TeamNexus.Api\TeamNexus.Api.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Ai\TeamNexus.Modules.Ai\TeamNexus.Modules.Ai.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Board\TeamNexus.Modules.Board\TeamNexus.Modules.Board.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Auth\TeamNexus.Modules.Auth\TeamNexus.Modules.Auth.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Reporting\TeamNexus.Modules.Reporting\TeamNexus.Modules.Reporting.csproj" />
+    <ProjectReference Include="..\..\src\TeamNexus.Persistence\TeamNexus.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

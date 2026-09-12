@@ -37,6 +37,16 @@ public static class DependencyInjection
 
         services.AddHttpContextAccessor();
 
+        // ---- Cookie transport options (Phase 8 D7) --------------------------
+        // One value drives BOTH the auth cookies and the antiforgery cookie below, so a split
+        // deployment (cross-site frontend/API) switches the whole cookie contract with one setting.
+        services.AddOptions<AuthOptions>()
+            .Bind(configuration.GetSection(AuthOptions.SectionName))
+            .Validate(
+                o => Enum.IsDefined(o.CookieSameSite),
+                "Auth:CookieSameSite must be one of Lax|Strict|None|Unspecified.")
+            .ValidateOnStart();
+
         // ---- JWT options ---------------------------------------------------
         services.AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))
@@ -58,6 +68,10 @@ public static class DependencyInjection
         // ---- Authentication -------------------------------------------------
         var jwtOptions = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
             ?? new JwtOptions();
+
+        // Same instance the antiforgery block below reads: one setting, one cookie contract.
+        var authOptions = configuration.GetSection(AuthOptions.SectionName).Get<AuthOptions>()
+            ?? new AuthOptions();
 
         var authBuilder = services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -190,7 +204,10 @@ public static class DependencyInjection
             options.HeaderName = AuthConstants.XsrfRequestHeader;
             options.Cookie.Name = "TeamNexus.Antiforgery";
             options.Cookie.HttpOnly = true;
-            options.Cookie.SameSite = SameSiteMode.Lax;
+            // Must match the auth cookies (Phase 8 D7): if the antiforgery cookie stays Lax while the
+            // session crosses sites, every POST/PUT/DELETE answers 403 on production while local
+            // development stays green — the hardest kind of regression to spot.
+            options.Cookie.SameSite = authOptions.CookieSameSite;
             options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         });
 

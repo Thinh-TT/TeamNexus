@@ -31,6 +31,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Reporting", "Reporting", "{
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TeamNexus.Modules.Reporting", "src\Modules\Reporting\TeamNexus.Modules.Reporting\TeamNexus.Modules.Reporting.csproj", "{9ECA04A1-DE71-4F2A-B29B-B4301ECF28A2}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TeamNexus.Api.Tests", "tests\TeamNexus.Api.Tests\TeamNexus.Api.Tests.csproj", "{D69C2118-697C-45D7-A2E1-1DE723B2514F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -125,6 +129,18 @@ Global
 		{9ECA04A1-DE71-4F2A-B29B-B4301ECF28A2}.Release|x64.Build.0 = Release|Any CPU
 		{9ECA04A1-DE71-4F2A-B29B-B4301ECF28A2}.Release|x86.ActiveCfg = Release|Any CPU
 		{9ECA04A1-DE71-4F2A-B29B-B4301ECF28A2}.Release|x86.Build.0 = Release|Any CPU
+		{D69C2118-697C-45D7-A2E1-1DE723B2514F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D69C2118-697C-45D7-A2E1-1DE723B2514F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D69C2118-697C-45D7-A2E1-1DE723B2514F}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{D69C2118-697C-45D7-A2E1-1DE723B2514F}.Debug|x64.Build.0 = Debug|Any CPU
+		{D69C2118-697C-45D7-A2E1-1DE723B2514F}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D69C2118-697C-45D7-A2E1-1DE723B2514F}.Debug|x86.Build.0 = Debug|Any CPU
+		{D69C2118-697C-45D7-A2E1-1DE723B2514F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D69C2118-697C-45D7-A2E1-1DE723B2514F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D69C2118-697C-45D7-A2E1-1DE723B2514F}.Release|x64.ActiveCfg = Release|Any CPU
+		{D69C2118-697C-45D7-A2E1-1DE723B2514F}.Release|x64.Build.0 = Release|Any CPU
+		{D69C2118-697C-45D7-A2E1-1DE723B2514F}.Release|x86.ActiveCfg = Release|Any CPU
+		{D69C2118-697C-45D7-A2E1-1DE723B2514F}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -143,5 +159,6 @@ Global
 		{385A0954-055F-467A-B9BE-37CC94240E5D} = {BB1D8860-8311-E62E-D03C-503AF4A8C141}
 		{738763F7-68AC-12DE-A386-1ED9BDE12CF2} = {EC447DCF-ABFA-6E24-52A5-D7FD48A5C558}
 		{9ECA04A1-DE71-4F2A-B29B-B4301ECF28A2} = {738763F7-68AC-12DE-A386-1ED9BDE12CF2}
+		{D69C2118-697C-45D7-A2E1-1DE723B2514F} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal

@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Reporter output from `npm test -- --reporter=json --outputFile=test-results.json`
+# (same file CI uploads as an artifact; must never be committed)
+test-results.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

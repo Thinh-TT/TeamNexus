@@ -1,5 +1,8 @@
 # TeamNexus
 
+[![ci-backend](https://github.com/Thinh-TT/TeamNexus/actions/workflows/ci-backend.yml/badge.svg?branch=main)](https://github.com/Thinh-TT/TeamNexus/actions/workflows/ci-backend.yml)
+[![ci-web](https://github.com/Thinh-TT/TeamNexus/actions/workflows/ci-web.yml/badge.svg?branch=main)](https://github.com/Thinh-TT/TeamNexus/actions/workflows/ci-web.yml)
+
 Trợ lý điều phối không gian làm việc thông minh — nền tảng quản lý công việc & giao tiếp nhóm
 kết hợp Kanban real-time với AI Agent (xem `Project-Documents/`).
 
@@ -23,7 +26,7 @@ Project-Documents/          # Spec, tech decisions, roadmap, DB design, tasks
 
 ## Chạy ở local (dev)
 
-Yêu cầu: .NET SDK 10, Node.js ≥ 22.
+Yêu cầu: .NET SDK 10, Node.js ≥ 22.12 (khuyến nghị 24 — đúng bản CI dùng; `vitest` yêu cầu `^22.12.0 || ^24.0.0 || >=26.0.0`).
 
 ```bash
 # 1) Backend – http://localhost:5000  (Scalar UI: http://localhost:5000/scalar)
@@ -143,29 +146,69 @@ nên User Secrets sẽ thắng trở lại).
 > deploy thật sự chạy được. Kế hoạch chi tiết đã chia task (kèm hướng dẫn deploy từng bước cho người **chưa từng dùng**
 > Render/Neon/Vercel/Railway/Supabase/Netlify/GitHub Actions):
 > `Project-Documents/tasks/phase-8-completion-test-deploy.md`.
-> Baseline frontend phải giữ hoặc vượt: **35 test files / 187 tests PASS**, `oxlint` 0/0, `tsc -b` exit 0, `npm run build` OK.
+> Baseline frontend: **35 files / 206 tests PASS**, `oxlint` 0/0, `tsc -b` exit 0, `npm run build` OK (baseline cuối Giai đoạn 7 là 187 — §2b đã cộng thêm 19 test).
 > Schema đã đóng băng ở Giai đoạn 7 (**6 migration**) — giai đoạn này **không** thêm migration.
 
-- [ ] §2 Test backend — project `tests/TeamNexus.Api.Tests` (xUnit + `WebApplicationFactory<Program>` + PostgreSQL thật, **không** dùng EF InMemory); ưu tiên 1 là các hàm thuần đã được viết `public static` từ Phase 4–7
-- [ ] §2b Test frontend bổ sung — `hubUrl`, `reconnectPolicy`, `useBoardHub` reconnect, nút "Kết nối lại"
-- [ ] §3 **3 vá bắt buộc**: cookie cross-site (`Auth:CookieSameSite`, áp cho **cả** antiforgery cookie) · SignalR URL theo `VITE_API_BASE_URL` · reconnect vô hạn có trần + refetch khi reconnect
-- [ ] §4 CI/CD — `.github/workflows/ci-backend.yml` (.NET 10 + `postgres:18`) và `ci-web.yml` (Node 22: `lint` → `tsc` → `test` → `build`) + badge; **không** secret trong CI
+- [x] §2 Test backend — project `tests/TeamNexus.Api.Tests` (xUnit **v3** + `WebApplicationFactory<Program>` + PostgreSQL 18 thật, **không** dùng EF InMemory): nhóm ưu tiên 1 (hàm thuần `public static` của Phase 4–7) + Auth/CSRF/refresh-rotation + Kanban CRUD/kéo-thả/siết membership + Smart Setup & Accountability Layer (Pending → Approve/Reject/Undo) + Agent Executor (rerun append-only, wall-clock guardrail, huỷ, reaper, 503) + export PDF/Excel — **172 test PASS** (0 fail / 0 skip / 0 warning) trên PostgreSQL 18 thật; **98 PASS / 74 SKIP / 0 FAIL** khi không có DB; `dotnet build TeamNexus.sln` = 0/0; `migrations list` = **6** (không đổi schema)
+- [x] §3.1 Vá **cookie cross-site** — `AuthOptions` (section `Auth`) điều khiển `SameSite` cho **cả** token cookie **và** antiforgery cookie; mặc định `Lax` (local không đổi), production đặt env `Auth__CookieSameSite=None`. **Đây là blocker số 1 khi tách domain FE/API** (Vercel + Render); verify bằng 2 test mới (`AuthCookies_UseLaxByDefault`, `AuthCookies_FollowAuthCookieSameSiteConfiguration`)
+- [x] §2b Test frontend bổ sung + §3.2/§3.3 — `utils/hubUrl.ts` (`resolveHubUrl`), `utils/reconnectPolicy.ts` (`nextRetryDelay` trần 30 s **thử lại vô hạn** + `isColdStartLikely`), `useBoardHub` dùng 2 hàm đó + `refetch` khi reconnect + `reconnect()` thủ công, `BoardView` có nút **"Kết nối lại"** + thông điệp cold-start tiếng Việt — **206 test PASS** (0 fail, +19 so với 187)
+- [x] §4 **CI/CD GitHub Actions** — `.github/workflows/ci-backend.yml` (.NET 10 + `postgres:18`, build `-m:1 -c Release`, 172 test, artifact TRX) và `ci-web.yml` (Node 24: `lint` → `tsc` → `test` → **assert số test > 187** → `build`, artifact `dist` + báo cáo JSON); cache NuGet/npm; có `concurrency` huỷ run cũ + `timeout-minutes`; **hoàn toàn không có secret** (D11 — deploy do Render/Vercel tự làm)
 - [ ] §5 Deploy — **Neon** (Postgres) → **Render** (API, `/api/health`) → **Vercel** (FE) + cập nhật redirect URI Google/GitHub + migrate thủ công bằng `dotnet ef` + checklist nghiệm thu 10 bước
-- [ ] §6 Cold-start — retry vô hạn (hiện tại chỉ thử 5 lần trong ~47 s, thua cold-start ~60 s), refetch board khi reconnect, thông báo UX tiếng Việt; tiêu chí: tự phục hồi ≤ 90 s sau ≥ 20 phút rỗi, không cần F5
+- [x] §6.2 Cold-start (phần frontend) — đã làm cùng §2b: thay `withAutomaticReconnect([…])` (5 lần trong ~47 s rồi **bỏ cuộc vĩnh viễn**) bằng retry vô hạn có trần, refetch board khi reconnect, nút "Kết nối lại", thông điệp tiếng Việt. Việc còn lại của §6 là **đo cold-start thật trên Render** (§6.5 — cần deploy trước)
+- [ ] §6.5 Đo cold-start trên Render: tự phục hồi ≤ 90 s sau ≥ 20 phút rỗi, không cần F5
 - [ ] §7 Rà soát UI/UX 1 vòng toàn app + sửa các mục trong danh sách chốt + chuẩn bị demo/CV (link demo, ảnh chụp, kịch bản trình bày)
 - [ ] §9 Báo cáo `Project-Documents/report/phase-8-completion-test-deploy-report.md` — số test thật, link CI, URL production, thời gian cold-start đo được, bug thật bắt được
 
-### Chạy test (sau khi §2 xong)
+### CI (GitHub Actions)
+
+Hai workflow chạy trên `ubuntu-latest` cho mọi push lên `main`/`develop`/`feat/**` và mọi PR vào `main`/`develop`:
+
+| Workflow | Làm gì | Artifact |
+|---|---|---|
+| `ci-backend.yml` | `restore` → `build -c Release` (**0 warning / 0 error**) → `dotnet test` trên **PostgreSQL 18** (service container) → **assert không test nào bị skip** | `backend-test-results` (TRX) |
+| `ci-web.yml` | `npm ci` → `lint` → `tsc -b` → `vitest` → **assert số test > 187** → `vite build` | `web-build-output` (`dist/` + báo cáo JSON) |
+
+**Trạng thái đã verify:** cả hai workflow **xanh** trên run thật — backend `Passed: 172, Skipped: 0`, frontend `vitest: total=206 failed=0`.
+
+- **Vì sao không có workflow deploy:** Render và Vercel tự deploy từ GitHub (quyết định **D11**). Nhờ vậy CI **không giữ một secret nào** —
+  toàn bộ cấu hình cho test do `TeamNexusApiFactory` cấp bằng code (`Jwt:SigningKey` test, `DeepSeek:ApiKey` rỗng ⇒ dùng fake provider).
+  Hệ quả đã biết: **migration lên DB cloud là bước thủ công** (xem `Project-Documents/tasks/phase-8-completion-test-deploy.md` §5.7).
+- **Hai cổng chống "xanh giả":** `vitest` vẫn xanh nếu ai đó xoá test ⇒ CI đọc báo cáo JSON và **fail nếu tổng ≤ 187**.
+  Và **một test bị `SKIP` vẫn tính là xanh** ⇒ job backend đọc counters trong TRX và **fail nếu `skipped > 0`**
+  (lần chạy CI đầu tiên đã lọt lưới đúng kiểu này: job xanh nhưng chỉ **111/172** test thực sự chạy — xem §4.6 của task doc).
+- **Node 24 (không phải 22):** `vitest` khai báo `engines: ^22.12.0 || ^24.0.0 || >=26.0.0`, nên Node 22.0–22.11 sẽ hỏng; 24 cũng khớp máy dev.
+
+### Chạy test backend (§2 đã xong)
 
 ```bash
-# Backend — cần PostgreSQL thật; đặt TEAMNEXUS_TEST_DB nếu không dùng default localhost
-$env:TEAMNEXUS_TEST_DB = "Host=localhost;Port=5432;Database=TeamNexus_Test;Username=postgres;Password=postgres"
-dotnet test TeamNexus.sln
-# Không có DB ⇒ nhóm test thuần (ưu tiên 1) vẫn xanh, nhóm cần DB tự skip kèm thông báo
+# Cần một PostgreSQL thật (schema dùng jsonb/bytea/advisory lock/CHECK ⇒ KHÔNG dùng EF InMemory).
+# Fixture tự tạo database test nếu chưa có và tự chạy migration một lần cho cả process.
+$env:TEAMNEXUS_TEST_DB = "Host=localhost;Port=5432;Database=TeamNexus_Test;Username=postgres;Password=..."
 
-# Frontend
+dotnet test tests/TeamNexus.Api.Tests/TeamNexus.Api.Tests.csproj
+
+# Lọc theo class (runner in-process của xUnit v3):
+dotnet run --project tests/TeamNexus.Api.Tests -- -class TeamNexus.Api.Tests.Pure.AgentGuardrailsTests
+
+# Docker thay cho PostgreSQL local:
+docker run --name teamnexus-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:18
+```
+
+> **Không có DB ⇒ không fail:** nhóm test thuần (ưu tiên 1) vẫn chạy (**98 PASS**), nhóm cần DB tự **skip kèm thông báo**
+> hành động được (**74 SKIP**, 0 fail) — đúng quyết định D4 của giai đoạn 8. Fixture in một dòng cho biết DB có sẵn sàng hay không;
+> **trên CI thì skip bị coi là lỗi** (job backend fail nếu `skipped > 0`), vì ở đó PostgreSQL đã được bảo đảm bằng service container.
+
+### Chạy test frontend
+
+```bash
 cd frontend
 npm run lint && npx tsc -b && npm test && npm run build
+
+# Giống hệt CI (kèm cổng bảo vệ baseline số test):
+npm test -- --reporter=json --outputFile=test-results.json
 ```
+
+> Kết quả hiện tại: **35 file / 206 test PASS** (baseline cuối Giai đoạn 7 là 187; §2b cộng thêm 19 test cho
+> `hubUrl`, `reconnectPolicy`, `useBoardHub` reconnect và `BoardView`).
 
 

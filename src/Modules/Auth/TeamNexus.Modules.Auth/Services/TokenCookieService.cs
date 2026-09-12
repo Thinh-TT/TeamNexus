@@ -8,16 +8,26 @@ namespace TeamNexus.Modules.Auth.Services;
 /// Writes/clears the HttpOnly auth cookies on responses and reads them from requests.
 /// `Secure` is applied only over HTTPS so dev (plain http://localhost) still works;
 /// behind TLS (prod) the flag is always on.
+/// <para>
+/// `SameSite` comes from <see cref="AuthOptions.CookieSameSite"/> (Phase 8 D7): `Lax` locally, `None`
+/// for a cross-site deployment (Vercel frontend + Render API). The exact same value must also be used
+/// for the antiforgery cookie, otherwise every state-changing request fails CSRF validation.
+/// </para>
 /// </summary>
 public sealed class TokenCookieService
 {
     private readonly IHttpContextAccessor _accessor;
     private readonly JwtOptions _jwtOptions;
+    private readonly AuthOptions _authOptions;
 
-    public TokenCookieService(IHttpContextAccessor accessor, IOptions<JwtOptions> jwtOptions)
+    public TokenCookieService(
+        IHttpContextAccessor accessor,
+        IOptions<JwtOptions> jwtOptions,
+        IOptions<AuthOptions> authOptions)
     {
         _accessor = accessor;
         _jwtOptions = jwtOptions.Value;
+        _authOptions = authOptions.Value;
     }
 
     private HttpContext HttpContext =>
@@ -36,7 +46,7 @@ public sealed class TokenCookieService
         {
             HttpOnly = true,
             Secure = HttpContext.Request.IsHttps,
-            SameSite = SameSiteMode.Lax,
+            SameSite = _authOptions.CookieSameSite,
             Path = "/",
             Expires = now.Add(_jwtOptions.AccessTokenLifetime),
         });
@@ -45,7 +55,7 @@ public sealed class TokenCookieService
         {
             HttpOnly = true,
             Secure = HttpContext.Request.IsHttps,
-            SameSite = SameSiteMode.Lax,
+            SameSite = _authOptions.CookieSameSite,
             Path = "/",
             Expires = now.Add(_jwtOptions.RefreshTokenLifetime),
         });
@@ -59,7 +69,7 @@ public sealed class TokenCookieService
         {
             HttpOnly = true,
             Secure = HttpContext.Request.IsHttps,
-            SameSite = SameSiteMode.Lax,
+            SameSite = _authOptions.CookieSameSite,
             Path = "/",
             Expires = expired,
         });
@@ -68,7 +78,7 @@ public sealed class TokenCookieService
         {
             HttpOnly = true,
             Secure = HttpContext.Request.IsHttps,
-            SameSite = SameSiteMode.Lax,
+            SameSite = _authOptions.CookieSameSite,
             Path = "/",
             Expires = expired,
         });

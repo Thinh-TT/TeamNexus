@@ -1,0 +1,16 @@
+# Chuẩn hoá kiểu xuống dòng cho các file "hạ tầng" — tránh việc Git trên Windows đổi LF thành
+# CRLF rồi commit nhầm cả file thành một diff lớn chỉ vì xuống dòng.
+#
+# GitHub Actions không bắt buộc LF, nhưng file workflow là file cấu hình được review kỹ và hay
+# bị sửa bằng nhiều công cụ khác nhau, nên ghim LF cho nó là rẻ và an toàn nhất.
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+# Script shell phải là LF, nếu không sẽ hỏng trên runner Linux (`bad interpreter`).
+*.sh   text eol=lf
+
+# Ảnh và file nhị phân: không đụng tới.
+*.png binary
+*.webp binary
+*.jpg binary
+*.ico binary

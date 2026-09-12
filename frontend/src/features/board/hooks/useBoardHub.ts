@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import {
   type HubConnection,
   HubConnectionBuilder,
@@ -15,15 +15,30 @@ import type {
   TaskResponse,
 } from '../types/board.types'
 import type { AgentRunProgressEvent } from '../../ai/types/agentRun.types'
+import { resolveHubUrl } from '../utils/hubUrl'
+import { nextRetryDelay } from '../utils/reconnectPolicy'
+
+export const SERVER_TIMEOUT_MS = 60_000
+export const KEEP_ALIVE_INTERVAL_MS = 15_000
 
 /**
  * Hook to manage SignalR lifecycle for real-time board collaboration.
- * Connects to /hubs/board, joins board room `board-{boardId}`, and dispatches
+ * Connects to SignalR board hub (resolved via resolveHubUrl), joins board room `board-{boardId}`,
+ * automatically reconnects indefinitely across free-tier cold starts, and dispatches
  * real-time events to the Zustand boardStore.
  */
-export const useBoardHub = (boardId: string | undefined) => {
+export const useBoardHub = (
+  boardId: string | undefined,
+  refetch?: () => void | Promise<void>
+) => {
   const connectionRef = useRef<HubConnection | null>(null)
   const isJoinedRef = useRef<boolean>(false)
+  const reconnectingLockRef = useRef<boolean>(false)
+  const refetchRef = useRef(refetch)
+
+  useEffect(() => {
+    refetchRef.current = refetch
+  }, [refetch])
 
   const {
     setConnectionStatus,
@@ -46,13 +61,20 @@ export const useBoardHub = (boardId: string | undefined) => {
     let isMounted = true
     isJoinedRef.current = false
 
+    const hubUrl = resolveHubUrl(import.meta.env.VITE_API_BASE_URL)
     const connection = new HubConnectionBuilder()
-      .withUrl('/hubs/board', {
+      .withUrl(hubUrl, {
         withCredentials: true,
       })
-      .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
+      .withAutomaticReconnect({
+        nextRetryDelayInMilliseconds: ({ previousRetryCount }) =>
+          nextRetryDelay(previousRetryCount),
+      })
       .configureLogging(LogLevel.Warning)
       .build()
+
+    connection.serverTimeoutInMilliseconds = SERVER_TIMEOUT_MS
+    connection.keepAliveIntervalInMilliseconds = KEEP_ALIVE_INTERVAL_MS
 
     connectionRef.current = connection
 
@@ -126,6 +148,11 @@ export const useBoardHub = (boardId: string | undefined) => {
         } catch (err) {
           console.error('[SignalR] Failed to rejoin board after reconnect:', err)
         }
+        try {
+          await refetchRef.current?.()
+        } catch (err) {
+          console.error('[SignalR] Failed to refetch board data after reconnect:', err)
+        }
       }
     })
 
@@ -190,7 +217,33 @@ export const useBoardHub = (boardId: string | undefined) => {
     applyAgentRunProgress,
   ])
 
+  const reconnect = useCallback(async () => {
+    const conn = connectionRef.current
+    if (!boardId || !conn || reconnectingLockRef.current) return
+    if (conn.state !== HubConnectionState.Disconnected) return
+
+    reconnectingLockRef.current = true
+    try {
+      setConnectionStatus('connecting')
+      await conn.start()
+      await conn.invoke('JoinBoard', boardId)
+      isJoinedRef.current = true
+      setConnectionStatus('connected')
+      try {
+        await refetchRef.current?.()
+      } catch (refetchErr) {
+        console.error('[SignalR] Failed to refetch board data after manual reconnect:', refetchErr)
+      }
+    } catch (err) {
+      console.error('[SignalR] Manual reconnect failed:', err)
+      setConnectionStatus('disconnected')
+    } finally {
+      reconnectingLockRef.current = false
+    }
+  }, [boardId, setConnectionStatus])
+
   return {
     getConnection: () => connectionRef.current,
+    reconnect,
   }
 }

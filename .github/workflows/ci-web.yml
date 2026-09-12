@@ -1,0 +1,75 @@
+name: ci-web
+
+on:
+  push:
+    branches: [main, develop, 'feat/**']
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-web-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Lint, typecheck, test, build (Node 24)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          # KHÔNG dùng '22': vitest khai báo engines `^22.12.0 || ^24.0.0 || >=26`, nên Node 22.0–22.11
+          # sẽ hỏng. Node 24 khớp máy dev (24.15) và khớp @types/node ^24.
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint (oxlint)
+        run: npm run lint
+
+      - name: Typecheck (tsc -b)
+        run: npx tsc -b
+
+      # Báo cáo JSON để bước sau kiểm chứng được SỐ test, chứ không chỉ tin vào exit code.
+      - name: Test (vitest)
+        run: npm test -- --reporter=json --outputFile=test-results.json
+
+      # Cổng bảo vệ baseline: exit code của vitest vẫn xanh nếu ai đó XOÁ bớt test.
+      # Baseline cuối Giai đoạn 7 là 187 test (35 file); DoD của Giai đoạn 8 yêu cầu chỉ tăng.
+      - name: Assert test count did not regress
+        shell: pwsh
+        run: |
+          $report = Get-Content test-results.json -Raw | ConvertFrom-Json
+          $total = [int]$report.numTotalTests
+          $failed = [int]$report.numFailedTests
+          Write-Host "vitest: total=$total failed=$failed"
+          if ($failed -ne 0) { throw "vitest reported $failed failing tests" }
+          if ($total -le 187) { throw "Số test đã tụt: $total (baseline cuối Giai đoạn 7 là 187)" }
+
+      - name: Build (vite)
+        run: npm run build
+
+      - name: Upload build output
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-build-output
+          path: |
+            frontend/dist/**
+            frontend/test-results.json
+          if-no-files-found: warn

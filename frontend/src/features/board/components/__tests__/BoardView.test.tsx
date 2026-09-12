@@ -1,5 +1,5 @@
 import React from 'react'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { BoardView } from '../BoardView'
@@ -71,6 +71,7 @@ const mockUseBoardResult = {
   workspaceLabels: [],
   activeTask: null,
   connectionStatus: 'connected',
+  reconnect: vi.fn(),
   isLoading: false,
   refetch: vi.fn(),
   setActiveTask: vi.fn(),
@@ -128,6 +129,8 @@ vi.mock('../../../ai/services/observerApi', () => ({
 describe('BoardView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUseBoardResult.connectionStatus = 'connected'
+    mockUseBoardResult.reconnect = vi.fn()
     vi.mocked(aiActionApi.listAiActions).mockResolvedValue([])
     vi.mocked(observerApi.listObserverRuns).mockResolvedValue([])
     vi.mocked(notificationApi.listNotifications).mockResolvedValue({
@@ -290,5 +293,61 @@ describe('BoardView', () => {
       expect(screen.queryByRole('button', { name: /AI Observer/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /Báo cáo/i })).not.toBeInTheDocument()
     })
+  })
+
+  it('displays reconnect button when disconnected and triggers reconnect on click', () => {
+    mockUseBoardResult.connectionStatus = 'disconnected'
+
+    renderComponent()
+
+    expect(screen.getByText('Mất kết nối')).toBeInTheDocument()
+    const reconnectBtn = screen.getByRole('button', { name: 'Kết nối lại' })
+    expect(reconnectBtn).toBeInTheDocument()
+
+    fireEvent.click(reconnectBtn)
+    expect(mockUseBoardResult.reconnect).toHaveBeenCalledTimes(1)
+  })
+
+  it('transitions to cold-start message when reconnecting for longer than threshold', () => {
+    vi.useFakeTimers()
+    mockUseBoardResult.connectionStatus = 'reconnecting'
+
+    const { unmount } = renderComponent()
+    expect(screen.getByText('Đang kết nối lại')).toBeInTheDocument()
+
+    // Fast-forward past the 5000ms threshold
+    act(() => {
+      vi.advanceTimersByTime(5000)
+    })
+
+    unmount()
+    vi.useRealTimers()
+  })
+
+  it('tests all four connection states rendered inside BoardView', () => {
+    // 1. Connecting
+    mockUseBoardResult.connectionStatus = 'connecting'
+    const { unmount: unmount1 } = renderComponent()
+    expect(screen.getByText('Đang kết nối')).toBeInTheDocument()
+    unmount1()
+
+    // 2. Connected
+    mockUseBoardResult.connectionStatus = 'connected'
+    const { unmount: unmount2 } = renderComponent()
+    expect(screen.getByText('Đã kết nối')).toBeInTheDocument()
+    unmount2()
+
+    // 3. Reconnecting
+    mockUseBoardResult.connectionStatus = 'reconnecting'
+    const { unmount: unmount3 } = renderComponent()
+    expect(screen.getByText('Đang kết nối lại')).toBeInTheDocument()
+    unmount3()
+
+    // 4. Disconnected
+    mockUseBoardResult.connectionStatus = 'disconnected'
+    const { unmount: unmount4 } = renderComponent()
+    expect(screen.getByText('Mất kết nối')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Kết nối lại' })).toBeInTheDocument()
+    unmount4()
   })
 })

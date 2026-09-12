@@ -41,9 +41,6 @@ export const useBoard = (workspaceId?: string, boardId?: string) => {
     applyColumnDeleted,
   } = useBoardStore()
 
-  // Connect SignalR hub
-  useBoardHub(boardId)
-
   // Fetch Board and Labels
   const fetchBoardData = useCallback(async () => {
     if (!workspaceId || !boardId) return
@@ -69,6 +66,9 @@ export const useBoard = (workspaceId?: string, boardId?: string) => {
       setLoading(false)
     }
   }, [workspaceId, boardId, setBoard, setWorkspaceLabels, setLoading, setError])
+
+  // Connect SignalR hub with automatic reconnect and refetch on reconnect
+  const { reconnect } = useBoardHub(boardId, fetchBoardData)
 
   useEffect(() => {
     fetchBoardData()
@@ -336,6 +336,7 @@ export const useBoard = (workspaceId?: string, boardId?: string) => {
     workspaceLabels,
     activeTask,
     connectionStatus,
+    reconnect,
     isLoading,
     error,
     refetch: fetchBoardData,
