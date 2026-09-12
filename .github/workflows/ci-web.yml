@@ -25,10 +25,10 @@ jobs:
         working-directory: frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           # KHÔNG dùng '22': vitest khai báo engines `^22.12.0 || ^24.0.0 || >=26`, nên Node 22.0–22.11
           # sẽ hỏng. Node 24 khớp máy dev (24.15) và khớp @types/node ^24.
@@ -66,7 +66,7 @@ jobs:
 
       - name: Upload build output
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web-build-output
           path: |

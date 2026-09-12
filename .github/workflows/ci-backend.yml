@@ -51,10 +51,10 @@ jobs:
       TEAMNEXUS_TEST_DB: Host=localhost;Port=5432;Database=TeamNexus_Test;Username=postgres;Password=postgres
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v6
         with:
           # .NET 10 đã GA ⇒ không cần `dotnet-quality: preview`. Ghim major.minor, KHÔNG dùng 'latest'.
           dotnet-version: '10.0.x'
@@ -62,7 +62,7 @@ jobs:
       # Repo không có packages.lock.json ⇒ `setup-dotnet` với `cache: true` sẽ không tìm thấy lock
       # file và bỏ qua cache. Cache thẳng thư mục NuGet với key băm các .csproj là cách đúng ở đây.
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
@@ -78,17 +78,40 @@ jobs:
         run: dotnet build TeamNexus.sln --no-restore -m:1 -c Release
 
       # `-c Release` PHẢI khớp với bước build ở trên, nếu không `--no-build` sẽ không tìm thấy
-      # assembly. TRX là artifact để người review thấy số test/skipped mà không phải cuộn log.
-      - name: Test (172 test; 74 test cần DB sẽ skip nếu DB không tới được)
+      # assembly.
+      - name: Test
         run: >
           dotnet test tests/TeamNexus.Api.Tests/TeamNexus.Api.Tests.csproj
           --no-build -c Release
           --logger "trx;LogFileName=test-results.trx"
           --results-directory TestResults
 
+      # Cổng chống "xanh giả". Một test bị SKIP vẫn tính là xanh, và khi DB không tới được thì
+      # DatabaseFixture cố tình bỏ qua cả nhóm test cần DB (Phase 8 D4) — trên CI điều đó KHÔNG
+      # bao giờ được phép xảy ra, vì service container ở trên là để bảo đảm có DB thật.
+      # Lần chạy CI đầu tiên đã lọt lưới đúng kiểu này: job xanh nhưng chỉ 111/172 test thực sự chạy.
+      - name: Assert no test was skipped
+        shell: pwsh
+        run: |
+          [xml]$trx = Get-Content TestResults/test-results.trx
+          $ns = @{ t = 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010' }
+          $counters = Select-Xml -Xml $trx -XPath '//t:ResultSummary/t:Counters' -Namespace $ns
+          $total = [int]$counters.Node.total
+          $executed = [int]$counters.Node.executed
+          $skipped = $total - $executed
+          $failed = [int]$counters.Node.failed
+
+          Write-Host "xUnit TRX: total=$total executed=$executed skipped=$skipped failed=$failed"
+          if ($skipped -gt 0) {
+            throw "Có $skipped test bị SKIP trên CI — DB test không sẵn sàng? Job này chỉ xanh khi MỌI test thực sự chạy."
+          }
+          if ($total -ne 172) {
+            throw "Số test backend đã đổi: $total (kỳ vọng 172). Nếu là chủ ý, cập nhật con số này và tài liệu."
+          }
+
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-test-results
           path: TestResults/**
