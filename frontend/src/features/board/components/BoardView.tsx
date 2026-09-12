@@ -57,13 +57,18 @@ import { KanbanColumn } from './KanbanColumn'
 import { TaskCard } from './TaskCard'
 import { TaskDetailModal } from './TaskDetailModal'
 import { useWorkspaceMembers } from '../hooks/useWorkspaceMembers'
+import { COLD_START_MESSAGE, COLD_START_THRESHOLD_MS } from '../utils/reconnectPolicy'
 
 interface BoardViewProps {
   workspaceId: string
   boardId: string
 }
 
-const renderConnectionStatus = (status: HubConnectionStatus) => {
+const renderConnectionStatus = (
+  status: HubConnectionStatus,
+  reconnect?: () => void,
+  isColdStarting = false
+) => {
   switch (status) {
     case 'connected':
       return (
@@ -76,7 +81,13 @@ const renderConnectionStatus = (status: HubConnectionStatus) => {
       )
     case 'reconnecting':
       return (
-        <Tooltip title="Đang cố gắng kết nối lại máy chủ Real-time...">
+        <Tooltip
+          title={
+            isColdStarting
+              ? COLD_START_MESSAGE
+              : 'Đang cố gắng kết nối lại máy chủ Real-time...'
+          }
+        >
           <Tag color="warning" style={{ display: 'flex', alignItems: 'center', gap: 4, margin: 0, borderRadius: 12 }}>
             <SyncOutlined spin />
             <span style={{ fontSize: 11.5 }}>Đang kết nối lại</span>
@@ -95,12 +106,23 @@ const renderConnectionStatus = (status: HubConnectionStatus) => {
     case 'disconnected':
     default:
       return (
-        <Tooltip title="Mất kết nối máy chủ Real-time. Dữ liệu sẽ cập nhật lại khi kết nối phục hồi.">
-          <Tag color="default" style={{ display: 'flex', alignItems: 'center', gap: 4, margin: 0, borderRadius: 12 }}>
-            <Badge status="default" />
-            <span style={{ fontSize: 11.5 }}>Mất kết nối</span>
-          </Tag>
-        </Tooltip>
+        <Flex align="center" gap={6}>
+          <Tooltip title="Mất kết nối máy chủ Real-time. Dữ liệu sẽ cập nhật lại khi kết nối phục hồi.">
+            <Tag color="default" style={{ display: 'flex', alignItems: 'center', gap: 4, margin: 0, borderRadius: 12 }}>
+              <Badge status="default" />
+              <span style={{ fontSize: 11.5 }}>Mất kết nối</span>
+            </Tag>
+          </Tooltip>
+          {reconnect && (
+            <Button
+              size="small"
+              onClick={reconnect}
+              style={{ fontSize: 11.5, height: 22, padding: '0 8px', borderRadius: 10 }}
+            >
+              Kết nối lại
+            </Button>
+          )}
+        </Flex>
       )
   }
 }
@@ -114,6 +136,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
     workspaceLabels,
     activeTask,
     connectionStatus,
+    reconnect,
     isLoading,
     refetch,
     setActiveTask,
@@ -128,6 +151,21 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
     attachLabel,
     detachLabel,
   } = useBoard(workspaceId, boardId)
+
+  const [isColdStarting, setIsColdStarting] = useState(false)
+
+  useEffect(() => {
+    if (connectionStatus !== 'reconnecting') {
+      return
+    }
+    const timer = setTimeout(() => {
+      setIsColdStarting(true)
+    }, COLD_START_THRESHOLD_MS)
+    return () => {
+      clearTimeout(timer)
+      setIsColdStarting(false)
+    }
+  }, [connectionStatus])
 
   const { members: workspaceMembers } = useWorkspaceMembers(workspaceId)
 
@@ -350,7 +388,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
                 <Typography.Title level={4} style={{ margin: 0, color: '#0f172a' }}>
                   {board?.name ?? 'Kanban Board'}
                 </Typography.Title>
-                {renderConnectionStatus(connectionStatus)}
+                {renderConnectionStatus(connectionStatus, reconnect, isColdStarting)}
               </Flex>
               {board?.description && (
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>

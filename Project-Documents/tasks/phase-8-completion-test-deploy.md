@@ -293,22 +293,22 @@ dotnet test tests/TeamNexus.Api.Tests/TeamNexus.Api.Tests.csproj
 
 Baseline hiện tại: **35 test files / 187 tests PASS** — mọi thứ dưới đây là **thêm**, và kết thúc §2b phải **> 187**.
 
-- [ ] `frontend/src/features/board/utils/hubUrl.ts` + `__tests__/hubUrl.test.ts`:
+- [x] `frontend/src/features/board/utils/hubUrl.ts` + `__tests__/hubUrl.test.ts`:
   - base URL rỗng/`undefined` ⇒ `/hubs/board` (dev proxy — giữ hành vi cũ).
   - base URL tương đối `/api` ⇒ `/hubs/board`.
   - base URL tuyệt đối `https://api.example.com/api` ⇒ `https://api.example.com/hubs/board` (**đúng cái bẫy B14**).
   - base URL có/không có `/` cuối ⇒ cùng kết quả (không sinh `//`).
   - base URL có path lạ ⇒ hành vi xác định (không ném exception).
-- [ ] `frontend/src/features/board/utils/reconnectPolicy.ts` + `__tests__/reconnectPolicy.test.ts`:
+- [x] `frontend/src/features/board/utils/reconnectPolicy.ts` + `__tests__/reconnectPolicy.test.ts`:
   - Lần 0 ⇒ 0 ms; 1 ⇒ 2 000; 2 ⇒ 5 000; 3 ⇒ 10 000; 4 ⇒ 30 000; 5, 6, 100 ⇒ **vẫn 30 000** (không bao giờ trả `null`/bỏ cuộc).
   - Không bao giờ trả giá trị âm hoặc `NaN` với đầu vào bất thường (`-1`, `Number.MAX_SAFE_INTEGER`).
-- [ ] `useBoardHub` (cập nhật test hiện có + test mới):
+- [x] `useBoardHub` (cập nhật test hiện có + test mới):
   - Dùng retry policy mới ⇒ `withAutomaticReconnect` nhận **object**, không nhận mảng.
   - `onreconnected` ⇒ gọi `refetch` **đúng một lần** (spy) và re-join `JoinBoard` với đúng `boardId`.
   - `onclose` sau khi hết đường ⇒ `connectionStatus = 'disconnected'`; `reconnect()` thủ công ⇒ gọi `start()` lại.
   - URL kết nối lấy từ `resolveHubUrl` (mock `import.meta.env`), không còn hard-code.
-- [ ] `BoardView.test.tsx`: trạng thái `disconnected` hiển thị nút **"Kết nối lại"** và bấm vào gọi `reconnect`; trạng thái `reconnecting` có thông điệp cold-start tiếng Việt sau mốc thời gian quy định (dùng fake timer).
-- [ ] DoD §2b: `oxlint` **0/0**, `npx tsc -b` **exit 0**, `npm test` **PASS và số test > 187**, `npm run build` **OK**.
+- [x] `BoardView.test.tsx`: trạng thái `disconnected` hiển thị nút **"Kết nối lại"** và bấm vào gọi `reconnect`; trạng thái `reconnecting` có thông điệp cold-start tiếng Việt sau mốc thời gian quy định (dùng fake timer).
+- [x] DoD §2b: `oxlint` **0/0**, `npx tsc -b` **exit 0**, `npm test` **37 files / 206 tests PASS (> 187)**, `npm run build` **OK**.
 
 ---
 
@@ -352,33 +352,31 @@ trong `AuthApiTests`:
 
 ### 3.2 Vá #2 — SignalR URL theo API base (D8, B14)
 
-> 🔻 **Hướng dẫn thi hành chi tiết: `tasks/phase-8-2b-frontend-handover.md` §2.1 + §2.4** (gộp cùng §2b vì test chính là hàm này).
-> Chưa thi hành — thuộc lượt của Antigravity.
+> 🔻 **ĐÃ THI HÀNH XONG** (2026-09, nhánh `feat/phase8-completion-test-deploy`).
 
-- [ ] `frontend/src/features/board/utils/hubUrl.ts`:
+- [x] `frontend/src/features/board/utils/hubUrl.ts`:
   ```ts
   /** Ghép đường dẫn hub với API base. Rỗng/relative ⇒ giữ đường dẫn tương đối (dev proxy). */
   export function resolveHubUrl(apiBaseUrl?: string, hubPath = '/hubs/board'): string
   ```
   - Dùng `import.meta.env.VITE_API_BASE_URL` làm tham số mặc định ở chỗ gọi.
   - Xử lý dấu `/` cuối, base có path (`https://api.x.com/api` ⇒ `https://api.x.com/hubs/board`), base rỗng.
-- [ ] `useBoardHub.ts`: thay `.withUrl('/hubs/board', ...)` bằng `.withUrl(resolveHubUrl(import.meta.env.VITE_API_BASE_URL), { withCredentials: true })`.
-- [ ] Không đụng `httpClient.ts` (đã đúng).
+- [x] `useBoardHub.ts`: thay `.withUrl('/hubs/board', ...)` bằng `.withUrl(resolveHubUrl(import.meta.env.VITE_API_BASE_URL), { withCredentials: true })`.
+- [x] Không đụng `httpClient.ts` (đã đúng).
 
 ### 3.3 Vá #3 — Reconnect vô hạn + refetch (D9, B7, B8)
 
-> 🔻 **Hướng dẫn thi hành chi tiết: `tasks/phase-8-2b-frontend-handover.md` §2.2 + §2.4** (gộp cùng §2b vì test chính là hàm này).
-> Chưa thi hành — thuộc lượt của Antigravity.
+> 🔻 **ĐÃ THI HÀNH XONG** (2026-09, nhánh `feat/phase8-completion-test-deploy`).
 
-- [ ] `frontend/src/features/board/utils/reconnectPolicy.ts`: hàm thuần, trả về `{ nextRetryDelayInMilliseconds }` cho `IRetryPolicy` của `@microsoft/signalr`.
-- [ ] `useBoardHub.ts`:
+- [x] `frontend/src/features/board/utils/reconnectPolicy.ts`: hàm thuần, trả về `{ nextRetryDelayInMilliseconds }` cho `IRetryPolicy` của `@microsoft/signalr`.
+- [x] `useBoardHub.ts`:
   - `useBoardHub(boardId, refetch?)` (tham số thứ hai tuỳ chọn để **không** phá 2 chỗ gọi hiện có).
-  - `.withAutomaticReconnect({ nextRetryDelayInMilliseconds })` + `serverTimeoutInMilliseconds`/`keepAliveIntervalInMilliseconds` hợp lý (server timeout lớn hơn 1 chút so với keep-alive; giá trị đặt ở hằng số có tên, không magic number).
+  - `.withAutomaticReconnect({ nextRetryDelayInMilliseconds })` + `serverTimeoutInMilliseconds`/`keepAliveIntervalInMilliseconds` hợp lý (`60_000` / `15_000` ở hằng số có tên, không magic number).
   - `onreconnected` ⇒ re-join group **rồi** `refetch()` (nuốt lỗi nhưng log có ngữ cảnh).
   - Trả thêm `reconnect()` cho UI thủ công.
-- [ ] `useBoard.ts`: truyền `refetch: fetchBoardData` xuống `useBoardHub`.
-- [ ] `BoardView.tsx`: thêm nút "Kết nối lại" trong nhánh `disconnected`; thông điệp cold-start trong nhánh `reconnecting` (giữ nguyên tooltip tiếng Việt hiện có, chỉ bổ sung).
-- [ ] `frontend/.env.example`: bổ sung dòng giải thích `VITE_API_BASE_URL` cho production (đã có comment, chỉ cần ví dụ).
+- [x] `useBoard.ts`: truyền `refetch: fetchBoardData` xuống `useBoardHub`.
+- [x] `BoardView.tsx`: thêm nút "Kết nối lại" trong nhánh `disconnected`; thông điệp cold-start trong nhánh `reconnecting` (giữ nguyên tooltip tiếng Việt hiện có, chỉ bổ sung).
+- [x] `frontend/.env.example`: bổ sung dòng giải thích `VITE_API_BASE_URL` cho production (đã có comment, chỉ cần ví dụ).
 
 ---
 

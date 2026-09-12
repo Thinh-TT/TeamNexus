@@ -22,9 +22,9 @@
 | Mục | Trạng thái |
 |---|---|
 | §2 Test backend (172 test, fixture PostgreSQL thật) | ✅ **XONG** — `dotnet test` = **172 passed / 0 failed / 0 skipped**; `dotnet build TeamNexus.sln` = **0 warning / 0 error**; `migrations list` = **6** (không đổi schema) |
-| **§2b Test frontend bổ sung** | ⬜ **VIỆC CỦA BẠN** — chưa có file `hubUrl.ts` / `reconnectPolicy.ts` nào |
+| **§2b Test frontend bổ sung** | ✅ **XONG** — 37 test files / 206 tests PASS (+19 test mới), `lint` 0/0, `tsc -b` exit 0, `build` OK |
 | **§3.1 Vá cookie backend (cross-site)** | ✅ **XONG ở phiên backend** — `AuthOptions` + `TokenCookieService` + antiforgery + `appsettings.json`; 2 test mới chứng minh cờ `SameSite` đi theo cấu hình. **Không sửa lại.** |
-| **§3.2 + §3.3 (frontend)** | ⬜ **VIỆC CỦA BẠN** (gộp luôn với §2b vì cùng tạo hàm) |
+| **§3.2 + §3.3 (frontend)** | ✅ **XONG** — `hubUrl.ts` (cross-site base), `reconnectPolicy.ts` (infinite retry + cold-start timer), `useBoardHub.ts`, `BoardView.tsx` |
 | §4 CI/CD · §5 deploy · §6.2 UX cold-start · §7 rà soát UI/UX | ⬜ Sau khi §2b xong |
 
 **Baseline frontend ĐÃ ĐO LẠI (2026-09, trên nhánh `feat/phase8-completion-test-deploy`):**
