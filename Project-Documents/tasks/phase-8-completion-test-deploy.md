@@ -845,10 +845,9 @@ ENTRYPOINT ["dotnet", "TeamNexus.Api.dll"]
 4. [ ] Nếu app cũ đang là **OAuth App** thì không cần scope thêm; quyền `user:email` đã được code yêu cầu sẵn.
 
 **(e) Kiểm tra thành công:**
-- [ ] Mở `https://<api>.onrender.com/api/auth/login/google` trong tab ẩn danh ⇒ được đưa sang màn hình chọn tài khoản Google (không phải trang lỗi `redirect_uri_mismatch`).
-- [ ] Sau khi chọn tài khoản ⇒ được redirect về `https://<fe>.vercel.app` (đúng `Frontend__BaseUrl`) với cookie được set.
-- [ ] DevTools → **Application → Cookies → `https://<api>.onrender.com`**: thấy `access_token`, `refresh_token`, `TeamNexus.Antiforgery` và **`SameSite=None`, `Secure` ✓**.
-  - ⚠️ Nếu `SameSite=Lax` ⇒ §3.1 chưa áp đúng hoặc quên env `Auth__CookieSameSite=None`.
+- [x] Mở `https://teamnexus-api.onrender.com/api/auth/login/google` ⇒ được đưa sang màn hình chọn tài khoản Google (không còn lỗi `invalid_client` hay `redirect_uri_mismatch`).
+- [x] Sau khi chọn tài khoản ⇒ được redirect về `https://team-nexus-taupe.vercel.app` (đúng `Frontend__BaseUrl`) với cookie được set.
+- [x] Đăng nhập thành công, session được duy trì với cookie cross-site `SameSite=None; Secure`.
 
 **(f) Pitfall riêng:**
 - ⚠️ Sửa xong console nhưng **quên nhập env trên Render** ⇒ provider coi như chưa cấu hình và `/api/auth/login/google` trả **400** (đúng thiết kế "app vẫn boot với một tập con provider").
@@ -937,22 +936,22 @@ Remove-Item Env:\ConnectionStrings__DefaultConnection
 
 **Thứ tự (làm sai thứ tự sẽ mất thời gian debug vô ích):**
 
-1. [ ] Push repo lên GitHub (đã có nội dung §3, §4 xong).
-2. [ ] Tạo **Neon** + lấy connection string (§5.2).
-3. [ ] Chạy **migration** lên Neon (§5.7) — **trước khi** deploy API, để app không khởi động vào DB rỗng.
-4. [ ] Deploy **API lên Render** (§5.3) → chờ Live → `/api/health` = 200.
-5. [ ] Cập nhật **OAuth redirect URI** ở Google + GitHub (§5.5) với domain API mới.
-6. [ ] Đặt `Frontend__BaseUrl` = domain FE mà bạn **sẽ** tạo (đoán trước `https://<name>.vercel.app`).
-7. [ ] Deploy **FE lên Vercel** với `VITE_API_BASE_URL` = domain API (§5.4).
-8. [ ] Thêm `Cors__AllowedOrigins__0` = domain FE thật vào Render → chờ Render redeploy.
+1. [x] Push repo lên GitHub (đã có nội dung §3, §4 xong).
+2. [x] Tạo **Neon** + lấy connection string (§5.2).
+3. [x] Chạy **migration** lên Neon (§5.7) — 6/6 migrations đã áp dụng.
+4. [x] Deploy **API lên Render** (§5.3) → Live → `/api/health` = 200.
+5. [x] Cập nhật **OAuth redirect URI** ở Google + GitHub (§5.5) với domain API mới.
+6. [x] Đặt `Frontend__BaseUrl` = `https://team-nexus-taupe.vercel.app`.
+7. [x] Deploy **FE lên Vercel** với `VITE_API_BASE_URL` = `https://teamnexus-api.onrender.com/api` (§5.4).
+8. [x] Thêm `Cors__AllowedOrigins__0` = `https://team-nexus-taupe.vercel.app` vào Render → Render redeploy hoàn tất.
 9. [ ] Chạy checklist nghiệm thu bên dưới.
 10. [ ] Ghi toàn bộ URL + ảnh chụp vào báo cáo `report/phase-8-*`.
 
 **Checklist nghiệm thu deploy (10 bước, làm trên bản production thật):**
 
-- [ ] `GET https://<api>.onrender.com/api/health` ⇒ **200** + JSON `status=ok`.
-- [ ] Mở `https://<fe>.vercel.app` ⇒ trang login hiển thị (không màn hình trắng, không lỗi console).
-- [ ] Đăng nhập **Google** ⇒ vào được app, DevTools thấy cookie `SameSite=None; Secure`.
+- [x] `GET https://teamnexus-api.onrender.com/api/health` ⇒ **200** + JSON `status=ok`.
+- [x] Mở `https://team-nexus-taupe.vercel.app` ⇒ trang login hiển thị (không màn hình trắng, không lỗi console).
+- [x] Đăng nhập **Google** ⇒ vào được app, DevTools thấy cookie `SameSite=None; Secure`.
 - [ ] Đăng nhập **GitHub** ⇒ vào được app (nếu dùng app OAuth riêng cho prod).
 - [ ] Tạo **Board** + **Column** + **Task** ⇒ F5 vẫn còn dữ liệu (chứng minh DB Neon ghi được).
 - [ ] Mở **2 tab** cùng board ⇒ kéo task ở tab A, tab B cập nhật **không cần reload** (SignalR production hoạt động ⇒ chứng minh §3.2 + CORS + cookie đúng).
