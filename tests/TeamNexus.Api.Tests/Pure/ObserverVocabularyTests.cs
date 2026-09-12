@@ -12,8 +12,7 @@ public sealed class ObserverVocabularyTests
     [Fact]
     public void Severities_AreOrderedAscendingFromLowToCritical()
     {
-        // TEMP: deliberate failure to prove the CI gate actually goes red.
-        Assert.Equal(["Low", "Medium", "High", "CRITICAL-TYPO"], ObserverSeverity.All);
+        Assert.Equal(["Low", "Medium", "High", "Critical"], ObserverSeverity.All);
     }
 
     [Theory]
