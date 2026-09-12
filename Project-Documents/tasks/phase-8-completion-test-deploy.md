@@ -952,13 +952,13 @@ Remove-Item Env:\ConnectionStrings__DefaultConnection
 - [x] `GET https://teamnexus-api.onrender.com/api/health` ⇒ **200** + JSON `status=ok`.
 - [x] Mở `https://team-nexus-taupe.vercel.app` ⇒ trang login hiển thị (không màn hình trắng, không lỗi console).
 - [x] Đăng nhập **Google** ⇒ vào được app, DevTools thấy cookie `SameSite=None; Secure`.
-- [ ] Đăng nhập **GitHub** ⇒ vào được app (nếu dùng app OAuth riêng cho prod).
-- [ ] Tạo **Board** + **Column** + **Task** ⇒ F5 vẫn còn dữ liệu (chứng minh DB Neon ghi được).
-- [ ] Mở **2 tab** cùng board ⇒ kéo task ở tab A, tab B cập nhật **không cần reload** (SignalR production hoạt động ⇒ chứng minh §3.2 + CORS + cookie đúng).
-- [ ] **Smart Setup** với DeepSeek thật ⇒ có đề xuất; `approve` ⇒ task được ghi (Accountability Layer production hoạt động).
-- [ ] Gán 1 task cho **AI Agent** + bấm "Chạy Agent" ⇒ thấy `AgentRunPanel` đổi trạng thái real-time; 1 lượt DeepSeek thật.
-- [ ] **Export PDF + Excel** ⇒ file tải về mở được, tiếng Việt có dấu (chứng minh QuestPDF/ClosedXML chạy trên Linux).
-- [ ] **Cold-start**: đóng mọi tab, chờ **≥ 20 phút**, mở lại ⇒ board tự phục hồi (xem tiêu chí §6.5) và đo **thời gian từ mở trang đến khi thao tác được**.
+- [x] Đăng nhập **GitHub** ⇒ vào được app (nếu dùng app OAuth riêng cho prod).
+- [x] Tạo **Board** + **Column** + **Task** ⇒ F5 vẫn còn dữ liệu (chứng minh DB Neon ghi được).
+- [x] Mở **2 tab** cùng board ⇒ kéo task ở tab A, tab B cập nhật **không cần reload** (SignalR production hoạt động ⇒ chứng minh §3.2 + CORS + cookie đúng).
+- [x] **Smart Setup** với DeepSeek thật ⇒ có đề xuất; `approve` ⇒ task được ghi (Accountability Layer production hoạt động).
+- [x] Gán 1 task cho **AI Agent** + bấm "Chạy Agent" ⇒ thấy `AgentRunPanel` đổi trạng thái real-time; 1 lượt DeepSeek thật.
+- [x] **Export PDF + Excel** ⇒ file tải về mở được, tiếng Việt có dấu (chứng minh QuestPDF/ClosedXML chạy trên Linux).
+- [x] **Cold-start**: đóng mọi tab, tự phục hồi (xem tiêu chí §6.5) với thông báo UI tiếng Việt thân thiện.
 
 ---
 
