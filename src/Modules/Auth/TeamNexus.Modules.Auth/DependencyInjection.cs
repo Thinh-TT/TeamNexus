@@ -145,8 +145,8 @@ public static class DependencyInjection
         // ---- OAuth providers (Phase 1 §3.1) ----------------------------------
         // Each provider registers only when its credentials are configured, so the
         // app still boots with a subset (login/{provider} answers 400 otherwise).
-        var githubClientId = configuration["Authentication:GitHub:ClientId"];
-        var githubClientSecret = configuration["Authentication:GitHub:ClientSecret"];
+        var githubClientId = configuration["Authentication:GitHub:ClientId"]?.Trim();
+        var githubClientSecret = configuration["Authentication:GitHub:ClientSecret"]?.Trim();
 
         if (!string.IsNullOrWhiteSpace(githubClientId) && !string.IsNullOrWhiteSpace(githubClientSecret))
         {
@@ -164,8 +164,8 @@ public static class DependencyInjection
             });
         }
 
-        var googleClientId = configuration["Authentication:Google:ClientId"];
-        var googleClientSecret = configuration["Authentication:Google:ClientSecret"];
+        var googleClientId = configuration["Authentication:Google:ClientId"]?.Trim();
+        var googleClientSecret = configuration["Authentication:Google:ClientSecret"]?.Trim();
 
         if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(googleClientSecret))
         {

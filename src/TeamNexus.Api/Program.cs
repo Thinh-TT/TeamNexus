@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 using TeamNexus.Modules.Ai;
@@ -14,6 +15,14 @@ var builder = WebApplication.CreateBuilder(args);
 // Services (DI)
 // =====================================================================
 builder.Services.AddProblemDetails();
+
+// Forwarded headers from reverse proxies (Render, Cloudflare)
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // OpenAPI document (.NET 10 built-in). UI served by Scalar at /scalar.
 builder.Services.AddOpenApi();
@@ -54,6 +63,8 @@ var app = builder.Build();
 // =====================================================================
 // Middleware pipeline
 // =====================================================================
+app.UseForwardedHeaders();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
