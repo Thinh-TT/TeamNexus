@@ -33,7 +33,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         isLoading: false,
       })
       try {
-        await httpClient.get('/auth/antiforgery')
+        await httpClient.get('/auth/antiforgery?json=true')
       } catch {
         // non-blocking
       }

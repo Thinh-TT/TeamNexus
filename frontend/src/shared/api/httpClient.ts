@@ -11,6 +11,35 @@ function getCookie(name: string): string | null {
   return null
 }
 
+let inMemoryXsrfToken: string | null = null
+
+export function setXsrfToken(token: string | null) {
+  inMemoryXsrfToken = token
+}
+
+export function getXsrfToken(): string | null {
+  return inMemoryXsrfToken ?? getCookie('XSRF-TOKEN')
+}
+
+async function fetchXsrfToken(): Promise<string | null> {
+  try {
+    const res = await axios.get<{ token?: string }>(
+      `${import.meta.env.VITE_API_BASE_URL ?? '/api'}/auth/antiforgery?json=true`,
+      { withCredentials: true }
+    )
+    const token =
+      res.data?.token ??
+      (res.headers['x-xsrf-token'] as string | undefined) ??
+      getCookie('XSRF-TOKEN')
+    if (token) {
+      inMemoryXsrfToken = token
+    }
+    return token ?? null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Base Axios instance shared across all features.
  *
@@ -29,16 +58,9 @@ export const httpClient = axios.create({
 httpClient.interceptors.request.use(async (config) => {
   const method = config.method?.toUpperCase()
   if (method && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
-    let xsrfToken = getCookie('XSRF-TOKEN')
+    let xsrfToken = getXsrfToken()
     if (!xsrfToken && !config.url?.includes('/auth/antiforgery')) {
-      try {
-        await axios.get(`${import.meta.env.VITE_API_BASE_URL ?? '/api'}/auth/antiforgery`, {
-          withCredentials: true,
-        })
-        xsrfToken = getCookie('XSRF-TOKEN')
-      } catch {
-        // Silently ignore if antiforgery call fails
-      }
+      xsrfToken = await fetchXsrfToken()
     }
     if (xsrfToken) {
       config.headers['X-XSRF-TOKEN'] = xsrfToken
@@ -66,7 +88,16 @@ const processQueue = (error: unknown) => {
 }
 
 httpClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const token =
+      (response.data && typeof response.data === 'object' && 'token' in response.data
+        ? (response.data as { token?: string }).token
+        : undefined) ?? (response.headers['x-xsrf-token'] as string | undefined)
+    if (token && typeof token === 'string') {
+      inMemoryXsrfToken = token
+    }
+    return response
+  },
   async (error) => {
     const originalRequest = error.config
 
@@ -110,10 +141,7 @@ httpClient.interceptors.response.use(
     ) {
       originalRequest._csrfRetry = true
       try {
-        await axios.get(`${import.meta.env.VITE_API_BASE_URL ?? '/api'}/auth/antiforgery`, {
-          withCredentials: true,
-        })
-        const freshToken = getCookie('XSRF-TOKEN')
+        const freshToken = await fetchXsrfToken()
         if (freshToken) {
           originalRequest.headers['X-XSRF-TOKEN'] = freshToken
         }

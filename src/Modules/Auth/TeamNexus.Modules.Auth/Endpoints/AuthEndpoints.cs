@@ -192,19 +192,29 @@ public static class AuthEndpoints
         return Results.NoContent();
     }
 
-    private static IResult AntiforgeryAsync(HttpContext http, IAntiforgery antiforgery)
+    private static IResult AntiforgeryAsync(
+        HttpContext http,
+        IAntiforgery antiforgery,
+        Microsoft.Extensions.Options.IOptions<TeamNexus.Modules.Auth.Options.AuthOptions> authOptions)
     {
         var tokens = antiforgery.GetAndStoreTokens(http);
 
         if (tokens.RequestToken is not null)
         {
+            http.Response.Headers[AuthConstants.XsrfRequestHeader] = tokens.RequestToken;
+
             http.Response.Cookies.Append(AuthConstants.XsrfTokenCookie, tokens.RequestToken, new CookieOptions
             {
                 HttpOnly = false, // readable by the SPA so it can echo it as a header
                 Secure = http.Request.IsHttps,
-                SameSite = SameSiteMode.Lax,
+                SameSite = authOptions.Value.CookieSameSite,
                 Path = "/",
             });
+
+            if (http.Request.Query.ContainsKey("json"))
+            {
+                return Results.Ok(new { token = tokens.RequestToken });
+            }
         }
 
         return Results.NoContent();
