@@ -8,7 +8,7 @@ using TeamNexus.Modules.Board.Endpoints;
 using TeamNexus.Modules.Board.Hubs;
 using TeamNexus.Modules.Reporting;
 
-var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilde(args);
 
 // =====================================================================
 // Services (DI)
