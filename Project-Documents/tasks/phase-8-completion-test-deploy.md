@@ -771,37 +771,32 @@ ENTRYPOINT ["dotnet", "TeamNexus.Api.dll"]
 **(b) Chuẩn bị:** tài khoản Vercel (GitHub); domain API Render đã Live (§5.3).
 
 **(c) Từng bước:**
-1. [ ] [vercel.com](https://vercel.com) → **Add New… → Project** → **Import Git Repository** → chọn repo `TeamNexus`.
-2. [ ] Cấu hình (rất quan trọng — **Root Directory**):
+1. [x] [vercel.com](https://vercel.com) → **Add New… → Project** → **Import Git Repository** → chọn repo `TeamNexus`.
+2. [x] Cấu hình (rất quan trọng — **Root Directory**):
 
    | Trường | Giá trị |
    |---|---|
    | **Root Directory** | `frontend` |
    | **Framework Preset** | Vite (tự nhận) |
-   | **Build Command** | `npm run build` (mặc định) |
+   | **Build Command** | `npm run build` |
    | **Output Directory** | `dist` |
-   | **Install Command** | `npm ci` (mặc định `npm install` cũng được) |
-   | **Node.js Version** | 22.x (khớp README) |
+   | **Install Command** | `npm install` |
 
-3. [ ] **Environment Variables**: `VITE_API_BASE_URL = https://<api>.onrender.com/api` (áp cho **Production**; có thể khác cho Preview nếu bạn có API staging).
-4. [ ] **Deploy** → mở URL `https://<fe>.vercel.app`.
-5. [ ] Thêm `frontend/vercel.json` vào repo (SPA rewrite) rồi push một lần để chắc chắn cấu hình được áp:
+3. [x] **Environment Variables**: `VITE_API_BASE_URL = https://teamnexus-api.onrender.com/api`.
+4. [x] **Deploy** → mở URL `https://team-nexus-taupe.vercel.app`.
+5. [x] Đã thêm `frontend/vercel.json` vào repo (SPA rewrite) và push lên remote.
+6. [ ] Quay lại Render → thêm/cập nhật origin của Vercel vào CORS và BaseUrl:
+   - `Cors__AllowedOrigins__0` = `https://team-nexus-taupe.vercel.app`
+   - `Frontend__BaseUrl` = `https://team-nexus-taupe.vercel.app`
+   - Chờ Render redeploy xong.
 
-```json
-{
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
-}
-```
-
-6. [ ] Quay lại Render → thêm origin của Vercel vào CORS (§5.6, `Cors__AllowedOrigins__0`) → chờ Render redeploy xong.
-
-**(d) Giá trị cần điền:** `VITE_API_BASE_URL` (build-time, xem pitfall ⚠️1).
+**(d) Giá trị cần điền:** `VITE_API_BASE_URL` (build-time: `https://teamnexus-api.onrender.com/api`).
 
 **(e) Kiểm tra thành công:**
-- [ ] Mở `https://<fe>.vercel.app` ⇒ hiện trang login.
-- [ ] F5 ở một route con (ví dụ `/workspaces/xxx/boards`) ⇒ **không** 404 (SPA rewrite hoạt động).
+- [x] Mở `https://team-nexus-taupe.vercel.app` ⇒ tự động chuyển sang `/login` và render giao diện chuẩn.
+- [x] F5 ở route con `/login` ⇒ **không** 404 (SPA rewrite hoạt động hoàn hảo).
 - [ ] Mở DevTools → **Network**: request tới `/api/...` phải đi tới **domain Render**, không phải domain Vercel.
-- [ ] DevTools → **Network → WS**: thấy `wss://<api>.onrender.com/hubs/board?...` (⚠️ nếu thấy `wss://<fe>.vercel.app/...` ⇒ §3.2 chưa áp đúng).
+- [ ] DevTools → **Network → WS**: thấy `wss://teamnexus-api.onrender.com/hubs/board?...`.
 
 **(f) Pitfall riêng của Vercel:**
 - ⚠️ **1 — `VITE_API_BASE_URL` là biến *build-time*.** Vite "nướng" giá trị vào bundle lúc build ⇒ **sửa env xong phải Redeploy** mới có tác dụng, F5 vô ích.
