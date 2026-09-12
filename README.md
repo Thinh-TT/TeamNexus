@@ -6,6 +6,14 @@
 Trợ lý điều phối không gian làm việc thông minh — nền tảng quản lý công việc & giao tiếp nhóm
 kết hợp Kanban real-time với AI Agent (xem `Project-Documents/`).
 
+## 🚀 Live Demo (Production)
+
+- 🌐 **Web App (Frontend)**: [https://team-nexus-taupe.vercel.app](https://team-nexus-taupe.vercel.app) *(Host trên Vercel)*
+- ⚙️ **API Health Check**: [https://teamnexus-api.onrender.com/api/health](https://teamnexus-api.onrender.com/api/health) *(Host trên Render với Docker .NET 10)*
+- 🗄️ **Database**: Neon Serverless PostgreSQL (Singapore `ap-southeast-1`, 6/6 EF Core migrations)
+
+> 💡 **Lưu ý Cold-start**: Do chạy trên Free Tier của Render, khi không có request trong 15 phút máy chủ sẽ tạm ngủ. Request đầu tiên có thể mất ~30–60 giây để máy chủ thức dậy. Giao diện frontend đã tích hợp sẵn cơ chế auto-reconnect & thông báo tiếng Việt mượt mà.
+
 ## Kiến trúc
 
 **Modular Monolith** ASP.NET Core (.NET 10) + React (TypeScript, Vite) + PostgreSQL (EF Core).
