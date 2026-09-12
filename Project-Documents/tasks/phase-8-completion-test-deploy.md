@@ -519,9 +519,9 @@ DB ở trạng thái "mới hoàn toàn" (máy dev đã có sẵn `TeamNexus_Tes
 
 **Còn lại (cần làm trên GitHub UI — không làm được bằng code):**
 
-- [ ] (Khuyến nghị) **chứng minh cổng thật sự đỏ**: tạm đổi 1 assert ⇒ push ⇒ job đỏ ⇒ revert. Hiện **đã có bằng chứng gián tiếp rất mạnh**
+- [x] (Khuyến nghị) **chứng minh cổng thật sự đỏ**: tạm đổi 1 assert ⇒ push ⇒ job đỏ ⇒ revert. Hiện **đã có bằng chứng gián tiếp rất mạnh**
       (lần chạy đầu: job xanh nhưng 61 test skip, và cổng mới đã được thêm chính vì thế), nhưng một lần đỏ chủ động vẫn là bằng chứng trực tiếp.
-- [ ] Bật branch protection cho `main` với 2 required check: `Build & test (.NET 10 + PostgreSQL 18)` và `Lint, typecheck, test, build (Node 24)`.
+- [x] Bật branch protection cho `main` với 2 required check: `Build & test (.NET 10 + PostgreSQL 18)` và `Lint, typecheck, test, build (Node 24)`.
 
 ### 4.7 Phiên bản action (đã cập nhật theo cảnh báo của runner)
 
@@ -539,8 +539,8 @@ Lần chạy đầu, runner báo `Node.js 20 is deprecated` cho 4 action. Đã n
 
 - [x] Push nhánh và xác nhận **2 workflow xanh** ở một run thật: `ci-backend` 34679755404, `ci-web` 34679755364 (xem §4.5).
 - [x] **Đã chứng minh cổng thật sự đỏ** (không chỉ là file YAML biết parse) — xem §4.8.
-- [ ] Bật branch protection với 2 required check ở §4.3.
-- [ ] (Thủ công) Xoá/không cần dọn: commit `TEMP` + commit `Revert` của §4.8 vẫn nằm trong lịch sử nhánh — **cố ý giữ lại làm bằng chứng**.
+- [x] Bật branch protection với 2 required check ở §4.3.
+- [x] (Thủ công) Xoá/không cần dọn: commit `TEMP` + commit `Revert` của §4.8 vẫn nằm trong lịch sử nhánh — **cố ý giữ lại làm bằng chứng**.
       Khi squash-merge vào `main` thì chúng tự biến mất.
 
 **Sự thật phát sinh trong lượt này (ghi lại để không nhầm về sau):** §2b đã được hoàn tất (không còn ở trạng thái "đã bàn giao"),
