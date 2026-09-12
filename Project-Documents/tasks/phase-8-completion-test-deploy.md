@@ -538,12 +538,32 @@ Lần chạy đầu, runner báo `Node.js 20 is deprecated` cho 4 action. Đã n
 (Run sau khi nâng **không còn** annotation `Node.js 20`.)
 
 - [x] Push nhánh và xác nhận **2 workflow xanh** ở một run thật: `ci-backend` 34679755404, `ci-web` 34679755364 (xem §4.5).
-- [ ] (Khuyến nghị) **Kiểm chứng cổng thật**: tạm đổi 1 assert ⇒ push ⇒ job **đỏ** ⇒ revert ⇒ xanh. Xem ghi chú ở §4.6 — đã có bằng chứng gián tiếp rất mạnh, nhưng một lần đỏ chủ động vẫn trực tiếp hơn.
+- [x] **Đã chứng minh cổng thật sự đỏ** (không chỉ là file YAML biết parse) — xem §4.8.
 - [ ] Bật branch protection với 2 required check ở §4.3.
+- [ ] (Thủ công) Xoá/không cần dọn: commit `TEMP` + commit `Revert` của §4.8 vẫn nằm trong lịch sử nhánh — **cố ý giữ lại làm bằng chứng**.
+      Khi squash-merge vào `main` thì chúng tự biến mất.
 
 **Sự thật phát sinh trong lượt này (ghi lại để không nhầm về sau):** §2b đã được hoàn tất (không còn ở trạng thái "đã bàn giao"),
 và **baseline frontend nay là 206 test / 35 file** (không phải 187). Điều này khớp với ngưỡng trong CI: cổng là `> 187`
 (baseline cuối Giai đoạn 7), nên 206 vượt qua thoải mái, đồng thời vẫn chặn được việc xoá test.
+
+### 4.8 Chứng minh cổng CI thật sự chặn (bằng chứng chủ động)
+
+Kế hoạch ghi rõ: "nếu bỏ bước này thì *CI xanh* chỉ là file YAML biết parse, chưa phải một cái cổng". Đã làm và **đã chứng minh**:
+
+| Bước | Commit | Run | Kết quả |
+|---|---|---|---|
+| 1. Cố ý phá **1** assert (`ObserverSeverity.All`: `"Critical"` → `"CRITICAL-TYPO"`) | `48d8a47` | [34679966008](https://github.com/Thinh-TT/TeamNexus/actions/runs/34679966008) | 🔴 **`X Build & test (.NET 10 + PostgreSQL 18)`** + annotation *"Process completed with exit code 1."* |
+| 2. `git revert` | `bfd4c91` | [34680042681](https://github.com/Thinh-TT/TeamNexus/actions/runs/34680042681) | 🟢 **XANH** — `xUnit TRX: total=172 executed=172 skipped=0 failed=0` |
+
+**Hai kết luận rút ra:**
+
+1. CI **thật sự là một cái cổng**: đúng một assert sai ⇒ job đỏ, không phải "xanh cho vui".
+2. Cổng `Assert no test was skipped` chạy **kể cả khi mọi test đều đạt** (`total=172 executed=172 skipped=0 failed=0`),
+   biến "skip âm thầm" — lỗi đã lộ ra ở lần chạy CI đầu tiên — thành thứ **không thể tái diễn trong im lặng**.
+
+> **Ghi chú về lịch sử nhánh:** hai commit `TEMP` và `Revert` được **giữ lại có chủ ý** trên nhánh này làm bằng chứng.
+> Khi squash-merge vào `main` thì chúng biến mất. Nội dung cuối cùng của mã nguồn **không đổi** (đã verify assert trở về `"Critical"`).
 
 ---
 
