@@ -102,11 +102,11 @@ tự động migrate lúc boot; multi-region; SSR.
 | § | Hạng mục | Trạng thái |
 |---|---|---|
 | §2 | **Test backend** — project `tests/TeamNexus.Api.Tests`, fixture DB thật, nhóm test ưu tiên 1–4 | ✅ **XONG** — **172 test PASS** (0 fail / 0 skip / 0 warning) trên PostgreSQL 18 thật; chi tiết ở §2.8 |
-| §2b | **Test frontend bổ sung** — `hubUrl`, `reconnectPolicy`, `useBoardHub` reconnect, `BoardView` nút kết nối lại | 🔻 **ĐÃ BÀN GIAO** — `tasks/phase-8-2b-frontend-handover.md` (gộp §2b + §3.2 + §3.3) |
-| §3 | **3 vá mã nguồn bắt buộc** — cookie cross-site (D7), SignalR URL (D8), reconnect policy (D9) | **§3.1 XONG** ✅ (172/172 test xanh) · §3.2 + §3.3 gộp vào lượt §2b của Antigravity |
-| §4 | **CI/CD** — `.github/workflows/ci-backend.yml` + `ci-web.yml`, badge ở README | [ ] |
+| §2b | **Test frontend bổ sung** — `hubUrl`, `reconnectPolicy`, `useBoardHub` reconnect, `BoardView` nút kết nối lại | ✅ **XONG** — **206 test PASS** (35 file, +19 so với baseline 187); `lint` 0/0, `tsc -b` exit 0, `build` OK |
+| §3 | **3 vá mã nguồn bắt buộc** — cookie cross-site (D7), SignalR URL (D8), reconnect policy (D9) | ✅ **CẢ 3 XONG** — §3.1 (backend, 2 test mới) + §3.2/§3.3 (frontend, cùng lượt §2b) |
+| §4 | **CI/CD** — `.github/workflows/ci-backend.yml` + `ci-web.yml`, badge ở README | ✅ **XONG** — file đã tạo + verify lệnh ở local trên Release; chi tiết §4.5 |
 | §5 | **Deploy 3 tầng** — Neon → Render → Vercel + OAuth console + migration + checklist deploy lần đầu | [ ] |
-| §6 | **Cold-start & SignalR reconnect** — retry vô hạn, refetch khi reconnect, UX thông báo, tiêu chí nghiệm thu 90 s | [ ] |
+| §6 | **Cold-start & SignalR reconnect** — retry vô hạn, refetch khi reconnect, UX thông báo, tiêu chí nghiệm thu 90 s | **§6.2 XONG** (cùng §2b) ✅ · còn **§6.5** đo cold-start thật trên Render (cần §5 trước) |
 | §7 | **Rà soát UI/UX** — checklist 1 vòng toàn app + sửa các mục trong danh sách chốt + CV readiness | [ ] |
 | §8 | Migrations & công việc bên ngoài repo (OAuth console, tài khoản cloud) | [ ] |
 | §9 | Definition of Done + nghiệm thu + ma trận rủi ro + báo cáo `report/phase-8-*` | [ ] |
@@ -384,38 +384,109 @@ trong `AuthApiTests`:
 
 > Mục tiêu: mọi push/PR phải chứng minh được "build xanh + test xanh" **trước khi** auto-deploy của Render/Vercel chạy.
 
+> ### ✅ ĐÃ THI HÀNH XONG — và kế hoạch ban đầu ở §4.1/§4.2 đã được **sửa 3 chỗ SAI** sau khi kiểm chứng thực tế
+>
+> Ba điểm dưới đây khác hẳn bản kế hoạch đầu; giữ lại để người sau không "sửa ngược" về phiên bản sai:
+>
+> 1. **Cache NuGet.** Kế hoạch ghi `setup-dotnet` với `cache-dependency-path: '**/packages.lock.json'` — nhưng repo
+>    **không có `packages.lock.json`** (đã kiểm: không có file lock nào). `setup-dotnet` sẽ cảnh báo "no lock files found"
+>    rồi **bỏ luôn cache**, tức là không tối ưu được gì. Nay dùng **`actions/cache@v4` trên `~/.nuget/packages`** với key băm
+>    `**/*.csproj` + `Directory.Build.props`, kèm `restore-keys` để vẫn dùng được cache cũ khi key đổi.
+> 2. **`-nr:false`.** Kế hoạch ghi "trên runner GitHub thì không hại gì, nên giữ luôn". Đúng là không hại, nhưng nó **chỉ tồn tại để
+>    né named-pipe của MSBuild bị chặn trong sandbox/agent** (README dòng 47–57) — trên runner Linux nó chỉ làm build chậm hơn.
+>    Nay CI dùng `-m:1` (build tuần tự, tất định, dễ đọc log) và **bỏ `-nr:false`**.
+> 3. **Node version.** Kế hoạch ghi `node-version: '22'` để "khớp Node ≥ 22 trong README". Sai cả hai đầu: `vitest` khai báo
+>    `engines: ^22.12.0 || ^24.0.0 || >=26.0.0` ⇒ **Node 22.0–22.11 sẽ hỏng**, mà README lại hứa "≥ 22" (tức là hứa cả 22.0).
+>    Nay CI dùng **`node-version: '24'`** (khớp máy dev 24.15 và `@types/node ^24`) **và** README đã sửa thành **"Node ≥ 22.12"**.
+>
+> Ngoài ra **có 2 điểm khác biệt nữa so với kế hoạch**, đều là *thêm* chứ không phải bớt:
+> - **Build/test ở `-c Release`.** Kế hoạch không ghi cấu hình; mặc định là Debug. Build Release sát với bản deploy hơn và
+>   GIỮ luôn `--no-build`. ⚠️ `-c Release` phải khớp **đồng thời** ở bước build và bước test, nếu không `--no-build` sẽ không tìm thấy assembly.
+> - **Cổng bảo vệ baseline số test frontend.** `vitest` vẫn xanh nếu ai đó **xoá bớt test**, nên job web đọc báo cáo JSON
+>   (`--reporter=json --outputFile=test-results.json`) và **fail nếu tổng ≤ 187**. Đây là điều kiện DoD cứng của §2b
+>   ("mọi §2b phải kết thúc với baseline mới tốt hơn baseline 187"), mà exit code của vitest không kiểm được.
+>
+> **Một điều đã kiểm chứng để tránh bẫy:** `--logger "trx;…"` của VSTest **hoạt động** trên project xUnit v3 (đã tạo được file TRX 34 KB).
+> **Ngược lại, cờ của runner xUnit truyền sau `--` (`-- -trx …`, `-- -class …`) bị nuốt**: không lọc test, không tạo file.
+> Vì vậy CI dùng `--logger`, **không** dùng `-- -trx`.
+
 ### 4.1 `.github/workflows/ci-backend.yml`
 
-- [ ] Trigger: `push` (mọi nhánh) + `pull_request`; thêm `concurrency` để huỷ run cũ trên cùng nhánh.
-- [ ] Job `build-and-test` trên `ubuntu-latest`:
-  - `actions/checkout@v4`.
-  - `actions/setup-dotnet@v4` với `dotnet-version: '10.0.x'` (ghim major.minor, **không** `latest`).
-  - `services: postgres:18` với `env: POSTGRES_PASSWORD`, `ports: 5432:5432`, `options: >- --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5`.
-  - `env: TEAMNEXUS_TEST_DB = Host=localhost;Port=5432;Database=TeamNexus_Test;Username=postgres;Password=<pw>`.
-  - `dotnet restore TeamNexus.sln` → `dotnet build TeamNexus.sln --no-restore -m:1 -nr:false` → `dotnet test --no-build --logger "trx;LogFileName=test-results.trx"`.
-  - `actions/upload-artifact@v4` cho `TestResults/**` với `if: always()`.
-- [ ] ⚠️ Ghi rõ trong tài liệu: `-m:1 -nr:false` là **bắt buộc trong môi trường sandbox/agent** (xem README dòng 47–57); trên runner GitHub thì không hại gì, nên giữ luôn cho nhất quán 1 lệnh duy nhất.
-- [ ] Cache NuGet (`actions/cache` hoặc `setup-dotnet` với `cache: true`, `cache-dependency-path: '**/packages.lock.json'` nếu bật lock file — nếu không thì cache `~/.nuget/packages`).
+- [x] Trigger: `push` lên `main`, `develop`, `feat/**` + `pull_request` vào `main`/`develop` + `workflow_dispatch`.
+      (`feat/**` để nhánh đang làm cũng được kiểm tra trước khi mở PR — thiếu nó thì workflow **im lặng không chạy** và rất dễ tưởng CI hỏng.)
+- [x] `concurrency: group: ci-backend-${{ github.head_ref || github.run_id }}`, `cancel-in-progress: true` — huỷ run cũ khi đẩy commit tiếp theo.
+      Dùng `head_ref` (không phải `ref_name`) để group không đổi khi nhánh bị rebase.
+- [x] `permissions: contents: read` — nguyên tắc quyền tối thiểu.
+- [x] Job `build-and-test` trên `ubuntu-latest`, **`timeout-minutes: 15`** (job treo ⇒ đỏ, không treo vô hạn).
+- [x] `actions/checkout@v4`.
+- [x] `actions/setup-dotnet@v4` với `dotnet-version: '10.0.x'`. **.NET 10 đã GA** (máy dev có SDK 10.0.201 + runtime `Microsoft.AspNetCore.App 10.0.5`)
+      ⇒ **không** cần `dotnet-quality: preview`.
+- [x] `services.postgres`: `image: postgres:18`, `POSTGRES_PASSWORD: postgres`, `ports: 5432:5432`,
+      `options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5`.
+- [x] `env: TEAMNEXUS_TEST_DB = Host=localhost;Port=5432;Database=TeamNexus_Test;Username=postgres;Password=postgres`.
+      **Không** cần tạo database thủ công và **không** cần `dotnet ef`: `DatabaseFixture` tự `CREATE DATABASE` rồi tự `Migrate()` một lần/process.
+- [x] `dotnet restore TeamNexus.sln` → `dotnet build TeamNexus.sln --no-restore -m:1 -c Release` → `dotnet test … --no-build -c Release --logger "trx;LogFileName=test-results.trx" --results-directory TestResults`.
+- [x] `actions/upload-artifact@v4` cho `TestResults/**` với `if: always()` (tên artifact: `backend-test-results`).
+- [x] Cache NuGet bằng `actions/cache@v4` trên `~/.nuget/packages` (xem lý do ở khối trên).
 
 ### 4.2 `.github/workflows/ci-web.yml`
 
-- [ ] Trigger giống §4.1; `defaults.run.working-directory: frontend`.
-- [ ] `actions/setup-node@v4` với `node-version: '22'` (khớp "Node ≥ 22" trong README) và `cache: npm`, `cache-dependency-path: frontend/package-lock.json`.
-- [ ] `npm ci` → `npm run lint` → `npx tsc -b` → `npm test` → `npm run build`.
-- [ ] **Không** truyền secret vào job này; nếu cần build với API base thật thì truyền `VITE_API_BASE_URL` bằng biến **không bí mật** (hoặc để trống và build theo mặc định).
-- [ ] (Tuỳ chọn) upload `frontend/dist` làm artifact để xem lại build output khi fail.
+- [x] Trigger + `concurrency` + `permissions` giống §4.1 (group `ci-web-…`); `defaults.run.working-directory: frontend`;
+      `timeout-minutes: 20` (suite frontend ~92 s ở local, runner chậm hơn).
+- [x] `actions/setup-node@v4` với **`node-version: '24'`** + `cache: npm` + `cache-dependency-path: frontend/package-lock.json`
+      (đã kiểm: `package-lock.json` là **lockfileVersion 3** ⇒ `npm ci` dùng được).
+- [x] `npm ci` → `npm run lint` → `npx tsc -b` → `npm test -- --reporter=json --outputFile=test-results.json` → **assert số test > 187** → `npm run build`.
+- [x] Bước assert dùng `shell: pwsh` (có sẵn trên `ubuntu-latest`), **in `total`/`failed` ra log trước khi throw** để nếu shape JSON
+      của vitest đổi thì log vẫn đủ để sửa nhanh thay vì đoán mò.
+- [x] **Không** truyền secret; build chạy với `VITE_API_BASE_URL` để trống (mặc định `/api`) — URL thật là việc của §5.4 (Vercel env).
+- [x] `actions/upload-artifact@v4` (`if: always()`) cho `frontend/dist/**` + `frontend/test-results.json` (tên: `web-build-output`).
+- [x] `frontend/.gitignore`: thêm `test-results.json` — file báo cáo này **không** được commit (đã kiểm bằng `git check-ignore`).
 
 ### 4.3 Không có workflow deploy (D11)
 
-- [ ] Ghi rõ trong tài liệu và trong README: **deploy do Render và Vercel tự làm** từ GitHub; Actions không giữ `ConnectionStrings__DefaultConnection`,
-  `Jwt__SigningKey` hay API key nào ⇒ không có secret nào cần rotate trong CI.
-- [ ] Hệ quả đã biết: **không** có bước tự động chạy migration sau deploy ⇒ §5.7 là bước thủ công bắt buộc.
-- [ ] (Tuỳ chọn) bật **branch protection** cho `main`: yêu cầu 2 check `ci-backend` + `ci-web` xanh mới merge.
+- [x] Đã ghi rõ trong README + tài liệu: **deploy do Render và Vercel tự làm** từ GitHub; Actions không giữ
+      `ConnectionStrings__DefaultConnection`, `Jwt__SigningKey` hay API key nào ⇒ không có secret nào cần rotate trong CI.
+      Cấu hình cho test do `TeamNexusApiFactory` cấp **hoàn toàn bằng code** (kể cả `Jwt:SigningKey` test và `DeepSeek:ApiKey` rỗng ⇒ dùng fake provider).
+- [x] Hệ quả đã biết: **không** có bước tự động chạy migration sau deploy ⇒ §5.7 là bước thủ công bắt buộc.
+- [ ] (Thủ công, khuyến nghị) bật **branch protection** cho `main`: required status checks là **đúng 2 chuỗi hiển thị**:
+      `Build & test (.NET 10 + PostgreSQL 18)` và `Lint, typecheck, test, build (Node 24)`.
+      → Đây là bước trên GitHub UI, **không** làm được bằng code.
+- [ ] ⚠️ **Giới hạn chưa xử lý được:** Render/Vercel auto-deploy **không chờ** CI. Nghĩa là một push hỏng lên `main` vẫn có thể được deploy
+      song song với lúc CI báo đỏ. Giảm thiểu bằng branch protection ở trên (chỉ merge PR đã xanh), nhưng đây là hệ quả đã chấp nhận của D11.
 
 ### 4.4 Badge & tài liệu
 
-- [ ] Thêm badge CI vào đầu `README.md` (2 badge, trỏ đúng tên workflow).
-- [ ] Ghi trong README: cách chạy test backend (`TEAMNEXUS_TEST_DB` + `dotnet test`) và frontend (`npm test`).
+- [x] Thêm 2 badge ở đầu `README.md`, trỏ theo **tên file** (không phải `name:`):
+      `…/actions/workflows/ci-backend.yml/badge.svg?branch=main` và `…/ci-web.yml/badge.svg?branch=main`.
+      (Badge sẽ xám cho tới lần chạy đầu trên `main` — bình thường.)
+- [x] Thêm mục **"CI (GitHub Actions)"** trong README: bảng 2 workflow làm gì + artifact, vì sao không có workflow deploy,
+      cổng bảo vệ baseline số test, và lý do chọn Node 24.
+- [x] Sửa README: `Node.js ≥ 22` ⇒ **`Node.js ≥ 22.12` (khuyến nghị 24)**.
+- [x] Ghi cách chạy test backend (`TEAMNEXUS_TEST_DB` + `dotnet test`) và frontend (`npm test`, kèm biến thể giống CI).
+
+### 4.5 Kết quả §4 (đã thi hành)
+
+**File mới:** `.github/workflows/ci-backend.yml`, `.github/workflows/ci-web.yml` (2 file duy nhất của §4 — không sửa code backend/frontend nào).
+
+**Verify ở local (mô phỏng đúng lệnh CI, chạy trên Release):**
+
+| Lệnh (giống CI) | Kết quả |
+|---|---|
+| `dotnet build TeamNexus.sln -m:1 -c Release` | **Build succeeded — 0 warning / 0 error** |
+| `dotnet test … --no-build -c Release --logger "trx;LogFileName=test-results.trx" --results-directory TestResults` | **Passed! — Failed 0, Passed 172, Skipped 0**; file `TestResults/test-results.trx` được tạo (**239 KB**) ⇒ cú pháp artifact đúng |
+| `npm test -- --reporter=json --outputFile=test-results.json` (trong `frontend/`) | `numTotalTests = 206`, `numFailedTests = 0`, `success = true` ⇒ bước assert đọc đúng 2 field, ngưỡng `> 187` thoả |
+
+**Còn lại (cần GitHub, không làm được ở local):**
+
+- [ ] Push nhánh và xác nhận **2 workflow xanh** ở một run thật.
+- [ ] (Khuyến nghị) **Kiểm chứng cổng thật**: tạm đổi 1 assert ⇒ push ⇒ job **đỏ** ⇒ revert ⇒ xanh. Nếu bỏ bước này thì "CI xanh"
+      chỉ là file YAML biết parse, chưa phải một cái cổng.
+- [ ] Bật branch protection với 2 required check ở §4.3.
+- [ ] Tick ô **"CI/CD pipeline qua GitHub Actions chạy build/test tự động"** trong `03-roadmap.md` — **chỉ sau khi** có run xanh thật.
+
+**Sự thật phát sinh trong lượt này (ghi lại để không nhầm về sau):** §2b đã được hoàn tất (không còn ở trạng thái "đã bàn giao"),
+và **baseline frontend nay là 206 test / 35 file** (không phải 187). Điều này khớp với ngưỡng trong CI: cổng là `> 187`
+(baseline cuối Giai đoạn 7), nên 206 vượt qua thoải mái, đồng thời vẫn chặn được việc xoá test.
 
 ---
 

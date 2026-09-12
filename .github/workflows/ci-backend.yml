@@ -1,0 +1,95 @@
+name: ci-backend
+
+# Chạy trên mọi nhánh phát triển + mọi PR vào main/develop. 'feat/**' là để nhánh đang làm
+# cũng được kiểm tra trước khi mở PR (nếu thiếu, workflow im lặng không chạy và rất dễ
+# tưởng CI hỏng).
+on:
+  push:
+    branches: [main, develop, 'feat/**']
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# Đẩy commit tiếp theo lên cùng nhánh/PR ⇒ huỷ run cũ cho khỏi tốn runner.
+# `head_ref` (chứ không phải `ref_name`) để tên group không đổi khi nhánh bị rebase;
+# `run_id` làm phương án dự phòng cho push trực tiếp.
+concurrency:
+  group: ci-backend-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  build-and-test:
+    name: Build & test (.NET 10 + PostgreSQL 18)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        # Khớp đúng major version đã verify ở Phase 7 và trên máy dev (PostgreSQL 18).
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # DatabaseFixture đọc biến này, tự `CREATE DATABASE TeamNexus_Test` nếu chưa có rồi tự chạy
+      # migration một lần cho cả process ⇒ CI KHÔNG cần tạo DB thủ công và KHÔNG cần `dotnet ef`.
+      TEAMNEXUS_TEST_DB: Host=localhost;Port=5432;Database=TeamNexus_Test;Username=postgres;Password=postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # .NET 10 đã GA ⇒ không cần `dotnet-quality: preview`. Ghim major.minor, KHÔNG dùng 'latest'.
+          dotnet-version: '10.0.x'
+
+      # Repo không có packages.lock.json ⇒ `setup-dotnet` với `cache: true` sẽ không tìm thấy lock
+      # file và bỏ qua cache. Cache thẳng thư mục NuGet với key băm các .csproj là cách đúng ở đây.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore TeamNexus.sln
+
+      # `-m:1` để build tuần tự, tất định và dễ đọc log. KHÔNG dùng `-nr:false` ở đây: cờ đó chỉ
+      # cần thiết trong môi trường sandbox/agent (named pipe của MSBuild bị chặn — xem README).
+      - name: Build (0 warning / 0 error)
+        run: dotnet build TeamNexus.sln --no-restore -m:1 -c Release
+
+      # `-c Release` PHẢI khớp với bước build ở trên, nếu không `--no-build` sẽ không tìm thấy
+      # assembly. TRX là artifact để người review thấy số test/skipped mà không phải cuộn log.
+      - name: Test (172 test; 74 test cần DB sẽ skip nếu DB không tới được)
+        run: >
+          dotnet test tests/TeamNexus.Api.Tests/TeamNexus.Api.Tests.csproj
+          --no-build -c Release
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: TestResults/**
+          if-no-files-found: warn
