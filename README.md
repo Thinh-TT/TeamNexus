@@ -146,8 +146,9 @@ nên User Secrets sẽ thắng trở lại).
 > Baseline frontend phải giữ hoặc vượt: **35 test files / 187 tests PASS**, `oxlint` 0/0, `tsc -b` exit 0, `npm run build` OK.
 > Schema đã đóng băng ở Giai đoạn 7 (**6 migration**) — giai đoạn này **không** thêm migration.
 
-- [ ] §2 Test backend — project `tests/TeamNexus.Api.Tests` (xUnit + `WebApplicationFactory<Program>` + PostgreSQL thật, **không** dùng EF InMemory); ưu tiên 1 là các hàm thuần đã được viết `public static` từ Phase 4–7
-- [ ] §2b Test frontend bổ sung — `hubUrl`, `reconnectPolicy`, `useBoardHub` reconnect, nút "Kết nối lại"
+- [x] §2 Test backend — project `tests/TeamNexus.Api.Tests` (xUnit **v3** + `WebApplicationFactory<Program>` + PostgreSQL 18 thật, **không** dùng EF InMemory): nhóm ưu tiên 1 (hàm thuần `public static` của Phase 4–7) + Auth/CSRF/refresh-rotation + Kanban CRUD/kéo-thả/siết membership + Smart Setup & Accountability Layer (Pending → Approve/Reject/Undo) + Agent Executor (rerun append-only, wall-clock guardrail, huỷ, reaper, 503) + export PDF/Excel — **172 test PASS** (0 fail / 0 skip / 0 warning) trên PostgreSQL 18 thật; **98 PASS / 74 SKIP / 0 FAIL** khi không có DB; `dotnet build TeamNexus.sln` = 0/0; `migrations list` = **6** (không đổi schema)
+- [x] §3.1 Vá **cookie cross-site** — `AuthOptions` (section `Auth`) điều khiển `SameSite` cho **cả** token cookie **và** antiforgery cookie; mặc định `Lax` (local không đổi), production đặt env `Auth__CookieSameSite=None`. **Đây là blocker số 1 khi tách domain FE/API** (Vercel + Render); verify bằng 2 test mới (`AuthCookies_UseLaxByDefault`, `AuthCookies_FollowAuthCookieSameSiteConfiguration`)
+- [ ] §2b Test frontend bổ sung (`hubUrl`, `reconnectPolicy`, `useBoardHub` reconnect, nút "Kết nối lại") + §3.2/§3.3 — 🔻 **đã bàn giao**: `Project-Documents/tasks/phase-8-2b-frontend-handover.md`
 - [ ] §3 **3 vá bắt buộc**: cookie cross-site (`Auth:CookieSameSite`, áp cho **cả** antiforgery cookie) · SignalR URL theo `VITE_API_BASE_URL` · reconnect vô hạn có trần + refetch khi reconnect
 - [ ] §4 CI/CD — `.github/workflows/ci-backend.yml` (.NET 10 + `postgres:18`) và `ci-web.yml` (Node 22: `lint` → `tsc` → `test` → `build`) + badge; **không** secret trong CI
 - [ ] §5 Deploy — **Neon** (Postgres) → **Render** (API, `/api/health`) → **Vercel** (FE) + cập nhật redirect URI Google/GitHub + migrate thủ công bằng `dotnet ef` + checklist nghiệm thu 10 bước
@@ -155,15 +156,28 @@ nên User Secrets sẽ thắng trở lại).
 - [ ] §7 Rà soát UI/UX 1 vòng toàn app + sửa các mục trong danh sách chốt + chuẩn bị demo/CV (link demo, ảnh chụp, kịch bản trình bày)
 - [ ] §9 Báo cáo `Project-Documents/report/phase-8-completion-test-deploy-report.md` — số test thật, link CI, URL production, thời gian cold-start đo được, bug thật bắt được
 
-### Chạy test (sau khi §2 xong)
+### Chạy test backend (§2 đã xong)
 
 ```bash
-# Backend — cần PostgreSQL thật; đặt TEAMNEXUS_TEST_DB nếu không dùng default localhost
-$env:TEAMNEXUS_TEST_DB = "Host=localhost;Port=5432;Database=TeamNexus_Test;Username=postgres;Password=postgres"
-dotnet test TeamNexus.sln
-# Không có DB ⇒ nhóm test thuần (ưu tiên 1) vẫn xanh, nhóm cần DB tự skip kèm thông báo
+# Cần một PostgreSQL thật (schema dùng jsonb/bytea/advisory lock/CHECK ⇒ KHÔNG dùng EF InMemory).
+# Fixture tự tạo database test nếu chưa có và tự chạy migration một lần cho cả process.
+$env:TEAMNEXUS_TEST_DB = "Host=localhost;Port=5432;Database=TeamNexus_Test;Username=postgres;Password=..."
 
-# Frontend
+dotnet test tests/TeamNexus.Api.Tests/TeamNexus.Api.Tests.csproj
+
+# Lọc theo class (runner in-process của xUnit v3):
+dotnet run --project tests/TeamNexus.Api.Tests -- -class TeamNexus.Api.Tests.Pure.AgentGuardrailsTests
+
+# Docker thay cho PostgreSQL local:
+docker run --name teamnexus-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:18
+```
+
+> **Không có DB ⇒ không fail:** nhóm test thuần (ưu tiên 1) vẫn chạy (**98 PASS**), nhóm cần DB tự **skip kèm thông báo**
+> hành động được (**74 SKIP**, 0 fail) — đúng quyết định D4 của giai đoạn 8.
+
+### Chạy test frontend
+
+```bash
 cd frontend
 npm run lint && npx tsc -b && npm test && npm run build
 ```

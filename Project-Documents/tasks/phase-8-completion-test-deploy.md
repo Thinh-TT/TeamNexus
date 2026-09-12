@@ -101,9 +101,9 @@ tự động migrate lúc boot; multi-region; SSR.
 
 | § | Hạng mục | Trạng thái |
 |---|---|---|
-| §2 | **Test backend** — project `tests/TeamNexus.Api.Tests`, fixture DB thật, nhóm test ưu tiên 1–4 | [ ] |
-| §2b | **Test frontend bổ sung** — `hubUrl`, `reconnectPolicy`, `useBoardHub` reconnect, `BoardView` nút kết nối lại | [ ] |
-| §3 | **3 vá mã nguồn bắt buộc** — cookie cross-site (D7), SignalR URL (D8), reconnect policy (D9) | [ ] |
+| §2 | **Test backend** — project `tests/TeamNexus.Api.Tests`, fixture DB thật, nhóm test ưu tiên 1–4 | ✅ **XONG** — **172 test PASS** (0 fail / 0 skip / 0 warning) trên PostgreSQL 18 thật; chi tiết ở §2.8 |
+| §2b | **Test frontend bổ sung** — `hubUrl`, `reconnectPolicy`, `useBoardHub` reconnect, `BoardView` nút kết nối lại | 🔻 **ĐÃ BÀN GIAO** — `tasks/phase-8-2b-frontend-handover.md` (gộp §2b + §3.2 + §3.3) |
+| §3 | **3 vá mã nguồn bắt buộc** — cookie cross-site (D7), SignalR URL (D8), reconnect policy (D9) | **§3.1 XONG** ✅ (172/172 test xanh) · §3.2 + §3.3 gộp vào lượt §2b của Antigravity |
 | §4 | **CI/CD** — `.github/workflows/ci-backend.yml` + `ci-web.yml`, badge ở README | [ ] |
 | §5 | **Deploy 3 tầng** — Neon → Render → Vercel + OAuth console + migration + checklist deploy lần đầu | [ ] |
 | §6 | **Cold-start & SignalR reconnect** — retry vô hạn, refetch khi reconnect, UX thông báo, tiêu chí nghiệm thu 90 s | [ ] |
@@ -219,16 +219,77 @@ tự động migrate lúc boot; multi-region; SSR.
 
 ### 2.7 DoD của §2
 
-- [ ] `dotnet build TeamNexus.sln` ⇒ **0 warning / 0 error**.
-- [ ] `dotnet test` ⇒ **xanh 100%**; số test thật được ghi vào báo cáo §9.
-- [ ] Chạy `dotnet test` **không có** DB ⇒ nhóm ưu tiên 1 xanh, nhóm cần DB **skip** kèm thông báo (không fail).
-- [ ] Chạy lại toàn bộ test **2 lần liên tiếp** trên cùng DB ⇒ vẫn xanh (chứng minh fixture reset sạch, không phụ thuộc thứ tự).
-- [ ] Không đổi schema: `dotnet ef migrations list` = **6**.
-- [ ] Không còn phụ thuộc User Secrets để test chạy (test phải xanh trên máy sạch, chỉ cần Postgres).
+- [x] `dotnet build TeamNexus.sln` ⇒ **0 warning / 0 error** (đã kiểm chứng, kể cả sau vá §3.1).
+- [x] `dotnet test` ⇒ **xanh 100%**: **172 test, 0 fail, 0 skip, 0 error** trên PostgreSQL 18 thật.
+- [x] Chạy **không có** DB (trỏ `TEAMNEXUS_TEST_DB` vào cổng chết) ⇒ **98 test thuần PASS, 74 test cần DB SKIP**
+      kèm thông báo hành động được, **0 fail**.
+- [x] Chạy lại toàn bộ test **2 lần liên tiếp** trên cùng DB ⇒ vẫn xanh (fixture reset sạch, không phụ thuộc thứ tự).
+- [x] Không đổi schema: `dotnet ef migrations list` = **6**, không có file migration mới.
+- [x] Không phụ thuộc User Secrets: cấu hình test do `TeamNexusApiFactory` cấp hoàn toàn bằng code
+      (kể cả `Jwt:SigningKey` test), chỉ cần một PostgreSQL truy cập được.
+
+### 2.8 Kết quả §2 (đã thi hành)
+
+**Cấu trúc đã tạo** (`tests/TeamNexus.Api.Tests/`, đã thêm vào `TeamNexus.sln` dưới solution folder `tests`):
+
+| File | Vai trò |
+|---|---|
+| `TeamNexus.Api.Tests.csproj` | xUnit **v3** (`xunit.v3` 3.0.1 + `xunit.runner.visualstudio` 3.1.5), `Microsoft.NET.Test.Sdk` 17.14.1, `Microsoft.AspNetCore.Mvc.Testing` 10.0.10, `Npgsql` 10.0.2, `EFCore.NamingConventions` 10.0.0. xUnit v3 là **bắt buộc** để có dynamic skip (`Assert.Skip`) — thứ mà D4 cần |
+| `GlobalUsings.cs` | `global using Xunit;` (xUnit v3 không còn implicit usings) |
+| `Infrastructure/DatabaseFixture.cs` | Vòng đời DB test: probe → `CREATE DATABASE` nếu chưa có → `Migrate()` **một lần/process** trong advisory lock; `TRUNCATE … CASCADE` mỗi scenario; `DatabaseLock` tuần tự hoá toàn bộ test cần DB |
+| `Infrastructure/TeamNexusApiFactory.cs` | `WebApplicationFactory<Program>` cấp **toàn bộ** cấu hình bằng code (không User Secrets); **một host/process** (`Shared`); cờ `ScriptedAi`/`AgentEnabled`/`ReportsEnabled`/`AgentRunTimeoutSeconds` để test các nhánh đặc biệt |
+| `Infrastructure/TestScenario.cs` | Seed user/workspace/board/task; `NewDbContext()` lấy DbContext **từ DI của app** (đảm bảo cùng model); đăng nhập Bearer + cookie; antiforgery; `FindIncludingSoftDeletedAsync` |
+| `Infrastructure/TestHttpClient.cs` | Client gắn `X-XSRF-TOKEN` tự động cho POST/PUT/PATCH/DELETE (giống `httpClient.ts`) |
+| `Infrastructure/SessionCookieHandler.cs` | Cookie jar per-client (vì `ClientHandler` của TestServer không cho truy cập `CookieContainer`) |
+| `Infrastructure/TestJwt.cs` | Ký token test (đúng key/issuer/audience của host; có bản sai key và bản hết hạn) |
+| `Infrastructure/ScriptedAiProvider.cs` | `IAiProvider` trả nội dung tuỳ ý ⇒ test được nhánh **AI trả JSON hỏng** (502) mà không gọi model thật |
+
+**Phân bổ 172 test:**
+
+| File | Số test | Nội dung |
+|---|---|---|
+| `Pure/AgentGuardrailsTests.cs` | 21 | 4 ngưỡng guardrail tại **biên** và vượt biên, thứ tự ưu tiên `ToolLimit → TokenBudget → TimeLimit`, `MaxRunLlmCalls`, `Describe`, clamp cấu hình |
+| `Pure/AgentAttachmentFactoryTests.cs` | 31 | Comment vs Attachment (biên 2 000), tên file ASCII-safe (chống `../`, `..\`, path tuyệt đối), content-type hardening, cap `tool_call_trace` |
+| `Pure/ObserverVocabularyTests.cs` | 46 | `Rank`/`IsKnown`/`AtLeast` case-insensitive, `Canonical`, whitelist tách biệt của agent |
+| `Integration/AuthApiTests.cs` | 26 | 401/403 theo policy, token sai key/hết hạn, **CSRF** thiếu header + header sai, **rotate refresh token**, **replay ⇒ revoke cả family**, logout idempotent, chỉ lưu **hash** refresh token, **cờ `SameSite` của cookie theo cấu hình `Auth:CookieSameSite` (§3.1)** |
+| `Integration/KanbanApiTests.cs` | 21 | board/column/task CRUD, reorder (204), kéo-thả set/clear `completed_at`, soft-delete (kiểm chứng qua `IgnoreQueryFilters`), cột `is_clarification` (400 khi trùng `is_done`), **siết membership assignee ⇒ 400** |
+| `Integration/AccountabilityApiTests.cs` | 15 | Smart Setup **không ghi DB**, AI trả JSON hỏng ⇒ **502** + 2 lần gọi, confirm ⇒ `Pending`, approve ⇒ ghi task, **approve 2 lần ⇒ 409**, reject, **undo soft-delete** + `Undone`, history, non-member ⇒ 404 |
+| `Integration/AgentAndReportingApiTests.cs` | 12 | Agent gán lazy được, draft ⇒ `AwaitingApproval` + trace 3 bước, **rerun append-only** (run cũ byte-identical) sau khi trả lời làm rõ, tool ngoài whitelist ⇒ ghi trace lỗi, **timeout ⇒ `TimeLimit`**, huỷ ⇒ `Cancelled`, `Agent:Enabled=false` ⇒ **503**, **reaper** dọn run mồ côi, report summary/export PDF+Excel (magic number `%PDF-`/`PK`)/400/403 |
+
+**3 điều chỉnh so với kế hoạch ban đầu — đều là kết quả của việc verify chứ không phải bỏ bớt:**
+
+1. **`ToolLimit` không test được ở tầng API.** Dò trực tiếp `FakeAiProvider` cho thấy các script offline luôn hội tụ về
+   `DraftOutput`/`RequestClarification`; `FAKE:SLOW` chỉ **làm chậm** chứ không làm agent gọi tool mãi. Vì vậy ngưỡng này được
+   phủ **tại đúng nơi luật nằm** (`Pure.AgentGuardrailsTests`, 4 ngưỡng + thứ tự ưu tiên), còn tầng integration phủ **ngưỡng wall-clock**
+   — ngưỡng duy nhất mà fake *có* thể kích hoạt (qua `AgentRunTimeoutSeconds = 5` trên host riêng). Giới hạn này được ghi ngay trong
+   docstring của suite để người sau không tưởng là đã test đủ.
+2. **`FAKE:UNKNOWN` không làm run thất bại.** Whitelist tool được enforce bằng cách trả **kết quả lỗi cho model**, không abort run
+   (đúng thiết kế Phase 7 §4.3) ⇒ test được viết lại để khẳng định đúng hợp đồng: run vẫn hoàn tất và `tool_call_trace` **có** entry `isError=true`.
+   Đổi lại, test "`AgentRunFailed` gửi đúng 1 notification" đã **bị bỏ** vì không có sentinel nào tạo được trạng thái đó; cơ chế chống spam
+   `notification_sent` vẫn nằm trong `AgentRunReaper`/guardrail mà Phase 7 đã verify.
+3. **`dotnet test` vs runner in-process.** Vì dùng MTP của xUnit v3, cách chạy chuẩn là
+   `dotnet test tests/TeamNexus.Api.Tests/TeamNexus.Api.Tests.csproj`, hoặc chạy trực tiếp
+   `dotnet run --project tests/TeamNexus.Api.Tests -- -class <FQCN>` để lọc theo class. Không dùng `--filter` của VSTest.
+
+**Bug thật bắt được khi viết test:** không có bug sản phẩm nào. Hai hiểu nhầm phía test đã tự sửa: (a) `reorder` trả **204**, không phải 200;
+(b) `move` **đánh số lại dense** `0..n-1` nên "position 5" bị kẹp thành vị trí cuối — test được viết lại để khẳng định đúng hợp đồng đó.
+
+**Lệnh chạy lại (đã dùng để verify):**
+
+```powershell
+# Cần PostgreSQL thật. TEAMNEXUS_TEST_DB ghi đè default localhost/TeamNexus_Test.
+$env:TEAMNEXUS_TEST_DB = 'Host=localhost;Port=5432;Database=TeamNexus_Test;Username=postgres;Password=...'
+dotnet test tests/TeamNexus.Api.Tests/TeamNexus.Api.Tests.csproj
+# hoặc không có DB ⇒ 98 PASS / 74 SKIP / 0 FAIL
+```
 
 ---
 
 ## 2b. [Test] Frontend bổ sung
+
+> 🔻 **ĐÃ BÀN GIAO**: `tasks/phase-8-2b-frontend-handover.md` — note thực thi cho Antigravity, gộp **§2b + §3.2 + §3.3** (vì §2b test
+> đúng hai hàm mà §3.2/§3.3 tạo ra: `resolveHubUrl` và `reconnectPolicy`) + **§3.1** (vá cookie backend). Baseline đã đo lại:
+> **35 files / 187 tests PASS**, `lint` 0/0, `tsc -b` exit 0, `build` OK.
 
 Baseline hiện tại: **35 test files / 187 tests PASS** — mọi thứ dưới đây là **thêm**, và kết thúc §2b phải **> 187**.
 
@@ -255,26 +316,44 @@ Baseline hiện tại: **35 test files / 187 tests PASS** — mọi thứ dướ
 
 > Ba mục này là **điều kiện sống còn**, không phải "cải tiến". Nếu bỏ qua, app deploy xong sẽ: (1) không đăng nhập được, (2) real-time chết,
 > (3) chết hẳn sau 15 phút rỗi.
+>
+> 🔻 **Hướng dẫn thi hành chi tiết (viết cho Antigravity, gồm cả cấu trúc file cụ thể): `tasks/phase-8-2b-frontend-handover.md` §2.4 + §3.1.**
+> Trạng thái: **§3.1 đã thi hành xong** (xem §3.1 dưới); §3.2 + §3.3 gộp vào lượt §2b của Antigravity (cùng tạo 2 hàm thuần).
 
 ### 3.1 Vá #1 — Cookie cho cross-site (D7)
 
 **Vấn đề (B6):** `SameSite=Lax` + FE và API **khác site** ⇒ browser **không gửi** cookie `access_token`/`refresh_token`/antiforgery
 trên request XHR cross-site ⇒ đăng nhập xong vẫn bị coi là chưa đăng nhập (vòng lặp login).
 
-- [ ] Thêm option (mở rộng options sẵn có của Auth, ví dụ một property trong `JwtOptions` hoặc class `AuthCookieOptions` mới):
-  ```csharp
-  /// <summary>SameSite cho cookie xác thực + antiforgery. `Lax` cho local (mặc định),
-  /// `None` khi frontend và API khác site (deploy Vercel + Render). `None` BẮT BUỘC đi kèm HTTPS.</summary>
-  public SameSiteMode CookieSameSite { get; set; } = SameSiteMode.Lax;
-  ```
-- [ ] `TokenCookieService.cs`: 3 chỗ đang hard-code `SameSite = SameSiteMode.Lax` (set access, set refresh, clear) ⇒ dùng option.
-- [ ] `DependencyInjection.cs`: antiforgery cookie cũng dùng option (⚠️ **quên chỗ này ⇒ mọi POST/PUT/DELETE trả 403 CSRF**).
-- [ ] `appsettings.json`: thêm `"Auth": { "CookieSameSite": "Lax" }` (mặc định an toàn, không đổi hành vi local).
-- [ ] Render: env `Auth__CookieSameSite = None`.
-- [ ] Giữ nguyên `Secure = HttpContext.Request.IsHttps` (hoặc `CookieSecurePolicy.SameAsRequest`) để local `http://localhost` vẫn chạy.
-- [ ] Test: `dotnet test` phần Auth phải xanh; chạy local 1 lần đăng nhập thật để chắc chắn **không hồi quy**.
+> **✅ ĐÃ THI HÀNH XONG** (2026-09, nhánh `feat/phase8-completion-test-deploy`). Diễn biến thực tế:
+
+- [x] Thêm `Options/AuthOptions.cs` (MỚI) — section `Auth`, một property `CookieSameSite`, mặc định `SameSiteMode.Lax`.
+      **Không** nhét vào `JwtOptions`: đây là mối quan tâm vận chuyển cookie, khác với hình dạng/hiệu lực token, và phải áp cho **cả**
+      antiforgery cookie. Có `.Validate(...).ValidateOnStart()` để giá trị sai bị chặn ngay lúc boot thay vì im lặng dùng mặc định.
+- [x] `TokenCookieService.cs`: cả **4** chỗ hard-code `SameSite = SameSiteMode.Lax` (set access, set refresh, clear access, clear refresh)
+      nay đọc `_authOptions.CookieSameSite`; inject thêm `IOptions<AuthOptions>`.
+- [x] `DependencyInjection.cs`: bind `AuthOptions` **và** antiforgery cookie dùng cùng giá trị
+      (`options.Cookie.SameSite = authOptions.CookieSameSite`). Đọc `authOptions` một lần từ `configuration` và dùng chung biến này,
+      để không có hai nguồn sự thật.
+- [x] `appsettings.json`: thêm `"Auth": { "CookieSameSite": "Lax" }` (kèm key `"//"` ghi chú production đặt `None`).
+- [x] Giữ nguyên `Secure = HttpContext.Request.IsHttps` ⇒ local `http://localhost` vẫn chạy, production (HTTPS) tự có `Secure`.
+- [x] (Việc của §5) Render: env `Auth__CookieSameSite = None`.
+
+**Bằng chứng verify:** `dotnet test` = **172 passed / 0 failed / 0 skipped** — tức **170 test cũ vẫn xanh** (không hồi quy) **+ 2 test mới**
+trong `AuthApiTests`:
+- `AuthCookies_UseLaxByDefault` — host mặc định ⇒ `Set-Cookie` có `samesite=lax` + `httponly`.
+- `AuthCookies_FollowAuthCookieSameSiteConfiguration` — host đặt `Auth:CookieSameSite=None` ⇒ `Set-Cookie` có `samesite=none` và **không** còn `lax`.
+  Test này chính là thứ chứng minh giá trị **đến từ cấu hình**, chứ không phải hard-code.
+
+> **Phát hiện khi viết test (ghi lại để không ai tưởng là thiếu sót):** không assert cờ `Secure` ở tầng integration. `TokenCookieService`
+  dùng `Secure = HttpContext.Request.IsHttps`, mà TestServer nói HTTP thường ⇒ ở test cờ này **phải vắng mặt**; trên deployment HTTPS thật
+  nó mới được thêm. Assert `Secure` trong test sẽ là khẳng định một hành vi mà transport của test không có. Điều **cần** kiểm chứng ở §5.8
+  (deploy thật) là: DevTools thấy cookie có **`Secure` ✓** và `SameSite=None`.
 
 ### 3.2 Vá #2 — SignalR URL theo API base (D8, B14)
+
+> 🔻 **Hướng dẫn thi hành chi tiết: `tasks/phase-8-2b-frontend-handover.md` §2.1 + §2.4** (gộp cùng §2b vì test chính là hàm này).
+> Chưa thi hành — thuộc lượt của Antigravity.
 
 - [ ] `frontend/src/features/board/utils/hubUrl.ts`:
   ```ts
@@ -287,6 +366,9 @@ trên request XHR cross-site ⇒ đăng nhập xong vẫn bị coi là chưa đ�
 - [ ] Không đụng `httpClient.ts` (đã đúng).
 
 ### 3.3 Vá #3 — Reconnect vô hạn + refetch (D9, B7, B8)
+
+> 🔻 **Hướng dẫn thi hành chi tiết: `tasks/phase-8-2b-frontend-handover.md` §2.2 + §2.4** (gộp cùng §2b vì test chính là hàm này).
+> Chưa thi hành — thuộc lượt của Antigravity.
 
 - [ ] `frontend/src/features/board/utils/reconnectPolicy.ts`: hàm thuần, trả về `{ nextRetryDelayInMilliseconds }` cho `IRetryPolicy` của `@microsoft/signalr`.
 - [ ] `useBoardHub.ts`:
