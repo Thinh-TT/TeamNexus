@@ -611,16 +611,33 @@ Kế hoạch ghi rõ: "nếu bỏ bước này thì *CI xanh* chỉ là file YAM
 
 ### 5.1 Chuẩn bị repo (làm một lần)
 
-- [ ] Đảm bảo `.gitignore` đã chặn: `bin/`, `obj/`, `node_modules/`, `frontend/dist/`, `*.user`, và **không** có file chứa secret (`appsettings.Development.json` hiện chỉ có logging — an toàn).
-- [ ] Kiểm tra **không** có secret bị commit (quan trọng vì repo sẽ là public cho CV):
-  - [ ] `git log -p --all -- src/TeamNexus.Api/appsettings*.json` ⇒ chỉ thấy giá trị rỗng.
-  - [ ] `grep -R "sk-\|ApiKey\|ClientSecret" --include="*.json" --include="*.cs" --include="*.ts"` ⇒ mọi chỗ đều là `""`.
-  - [ ] Nếu từng commit secret ⇒ **coi như đã lộ**: rotate key đó ở DeepSeek/Tavily/OAuth, không chỉ xoá file.
-- [ ] Tạo repo trên GitHub (private hoặc public) và push nhánh `main`.
+- [x] Đảm bảo `.gitignore` đã chặn: `bin/`, `obj/`, `node_modules/`, `frontend/dist/`, `*.user`, và **không** có file chứa secret (`appsettings.Development.json` hiện chỉ có logging — an toàn).
+- [x] Kiểm tra **không** có secret bị commit (quan trọng vì repo sẽ là public cho CV):
+  - [x] `git log -p --all -- src/TeamNexus.Api/appsettings*.json` ⇒ chỉ thấy giá trị rỗng.
+  - [x] `grep -R "sk-\|ApiKey\|ClientSecret" --include="*.json" --include="*.cs" --include="*.ts"` ⇒ mọi chỗ đều là `""`.
+  - [x] Nếu từng commit secret ⇒ **coi như đã lộ**: rotate key đó ở DeepSeek/Tavily/OAuth, không chỉ xoá file.
+- [x] Tạo repo trên GitHub (private hoặc public) và push nhánh `main`.
 - [ ] (Tuỳ chọn, nên làm) tạo nhánh `develop` để deploy preview trước khi vào `main`.
-- [ ] Ghi lại **quy ước đặt tên domain** bạn sẽ dùng, vì nó xuất hiện ở 4 nơi (OAuth console, `Frontend__BaseUrl`, `Cors__AllowedOrigins__0`, `VITE_API_BASE_URL`). Ví dụ:
-  - API: `https://teamnexus-api.onrender.com`
-  - FE: `https://teamnexus.vercel.app`
+- [x] Ghi lại **quy ước đặt tên domain** bạn sẽ dùng, vì nó xuất hiện ở 4 nơi (OAuth console, `Frontend__BaseUrl`, `Cors__AllowedOrigins__0`, `VITE_API_BASE_URL`).
+
+#### Quy ước đặt tên Domain (Production)
+
+> **Cặp URL chuẩn đã chốt:**
+> - **Backend API (Render):** `https://teamnexus-api.onrender.com`
+> - **Frontend Web (Vercel):** `https://teamnexus.vercel.app`
+
+Bảng ánh xạ đồng bộ 4 vị trí cấu hình bắt buộc:
+
+| Vị trí cấu hình | Biến / Trường | Giá trị thiết lập | Ghi chú |
+|---|---|---|---|
+| **Render (API)** | `Frontend__BaseUrl` | `https://teamnexus.vercel.app` | URL redirect sau khi OAuth hoàn tất |
+| **Render (API)** | `Cors__AllowedOrigins__0` | `https://teamnexus.vercel.app` | Cho phép browser gửi request cross-origin từ FE |
+| **Render (API)** | `Auth__CookieSameSite` | `None` | Bắt buộc cho cookie auth hoạt động cross-site (§3.1, D7) |
+| **Vercel (FE)** | `VITE_API_BASE_URL` | `https://teamnexus-api.onrender.com` | Base URL cho `httpClient` và SignalR `hubUrl` (§3.2, D8) |
+| **Google Cloud Console** | *Authorized JavaScript origins* | `https://teamnexus-api.onrender.com` | Origin của backend |
+| **Google Cloud Console** | *Authorized redirect URIs* | `https://teamnexus-api.onrender.com/api/auth/external-callback?provider=google` | Endpoint xử lý Google OAuth token |
+| **GitHub OAuth App** | *Homepage URL* | `https://teamnexus.vercel.app` | Trang chủ ứng dụng |
+| **GitHub OAuth App** | *Authorization callback URL* | `https://teamnexus-api.onrender.com/api/auth/external-callback?provider=github` | Endpoint xử lý GitHub OAuth token |
 
 ---
 
