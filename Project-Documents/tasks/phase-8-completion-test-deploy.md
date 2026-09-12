@@ -617,7 +617,7 @@ Kế hoạch ghi rõ: "nếu bỏ bước này thì *CI xanh* chỉ là file YAM
   - [x] `grep -R "sk-\|ApiKey\|ClientSecret" --include="*.json" --include="*.cs" --include="*.ts"` ⇒ mọi chỗ đều là `""`.
   - [x] Nếu từng commit secret ⇒ **coi như đã lộ**: rotate key đó ở DeepSeek/Tavily/OAuth, không chỉ xoá file.
 - [x] Tạo repo trên GitHub (private hoặc public) và push nhánh `main`.
-- [ ] (Tuỳ chọn, nên làm) tạo nhánh `develop` để deploy preview trước khi vào `main`.
+- [x] Tạo nhánh `develop` để deploy preview trước khi vào `main`.
 - [x] Ghi lại **quy ước đặt tên domain** bạn sẽ dùng, vì nó xuất hiện ở 4 nơi (OAuth console, `Frontend__BaseUrl`, `Cors__AllowedOrigins__0`, `VITE_API_BASE_URL`).
 
 #### Quy ước đặt tên Domain (Production)
