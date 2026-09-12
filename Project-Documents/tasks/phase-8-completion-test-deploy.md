@@ -466,7 +466,7 @@ trong `AuthApiTests`:
 
 ### 4.5 Kết quả §4 (đã thi hành)
 
-**File mới:** `.github/workflows/ci-backend.yml`, `.github/workflows/ci-web.yml` (2 file duy nhất của §4 — không sửa code backend/frontend nào).
+**File mới:** `.github/workflows/ci-backend.yml`, `.github/workflows/ci-web.yml`.
 
 **Verify ở local (mô phỏng đúng lệnh CI, chạy trên Release):**
 
@@ -476,13 +476,70 @@ trong `AuthApiTests`:
 | `dotnet test … --no-build -c Release --logger "trx;LogFileName=test-results.trx" --results-directory TestResults` | **Passed! — Failed 0, Passed 172, Skipped 0**; file `TestResults/test-results.trx` được tạo (**239 KB**) ⇒ cú pháp artifact đúng |
 | `npm test -- --reporter=json --outputFile=test-results.json` (trong `frontend/`) | `numTotalTests = 206`, `numFailedTests = 0`, `success = true` ⇒ bước assert đọc đúng 2 field, ngưỡng `> 187` thoả |
 
-**Còn lại (cần GitHub, không làm được ở local):**
+**Verify trên GitHub (run thật, đã xanh cả hai):**
 
-- [ ] Push nhánh và xác nhận **2 workflow xanh** ở một run thật.
-- [ ] (Khuyến nghị) **Kiểm chứng cổng thật**: tạm đổi 1 assert ⇒ push ⇒ job **đỏ** ⇒ revert ⇒ xanh. Nếu bỏ bước này thì "CI xanh"
-      chỉ là file YAML biết parse, chưa phải một cái cổng.
+| Workflow | Run | Kết quả đọc từ log |
+|---|---|---|
+| `ci-backend` | [34679755404](https://github.com/Thinh-TT/TeamNexus/actions/runs/34679755404) | `Passed! - Failed: 0, Passed: 172, Skipped: 0, Total: 172` + cổng `xUnit TRX: total=172 executed=172 skipped=0 failed=0` |
+| `ci-web` | [34679755364](https://github.com/Thinh-TT/TeamNexus/actions/runs/34679755364) | `vitest: total=206 failed=0` + `lint`, `tsc -b`, `vite build` đều xanh |
+
+### 4.6 ⚠️ CI đã bắt được 4 lỗi thật trong hạ tầng test ngay lần chạy đầu (giá trị lớn nhất của §4)
+
+Lần chạy CI **đầu tiên** báo `success` nhưng log ghi `Passed: 111, Skipped: 61, Total: 172` — nghĩa là **61 test cần DB bị bỏ qua trong im lặng**.
+Đây là bài học đúng như lo ngại ở F1: *job xanh ≠ đã verify*. Truy vết trong `DatabaseFixture` tìm ra **4 lỗi thật**, tất cả đều chỉ xuất hiện khi
+DB ở trạng thái "mới hoàn toàn" (máy dev đã có sẵn `TeamNexus_Test` nên **không bao giờ** lộ ra):
+
+| # | Lỗi | Triệu chứng trên CI | Cách sửa |
+|---|---|---|---|
+| 1 | `EnsureDatabaseCreated` nhả lock **trước** khi `CREATE DATABASE` chạy; `_databaseReady` được set **sau** | Hai class cùng thấy "chưa có DB" ⇒ cùng `CREATE DATABASE` ⇒ kẻ thua chết với **`23505`** (unique index `pg_database`), mà `catch` chỉ bắt `42P04` ⇒ `IsAvailable=false` ⇒ cả class skip | Giữ lock cho **toàn bộ** check-and-create; bắt thêm `23505` |
+| 2 | `MigrationLockKey` = `0x…L & long.MaxValue` ⇒ **không phải** dạng 64-bit của `pg_try_advisory_lock(int8)` | Fast path **không bao giờ** thấy lock của process khác ⇒ hai class chạy `MigrateAsync()` **đồng thời** ⇒ tuỳ số class/số nhân mà class này skip, class kia không | Dùng hằng `long` không qua phép AND |
+| 3 | Kẻ thua lock migration **return ngay** thay vì chờ schema | `TRUNCATE` chạy trên schema đang migrate dở ⇒ **`42P01: relation "task_attachments" does not exist`** (14 test đỏ) | Chờ tới khi `__EFMigrationsHistory` thực sự dùng được rồi mới return |
+| 4 | `EnsureMigratedAsync` giả định DB đã tồn tại | DB bị xoá ngoài tiến trình ⇒ `3D000` ⇒ mọi class sau đó skip | Tự `EnsureDatabaseCreated()` bên trong + retry **một lần** khi gặp `3D000` |
+
+**Hai cải thiện phòng ngừa kèm theo:**
+
+- `ResetDatabaseAsync` chỉ `TRUNCATE` những bảng **thực sự tồn tại** (lọc từ `information_schema.tables`). Trước đây **một** bảng thiếu làm
+  **cả** câu `TRUNCATE` fail với `42P01`, biến lỗi schema thành một loạt test đỏ khó hiểu.
+- `DatabaseFixture` in **một dòng** cho biết DB có sẵn sàng hay không (`[Phase 8] Test DB ready…` / `… UNAVAILABLE … will SKIP`).
+  Không có dòng đó thì "skip sạch" trông y hệt "chạy sạch" — đúng cái bẫy đã xảy ra.
+
+**Cổng mới để lỗi này không tái diễn:** bước **`Assert no test was skipped`** đọc counters trong TRX và **fail nếu `skipped > 0`**,
+đồng thời fail nếu `total` lệch khỏi **172** (buộc người sửa phải cập nhật số liệu một cách có ý thức). CI xanh giờ **có nghĩa là** đã chạy thật.
+
+**Verify lại sau khi sửa (local, dùng `dotnet ef database drop` để tạo đúng điều kiện "DB mới"):**
+
+| Kịch bản | Trước khi sửa | Sau khi sửa |
+|---|---|---|
+| DB vừa bị drop (fresh) | 172 total · **74 skip** hoặc **14 fail** tuỳ thời điểm | **172 chạy hết · 0 skip · 0 fail** |
+| Chạy lại trên DB đã có | 172 · 0 skip | **172 · 0 skip** |
+| Không có DB (cổng chết) | 98 pass · 74 skip · 0 fail | **98 pass · 74 skip · 0 fail** (giữ nguyên hành vi D4 — nhưng trên CI thì cổng mới **chặn**) |
+
+> **Kết luận cần nhớ:** `dotnet test` báo "Passed!" **không** đồng nghĩa với "đã kiểm chứng".
+> Phải đọc `Total`/`Skipped`. Đây là lý do tồn tại của cổng `assert skipped = 0` (backend) và cổng `total > 187` (frontend).
+
+**Còn lại (cần làm trên GitHub UI — không làm được bằng code):**
+
+- [ ] (Khuyến nghị) **chứng minh cổng thật sự đỏ**: tạm đổi 1 assert ⇒ push ⇒ job đỏ ⇒ revert. Hiện **đã có bằng chứng gián tiếp rất mạnh**
+      (lần chạy đầu: job xanh nhưng 61 test skip, và cổng mới đã được thêm chính vì thế), nhưng một lần đỏ chủ động vẫn là bằng chứng trực tiếp.
+- [ ] Bật branch protection cho `main` với 2 required check: `Build & test (.NET 10 + PostgreSQL 18)` và `Lint, typecheck, test, build (Node 24)`.
+
+### 4.7 Phiên bản action (đã cập nhật theo cảnh báo của runner)
+
+Lần chạy đầu, runner báo `Node.js 20 is deprecated` cho 4 action. Đã nâng lên major hiện hành (**đã verify xanh lại**):
+
+| Action | Trước | Sau |
+|---|---|---|
+| `actions/checkout` | `v4` | **`v7`** |
+| `actions/setup-dotnet` | `v4` | **`v6`** |
+| `actions/setup-node` | `v4` | **`v7`** |
+| `actions/cache` | `v4` | **`v6`** |
+| `actions/upload-artifact` | `v4` | **`v7`** |
+
+(Run sau khi nâng **không còn** annotation `Node.js 20`.)
+
+- [x] Push nhánh và xác nhận **2 workflow xanh** ở một run thật: `ci-backend` 34679755404, `ci-web` 34679755364 (xem §4.5).
+- [ ] (Khuyến nghị) **Kiểm chứng cổng thật**: tạm đổi 1 assert ⇒ push ⇒ job **đỏ** ⇒ revert ⇒ xanh. Xem ghi chú ở §4.6 — đã có bằng chứng gián tiếp rất mạnh, nhưng một lần đỏ chủ động vẫn trực tiếp hơn.
 - [ ] Bật branch protection với 2 required check ở §4.3.
-- [ ] Tick ô **"CI/CD pipeline qua GitHub Actions chạy build/test tự động"** trong `03-roadmap.md` — **chỉ sau khi** có run xanh thật.
 
 **Sự thật phát sinh trong lượt này (ghi lại để không nhầm về sau):** §2b đã được hoàn tất (không còn ở trạng thái "đã bàn giao"),
 và **baseline frontend nay là 206 test / 35 file** (không phải 187). Điều này khớp với ngưỡng trong CI: cổng là `> 187`

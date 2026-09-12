@@ -165,13 +165,17 @@ Hai workflow chạy trên `ubuntu-latest` cho mọi push lên `main`/`develop`/`
 
 | Workflow | Làm gì | Artifact |
 |---|---|---|
-| `ci-backend.yml` | `restore` → `build -c Release` (**0 warning / 0 error**) → `dotnet test` trên **PostgreSQL 18** (service container) | `backend-test-results` (TRX) |
+| `ci-backend.yml` | `restore` → `build -c Release` (**0 warning / 0 error**) → `dotnet test` trên **PostgreSQL 18** (service container) → **assert không test nào bị skip** | `backend-test-results` (TRX) |
 | `ci-web.yml` | `npm ci` → `lint` → `tsc -b` → `vitest` → **assert số test > 187** → `vite build` | `web-build-output` (`dist/` + báo cáo JSON) |
+
+**Trạng thái đã verify:** cả hai workflow **xanh** trên run thật — backend `Passed: 172, Skipped: 0`, frontend `vitest: total=206 failed=0`.
 
 - **Vì sao không có workflow deploy:** Render và Vercel tự deploy từ GitHub (quyết định **D11**). Nhờ vậy CI **không giữ một secret nào** —
   toàn bộ cấu hình cho test do `TeamNexusApiFactory` cấp bằng code (`Jwt:SigningKey` test, `DeepSeek:ApiKey` rỗng ⇒ dùng fake provider).
   Hệ quả đã biết: **migration lên DB cloud là bước thủ công** (xem `Project-Documents/tasks/phase-8-completion-test-deploy.md` §5.7).
-- **Cổng bảo vệ baseline số test:** `vitest` vẫn xanh nếu ai đó xoá bớt test, nên CI đọc báo cáo JSON và **fail nếu tổng số test ≤ 187**.
+- **Hai cổng chống "xanh giả":** `vitest` vẫn xanh nếu ai đó xoá test ⇒ CI đọc báo cáo JSON và **fail nếu tổng ≤ 187**.
+  Và **một test bị `SKIP` vẫn tính là xanh** ⇒ job backend đọc counters trong TRX và **fail nếu `skipped > 0`**
+  (lần chạy CI đầu tiên đã lọt lưới đúng kiểu này: job xanh nhưng chỉ **111/172** test thực sự chạy — xem §4.6 của task doc).
 - **Node 24 (không phải 22):** `vitest` khai báo `engines: ^22.12.0 || ^24.0.0 || >=26.0.0`, nên Node 22.0–22.11 sẽ hỏng; 24 cũng khớp máy dev.
 
 ### Chạy test backend (§2 đã xong)
@@ -191,7 +195,8 @@ docker run --name teamnexus-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d pos
 ```
 
 > **Không có DB ⇒ không fail:** nhóm test thuần (ưu tiên 1) vẫn chạy (**98 PASS**), nhóm cần DB tự **skip kèm thông báo**
-> hành động được (**74 SKIP**, 0 fail) — đúng quyết định D4 của giai đoạn 8.
+> hành động được (**74 SKIP**, 0 fail) — đúng quyết định D4 của giai đoạn 8. Fixture in một dòng cho biết DB có sẵn sàng hay không;
+> **trên CI thì skip bị coi là lỗi** (job backend fail nếu `skipped > 0`), vì ở đó PostgreSQL đã được bảo đảm bằng service container.
 
 ### Chạy test frontend
 
