@@ -89,42 +89,88 @@ public sealed class TestScenario : IAsyncDisposable
         await action(db);
     }
 
-    /// <summary>Wipes every data table (TRUNCATE … CASCADE) and clears the local session.</summary>
+    /// <summary>
+    /// Wipes every data table (TRUNCATE … CASCADE) and clears the local session.
+    /// <para>
+    /// Only tables that actually exist are truncated. A single missing table makes the whole
+    /// <c>TRUNCATE</c> statement fail with <c>42P01</c>, which turns a schema problem — or simply a
+    /// database that another process is still migrating — into confusing test failures. Filtering
+    /// keeps this reset honest and self-describing instead.
+    /// </para>
+    /// </summary>
     internal async Task ResetDatabaseAsync()
     {
         await using var db = NewDbContext();
 
+        var existing = await GetExistingTableNamesAsync(db);
+
+        // `roles` is deliberately absent: it is seeded once by InitialSchema and never rewritten.
+        string[] wanted =
+        [
+            "task_attachments", "agent_runs", "task_comments", "notifications", "activity_logs",
+            "ai_observer_runs", "ai_action_logs", "task_labels", "tasks", "board_columns", "boards",
+            "labels", "workspace_members", "refresh_tokens", "user_roles", "user_claims",
+            "user_tokens", "user_logins", "users", "workspaces",
+        ];
+
+        var present = wanted.Where(existing.Contains).ToList();
+
+        if (present.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Không tìm thấy bảng nào của TeamNexus trong database test — migration chưa chạy xong?");
+        }
+
         // TRUNCATE … CASCADE rather than ordered DELETEs: every relationship in this schema is
-        // ON DELETE RESTRICT, so a hand-maintained deletion order would break the day a new FK is
-        // added. `roles` is deliberately left alone (seeded once by InitialSchema).
-        await db.Database.ExecuteSqlRawAsync(
-            """
-            TRUNCATE TABLE
-                task_attachments,
-                agent_runs,
-                task_comments,
-                notifications,
-                activity_logs,
-                ai_observer_runs,
-                ai_action_logs,
-                task_labels,
-                tasks,
-                board_columns,
-                boards,
-                labels,
-                workspace_members,
-                refresh_tokens,
-                user_roles,
-                user_claims,
-                user_tokens,
-                user_logins,
-                users,
-                workspaces
-            RESTART IDENTITY CASCADE;
-            """);
+        // ON DELETE RESTRICT, so a hand-maintained deletion order would break the day a new FK is added.
+        // Identifiers are quoted and come from the hard-coded allow-list above (never from user input),
+        // so the statement is built as a plain string rather than an interpolated one.
+        var tableList = string.Join(", ", present.Select(name => "\"" + name + "\""));
+        var sql = "TRUNCATE TABLE " + tableList + " RESTART IDENTITY CASCADE;";
+
+        await db.Database.ExecuteSqlRawAsync(sql);
 
         db.ChangeTracker.Clear();
         ResetSession();
+    }
+
+    private static async Task<HashSet<string>> GetExistingTableNamesAsync(TeamNexusDbContext db)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+
+        // The connection belongs to the DbContext: closing/disposing it here would leave EF with a
+        // disposed connection for the statements that follow (observed as ObjectDisposedException on
+        // the TRUNCATE). So it is leaned on without taking ownership.
+        var connection = db.Database.GetDbConnection();
+        var wasClosed = connection.State != System.Data.ConnectionState.Open;
+
+        if (wasClosed)
+        {
+            await connection.OpenAsync();
+        }
+
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText =
+                "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'";
+
+            await using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                names.Add(reader.GetString(0));
+            }
+        }
+        finally
+        {
+            if (wasClosed)
+            {
+                await connection.CloseAsync();
+            }
+        }
+
+        return names;
     }
 
     // ---- seeding ------------------------------------------------------------

@@ -45,6 +45,17 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// <summary>PostgreSQL error code for "database already exists".</summary>
     private const string DuplicateDatabase = "42P04";
 
+    /// <summary>PostgreSQL error code for <c>unique_violation</c> — what a concurrent CREATE DATABASE raises.</summary>
+    private const string DuplicateObject = "23505";
+
+    /// <summary>How long to keep retrying the very first connection (service container first boot).</summary>
+    private static readonly TimeSpan ServerReadyTimeout = TimeSpan.FromSeconds(60);
+
+    private static readonly TimeSpan ServerReadyDelay = TimeSpan.FromSeconds(2);
+
+    private static readonly int ServerReadyAttempts =
+        Math.Max(1, (int)(ServerReadyTimeout / ServerReadyDelay));
+
     /// <summary>Stable key for the cross-process migration advisory lock (distinct from Phase 7's per-task locks).</summary>
     private const long MigrationLockKey = 0x5445_5354_4D49_4700L & long.MaxValue;
 
@@ -66,6 +77,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
 
     private static bool _migrationsApplied;
 
+    private static bool _availabilityReported;
+
     /// <summary>True when a PostgreSQL that can host the test schema is reachable.</summary>
     public bool IsAvailable { get; private set; }
 
@@ -76,7 +89,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
     public string ConnectionString { get; private set; } = ResolveConnectionString();
 
     /// <summary>
-    /// Called once per test class: probes PostgreSQL, creates the test database if needed, applies
+    /// Called once per test class: waits for PostgreSQL, creates the test database if needed, applies
     /// the migration chain, and makes sure the shared host exists. Never throws for an unreachable
     /// database — that is a skip, decided here and reported by <see cref="Require"/>.
     /// </summary>
@@ -84,6 +97,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
     {
         try
         {
+            await WaitForServerAsync();
             EnsureDatabaseCreated();
             EnsureFactory();
             await EnsureMigratedAsync();
@@ -100,6 +114,17 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// <summary>Called at the top of every DB-backed test: skips (never fails) without a database.</summary>
     public void Require()
     {
+        // One line in the job log is enough to tell "no DB ⇒ everything skipped" apart from
+        // "everything ran" — without it, a fully-skipped run looks identical to a passing one.
+        if (!_availabilityReported)
+        {
+            _availabilityReported = true;
+            Console.WriteLine(
+                IsAvailable
+                    ? $"[Phase 8] Test DB ready: {ConnectionString}"
+                    : $"[Phase 8] Test DB UNAVAILABLE — DB-backed tests will SKIP. Lý do: {UnavailableReason}");
+        }
+
         if (!IsAvailable)
         {
             Assert.Skip(
@@ -200,7 +225,15 @@ public sealed class DatabaseFixture : IAsyncLifetime
 
     /// <summary>
     /// Applies the migration chain once per process. Safe under xUnit's parallel collections: a
-    /// session-level advisory lock guards the first caller, the others wait for the history table.
+    /// session-level advisory lock guards the first caller, and every other caller <b>waits until the
+    /// schema actually exists</b> before returning.
+    /// <para>
+    /// That wait is not optional. An earlier version let the loser of the lock return immediately and
+    /// just remember "migrations are done"; it then truncated tables that did not exist yet, the
+    /// resulting exception flipped <c>IsAvailable</c> to false, and — because the availability
+    /// decision is cached for the process — every DB-backed test in that class silently became a
+    /// skip. On CI that hid 61 of 172 tests behind a green job.
+    /// </para>
     /// </summary>
     private async Task EnsureMigratedAsync()
     {
@@ -212,31 +245,71 @@ public sealed class DatabaseFixture : IAsyncLifetime
             }
         }
 
-        await using var db = NewDbContext();
+        // The database itself is ensured HERE, not only in InitializeAsync, so this method is safe
+        // even when the database was dropped between two test classes.
+        EnsureDatabaseCreated();
 
+        try
+        {
+            await MigrateOnceAsync();
+        }
+        catch (PostgresException ex) when (ex.SqlState == UndefinedDatabase)
+        {
+            // The database vanished after `_databaseReady` was cached (a developer wiped it, or a
+            // previous process dropped it). Forget the cached decisions and rebuild from scratch
+            // instead of permanently downgrading the whole class to "skipped".
+            lock (Gate)
+            {
+                _databaseReady = false;
+                _migrationsApplied = false;
+            }
+
+            EnsureDatabaseCreated();
+            await MigrateOnceAsync();
+        }
+
+        MarkMigrated();
+    }
+
+    /// <summary>
+    /// One migration attempt. When another process already holds the advisory lock this <b>waits until
+    /// the schema is really there</b> before returning.
+    /// <para>
+    /// That wait is the whole point. Returning as soon as the lock is taken flips <c>_migrationsApplied</c>
+    /// to true while the winner is still creating tables, so this class then runs
+    /// <c>TRUNCATE …</c> against a half-migrated schema and dies with
+    /// <c>42P01: relation "task_attachments" does not exist</c> — observed on a fresh database before
+    /// this was fixed.
+    /// </para>
+    /// </summary>
+    private async Task MigrateOnceAsync()
+    {
         if (await HasAppliedMigrationsAsync())
         {
-            MarkMigrated();
             return;
         }
 
         await using var connection = new NpgsqlConnection(ConnectionString);
         await connection.OpenAsync();
 
+        var acquired = false;
+
         await using (var acquire = new NpgsqlCommand("select pg_try_advisory_lock(@key)", connection))
         {
             acquire.Parameters.AddWithValue("key", MigrationLockKey);
+            acquired = (bool)(await acquire.ExecuteScalarAsync() ?? false);
+        }
 
-            if (!(bool)(await acquire.ExecuteScalarAsync() ?? false))
-            {
-                await WaitForMigrationsAsync();
-                MarkMigrated();
-                return;
-            }
+        if (!acquired)
+        {
+            // Someone else is migrating: block until the history table is actually usable.
+            await WaitForMigrationsAsync();
+            return;
         }
 
         try
         {
+            await using var db = NewDbContext();
             await db.Database.MigrateAsync();
         }
         finally
@@ -245,8 +318,6 @@ public sealed class DatabaseFixture : IAsyncLifetime
             release.Parameters.AddWithValue("key", MigrationLockKey);
             await release.ExecuteNonQueryAsync();
         }
-
-        MarkMigrated();
     }
 
     private static void MarkMigrated()
@@ -257,35 +328,76 @@ public sealed class DatabaseFixture : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// Waits until the server accepts connections, for up to <see cref="ServerReadyTimeout"/>.
+    /// <para>
+    /// Needed because on a fresh CI runner the PostgreSQL service container can still be doing its
+    /// first-time initdb while the test process starts. The availability decision is cached for the
+    /// process, so a single early failure would silently turn every DB-backed test in this class into
+    /// a skip — the suite would look green while having actually verified nothing. Retrying removes
+    /// that failure mode entirely.
+    /// </para>
+    /// </summary>
+    private async Task WaitForServerAsync()
+    {
+        Exception? lastError = null;
+
+        for (var attempt = 0; attempt < ServerReadyAttempts; attempt++)
+        {
+            try
+            {
+                await using var connection = new NpgsqlConnection(BuildAdminConnectionString());
+                await connection.OpenAsync();
+                return;
+            }
+            catch (Exception ex)
+            {
+                lastError = ex;
+
+                if (attempt < ServerReadyAttempts - 1)
+                {
+                    await Task.Delay(ServerReadyDelay);
+                }
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"PostgreSQL không nhận kết nối sau {ServerReadyTimeout.TotalSeconds:N0}s. {Describe(lastError!)}",
+            lastError);
+    }
+
     /// <summary>Creates the test database on first use (CREATE DATABASE cannot run in a transaction).</summary>
     private void EnsureDatabaseCreated()
     {
+        // The whole check-and-create runs under the lock. Doing the wait outside it (as an earlier
+        // version did) let two test classes both observe "not created yet" and both issue
+        // CREATE DATABASE — which fails with 23505 on the pg_database unique index, not with the
+        // 42P04 the catch below used to expect.
         lock (Gate)
         {
             if (_databaseReady)
             {
                 return;
             }
-        }
 
-        using var connection = new NpgsqlConnection(BuildAdminConnectionString());
-        connection.Open();
+            using var connection = new NpgsqlConnection(BuildAdminConnectionString());
+            connection.Open();
 
-        var database = new NpgsqlConnectionStringBuilder(ConnectionString).Database;
+            var database = new NpgsqlConnectionStringBuilder(ConnectionString).Database;
+            using var create = new NpgsqlCommand($"CREATE DATABASE \"{database}\"", connection);
 
-        using var create = new NpgsqlCommand($"CREATE DATABASE \"{database}\"", connection);
+            try
+            {
+                create.ExecuteNonQuery();
+            }
+            catch (PostgresException ex)
+                when (ex.SqlState is DuplicateDatabase or DuplicateObject)
+            {
+                // Already there — the normal case after the first run. 42P04 = duplicate_database;
+                // 23505 = unique_violation, which is what a concurrent CREATE DATABASE produces on
+                // the pg_database index (observed on a fresh CI runner before this was locked).
+            }
 
-        try
-        {
-            create.ExecuteNonQuery();
-        }
-        catch (PostgresException ex) when (ex.SqlState == DuplicateDatabase)
-        {
-            // Already there — the normal case after the first run.
-        }
-
-        lock (Gate)
-        {
             _databaseReady = true;
         }
     }
