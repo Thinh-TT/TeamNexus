@@ -695,35 +695,33 @@ Bảng ánh xạ đồng bộ 4 vị trí cấu hình bắt buộc:
 ```
 
 **(c) Từng bước:**
-1. [ ] [dashboard.render.com](https://dashboard.render.com) → **New +** → **Web Service**.
-2. [ ] **Connect a repository** → chọn repo `TeamNexus` → **Connect**.
-3. [ ] Điền cấu hình:
+1. [x] [dashboard.render.com](https://dashboard.render.com) → **New +** → **Web Service**.
+2. [x] **Connect a repository** → chọn repo `TeamNexus` → **Connect**.
+3. [x] Điền cấu hình:
 
    | Trường | Giá trị |
    |---|---|
    | **Name** | `teamnexus-api` (⇒ domain `https://teamnexus-api.onrender.com`) |
    | **Region** | Singapore (gần người dùng Việt Nam nhất) |
-   | **Branch** | `main` |
+   | **Branch** | `main` / `develop` |
    | **Root Directory** | *(để trống)* |
-   | **Runtime** | `Docker` **hoặc** `.NET` tuỳ Render phát hiện (xem pitfall ⚠️1) |
-   | **Build Command** | `dotnet publish src/TeamNexus.Api/TeamNexus.Api.csproj -c Release -o out` |
-   | **Start Command** | `dotnet out/TeamNexus.Api.dll` |
+   | **Runtime** | `Docker` (Multi-stage build .NET 10) |
    | **Health Check Path** | `/api/health` |
    | **Instance Type** | **Free** |
 
-4. [ ] **Environment → Add Environment Variable**: nhập toàn bộ bảng ở §5.6 (mục API). Đặc biệt đừng quên `ASPNETCORE_URLS=http://0.0.0.0:$PORT` (pitfall ⚠️2).
-5. [ ] **Create Web Service** → xem tab **Logs** để theo dõi build đầu tiên (lần đầu có thể 5–10 phút).
-6. [ ] Khi trạng thái chuyển **Live**, mở `https://<name>.onrender.com/api/health` ⇒ phải thấy JSON `{"status":"ok","service":"TeamNexus.Api",...}`.
-7. [ ] Ghi lại domain API — nó sẽ dùng ở §5.4 (FE), §5.5 (OAuth), §5.6 (CORS).
+4. [x] **Environment → Add Environment Variable**: nhập toàn bộ bảng ở §5.6 (mục API).
+5. [x] **Create Web Service** → Render kéo repo, build Docker image thành công.
+6. [x] Trạng thái chuyển **Live**, mở `https://teamnexus-api.onrender.com/api/health` ⇒ trả về JSON `{"status":"ok","service":"TeamNexus.Api",...}`.
+7. [x] Ghi lại domain API: `https://teamnexus-api.onrender.com` — dùng ở §5.4 (FE), §5.5 (OAuth), §5.6 (CORS).
 
 **(d) Giá trị cần điền:** §5.6.
 
 **(e) Kiểm tra thành công:**
-- [ ] `/api/health` trả 200 + JSON đúng (endpoint này có sẵn trong `Program.cs`, không cần auth).
-- [ ] Log khởi động **không** có exception về `Jwt:SigningKey` (nếu có ⇒ key < 32 byte hoặc chưa set: app **cố tình** fail-fast theo `ValidateOnStart`).
-- [ ] Log khởi động **không** có lỗi kết nối Npgsql (nếu có ⇒ sai connection string/`SslMode`).
-- [ ] Trang `/scalar` **KHÔNG** tồn tại (đúng D14 — production ẩn OpenAPI).
-- [ ] `POST /api/auth/login/google` (không có cookie) trả **400/302 hợp lý**, không 500.
+- [x] `/api/health` trả 200 + JSON đúng: `{"status":"ok","service":"TeamNexus.Api","time":"..."}`.
+- [x] Log khởi động **không** có exception về `Jwt:SigningKey`.
+- [x] Log khởi động **không** có lỗi kết nối Npgsql (đã query thành công DB Neon).
+- [x] Trang `/scalar` / `/openapi/v1.json` **KHÔNG** tồn tại (đúng D14 — production ẩn OpenAPI, trả 404).
+- [x] Background worker Reaper & Observer hoạt động bình thường trên Neon DB.
 
 **(f) Pitfall riêng của Render:**
 - ⚠️ **1 — Render có thể không nhận .NET 10 để auto-detect** (SDK 10 rất mới). Triệu chứng: build fail với "no SDK / unsupported framework". Cách sửa: chuyển **Runtime = Docker** và thêm `Dockerfile` ở gốc repo (mẫu đầy đủ ở §5.3-Dockerfile). *Chỉ dùng Dockerfile khi auto-detect thất bại* — đừng thêm trước.
