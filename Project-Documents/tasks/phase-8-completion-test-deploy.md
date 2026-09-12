@@ -648,23 +648,23 @@ Bảng ánh xạ đồng bộ 4 vị trí cấu hình bắt buộc:
 **(b) Chuẩn bị:** tài khoản (đăng nhập bằng GitHub), biết region gần bạn nhất (Việt Nam ⇒ **Singapore**).
 
 **(c) Từng bước:**
-1. [ ] Vào [console.neon.tech](https://console.neon.tech) → đăng nhập bằng GitHub → **New Project**.
-2. [ ] Điền **Project name** (`teamnexus`), **Region** (`AWS ap-southeast-1` / Singapore nếu có), **Postgres version** (chọn **18** nếu được, để khớp môi trường đã verify ở Phase 7).
-3. [ ] Sau khi tạo, Neon hiện **Connection string**. Bấm **Connect** để xem chi tiết. Bạn cần chú ý 2 biến thể endpoint:
+1. [x] Vào [console.neon.tech](https://console.neon.tech) → đăng nhập bằng GitHub → **New Project**.
+2. [x] Điền **Project name** (`teamnexus`), **Region** (`AWS ap-southeast-1` / Singapore nếu có), **Postgres version** (chọn **18** nếu được, để khớp môi trường đã verify ở Phase 7).
+3. [x] Sau khi tạo, Neon hiện **Connection string**. Bấm **Connect** để xem chi tiết. Bạn cần chú ý 2 biến thể endpoint:
    - **Direct** (`ep-xxx.ap-southeast-1.aws.neon.tech`) → dùng cho **migration**.
    - **Pooled** (có `-pooler` trong host) → dùng cho **runtime** (API) nếu muốn tiết kiệm connection.
-4. [ ] Lấy connection string ở **định dạng .NET/Npgsql** (Neon có dropdown chọn "Npgsql"/".NET"): dạng
+4. [x] Lấy connection string ở **định dạng .NET/Npgsql** (Neon có dropdown chọn "Npgsql"/".NET"): dạng
    `Host=ep-xxx.ap-southeast-1.aws.neon.tech;Port=5432;Database=neondb;Username=neondb_owner;Password=...;SslMode=Require`
    - Nếu Neon chỉ cho URI `postgresql://user:pass@host/db?sslmode=require`, tự chuyển sang dạng trên.
-5. [ ] Lưu vào nơi an toàn (password manager) — **không** dán vào file trong repo.
+5. [x] Lưu vào nơi an toàn (password manager) — **không** dán vào file trong repo.
 6. [ ] (Khuyến nghị) Tạo **một branch/database riêng cho test** nếu sau này muốn chạy test trên cloud; mặc định không cần.
 
 **(d) Giá trị cần điền:** xem bảng §5.6 (`ConnectionStrings__DefaultConnection`).
 
 **(e) Kiểm tra thành công:**
-- [ ] Từ Neon console, **SQL Editor** chạy `select version();` ⇒ trả về PostgreSQL ≥ 16.
-- [ ] Sau §5.7 (migration), chạy `select count(*) from "__EFMigrationsHistory";` ⇒ **6**.
-- [ ] Chạy `select count(*) from information_schema.tables where table_schema='public';` ⇒ thấy đủ các bảng (`workspaces`, `boards`, `board_columns`, `tasks`, `task_comments`, `labels`, `task_labels`, `ai_action_logs`, `activity_logs`, `notifications`, `ai_observer_runs`, `agent_runs`, `task_attachments`, …).
+- [x] Từ Neon console, **SQL Editor** chạy `select version();` ⇒ trả về PostgreSQL ≥ 16 (AWS Singapore).
+- [x] Sau §5.7 (migration), chạy `select count(*) from "__EFMigrationsHistory";` ⇒ **6** (đã áp dụng trọn vẹn cả 6 migrations).
+- [x] Chạy `select count(*) from information_schema.tables where table_schema='public';` ⇒ thấy đủ các bảng (`workspaces`, `boards`, `board_columns`, `tasks`, `task_comments`, `labels`, `task_labels`, `ai_action_logs`, `activity_logs`, `notifications`, `ai_observer_runs`, `agent_runs`, `task_attachments`, …).
 
 **(f) Pitfall riêng của Neon:**
 - ⚠️ **Đừng hoảng khi query đầu tiên chậm** — đó là compute đang thức dậy, không phải API lỗi.
