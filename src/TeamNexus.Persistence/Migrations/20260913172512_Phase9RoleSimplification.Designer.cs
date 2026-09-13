@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using TeamNexus.Persistence.Data;
@@ -11,9 +12,11 @@ using TeamNexus.Persistence.Data;
 namespace TeamNexus.Persistence.Migrations
 {
     [DbContext(typeof(TeamNexusDbContext))]
-    partial class TeamNexusDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260913172512_Phase9RoleSimplification")]
+    partial class Phase9RoleSimplification
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -63,10 +66,17 @@ namespace TeamNexus.Persistence.Migrations
                         },
                         new
                         {
+                            Id = new Guid("22222222-2222-2222-2222-222222222222"),
+                            ConcurrencyStamp = "22222222-2222-2222-2222-222222222222",
+                            Name = "Manager",
+                            NormalizedName = "MANAGER"
+                        },
+                        new
+                        {
                             Id = new Guid("33333333-3333-3333-3333-333333333333"),
                             ConcurrencyStamp = "33333333-3333-3333-3333-333333333333",
-                            Name = "User",
-                            NormalizedName = "USER"
+                            Name = "Member",
+                            NormalizedName = "MEMBER"
                         });
                 });
 

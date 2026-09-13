@@ -27,7 +27,7 @@ Thu thập log hệ thống và bối cảnh giao tiếp để nhận diện s�
 ### 6. Xuất Báo cáo Đa định dạng
 Tự động tổng hợp dữ liệu tiến độ và hiệu suất thành các tệp PDF hoặc Excel trực quan.
 
-### 7. AI Agent Executor (Thành viên ảo thực thi công việc) — Giai đoạn 7
+### 7. AI Agent Executor (Thành viên ảo thực thi công việc) — Giai đoạn 7 ✅
 Nâng AI từ vai trò "đề xuất/quan sát" lên vai trò "thực thi". AI Agent được gán task trực tiếp như một thành viên thật (qua đúng thao tác assign/kéo-thả sẵn có) và tự thực hiện các task đặc thù được trưởng nhóm giao.
  
 - **Phạm vi công việc:** kết hợp soạn thảo tài liệu/báo cáo nội bộ, tóm tắt & tổng hợp thông tin từ task/comment trong hệ thống, và nghiên cứu qua web khi cần.
@@ -35,3 +35,15 @@ Nâng AI từ vai trò "đề xuất/quan sát" lên vai trò "thực thi". AI A
 - **Khi thiếu thông tin:** Agent tạm dừng, chuyển task sang trạng thái "Chờ làm rõ" và hỏi lại trưởng nhóm thay vì tự suy đoán; sau khi trưởng nhóm trả lời (comment), cần thao tác thủ công "Chạy lại" để Agent tiếp tục.
 - **Kết quả đầu ra:** nội dung ngắn thể hiện dưới dạng bình luận trên task, nội dung dài thể hiện dưới dạng tệp đính kèm — cả hai đều phải qua Accountability Layer (mục 5) để trưởng nhóm duyệt trước khi coi là hoàn thành.
 - **Giới hạn an toàn:** mỗi lượt thực thi bị giới hạn số bước gọi công cụ, thời gian chạy và ngân sách token để tránh vòng lặp vô hạn và phát sinh chi phí ngoài kiểm soát.
+
+### 8. Đơn giản hóa Kiến trúc Role — Giai đoạn 9
+Tách biệt rõ ràng hai lớp phân quyền: **Identity Role toàn cục** (`Admin`/`User`) dành cho quản trị nền tảng; **Workspace Role** (`Admin`/`Manager`/`Member`) dành cho mọi nghiệp vụ trong workspace. Mọi user đăng nhập qua OAuth tự động nhận Identity role `User`; role `Admin` chỉ assign thủ công cho system administrator của nền tảng.
+
+### 9. Nâng cao Task & Workspace UX — Giai đoạn 10
+Hoàn thiện UI cho các field task đã có schema: **Due Date** (hiển thị badge đỏ khi quá hạn, kết nối AI Observer), **Priority** (badge màu Low/Medium/High/Urgent), **Description** (markdown cơ bản). Thêm **Workspace Settings** cho Admin (sửa tên/mô tả, chuyển ownership, xóa workspace) và **Activity Log UI** cho Manager/Admin (lịch sử ai làm gì trong workspace).
+
+### 10. Quản lý Member & Profile — Giai đoạn 11
+**Mời member qua email:** Manager/Admin nhập email → hệ thống gửi link mời qua Resend API → người nhận click link, chọn role (mặc định Member), tham gia workspace. **Gửi email nhanh:** Manager soạn tiêu đề + nội dung ngắn trong app, chọn member(s) nhận → gửi đến inbox thật qua Resend (dùng cho thông báo họp, việc cần gấp). **Quản lý member:** xem danh sách, đổi role (Admin), kick member (Admin). **Profile cá nhân:** sửa display_name và avatar, xem workspace đang tham gia, tự rời workspace. **Notification Center:** badge unread + drawer thông báo tại header (assign task, comment mới, được mời vào workspace).
+
+### 11. Dashboard & Tìm kiếm — Giai đoạn 12
+**Dashboard tổng quan workspace:** hiển thị "Task của tôi" (sắp đến hạn, quá hạn, mới giao), hoạt động gần đây, tóm tắt board, cảnh báo AI Observer chưa đọc. **Tìm kiếm & Lọc task:** theo tên, assignee, label, priority, trạng thái, due date trong phạm vi workspace/board. **@mention trong comment:** tag thành viên với `@tên`, kích hoạt thông báo cho người được tag.

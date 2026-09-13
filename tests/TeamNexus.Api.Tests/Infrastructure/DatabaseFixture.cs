@@ -284,11 +284,6 @@ public sealed class DatabaseFixture : IAsyncLifetime
     /// </summary>
     private async Task MigrateOnceAsync()
     {
-        if (await HasAppliedMigrationsAsync())
-        {
-            return;
-        }
-
         await using var connection = new NpgsqlConnection(ConnectionString);
         await connection.OpenAsync();
 

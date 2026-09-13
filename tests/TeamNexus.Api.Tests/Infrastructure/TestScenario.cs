@@ -129,6 +129,10 @@ public sealed class TestScenario : IAsyncDisposable
         var sql = "TRUNCATE TABLE " + tableList + " RESTART IDENTITY CASCADE;";
 
         await db.Database.ExecuteSqlRawAsync(sql);
+        await db.Database.ExecuteSqlRawAsync("""
+            UPDATE roles SET name = 'User', normalized_name = 'USER' WHERE id = '33333333-3333-3333-3333-333333333333'::uuid;
+            DELETE FROM roles WHERE id = '22222222-2222-2222-2222-222222222222'::uuid;
+            """);
 
         db.ChangeTracker.Clear();
         ResetSession();
@@ -179,7 +183,7 @@ public sealed class TestScenario : IAsyncDisposable
     public async Task<ApplicationUser> CreateUserAsync(
         string displayName,
         string? email = null,
-        string role = AuthConstants.DefaultMemberRole)
+        string role = AuthConstants.DefaultUserRole)
     {
         await using var db = NewDbContext();
 
@@ -587,9 +591,11 @@ public sealed class TestScenario : IAsyncDisposable
     private static Guid RoleId(string role) => role switch
     {
         "Admin" => IdentityRoles.AdminId,
-        "Manager" => IdentityRoles.ManagerId,
-        "Member" => IdentityRoles.MemberId,
-        _ => IdentityRoles.MemberId,
+        // Phase 9: Manager and Member Identity roles removed; both map to UserId.
+        "Manager" => IdentityRoles.UserId,
+        "Member" => IdentityRoles.UserId,
+        "User" => IdentityRoles.UserId,
+        _ => IdentityRoles.UserId,
     };
 
     /// <summary>Typed GET helper kept next to the scenario for readability of the read suites.</summary>
