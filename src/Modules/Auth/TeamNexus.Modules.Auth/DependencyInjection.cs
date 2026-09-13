@@ -185,17 +185,14 @@ public static class DependencyInjection
             });
         }
 
-        // ---- Authorization policies (RBAC, Phase 1 §3.3) --------------------
+        // ---- Authorization policies (Phase 9 — simplified role architecture) -----------
+        // SystemAdminPolicy: Identity role = "Admin" — for platform-level admin endpoints only.
+        // All workspace-level endpoints use plain .RequireAuthorization() (authenticated user)
+        // and enforce workspace_members.role inside the service layer (WorkspaceAccess).
         services.AddAuthorization(options =>
         {
-            options.AddPolicy(AuthConstants.AdminOnlyPolicy, policy =>
+            options.AddPolicy(AuthConstants.SystemAdminPolicy, policy =>
                 policy.RequireClaim(ClaimTypes.Role, "Admin"));
-
-            options.AddPolicy(AuthConstants.ManagerOrAbovePolicy, policy =>
-                policy.RequireClaim(ClaimTypes.Role, "Admin", "Manager"));
-
-            options.AddPolicy(AuthConstants.MemberOrAbovePolicy, policy =>
-                policy.RequireClaim(ClaimTypes.Role, "Admin", "Manager", "Member"));
         });
 
         // ---- Anti-CSRF -------------------------------------------------------
