@@ -6,8 +6,20 @@ name: ci-backend
 on:
   push:
     branches: [main, develop, 'feat/**']
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - '*.sln'
+      - 'Directory.Build.props'
+      - '.github/workflows/ci-backend.yml'
   pull_request:
     branches: [main, develop]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - '*.sln'
+      - 'Directory.Build.props'
+      - '.github/workflows/ci-backend.yml'
   workflow_dispatch:
 
 # Đẩy commit tiếp theo lên cùng nhánh/PR ⇒ huỷ run cũ cho khỏi tốn runner.
@@ -116,3 +128,4 @@ jobs:
           name: backend-test-results
           path: TestResults/**
           if-no-files-found: warn
+          retention-days: 7
