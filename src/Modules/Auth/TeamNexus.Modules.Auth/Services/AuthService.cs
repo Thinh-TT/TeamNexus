@@ -109,8 +109,9 @@ public sealed class AuthService
 
         await _userManager.AddLoginAsync(user, new UserLoginInfo(provider, providerKey, provider));
 
-        // Default global role for new accounts (RBAC, Phase 1 §3.3).
-        var roleResult = await _userManager.AddToRoleAsync(user, AuthConstants.DefaultMemberRole);
+        // Default global Identity role for new accounts (Phase 9 — simplified role architecture).
+        // "User" = any authenticated person; workspace-level permissions managed via workspace_members.role.
+        var roleResult = await _userManager.AddToRoleAsync(user, AuthConstants.DefaultUserRole);
         if (!roleResult.Succeeded)
         {
             _logger.LogWarning("Could not assign default role to new user: {Errors}",

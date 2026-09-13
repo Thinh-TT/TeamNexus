@@ -139,11 +139,18 @@ Entity `ApplicationUser` kế thừa `IdentityUser<Guid>`, thêm các field nghi
 | Cột | Kiểu | Null | Ràng buộc | Ghi chú |
 |---|---|---|---|---|
 | `id` | uuid | — | PK | |
-| `name` | text | — | UQ | `Admin` / `Manager` / `Member` |
+| `name` | text | — | UQ | `Admin` / `User` |
 | `normalized_name` | text | — | UQ (index) | |
 | `concurrency_stamp` | text | — | | |
 
-Seed 3 role khi migrate: `Admin`, `Manager`, `Member`.
+Seed 2 role khi migrate: `Admin` (system administrator nền tảng) và `User` (default cho mọi user thường đăng ký qua OAuth).
+
+> **Ghi chú thiết kế (Giai đoạn 9 — Đơn giản hóa Role):**
+> - **`Admin` (Identity)**: quản trị nền tảng — assign thủ công, không cấp cho user thường. Dùng protect endpoint platform-level (`SystemAdminPolicy`).
+> - **`User` (Identity)**: mọi người dùng đăng nhập thành công qua OAuth. Không phản ánh quyền gì trong workspace — quyền workspace do `workspace_members.role` quyết định.
+> - Phân quyền nghiệp vụ workspace (tạo board, dùng AI, xem báo cáo...) **không** đọc Identity role — chỉ đọc `workspace_members.role`.
+> - **Cũ (Phase 1):** 3 role `Admin`/`Manager`/`Member` — `Manager` và `Member` bị loại bỏ vì chúng không phản ánh quyền thực sự nào; mọi kiểm tra quyền đã dùng `workspace_members.role` từ đầu.
+
 
 #### `user_roles`
 `IdentityUserRole<Guid>`.
@@ -216,6 +223,29 @@ Bảng junction giữa workspace và user, mang vai trò **theo từng workspace
 > - **Partial unique index** `uq_workspace_members_ai_agent` trên `workspace_id` **WHERE** `member_type = 'ai_agent'` ⇒ mỗi workspace có **đúng một** agent. Luôn tìm agent qua `member_type`, **không** qua `ai_agent_name` (tên có thể bị đổi).
 > - **Agent là user "ảo", không thể đăng nhập:** row `users` của agent sinh với `email = null`, `password_hash = null`, `lockout_enabled = true`, `two_factor_enabled = true`, và **không** có `user_logins`. Đây là ràng buộc **bảo mật**, không phải chi tiết kỹ thuật.
 > - `role` của agent: `Member` — agent **không** phải Manager/Admin; quyền ghi dữ liệu thật đi qua Accountability Layer và do con người duyệt, không qua `role`.
+
+#### `workspace_invitations`
+Lời mời tham gia workspace qua email — **Giai đoạn 11**. Khi Manager/Admin mời người dùng mới, một row được tạo ở trạng thái `Pending`; người nhận click link để `Accept`; link hết hạn hoặc bị hủy thì `Expired`/`Cancelled`.
+
+| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
+|---|---|---|---|---|
+| `id` | uuid | — | PK | |
+| `workspace_id` | uuid | — | FK→`workspaces`, IX | |
+| `invited_email` | text | — | IX `(workspace_id, invited_email)` WHERE status='Pending' | Email người được mời |
+| `invited_role` | text | — | CHECK (`invited_role` IN ('Admin','Manager','Member')), default `'Member'` | Role sẽ nhận khi accept |
+| `token_hash` | text | — | UQ | SHA-256 của token thô gửi qua email (không lưu token gốc) |
+| `invited_by_user_id` | uuid | — | FK→`users`, IX | Manager/Admin tạo lời mời |
+| `status` | text | — | CHECK (`status` IN ('Pending','Accepted','Cancelled','Expired')), default `'Pending'` | Trạng thái lời mời |
+| `expires_at` | timestamptz | — | | Mặc định 7 ngày từ lúc tạo |
+| `accepted_by_user_id` | uuid | null | FK→`users` | Set khi người nhận accept (user đã tồn tại hoặc mới đăng ký) |
+| `accepted_at` | timestamptz | null | | |
+| `created_at` | timestamptz | — | | |
+
+> **Ghi chú thiết kế:**
+> - **Partial unique index** trên `(workspace_id, invited_email)` WHERE `status = 'Pending'` — đảm bảo không có 2 lời mời đang chờ cùng một email cho cùng workspace.
+> - **Token thô** gửi qua email, lưu dạng SHA-256 hash — giống pattern `refresh_tokens.token_hash`.
+> - **Luồng accept:** người nhận click link `/invitations/accept?token=...` → hệ thống hash token, tìm row `Pending` chưa expire → tạo row `workspace_members` với `invited_role` → set `status = 'Accepted'`, `accepted_by_user_id`, `accepted_at`. Nếu email chưa có tài khoản thì redirect sang đăng nhập/đăng ký OAuth trước.
+> - **Expiry:** BackgroundService (hoặc kiểm tra lazy khi accept) set `status = 'Expired'` cho các row `Pending` đã quá `expires_at`.
 
 ### 3.4 Module Kanban — Board (Giai đoạn 2)
 

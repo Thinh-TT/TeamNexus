@@ -14,11 +14,14 @@
 ### 2.1. Auth & RBAC
 - **Công nghệ:** ASP.NET Core Identity + OAuth handlers built-in (Google/GitHub), tự issue JWT + refresh token qua HttpOnly Cookie.
 - **Không dùng:** Keycloak tự host — tránh tốn thêm hạ tầng/RAM không cần thiết ở quy mô solo + free-tier.
-- **Lưu ý:**
+- **Mô hình phân quyền hai lớp (Giai đoạn 9):**
+  - **Identity Role toàn cục** (`Admin` / `User`): gắn vào JWT claim. `User` là default cho mọi user đăng ký OAuth. `Admin` chỉ assign thủ công cho system administrator của nền tảng (platform-level: xem toàn bộ users, can thiệp workspace vi phạm...).
+  - **Workspace Role** (`Admin` / `Manager` / `Member`): lưu trong `workspace_members.role`, kiểm tra tại service layer cho mọi nghiệp vụ trong workspace. Đây là lớp phân quyền thực sự — một user có thể là `Admin` ở workspace A và `Member` ở workspace B.
+  - **Nguyên tắc:** mọi endpoint workspace dùng `.RequireAuthorization()` (user hợp lệ) + kiểm `workspace_members.role` trong service; chỉ endpoint platform-level dùng `SystemAdminPolicy` (Identity = Admin).
+- **Lưu ý kỹ thuật:**
   - Cookie cần cấu hình `SameSite=Strict/Lax` + `Secure`.
   - Vì dùng cookie-based auth nên cần cơ chế chống CSRF riêng (anti-forgery token).
   - Refresh token nên rotate mỗi lần sử dụng (tránh replay).
-  - Phân quyền theo Policy-based Authorization (Admin/Manager/Member) thay vì check role rải rác trong code.
 
 ### 2.2. Kanban Board Real-time
 - **Công nghệ:** SignalR (native trong ASP.NET Core).
@@ -57,6 +60,12 @@
 ### 2.7. Mobile (giai đoạn sau)
 - **Công nghệ:** Flutter, gọi chung API với web.
 - **Lưu ý:** Khi triển khai, dùng package `signalr_netcore` để kết nối SignalR từ Flutter; áp dụng lại kinh nghiệm cấu hình network (LAN config, cleartext HTTP cho môi trường dev) đã từng xử lý ở UniShare nếu cần test trên thiết bị thật.
+
+### 2.9. Email Transactional (Giai đoạn 11)
+- **Công nghệ:** [Resend](https://resend.com) API — free 3.000 email/tháng, không cần thẻ tín dụng, SDK .NET chính thức.
+- **Dùng cho:** email mời member vào workspace (link token), gửi email nhanh từ Manager đến member(s).
+- **Không dùng:** SendGrid (yêu cầu xác minh domain phức tạp hơn), SMTP tự cấu hình (không cần thiết ở quy mô này).
+- **Lưu ý:** API key lưu trong User Secrets (local) và environment variable (production Render); không commit vào repo. Domain gửi email có thể dùng subdomain miễn phí của Resend cho giai đoạn đầu.
 
 ### 2.8. AI Agent Executor (Phase 7)
 - **Gán task cho Agent:** thêm pseudo-member `member_type = 'ai_agent'` trong `workspace_members` — gán qua đúng dropdown/kéo-thả assignee hiện có, không xây UI riêng.

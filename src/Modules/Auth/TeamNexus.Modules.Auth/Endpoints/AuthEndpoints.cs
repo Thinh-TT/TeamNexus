@@ -32,7 +32,7 @@ public static class AuthEndpoints
         // /api/auth/callback/github, which is why no endpoint is mapped there.)
         auth.MapGet("/external-login", ExternalLoginAsync).AllowAnonymous();
 
-        auth.MapGet("/me", MeAsync).RequireAuthorization(AuthConstants.MemberOrAbovePolicy);
+        auth.MapGet("/me", MeAsync).RequireAuthorization();
 
         // Mutating cookie endpoints are CSRF-protected (X-XSRF-TOKEN header).
         auth.MapPost("/refresh", RefreshAsync)
@@ -46,14 +46,10 @@ public static class AuthEndpoints
         // Issues the anti-CSRF request token (also mirrored into XSRF-TOKEN cookie).
         auth.MapGet("/antiforgery", AntiforgeryAsync).AllowAnonymous();
 
-        // ---- RBAC sample endpoints (Phase 1 §3.3) ----
-        endpoints.MapGet("/api/admin/ping", () => Results.Ok(new { message = "Admin access OK." }))
-            .RequireAuthorization(AuthConstants.AdminOnlyPolicy)
-            .WithTags("Sample");
-
-        endpoints.MapGet("/api/manager/ping", () => Results.Ok(new { message = "Manager access OK." }))
-            .RequireAuthorization(AuthConstants.ManagerOrAbovePolicy)
-            .WithTags("Sample");
+        // ---- Platform admin endpoint (Phase 9 — SystemAdminPolicy: Identity role = "Admin") ----
+        endpoints.MapGet("/api/admin/ping", () => Results.Ok(new { message = "System admin access OK." }))
+            .RequireAuthorization(AuthConstants.SystemAdminPolicy)
+            .WithTags("Admin");
 
         return endpoints;
     }

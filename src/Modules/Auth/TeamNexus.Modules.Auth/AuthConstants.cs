@@ -19,15 +19,17 @@ public static class AuthConstants
     public const string XsrfTokenCookie = "XSRF-TOKEN";
     public const string XsrfRequestHeader = "X-XSRF-TOKEN";
 
-    // Authorization policies (Phase 1 §3.3).
-    public const string AdminOnlyPolicy = "AdminOnly";
-    public const string ManagerOrAbovePolicy = "ManagerOrAbove";
-    public const string MemberOrAbovePolicy = "MemberOrAbove";
+    // Authorization policies (Phase 9 — simplified role architecture).
+    // SystemAdminPolicy: Identity role = "Admin" (platform-level admin only).
+    // All workspace-level endpoints use plain .RequireAuthorization() (any authenticated user)
+    // and check workspace_members.role inside the service layer.
+    public const string SystemAdminPolicy = "SystemAdmin";
 
-    // Default global role assigned to new OAuth accounts.
-    public const string DefaultMemberRole = "Member";
+    // Default global Identity role assigned to new OAuth accounts.
+    public const string DefaultUserRole = "User";
 
     public const string GitHubCallbackPath = "/api/auth/callback/github";
     public const string GoogleCallbackPath = "/api/auth/callback/google";
     public const string ExternalLoginPath = "/api/auth/external-login";
 }
+
