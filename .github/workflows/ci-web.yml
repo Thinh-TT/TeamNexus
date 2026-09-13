@@ -3,8 +3,14 @@ name: ci-web
 on:
   push:
     branches: [main, develop, 'feat/**']
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/ci-web.yml'
   pull_request:
     branches: [main, develop]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/ci-web.yml'
   workflow_dispatch:
 
 concurrency:
@@ -73,3 +79,4 @@ jobs:
             frontend/dist/**
             frontend/test-results.json
           if-no-files-found: warn
+          retention-days: 7
