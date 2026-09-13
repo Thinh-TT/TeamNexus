@@ -129,6 +129,10 @@ public sealed class TestScenario : IAsyncDisposable
         var sql = "TRUNCATE TABLE " + tableList + " RESTART IDENTITY CASCADE;";
 
         await db.Database.ExecuteSqlRawAsync(sql);
+        await db.Database.ExecuteSqlRawAsync("""
+            UPDATE roles SET name = 'User', normalized_name = 'USER' WHERE id = '33333333-3333-3333-3333-333333333333'::uuid;
+            DELETE FROM roles WHERE id = '22222222-2222-2222-2222-222222222222'::uuid;
+            """);
 
         db.ChangeTracker.Clear();
         ResetSession();

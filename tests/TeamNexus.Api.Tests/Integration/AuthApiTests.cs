@@ -60,9 +60,9 @@ public sealed class AuthApiTests : IClassFixture<DatabaseFixture>
     public async Task Me_WithAValidToken_ReturnsTheUserAndItsRoles()
     {
         await using var scenario = await _database.CreateScenarioAsync();
-        var user = await scenario.CreateUserAsync("Nguyễn Văn A", "a@example.test", role: "Manager");
+        var user = await scenario.CreateUserAsync("Nguyễn Văn A", "a@example.test", role: AuthConstants.DefaultUserRole);
 
-        using var client = await scenario.AsUserAsync(user, "Manager");
+        using var client = await scenario.AsUserAsync(user, AuthConstants.DefaultUserRole);
         var response = await client.GetAsync("/api/auth/me");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -71,7 +71,7 @@ public sealed class AuthApiTests : IClassFixture<DatabaseFixture>
         Assert.Equal(user.Id, body?.Id);
         Assert.Equal("Nguyễn Văn A", body?.DisplayName);
         Assert.Equal("a@example.test", body?.Email);
-        Assert.Contains("Manager", body!.Roles);
+        Assert.Contains(AuthConstants.DefaultUserRole, body!.Roles);
     }
 
     [Fact]
@@ -126,28 +126,16 @@ public sealed class AuthApiTests : IClassFixture<DatabaseFixture>
     }
 
     [Fact]
-    public async Task AdminPing_WithTheMemberRole_IsForbidden()
+    public async Task AdminPing_WithTheUserRole_IsForbidden()
     {
         await using var scenario = await _database.CreateScenarioAsync();
-        var member = await scenario.CreateUserAsync("Thành viên", role: "Member");
+        var user = await scenario.CreateUserAsync("Thành viên", role: AuthConstants.DefaultUserRole);
 
-        using var client = await scenario.AsUserAsync(member, "Member");
+        using var client = await scenario.AsUserAsync(user, AuthConstants.DefaultUserRole);
         var response = await client.GetAsync("/api/admin/ping");
 
         // 403 (authenticated but not authorized) — NOT 401, which would mean the token was rejected.
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task ManagerPing_WithTheManagerRole_IsAllowed()
-    {
-        await using var scenario = await _database.CreateScenarioAsync();
-        var manager = await scenario.CreateUserAsync("Trưởng nhóm", role: "Manager");
-
-        using var client = await scenario.AsUserAsync(manager, "Manager");
-        var response = await client.GetAsync("/api/manager/ping");
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     // ---- anti-CSRF ----------------------------------------------------------

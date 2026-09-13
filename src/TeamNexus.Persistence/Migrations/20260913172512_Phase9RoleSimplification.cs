@@ -22,28 +22,28 @@ namespace TeamNexus.Persistence.Migrations
                 SET    name            = 'User',
                        normalized_name = 'USER',
                        concurrency_stamp = '33333333-3333-3333-3333-333333333333'
-                WHERE  id = '33333333-3333-3333-3333-333333333333';
+                WHERE  id = '33333333-3333-3333-3333-333333333333'::uuid;
                 """);
 
             // 2. Reassign any user who had the "Manager" Identity role to "User" instead.
             migrationBuilder.Sql($"""
                 UPDATE user_roles
-                SET    role_id = '{UserId}'
-                WHERE  role_id = '{ManagerId}'
+                SET    role_id = '{UserId}'::uuid
+                WHERE  role_id = '{ManagerId}'::uuid
                   AND  user_id NOT IN (
-                       SELECT user_id FROM user_roles WHERE role_id = '{UserId}'
+                       SELECT user_id FROM user_roles WHERE role_id = '{UserId}'::uuid
                   );
                 """);
 
             // 3. Delete remaining user_roles rows pointing to Manager (already reassigned above
             //    or duplicates for users who already had both Manager + Member roles).
             migrationBuilder.Sql($"""
-                DELETE FROM user_roles WHERE role_id = '{ManagerId}';
+                DELETE FROM user_roles WHERE role_id = '{ManagerId}'::uuid;
                 """);
 
             // 4. Delete the "Manager" role row itself.
             migrationBuilder.Sql($"""
-                DELETE FROM roles WHERE id = '{ManagerId}';
+                DELETE FROM roles WHERE id = '{ManagerId}'::uuid;
                 """);
         }
 
@@ -53,7 +53,7 @@ namespace TeamNexus.Persistence.Migrations
             // Re-insert the "Manager" role.
             migrationBuilder.Sql($"""
                 INSERT INTO roles (id, name, normalized_name, concurrency_stamp)
-                VALUES ('{ManagerId}', 'Manager', 'MANAGER', '{ManagerId}')
+                VALUES ('{ManagerId}'::uuid, 'Manager', 'MANAGER', '{ManagerId}')
                 ON CONFLICT (id) DO NOTHING;
                 """);
 
@@ -63,7 +63,7 @@ namespace TeamNexus.Persistence.Migrations
                 SET    name            = 'Member',
                        normalized_name = 'MEMBER',
                        concurrency_stamp = '33333333-3333-3333-3333-333333333333'
-                WHERE  id = '33333333-3333-3333-3333-333333333333';
+                WHERE  id = '33333333-3333-3333-3333-333333333333'::uuid;
                 """);
         }
     }
