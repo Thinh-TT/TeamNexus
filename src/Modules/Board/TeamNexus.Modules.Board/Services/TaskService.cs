@@ -133,7 +133,7 @@ public sealed class TaskService : ITaskService
             Description = TrimToNull(request.Description),
             Position = maxPosition + 1,
             AssigneeId = request.AssigneeId,
-            DueDate = request.DueDate,
+            DueDate = ToUtc(request.DueDate),
             Priority = ParsePriority(request.Priority),
             CreatedBy = userId,
             CompletedAt = column.IsDone ? DateTimeOffset.UtcNow : null,
@@ -188,7 +188,7 @@ public sealed class TaskService : ITaskService
         task.Title = request.Title.Trim();
         task.Description = TrimToNull(request.Description);
         task.AssigneeId = request.AssigneeId;
-        task.DueDate = request.DueDate;
+        task.DueDate = ToUtc(request.DueDate);
         task.Priority = ParsePriority(request.Priority);
 
         await _db.SaveChangesAsync(ct);
@@ -205,7 +205,7 @@ public sealed class TaskService : ITaskService
                 titleChanged,
                 descriptionChanged,
                 assigneeId = request.AssigneeId,
-                dueDate = request.DueDate,
+                dueDate = task.DueDate,
                 priority = task.Priority?.ToString(),
             })), ct);
 
@@ -471,11 +471,71 @@ public sealed class TaskService : ITaskService
             return null;
         }
 
-        return Enum.TryParse<TaskPriority>(value, ignoreCase: true, out var priority)
+        // Enum.TryParse alone is NOT a validator: it also parses a NUMERIC string as the enum member
+        // at that index — "1" → Medium, "99" → the undefined (TaskPriority)99. Pure names are
+        // unaffected ("Urgent", "urgent"), but the wire contract is the four names in DB design §4, so
+        // a numeric value must be rejected. Without the IsNumericString guard "1" silently stored
+        // Medium; without the IsDefined guard an out-of-range number would sail through and surface as
+        // a CHECK-constraint violation (500). Phase 10 §1 caught both via
+        // TaskFieldsApiTests.UpdateTask_WithAnUnknownPriority_Returns400.
+        return !IsNumericString(value)
+               && Enum.TryParse<TaskPriority>(value, ignoreCase: true, out var priority)
+               && Enum.IsDefined(priority)
             ? priority
             : throw new BadRequestException(
                 $"Priority must be one of: Low, Medium, High, Urgent.");
     }
+
+    /// <summary>
+    /// True when <paramref name="value"/> is only a sign and digits — the shape
+    /// <see cref="Enum.TryParse{TEnum}(string, bool, out TEnum)"/> treats as a numeric value rather
+    /// than a member name. Deliberately narrow: it must not classify a member name such as
+    /// <c>"Urgent"</c> as numeric.
+    /// </summary>
+    private static bool IsNumericString(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.Length == 0)
+        {
+            return false;
+        }
+
+        var digits = 0;
+        for (var i = 0; i < trimmed.Length; i++)
+        {
+            var c = trimmed[i];
+            if (c is >= '0' and <= '9')
+            {
+                digits++;
+                continue;
+            }
+
+            // A sign is only meaningful at the very front.
+            if (c is '-' or '+' && i == 0)
+            {
+                continue;
+            }
+
+            return false;
+        }
+
+        return digits > 0;
+    }
+
+    /// <summary>
+    /// Npgsql refuses a <see cref="DateTimeOffset"/> whose offset is not zero when writing to
+    /// PostgreSQL <c>timestamptz</c> ("only offset 0 (UTC) is supported"), and it throws from
+    /// <c>SaveChangesAsync</c> — after the request has been accepted, so the client sees a 500.
+    /// <para>
+    /// A client is perfectly entitled to send an ISO-8601 instant with an offset
+    /// (<c>2026-06-15T09:00:00+07:00</c>), which is what any non-UTC browser or a Flutter client
+    /// would send. The value is an <b>instant</b>, so normalizing it to UTC preserves the meaning and
+    /// keeps the database column canonical. Phase 10 §1 caught this with
+    /// <c>TaskFieldsApiTests.UpdateTask_WithAnOffsetDueDate_RoundTripsTheSameInstant</c>.
+    /// </para>
+    /// </summary>
+    private static DateTimeOffset? ToUtc(DateTimeOffset? value)
+        => value?.ToUniversalTime();
 
     private static void ValidateTitle(string title)
     {
