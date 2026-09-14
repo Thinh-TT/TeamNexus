@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeftOutlined,
   FilterOutlined,
@@ -49,10 +49,13 @@ export const WorkspaceActivityPage: React.FC = () => {
       .catch(() => {})
   }, [workspaceId])
 
-  const filterParams = {
-    entityType: entityFilter === 'ALL' ? undefined : entityFilter,
-    boardId: selectedBoardId,
-  }
+  const filterParams = useMemo(
+    () => ({
+      entityType: entityFilter === 'ALL' ? undefined : entityFilter,
+      boardId: selectedBoardId,
+    }),
+    [entityFilter, selectedBoardId]
+  )
 
   const {
     items,
@@ -107,7 +110,15 @@ export const WorkspaceActivityPage: React.FC = () => {
           <Button
             type="text"
             icon={<ArrowLeftOutlined />}
-            onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
+            aria-label="Quay lại"
+            data-testid="back-to-boards-btn"
+            onClick={() => {
+              if (workspaceId) {
+                navigate(`/workspaces/${workspaceId}/boards`)
+              } else {
+                navigate(-1)
+              }
+            }}
           />
           <Typography.Title level={4} style={{ margin: 0, color: '#0f172a' }}>
             <HistoryOutlined style={{ marginRight: 8, color: '#6366f1' }} />
