@@ -53,6 +53,31 @@ public sealed class ConflictException : BoardModuleException
     }
 }
 
+/// <summary>
+/// The resource existed but is no longer usable — an expired or cancelled invitation token → 410.
+/// Distinct from 404 on purpose: the accept page can tell "link expired, ask for a new one" apart
+/// from "link does not exist".
+/// </summary>
+public sealed class GoneException : BoardModuleException
+{
+    public GoneException(string message)
+        : base(StatusCodes.Status410Gone, message)
+    {
+    }
+}
+
+/// <summary>
+/// A metered quota is exhausted — the free-tier email allowance → 429.
+/// Distinct from 409 on purpose: the request is valid and retrying the same thing later will work.
+/// </summary>
+public sealed class TooManyRequestsException : BoardModuleException
+{
+    public TooManyRequestsException(string message)
+        : base(StatusCodes.Status429TooManyRequests, message)
+    {
+    }
+}
+
 /// <summary>Invalid input / failed validation → 400.</summary>
 public sealed class BadRequestException : BoardModuleException
 {

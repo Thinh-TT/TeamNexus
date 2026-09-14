@@ -16,52 +16,17 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useNavigate } from 'react-router-dom'
-import type {
-  NotificationResponse,
-  NotificationSeverity,
-  NotificationType,
-} from '../types/notification.types'
+import type { NotificationResponse } from '../types/notification.types'
+import {
+  getSeverityTagColor,
+  getTypeText,
+} from '../utils/notificationLabels'
 
 interface NotificationItemProps {
   notification: NotificationResponse
   onMarkRead: (id: string) => Promise<void>
-  workspaceId: string
+  workspaceId?: string
   marking?: boolean
-}
-
-const getSeverityTagColor = (severity?: NotificationSeverity | string): string => {
-  switch (severity?.toLowerCase()) {
-    case 'critical':
-      return 'error'
-    case 'high':
-      return 'warning'
-    case 'medium':
-      return 'processing'
-    case 'low':
-    default:
-      return 'default'
-  }
-}
-
-const getTypeText = (type: NotificationType | string): string => {
-  switch (type) {
-    case 'OverdueTask':
-      return 'Quá hạn'
-    case 'StalledTask':
-      return 'Đình trệ'
-    case 'Overload':
-      return 'Quá tải'
-    case 'Bottleneck':
-      return 'Nghẽn việc'
-    case 'AgentRunFailed':
-      return 'Agent thất bại (AgentRunFailed)'
-    case 'AgentAwaitingClarification':
-      return 'Agent chờ làm rõ (AgentAwaitingClarification)'
-    case 'AgentOutputPending':
-      return 'Agent chờ duyệt kết quả (AgentOutputPending)'
-    default:
-      return type
-  }
 }
 
 export const NotificationItem: React.FC<NotificationItemProps> = ({
@@ -74,11 +39,11 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({
   const [expanded, setExpanded] = useState(false)
 
   const payload = notification.payload
-  const severity = payload?.severity ?? 'Medium'
+  const severity = payload?.severity
   const boardId = payload?.boardId
 
   const handleOpenBoard = () => {
-    if (boardId) {
+    if (boardId && workspaceId) {
       navigate(`/workspaces/${workspaceId}/boards/${boardId}`)
     }
   }
@@ -107,12 +72,14 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({
             {!notification.isRead && (
               <Badge status="processing" color="#3b82f6" text="" />
             )}
-            <Tag
-              color={getSeverityTagColor(severity)}
-              style={{ fontWeight: 600, margin: 0 }}
-            >
-              {severity.toUpperCase()}
-            </Tag>
+            {severity && (
+              <Tag
+                color={getSeverityTagColor(severity)}
+                style={{ fontWeight: 600, margin: 0 }}
+              >
+                {severity.toUpperCase()}
+              </Tag>
+            )}
             <Tag color="geekblue" style={{ margin: 0 }}>
               {getTypeText(notification.type)}
             </Tag>
@@ -180,7 +147,7 @@ export const NotificationItem: React.FC<NotificationItemProps> = ({
             </Typography.Paragraph>
 
             <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
-              {boardId ? (
+              {boardId && workspaceId ? (
                 <Button
                   size="small"
                   type="link"

@@ -27,8 +27,9 @@ import { useWorkspaceRole } from '../../../shared/hooks/useWorkspaceRole'
 import { useWorkspaceMembers } from '../../board/hooks/useWorkspaceMembers'
 import { WorkspaceSettingsModal } from '../components/WorkspaceSettingsModal'
 import { useWorkspaceDetail } from '../hooks/useWorkspaceDetail'
+import { AppHeader } from '../../../shared/components/AppHeader'
 
-const { Header, Content } = Layout
+const { Content } = Layout
 
 export const WorkspaceSettingsPage: React.FC = () => {
   const { workspaceId = '' } = useParams<{ workspaceId: string }>()
@@ -89,7 +90,9 @@ export const WorkspaceSettingsPage: React.FC = () => {
 
   return (
     <Layout style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
-      <Header
+      <AppHeader workspaceId={workspaceId} />
+
+      <div
         style={{
           backgroundColor: '#ffffff',
           borderBottom: '1px solid #e2e8f0',
@@ -120,7 +123,7 @@ export const WorkspaceSettingsPage: React.FC = () => {
         >
           Chỉnh Sửa Cài Đặt
         </Button>
-      </Header>
+      </div>
 
       <Content style={{ padding: '24px 32px', maxWidth: 1000, margin: '0 auto', width: '100%' }}>
         <Row gutter={[24, 24]}>

@@ -837,6 +837,84 @@ namespace TeamNexus.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.EmailMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BodyPreview")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("body_preview");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("error");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("ProviderMessageId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("provider_message_id");
+
+                    b.Property<Guid?>("SentByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sent_by_user_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("subject");
+
+                    b.Property<string>("ToEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("to_email");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_email_messages");
+
+                    b.HasIndex("SentByUserId")
+                        .HasDatabaseName("ix_email_messages_sent_by_user_id");
+
+                    b.HasIndex("WorkspaceId", "CreatedAt")
+                        .HasDatabaseName("ix_email_messages_workspace_id_created_at");
+
+                    b.ToTable("email_messages", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_email_messages_status", "\"status\" IN ('Queued', 'Sent', 'Failed')");
+                        });
+                });
+
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.Label", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1154,6 +1232,94 @@ namespace TeamNexus.Persistence.Migrations
                     b.ToTable("workspaces", (string)null);
                 });
 
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("accepted_at");
+
+                    b.Property<Guid?>("AcceptedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("accepted_by_user_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<Guid>("InvitedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invited_by_user_id");
+
+                    b.Property<string>("InvitedEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("invited_email");
+
+                    b.Property<string>("InvitedRole")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("invited_role");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("token_hash");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_workspace_invitations");
+
+                    b.HasIndex("AcceptedByUserId")
+                        .HasDatabaseName("ix_workspace_invitations_accepted_by_user_id");
+
+                    b.HasIndex("InvitedByUserId")
+                        .HasDatabaseName("ix_workspace_invitations_invited_by_user_id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("uq_workspace_invitations_token_hash");
+
+                    b.HasIndex("WorkspaceId", "InvitedEmail")
+                        .IsUnique()
+                        .HasDatabaseName("uq_workspace_invitations_pending")
+                        .HasFilter("\"status\" = 'Pending'");
+
+                    b.HasIndex("WorkspaceId", "Status")
+                        .HasDatabaseName("ix_workspace_invitations_workspace_id_status");
+
+                    b.ToTable("workspace_invitations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_workspace_invitations_invited_role", "\"invited_role\" IN ('Admin', 'Manager', 'Member')");
+
+                            t.HasCheckConstraint("ck_workspace_invitations_status", "\"status\" IN ('Pending', 'Accepted', 'Cancelled', 'Expired')");
+                        });
+                });
+
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceMember", b =>
                 {
                     b.Property<Guid>("WorkspaceId")
@@ -1439,6 +1605,22 @@ namespace TeamNexus.Persistence.Migrations
                     b.Navigation("CreatedByUser");
                 });
 
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.EmailMessage", b =>
+                {
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("SentByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_email_messages_users_sent_by_user_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_email_messages_workspaces_workspace_id");
+                });
+
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.Label", b =>
                 {
                     b.HasOne("TeamNexus.Persistence.Data.Entities.Workspace", "Workspace")
@@ -1565,6 +1747,33 @@ namespace TeamNexus.Persistence.Migrations
                         .HasConstraintName("fk_workspaces_users_owner_id");
 
                     b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceInvitation", b =>
+                {
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AcceptedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_workspace_invitations_users_accepted_by_user_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.ApplicationUser", "InvitedBy")
+                        .WithMany()
+                        .HasForeignKey("InvitedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_workspace_invitations_users_invited_by_user_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_workspace_invitations_workspaces_workspace_id");
+
+                    b.Navigation("InvitedBy");
+
+                    b.Navigation("Workspace");
                 });
 
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceMember", b =>

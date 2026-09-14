@@ -2,7 +2,7 @@
 
 > Roadmap ở mức giai đoạn lớn (chưa chia task chi tiết). Mỗi giai đoạn kèm các yêu cầu hoàn thiện để coi là "xong" trước khi chuyển sang giai đoạn kế tiếp.
 
-> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đã hoàn thành)** → **8 (đã hoàn thành)** → **9 (đã hoàn thành)** → **10 (đã hoàn thành)** → 11 → 12 → 13.
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đã hoàn thành)** → **8 (đã hoàn thành)** → **9 (đã hoàn thành)** → **10 (đã hoàn thành)** → **11 (đã hoàn thành)** → 12 → 13.
 >
 > Số giai đoạn đã được **đánh lại**: **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Đơn giản hóa Role**, **10 = Nâng cao Task & Workspace UX**, **11 = Quản lý Member & Profile**, **12 = Dashboard & Tìm kiếm**, **13 = Mobile**. `01-system-specification.md` và `02-tech-stack-decisions.md` đã cập nhật theo.
 >
@@ -178,19 +178,23 @@ Hoàn thiện UI cho các field task đã có schema nhưng chưa có giao diệ
 > **copy 2 lần** ở `BoardView` và `ReportsPage`); và 1 **nghi vấn bug** ở `TaskDetailModal` (Select priority/ngày có thể gửi **giá trị cũ**
 > do `onChange` chạy trước khi AntD Form cập nhật store) ⇒ **phải viết test chứng minh trước, chỉ sửa nếu test đỏ**.
 
-## Giai đoạn 11: Quản lý Member & Profile
+## Giai đoạn 11: Quản lý Member & Profile (✅ HOÀN THÀNH — cả Backend & Frontend)
 
-> Cần schema mới: bảng `workspace_invitations`. Email gửi qua **Resend API** (free 3.000 email/tháng, không cần thẻ tín dụng).
-> Kế hoạch chi tiết sẽ chia task khi đến giai đoạn này.
+> Schema mới: bảng `workspace_invitations` và `email_messages` (Migration `Phase11MemberProfile`). Dịch vụ email tích hợp qua FluentEmail hỗ trợ Postmark (API key) kèm MailKit SMTP / memory fallback cho môi trường test/dev.
 
 Xây luồng mời thành viên vào workspace qua email, quản lý danh sách member, profile cá nhân và notification center.
 
 **Yêu cầu hoàn thiện:**
-- [ ] **Mời member qua email**: Manager/Admin nhập email → hệ thống gửi link mời qua Resend → người nhận click link, chọn role (Member mặc định), tham gia workspace
-- [ ] **Gửi email nhanh**: Manager soạn tiêu đề + nội dung ngắn trong app → gửi đến inbox thật của một hoặc nhiều member qua Resend (dùng cho thông báo họp, việc cần gấp...)
-- [ ] **Quản lý member**: xem danh sách thành viên + role, hủy invitation đang chờ (Manager/Admin), đổi role member (chỉ Admin), kick member (chỉ Admin)
-- [ ] **Profile cá nhân**: xem/sửa display_name, avatar URL; xem danh sách workspace đang tham gia + role của mình; tự rời workspace (không phải owner)
-- [ ] **Notification Center**: badge unread + dropdown/drawer tại header — thông báo khi được assign task, có comment mới trên task của mình, được mời vào workspace — tận dụng `notifications` table từ Phase 5
+- [x] **Mời member qua email**: Manager/Admin nhập email → hệ thống lưu token SHA-256 an toàn và gửi link mời qua Postmark / MailKit → người nhận click link, chọn role (Member mặc định), tham gia workspace
+- [x] **Gửi email nhanh**: Manager/Admin soạn tiêu đề + nội dung ngắn trong app → gửi đến inbox thật của một hoặc nhiều member (dùng cho thông báo họp, việc cần gấp...) kèm ghi nhận vào `email_messages`
+- [x] **Quản lý member**: xem danh sách thành viên + role, hủy invitation đang chờ (Manager/Admin), đổi role member (chỉ Admin), kick member (chỉ Admin)
+- [x] **Profile cá nhân**: xem/sửa display_name, avatar URL (validate an toàn); xem danh sách workspace đang tham gia + role của mình; tự rời workspace (chặn chủ sở hữu)
+- [x] **Notification Center**: badge unread + Drawer tại AppHeader dùng chung — hỗ trợ cả thông báo AI Observer và thông báo nghiệp vụ (được assign task, comment mới, được mời vào workspace)
+
+> **Trạng thái: ✅ ĐÃ HOÀN THÀNH & VERIFY ĐẦY ĐỦ.**
+> - **Backend:** **371 tests** (0 failed; CI PostgreSQL 18 assert 371/371 pass). Migration thứ 9 `Phase11MemberProfile` áp dụng thành công.
+> - **Frontend:** **359/359 tests passed (60 test files)**; `npm run lint` đạt 0 warning / 0 error; `npx tsc -b` exit 0; `npm run build` thành công.
+> - Chi tiết: `tasks/phase-11-member-profile-management.md` và `report/phase-11-member-profile-management-test-report.md`.
 
 ## Giai đoạn 12: Dashboard & Tìm kiếm
 

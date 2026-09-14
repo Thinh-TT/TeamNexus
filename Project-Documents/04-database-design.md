@@ -522,13 +522,52 @@ Kết quả **dài** của Agent (báo cáo, tài liệu, file có định dạn
 
 #### `notifications.type` — bộ giá trị mở rộng
 
-Ba loại mới (text tự do, **không** CHECK — §4): `AgentRunFailed` (dừng bất thường / vượt ngưỡng), `AgentAwaitingClarification`
-(Agent cần trưởng nhóm trả lời), `AgentOutputPending` (có kết quả chờ duyệt). Fan-out giữ nguyên "1 row / 1 người nhận (Manager/Admin)".
+- **Giai đoạn 7:** `AgentRunFailed` (dừng bất thường / vượt ngưỡng), `AgentAwaitingClarification` (Agent cần trưởng nhóm trả lời), `AgentOutputPending` (có kết quả chờ duyệt).
+- **Giai đoạn 11:** `WorkspaceInvitation` (lời mời vào workspace), `TaskAssigned` (được gán việc), `CommentOnTask` (bình luận mới trên task đang tham gia).
+Fan-out giữ nguyên "1 row / 1 người nhận".
 
-> **Ba loại này KHÔNG nằm trong whitelist của Observer.** `NotificationTypes.All` (4 tín hiệu của Giai đoạn 5) là danh sách
-> **chống hallucination**: `ObserverFindingValidator` chỉ chấp nhận type có trong đó. Nếu thêm 3 loại agent vào `All` thì model
-> Observer có thể sinh `AgentRunFailed` và **qua** validator ⇒ module Ai dùng lớp hằng riêng (`AgentNotificationTypes`);
-> notification của agent do code của mình ghi nên không cần whitelist.
+> **Các loại thông báo ngoài Observer KHÔNG nằm trong whitelist của Observer.** `NotificationTypes.All` (4 tín hiệu của Giai đoạn 5) là danh sách
+> **chống hallucination** của model AI Observer. Notification hệ thống/nghiệp vụ do backend ghi trực tiếp nên không dùng chung whitelist này.
+
+---
+
+### 3.9 Module Quản lý Thành viên & Hồ sơ Cá nhân (Giai đoạn 11)
+
+> **Mục tiêu:** Quản lý lời mời gia nhập workspace qua email (Postmark / MailKit fallback), chấp nhận lời mời, phân quyền vai trò thành viên, gửi email nhanh nội bộ, và quản lý hồ sơ cá nhân (`displayName`, `avatarUrl`) cùng danh sách workspace đã tham gia.
+
+#### `workspace_invitations` — Lời mời tham gia Workspace
+
+| Cột | Kiểu | Null? | Mặc định | Ý nghĩa |
+|---|---|---|---|---|
+| `id` | uuid | PK | | Mã định danh lời mời |
+| `workspace_id` | uuid | FK | | Workspace phát lời mời (`workspaces.id`, Restrict) |
+| `invited_email` | varchar(320) | — | | Email được mời (chuẩn RFC 5321) |
+| `invited_role` | varchar(32) | — | | Vai trò dự kiến: `Admin`, `Manager`, `Member` (CHECK) |
+| `token_hash` | varchar(128) | UQ | | Mã băm SHA-256 của invitation token ngẫu nhiên (chống lộ token trong DB) |
+| `invited_by_user_id` | uuid | FK | | Người tạo lời mời (`users.id`, Restrict) |
+| `status` | varchar(32) | — | | Trạng thái: `Pending`, `Accepted`, `Cancelled`, `Expired` (CHECK) |
+| `expires_at` | timestamptz | — | | Thời hạn hết hiệu lực của lời mời (mặc định 7 ngày) |
+| `accepted_by_user_id` | uuid | FK, null | null | Người thực sự chấp nhận lời mời (`users.id`, Restrict) |
+| `accepted_at` | timestamptz | null | null | Thời điểm chấp nhận lời mời |
+| `created_at` | timestamptz | — | | Thời điểm gửi lời mời |
+| `updated_at` | timestamptz | — | | Thời điểm cập nhật cuối cùng |
+
+#### `email_messages` — Nhật ký và Hàng đợi Gửi Email
+
+| Cột | Kiểu | Null? | Mặc định | Ý nghĩa |
+|---|---|---|---|---|
+| `id` | uuid | PK | | Mã định danh thông điệp email |
+| `workspace_id` | uuid | FK | | Workspace liên quan (`workspaces.id`, Restrict) |
+| `to_email` | varchar(320) | — | | Địa chỉ email người nhận |
+| `kind` | varchar(40) | — | | Loại email: `Invitation`, `QuickNotice`, `TaskAssignment`, v.v. |
+| `subject` | varchar(200) | — | | Tiêu đề email (tối đa 200 ký tự) |
+| `body_preview` | varchar(500) | — | | Bản trích yếu nội dung (tối đa 500 ký tự, chống phình DB) |
+| `sent_by_user_id` | uuid | FK, null | null | Người bấm gửi (`users.id`, Restrict; null nếu hệ thống tự gửi) |
+| `status` | varchar(32) | — | | Trạng thái gửi: `Queued`, `Sent`, `Failed` (CHECK) |
+| `provider_message_id` | varchar(200) | null | null | Message-ID do Email Provider trả về (Postmark / MailKit) |
+| `error` | varchar(500) | null | null | Thông điệp lỗi nếu gửi thất bại |
+| `created_at` | timestamptz | — | | Thời điểm tạo thông điệp |
+| `updated_at` | timestamptz | — | | Thời điểm cập nhật trạng thái gửi |
 
 ---
 
@@ -542,13 +581,15 @@ Ba loại mới (text tự do, **không** CHECK — §4): `AgentRunFailed` (dừ
 | `AiActionStatus` | `text` + CHECK | `Pending`, `Approved`, `Rejected`, `Undone` | `ai_action_logs.status` |
 | `AiActionType` | `text` (tự do, bộ gợi ý) | `CreateSubtasks`, `AssignMember`, `SetLabels`, `MoveTasks`, `PostComment`, `PostAttachment`, … | `ai_action_logs.action` |
 | `ActivityAction` | `text` (tự do, bộ gợi ý) | `TaskCreated`, `TaskUpdated`, `TaskMoved`, `TaskCompleted`, `TaskDeleted`, `CommentAdded`, … | `activity_logs.action` |
-| `NotificationType` | `text` (tự do, bộ gợi ý) | `OverdueTask`, `StalledTask`, `Overload`, `Bottleneck`, `AgentRunFailed`, `AgentAwaitingClarification`, `AgentOutputPending`, … | `notifications.type` |
+| `NotificationType` | `text` (tự do, bộ gợi ý) | `OverdueTask`, `StalledTask`, `Overload`, `Bottleneck`, `AgentRunFailed`, `AgentAwaitingClarification`, `AgentOutputPending`, `WorkspaceInvitation`, `TaskAssigned`, `CommentOnTask`, … | `notifications.type` |
 | `NotificationSeverity` | `text` (tự do, bộ gợi ý) | `Low`, `Medium`, `High`, `Critical` | `notifications.payload.severity` (không phải cột) |
 | `ObserverRunStatus` | `text` + CHECK | `Running`, `Completed`, `Skipped`, `Failed` | `ai_observer_runs.status` |
 | `MemberType` | `text` + CHECK | `human`, `ai_agent` | `workspace_members.member_type` |
 | `AgentRunStatus` | `text` + CHECK | `Running`, `AwaitingClarification`, `AwaitingApproval`, `Completed`, `Failed` | `agent_runs.status` |
 | `AgentStopReason` | `text` + CHECK | `DraftProduced`, `QuestionAsked`, `ToolLimit`, `TimeLimit`, `TokenBudget`, `ProviderError`, `Cancelled`, `TaskChanged`, `InternalError` | `agent_runs.stop_reason` |
 | `AgentOutputKind` | `text` + CHECK | `Comment`, `Attachment` | `agent_runs.output_kind` |
+| `InvitationStatus` | `text` + CHECK | `Pending`, `Accepted`, `Cancelled`, `Expired` | `workspace_invitations.status` |
+| `EmailMessageStatus` | `text` + CHECK | `Queued`, `Sent`, `Failed` | `email_messages.status` |
 
 > Nguyên tắc: enum có tập giá trị cố định (role, priority, status) dùng `CHECK`; enum dự kiến mở rộng (action type, notification type) dùng `text` tự do kèm bộ giá trị gợi ý để không phải sửa constraint mỗi lần thêm loại mới.
 >
@@ -581,6 +622,13 @@ Ba loại mới (text tự do, **không** CHECK — §4): `AgentRunFailed` (dừ
 | `agent_runs` | `(workspace_id, started_at)` | IX | Audit + prune theo workspace |
 | `agent_runs` | `status` WHERE `status = 'Running'` | IX (partial) | Reaper tìm run mồ côi sau restart |
 | `task_attachments` | `task_id` | IX | Liệt kê tệp đính kèm của task |
+| `workspace_invitations` | `(workspace_id, status)` | IX | Lọc danh sách lời mời theo trạng thái (Pending/Accepted/Cancelled/Expired) |
+| `workspace_invitations` | `(workspace_id, invited_email)` WHERE `status = 'Pending'` | UQ (partial) | **Giai đoạn 11** — Mỗi email chỉ có tối đa một lời mời chờ xử lý trong một workspace |
+| `workspace_invitations` | `token_hash` | UQ | **Giai đoạn 11** — Tra cứu và xác thực token lời mời nhanh chóng, duy nhất |
+| `workspace_invitations` | `invited_by_user_id` | IX | Lọc lời mời theo người gửi |
+| `workspace_invitations` | `accepted_by_user_id` | IX | Truy vết người chấp nhận lời mời |
+| `email_messages` | `(workspace_id, created_at)` | IX | Lịch sử gửi email theo workspace |
+| `email_messages` | `sent_by_user_id` | IX | Lọc email do người dùng gửi |
 
 > Các FK còn lại (`activity_logs.board_id`/`user_id`, `notifications.workspace_id`, `ai_observer_runs.workspace_id`, `agent_runs.agent_user_id`/`triggered_by_user_id`/`previous_run_id`, `task_attachments.created_by_user_id`/`source_run_id`, …) **không** khai báo tường minh: EF Core sinh index theo FK convention (đúng tiền lệ Phase 4 §1.2 — FK `decided_by_user_id` cũng sinh index phụ, chấp nhận).
 >
@@ -595,23 +643,30 @@ Ba loại mới (text tự do, **không** CHECK — §4): `AgentRunFailed` (dừ
 - Seed dữ liệu nền trong migration/`OnModelCreating`: 3 role `Admin`, `Manager`, `Member`.
 - Migration áp dụng lên PostgreSQL local để dev, sau đó lên Neon/Supabase (theo `phase-1-auth.md` §2.1).
 
-**Chuỗi migration đã áp dụng (tính tới Giai đoạn 7):**
+**Chuỗi migration đã áp dụng (tính tới Giai đoạn 11):**
 
-| # | Migration | Giai đoạn |
-|---|---|---|
-| 1 | `InitialSchema` | 1 |
-| 2 | `Phase2KanbanSchema` | 2 |
-| 3 | `Phase2BoardColumnIsDone` | 2 |
-| 4 | `Phase4AccountabilityLayer` | 4 |
-| 5 | `Phase5AiObserverSchema` | 5 |
-| 6 | `Phase7AiAgentSchema` | **7** — `member_type`/`ai_agent_name`, `is_clarification`, `agent_runs`, `task_attachments` |
+| # | Migration | Giai đoạn | Nội dung |
+|---|---|---|---|
+| 1 | `InitialSchema` | 1 | Schema ban đầu: `users`, `roles`, `workspaces`, `workspace_members`, `refresh_tokens` |
+| 2 | `Phase2KanbanSchema` | 2 | Schema Kanban: `boards`, `board_columns`, `tasks`, `labels`, `task_labels`, `task_comments` |
+| 3 | `Phase2BoardColumnIsDone` | 2 | Bổ sung cờ `is_done` cho `board_columns` |
+| 4 | `Phase4AccountabilityLayer` | 4 | Bổ sung `ai_action_logs` |
+| 5 | `Phase5AiObserverSchema` | 5 | Bổ sung `activity_logs`, `notifications`, `ai_observer_runs` |
+| 6 | `Phase7AiAgentSchema` | 7 | `member_type`/`ai_agent_name`, `is_clarification`, `agent_runs`, `task_attachments` |
+| 7 | `Phase9RoleSimplification` | 9/10 | Tinh giản và chuẩn hoá cấu hình vai trò Identity |
+| 8 | `Phase9ModelSync` | 9/10 | Đồng bộ hoá model snapshot và quan hệ |
+| 9 | `Phase11MemberProfile` | 11 | Bổ sung `workspace_invitations`, `email_messages`, partial UQ pending invite |
 
-> Giai đoạn 3 (AI Smart Setup) **không** có migration (chỉ đọc/đề xuất, không ghi DB); Giai đoạn 6 (Reporting) **không** có migration (projection read-only); Giai đoạn 8 (Test & Deploy) và 9 (Flutter) **không** có migration. Dùng `dotnet ef migrations list` để đối chiếu — hiện tại phải là **6**.
+> Dùng `dotnet ef migrations list` để đối chiếu — hiện tại phải là **9**.
 
 ---
 
 ## 7. Toàn vẹn dữ liệu, edge cases & failure modes
 
+- **Giai đoạn 11 — Bảo mật token lời mời:** Token gửi qua email là chuỗi ngẫu nhiên độ entropy cao (cryptographically secure). Cột `workspace_invitations.token_hash` chỉ lưu băm **SHA-256** (128 ký tự hex), tuyệt đối không lưu token thô trong database. Tránh nguy cơ bị chiếm quyền truy cập nếu dữ liệu bị rò rỉ.
+- **Giai đoạn 11 — Partial unique index lời mời đang chờ (`Pending`):** Một email chỉ được phép có tối đa một lời mời ở trạng thái `Pending` trong một workspace (`uq_workspace_invitations_pending`). Lời mời cũ đã huỷ (`Cancelled`), đã chấp nhận (`Accepted`) hoặc hết hạn (`Expired`) không ngăn cản việc tạo lời mời mới cho cùng email.
+- **Giai đoạn 11 — Chặn chủ sở hữu rời workspace (`leaveWorkspace`):** Người dùng có `is_owner = true` (`workspaces.owner_id = user_id`) bị hệ thống chặn rời workspace (trả về `400 Bad Request`). Muốn rời, chủ sở hữu bắt buộc phải thực hiện chuyển giao quyền sở hữu (`Transfer Ownership`) cho thành viên khác tại trang Cài đặt workspace.
+- **Giai đoạn 11 — Chấp nhận lời mời và bảo toàn luồng đăng nhập:** Khi người dùng mở liên kết `/invitations/accept?token=...`, hệ thống kiểm tra token hợp lệ và chưa hết hạn (`expires_at > utcNow`). Nếu user chưa đăng nhập, token được lưu an toàn tại `sessionStorage` (`pending_invite_token`) và chuyển hướng sang `/login`; sau khi đăng nhập/đăng ký thành công, router tự động khôi phục và tiếp tục quy trình chấp nhận lời mời. Khi chấp nhận thành công, row `workspace_members` được tạo với `role = invited_role`, cập nhật `accepted_by_user_id`, `status = Accepted` và ghi nhận một bản ghi vào `activity_logs`.
 - **Refresh token rotate:** khi refresh, token cũ phải `revoked_at` ngay và token mới trỏ `replaced_by_token_id` về token cũ. Nếu một token đã revoke được sử dụng lại → phát hiện replay (revoke cả chuỗi con nếu cần) và trả `401`.
 - **Soft delete vs Undo:** `deleted_at` dùng để ẩn/phục hồi entity trong UI (workspace/board/column/task/comment). Undo cho **hành động AI** dùng `applied_snapshot` trong `ai_action_logs` (revert đúng những gì đã ghi thật; `before_snapshot` dùng cho loại hành động có dữ liệu gốc để khôi phục). Hai cơ chế này khác nhau và không thay thế lẫn nhau.
 - **Kanban đồng thời:** cập nhật `position`/`column_id` có thể xung đột giữa các client; chấp nhận **last-write-wins** ở giai đoạn này, client dùng optimistic update và đồng bộ lại khi server xác nhận (theo `02` §2.2).
