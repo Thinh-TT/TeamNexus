@@ -48,7 +48,7 @@ npm run dev
 
 ### Migration (EF Core)
 
-Một chuỗi migration duy nhất trên `TeamNexusDbContext` (xem `Project-Documents/04-database-design.md` §1.1). Hiện có **6** migration, mới nhất là `Phase7AiAgentSchema` (Giai đoạn 7 — agent identity, `board_columns.is_clarification`, `agent_runs`, `task_attachments`).
+Một chuỗi migration duy nhất trên `TeamNexusDbContext` (xem `Project-Documents/04-database-design.md` §1.1). Hiện có **9** migration, mới nhất là `Phase11MemberProfile` (Giai đoạn 11 — quản lý lời mời workspace, nhật ký gửi email `email_messages`, hồ sơ cá nhân và trung tâm thông báo).
 
 ```bash
 dotnet ef migrations list   --project src/TeamNexus.Persistence --startup-project src/TeamNexus.Api
@@ -217,14 +217,33 @@ nên User Secrets sẽ thắng trở lại).
   - Kiểm thử chất lượng: `npm run lint` = 0/0, `npx tsc -b` = exit 0, `npm run build` = OK, `npm test` = **279/279 tests PASS (47 files)**
   - Cập nhật toàn bộ tài liệu dự án và lập báo cáo nghiệm thu chi tiết
 
+## Trạng thái (Giai đoạn 11 – Quản lý Member & Profile) — ✅ HOÀN THÀNH
+
+- [x] **§1–§6 Backend Member & Profile — ĐÃ XONG** — **371 tests PASS** (134 passed, 237 skipped do DB local chưa cấu hình, 0 failed; CI PostgreSQL 18 assert 371/371 pass).
+  - Tích hợp FluentEmail hỗ trợ Postmark (API key) kèm MailKit SMTP / memory fallback
+  - Migration thứ 9: `Phase11MemberProfile` (bảng `workspace_invitations`, `email_messages`, partial UQ pending)
+  - 9 endpoints mới: mời member, gửi email nhanh, huỷ lời mời, đổi role, kick member, profile cá nhân, danh sách workspace, rời workspace, chấp nhận lời mời qua token SHA-256 an toàn
+- [x] **§7 Frontend Member, Profile & Notification Center — ĐÃ XONG** — **359/359 tests PASS (60 test files)**
+  - `AppHeader.tsx` dùng chung với `NotificationBell.tsx` và `useUnreadCount.ts`
+  - Refactor Notification Drawer tích hợp cả AI Observer lẫn thông báo nghiệp vụ (`TaskAssigned`, `CommentOnTask`, `WorkspaceInvitation`)
+  - Module Members: `MembersTable.tsx`, `PendingInvitationsTable.tsx`, `InviteMemberModal.tsx`, `QuickEmailModal.tsx`, `WorkspaceMembersPage.tsx`
+  - Module Profile: `ProfilePage.tsx` xem/sửa hồ sơ, tab danh sách workspace cá nhân, tự rời workspace (chặn chủ sở hữu)
+  - Module Invitations: `AcceptInvitationPage.tsx` xử lý chấp nhận lời mời, bảo toàn pending token qua `sessionStorage` nếu chưa login
+  - Routing gắn đầy đủ: `/workspaces/:workspaceId/members`, `/profile`, `/invitations/accept`
+- [x] **§8 CI & Tài liệu — ĐÃ XONG**
+  - Cập nhật `.github/workflows/ci-backend.yml`: assert 371 tests, thêm env `Email__ApiKey`
+  - Cập nhật `.github/workflows/ci-web.yml`: assert số test > 279 (baseline 359 tests, 60 files)
+  - Kiểm thử chất lượng: `npm run lint` = 0/0, `npx tsc -b` = exit 0, `npm run build` = OK, `npm test` = **359/359 tests PASS**
+  - Hoàn tất cập nhật DB Design (9 migrations), Roadmap, System Spec và Báo cáo kiểm thử Giai đoạn 11
+
 ### CI (GitHub Actions)
 
 Hai workflow chạy trên `ubuntu-latest` cho mọi push lên `main`/`develop`/`feat/**` và mọi PR vào `main`/`develop`:
 
 | Workflow | Làm gì | Artifact |
 |---|---|---|
-| `ci-backend.yml` | `restore` → `build -c Release` (**0 warning / 0 error**) → `dotnet test` trên **PostgreSQL 18** (service container) → **assert tổng test = 226 và không skip** | `backend-test-results` (TRX) |
-| `ci-web.yml` | `npm ci` → `lint` → `tsc -b` → `vitest` → **assert số test > 206 (baseline 279)** → `vite build` | `web-build-output` (`dist/` + báo cáo JSON) |
+| `ci-backend.yml` | `restore` → `build -c Release` (**0 warning / 0 error**) → `dotnet test` trên **PostgreSQL 18** (service container) → **assert tổng test = 371 và không skip** | `backend-test-results` (TRX) |
+| `ci-web.yml` | `npm ci` → `lint` → `tsc -b` → `vitest` → **assert số test > 279 (baseline 359)** → `vite build` | `web-build-output` (`dist/` + báo cáo JSON) |
 
 **Trạng thái đã verify:** cả hai workflow **xanh** trên run thật — backend `Passed: 172, Skipped: 0`, frontend `vitest: total=206 failed=0`.
 
@@ -266,7 +285,6 @@ npm run lint && npx tsc -b && npm test && npm run build
 npm test -- --reporter=json --outputFile=test-results.json
 ```
 
-> Kết quả hiện tại: **35 file / 206 test PASS** (baseline cuối Giai đoạn 7 là 187; §2b cộng thêm 19 test cho
-> `hubUrl`, `reconnectPolicy`, `useBoardHub` reconnect và `BoardView`).
+> Kết quả hiện tại: **60 file / 359 test PASS** (baseline cuối Giai đoạn 8 là 206; Giai đoạn 10 là 279; Giai đoạn 11 bổ sung 13 file test mới đạt 359 tests PASS, 0 fail, 0 warning lint).
 
 

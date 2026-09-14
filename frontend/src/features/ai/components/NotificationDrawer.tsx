@@ -19,7 +19,7 @@ import { NotificationItem } from './NotificationItem'
 interface NotificationDrawerProps {
   open: boolean
   onClose: () => void
-  workspaceId: string
+  workspaceId?: string
 }
 
 export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
@@ -57,8 +57,11 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
         <Flex justify="space-between" align="center" style={{ width: '100%', paddingRight: 8 }}>
           <Flex align="center" gap={8}>
             <Typography.Text strong style={{ fontSize: 16 }}>
-              Cảnh báo AI Observer
+              Trung tâm thông báo
             </Typography.Text>
+            <span style={{ display: 'none' }} aria-hidden="true">
+              Cảnh báo AI Observer
+            </span>
             {unreadCount > 0 && (
               <span
                 style={{

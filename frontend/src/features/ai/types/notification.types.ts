@@ -6,12 +6,18 @@ export type NotificationType =
   | 'AgentRunFailed'
   | 'AgentAwaitingClarification'
   | 'AgentOutputPending'
+  | 'TaskAssigned'
+  | 'CommentOnTask'
+  | 'WorkspaceInvitation'
 export type NotificationSeverity = 'Low' | 'Medium' | 'High' | 'Critical'
 export type ObserverRunStatus = 'Running' | 'Completed' | 'Skipped' | 'Failed'
 
 export interface NotificationPayload {
   runId?: string
   boardId?: string | null
+  taskId?: string
+  commentId?: string
+  invitationId?: string
   taskIds?: string[]
   userIds?: string[]
   severity?: NotificationSeverity

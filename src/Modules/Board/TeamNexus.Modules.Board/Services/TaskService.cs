@@ -29,19 +29,22 @@ public sealed class TaskService : ITaskService
     private readonly IBoardEventPublisher _events;
     private readonly IActivityLogWriter _activityLog;
     private readonly IAiAgentResolver _agents;
+    private readonly INotificationWriter _notifications;
 
     public TaskService(
         TeamNexusDbContext db,
         IWorkspaceAccess access,
         IBoardEventPublisher events,
         IActivityLogWriter activityLog,
-        IAiAgentResolver agents)
+        IAiAgentResolver agents,
+        INotificationWriter notifications)
     {
         _db = db;
         _access = access;
         _events = events;
         _activityLog = activityLog;
         _agents = agents;
+        _notifications = notifications;
     }
 
     public async Task<IReadOnlyList<TaskResponse>> GetTasksAsync(
@@ -164,6 +167,10 @@ public sealed class TaskService : ITaskService
                 isDone = column.IsDone,
             })), ct);
 
+        // Phase 11 §6.5: a brand-new assignment is the one case where the assignee definitely did
+        // not know about this task yet. Best-effort and AFTER the writes, like the activity log.
+        await NotifyAssignmentAsync(board.WorkspaceId, task, request.AssigneeId, userId, ct);
+
         return response;
     }
 
@@ -184,6 +191,10 @@ public sealed class TaskService : ITaskService
         // booleans so the log never stores the title/description content).
         var titleChanged = !string.Equals(task.Title, request.Title.Trim(), StringComparison.Ordinal);
         var descriptionChanged = !string.Equals(task.Description, TrimToNull(request.Description), StringComparison.Ordinal);
+
+        // Phase 11 §6.5: capture the assignment BEFORE the mutation. An alert is sent only when the
+        // assignee actually changes — editing a title must not re-notify the same person.
+        var previousAssigneeId = task.AssigneeId;
 
         task.Title = request.Title.Trim();
         task.Description = TrimToNull(request.Description);
@@ -211,6 +222,12 @@ public sealed class TaskService : ITaskService
 
         var response = await GetTaskByIdAsync(taskId, userId, ct);
         await _events.TaskUpdated(task.BoardId, response, ct);
+
+        if (previousAssigneeId != request.AssigneeId)
+        {
+            await NotifyAssignmentAsync(workspaceId, task, request.AssigneeId, userId, ct);
+        }
+
         return response;
     }
 
@@ -427,6 +444,43 @@ public sealed class TaskService : ITaskService
             .Where(t => t.Id == taskId)
             .Include(t => t.Assignee)
             .FirstOrDefaultAsync(ct);
+
+    /// <summary>
+    /// Alerts the new assignee that a task is now theirs (Phase 11 §6.5).
+    /// <para>
+    /// Skipped when there is no assignee, when the caller assigned themselves (they already know),
+    /// and when the assignee is the <b>AI Agent</b> — a pseudo-member with no inbox, whose
+    /// "something happened to my run" alerts already travel to the Managers through
+    /// <c>AgentNotificationTypes</c>. Sending this one would only create rows nobody reads.
+    /// </para>
+    /// </summary>
+    private async Task NotifyAssignmentAsync(
+        Guid workspaceId, BoardTask task, Guid? assigneeId, Guid actorId, CancellationToken ct)
+    {
+        if (assigneeId is not { } target || target == actorId)
+        {
+            return;
+        }
+
+        // Agent identity is a per-workspace fact (one agent row per workspace), so it cannot be
+        // decided from the id alone.
+        if (await _agents.IsAiAgentAsync(workspaceId, target, ct))
+        {
+            return;
+        }
+
+        await _notifications.NotifyAsync(
+            new MemberNotification(
+                workspaceId,
+                [target],
+                MemberNotificationTypes.TaskAssigned,
+                "Bạn được giao một thẻ mới",
+                MemberNotificationLimits.Clamp(task.Title, MemberNotificationLimits.Title),
+                JsonSerializer.Serialize(
+                    new { boardId = task.BoardId, taskId = task.Id, columnId = task.ColumnId },
+                    ActivityJson)),
+            ct);
+    }
 
     private async Task<Dictionary<Guid, IReadOnlyList<LabelResponse>>> LoadLabelsByTaskAsync(
         List<Guid> taskIds, CancellationToken ct)

@@ -19,6 +19,8 @@ public static class BoardEndpoints
         endpoints.MapLabelsEndpoints();
         endpoints.MapCommentsEndpoints();
         endpoints.MapMembersEndpoints();
+        endpoints.MapInvitationsEndpoints();
+        endpoints.MapProfileEndpoints();
 
         return endpoints;
     }

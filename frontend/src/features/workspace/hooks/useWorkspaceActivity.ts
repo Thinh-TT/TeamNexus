@@ -16,12 +16,16 @@ export function useWorkspaceActivity(
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
 
+  const entityType = filterParams?.entityType
+  const boardId = filterParams?.boardId
+
   const reload = useCallback(async () => {
     if (!workspaceId) return
     setLoading(true)
     try {
       const page = await workspaceApi.getActivity(workspaceId, {
-        ...filterParams,
+        entityType,
+        boardId,
         take: 50,
       })
       setItems(page.items)
@@ -38,7 +42,7 @@ export function useWorkspaceActivity(
     } finally {
       setLoading(false)
     }
-  }, [workspaceId, filterParams])
+  }, [workspaceId, entityType, boardId])
 
   useEffect(() => {
     Promise.resolve().then(() => {
@@ -51,7 +55,8 @@ export function useWorkspaceActivity(
     setLoadingMore(true)
     try {
       const page = await workspaceApi.getActivity(workspaceId, {
-        ...filterParams,
+        entityType,
+        boardId,
         take: 50,
         before: nextCursor,
       })

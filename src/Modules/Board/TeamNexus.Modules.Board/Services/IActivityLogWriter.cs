@@ -32,6 +32,28 @@ public static class ObserverActivityActions
 
     /// <summary>Workspace soft-deleted (owner/Admin).</summary>
     public const string WorkspaceDeleted = "WorkspaceDeleted";
+
+    // ---- membership events (Phase 11 §3.4) -----------------------------------
+    // Also recorded with board_id = NULL (workspace-level events). action stays free text, so a new
+    // kind needs no schema change and no CHECK update.
+
+    /// <summary>An invitation was created and its email attempted (Manager+).</summary>
+    public const string InvitationCreated = "InvitationCreated";
+
+    /// <summary>A pending invitation was cancelled (Manager+).</summary>
+    public const string InvitationCancelled = "InvitationCancelled";
+
+    /// <summary>An invitation token was accepted and a membership created.</summary>
+    public const string InvitationAccepted = "InvitationAccepted";
+
+    /// <summary>A member's workspace role changed (Admin).</summary>
+    public const string MemberRoleChanged = "MemberRoleChanged";
+
+    /// <summary>A member was removed from the workspace (Admin) or left it themselves.</summary>
+    public const string MemberRemoved = "MemberRemoved";
+
+    /// <summary>A member left the workspace on their own initiative.</summary>
+    public const string MemberLeft = "MemberLeft";
 }
 
 /// <summary>Entity types written to <c>activity_logs.entity_type</c>.</summary>

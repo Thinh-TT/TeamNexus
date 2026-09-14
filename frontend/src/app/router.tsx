@@ -8,12 +8,16 @@ import { BoardPage } from '../features/board/pages/BoardPage'
 import { ReportsPage } from '../features/reporting/pages/ReportsPage'
 import { WorkspaceSettingsPage } from '../features/workspace/pages/WorkspaceSettingsPage'
 import { WorkspaceActivityPage } from '../features/workspace/pages/WorkspaceActivityPage'
+import { WorkspaceMembersPage } from '../features/members/pages/WorkspaceMembersPage'
+import { ProfilePage } from '../features/profile/pages/ProfilePage'
+import { AcceptInvitationPage } from '../features/invitations/pages/AcceptInvitationPage'
 
 export const AppRouter: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
         <Route
           path="/"
           element={
@@ -59,6 +63,22 @@ export const AppRouter: React.FC = () => {
           element={
             <ProtectedRoute>
               <WorkspaceActivityPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/workspaces/:workspaceId/members"
+          element={
+            <ProtectedRoute>
+              <WorkspaceMembersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
             </ProtectedRoute>
           }
         />

@@ -23,17 +23,23 @@ public sealed class CommentService : ICommentService
     private readonly IWorkspaceAccess _access;
     private readonly IBoardEventPublisher _events;
     private readonly IActivityLogWriter _activityLog;
+    private readonly IAiAgentResolver _agents;
+    private readonly INotificationWriter _notifications;
 
     public CommentService(
         TeamNexusDbContext db,
         IWorkspaceAccess access,
         IBoardEventPublisher events,
-        IActivityLogWriter activityLog)
+        IActivityLogWriter activityLog,
+        IAiAgentResolver agents,
+        INotificationWriter notifications)
     {
         _db = db;
         _access = access;
         _events = events;
         _activityLog = activityLog;
+        _agents = agents;
+        _notifications = notifications;
     }
 
     public async Task<IReadOnlyList<CommentResponse>> GetCommentsAsync(
@@ -85,7 +91,54 @@ public sealed class CommentService : ICommentService
                 new { commentId = comment.Id, taskId },
                 ActivityJson)), ct);
 
+        // Phase 11 §6.6: tell the person the task belongs to. Only the assignee — fanning out to the
+        // whole workspace would be noise, and @mention (which does need a wider audience) is
+        // Giai đoạn 12.
+        await NotifyAssigneeAsync(task, comment, userId, ct);
+
         return response;
+    }
+
+    /// <summary>
+    /// One alert for the task's assignee (Phase 11 §6.6).
+    /// <para>
+    /// Skipped when the task has no assignee, when the commenter <i>is</i> the assignee (nobody needs
+    /// an alert about their own comment), and when the assignee is the <b>AI Agent</b> — it has no
+    /// inbox, and it is explicitly woken by a human pressing "Chạy lại" rather than by a notification
+    /// (Phase 7 D9: a comment must never auto-trigger a run).
+    /// </para>
+    /// </summary>
+    private async Task NotifyAssigneeAsync(
+        BoardTask task, TaskComment comment, Guid actorId, CancellationToken ct)
+    {
+        if (task.AssigneeId is not { } assigneeId || assigneeId == actorId)
+        {
+            return;
+        }
+
+        var workspaceId = task.Board!.WorkspaceId;
+
+        if (await _agents.IsAiAgentAsync(workspaceId, assigneeId, ct))
+        {
+            return;
+        }
+
+        var authorName = comment.Author?.DisplayName ?? "Ai đó";
+        var excerpt = MemberNotificationLimits.Clamp(comment.Content, MemberNotificationLimits.CommentExcerpt);
+
+        await _notifications.NotifyAsync(
+            new MemberNotification(
+                workspaceId,
+                [assigneeId],
+                MemberNotificationTypes.CommentOnTask,
+                "Có bình luận mới trên thẻ của bạn",
+                // The comment body is a preview here, never copied in full (Phase 5 §2.3 keeps text
+                // content out of the append-only stores; the notification is a pointer to the task).
+                $"{authorName}: {excerpt}",
+                JsonSerializer.Serialize(
+                    new { boardId = task.BoardId, taskId = task.Id, commentId = comment.Id },
+                    ActivityJson)),
+            ct);
     }
 
     public async Task<CommentResponse> UpdateCommentAsync(
