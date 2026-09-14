@@ -286,21 +286,16 @@ public sealed class ProfileApiTests : IClassFixture<DatabaseFixture>
     {
         await using var scenario = await _database.CreateScenarioAsync();
 
-        // Owner is deliberately not an Admin, so the leaver is the only Admin.
+        // Seeded directly with the OWNER AS A PLAIN MEMBER: CreateWorkspaceAsync always makes the
+        // owner an Admin, which would keep a second Admin alive and make the last-Admin guard
+        // unreachable. The guard's real shape is a workspace whose owner is not an Admin.
         var owner = await scenario.CreateUserAsync("Chủ sở hữu");
         var admin = await scenario.CreateUserAsync("Admin duy nhất");
-        var workspace = await scenario.CreateWorkspaceAsync(owner, "Workspace của chủ");
-
-        await using (var db = scenario.NewDbContext())
-        {
-            db.WorkspaceMembers.Add(new WorkspaceMember
-            {
-                WorkspaceId = workspace.Id,
-                UserId = admin.Id,
-                Role = WorkspaceRole.Admin,
-            });
-            await db.SaveChangesAsync();
-        }
+        var workspace = await SeedWorkspaceWithMembersAsync(
+            scenario,
+            owner,
+            (owner, WorkspaceRole.Member),
+            (admin, WorkspaceRole.Admin));
 
         using var client = await scenario.AsUserAsync(admin);
         var response = await client.DeleteAsync($"/api/users/me/workspaces/{workspace.Id}");
@@ -358,6 +353,46 @@ public sealed class ProfileApiTests : IClassFixture<DatabaseFixture>
     }
 
     // ---- helpers -----------------------------------------------------------
+
+    /// <summary>
+    /// Writes the workspace and its memberships straight to the database, so a suite can control the
+    /// owner's role.
+    /// <para>
+    /// <see cref="TestScenario.CreateWorkspaceAsync"/> always makes the owner an Admin — correct for
+    /// the production flow, but it makes the "last Admin" guard unreachable, because there is always
+    /// a second Admin. The guard's real shape is a workspace whose owner is NOT an Admin, which only
+    /// a direct insert can reproduce.
+    /// </para>
+    /// </summary>
+    private static async Task<Workspace> SeedWorkspaceWithMembersAsync(
+        TestScenario scenario,
+        ApplicationUser owner,
+        params (ApplicationUser User, WorkspaceRole Role)[] members)
+    {
+        await using var db = scenario.NewDbContext();
+
+        var workspace = new Workspace
+        {
+            Id = Guid.NewGuid(),
+            Name = "Workspace kiểm thử",
+            OwnerId = owner.Id,
+        };
+
+        db.Workspaces.Add(workspace);
+
+        foreach (var (user, role) in members)
+        {
+            db.WorkspaceMembers.Add(new WorkspaceMember
+            {
+                WorkspaceId = workspace.Id,
+                UserId = user.Id,
+                Role = role,
+            });
+        }
+
+        await db.SaveChangesAsync();
+        return workspace;
+    }
 
     private sealed record ProfileDto
     {

@@ -222,65 +222,46 @@ public sealed class WorkspaceMemberApiTests : IClassFixture<DatabaseFixture>
     {
         await using var scenario = await _database.CreateScenarioAsync();
 
-        // The owner is deliberately not an Admin, so exactly one Admin exists in this workspace and
-        // the caller can never be the last one themselves (self-changes are refused earlier).
+        // Seeded directly, with the OWNER AS A PLAIN MEMBER.
+        //
+        // That is not laziness: CreateWorkspaceAsync always makes the owner an Admin, and the
+        // production flow (every OAuth signup creates a workspace with the creator as owner+Admin)
+        // therefore always leaves a second Admin behind — so the "last Admin" guard would be
+        // unreachable. Its reachable case is a workspace created directly in the database (an
+        // earlier phase, or an admin-side import), which is exactly what the guard exists for.
         var owner = await scenario.CreateUserAsync("Chủ sở hữu");
         var onlyAdmin = await scenario.CreateUserAsync("Admin duy nhất");
-        var newcomer = await scenario.CreateUserAsync("Admin mới");
-        var workspace = await scenario.CreateWorkspaceAsync(owner, "Workspace của chủ");
-
-        await using (var db = scenario.NewDbContext())
-        {
-            db.WorkspaceMembers.AddRange(
-                new WorkspaceMember
-                {
-                    WorkspaceId = workspace.Id,
-                    UserId = onlyAdmin.Id,
-                    Role = WorkspaceRole.Admin,
-                },
-                new WorkspaceMember
-                {
-                    WorkspaceId = workspace.Id,
-                    UserId = newcomer.Id,
-                    Role = WorkspaceRole.Member,
-                });
-            await db.SaveChangesAsync();
-        }
-
-        // A second Admin makes the demotion of the first one legal.
         var secondAdmin = await scenario.CreateUserAsync("Admin thứ hai");
-        await using (var db = scenario.NewDbContext())
-        {
-            db.WorkspaceMembers.Add(new WorkspaceMember
-            {
-                WorkspaceId = workspace.Id,
-                UserId = secondAdmin.Id,
-                Role = WorkspaceRole.Admin,
-            });
-            await db.SaveChangesAsync();
-        }
+        var newcomer = await scenario.CreateUserAsync("Người mới");
+        var workspace = await SeedWorkspaceWithMembersAsync(
+            scenario,
+            owner,
+            (owner, WorkspaceRole.Member),
+            (onlyAdmin, WorkspaceRole.Admin),
+            (secondAdmin, WorkspaceRole.Admin),
+            (newcomer, WorkspaceRole.Member));
 
         using var client = await scenario.AsUserAsync(secondAdmin);
 
+        // Demoting an Admin while another one remains is legal.
         Assert.Equal(
             HttpStatusCode.NoContent,
             (await client.PutJsonAsync(
                 $"/api/workspaces/{workspace.Id}/members/{onlyAdmin.Id}/role",
                 new { role = "Member" })).StatusCode);
 
-        // `secondAdmin` is now the last Admin: promoting then demoting is fine, but demoting the
-        // caller themselves is refused by the self-change guard, so there is no path that can leave
-        // the workspace without an Admin through this endpoint.
+        // `secondAdmin` is now the last Admin. The workspace still has one, and no sequence of calls
+        // on this endpoint can empty the role: demoting yourself is refused (400, self-change) and a
+        // non-Admin cannot promote anyone (403).
         await using (var db = scenario.NewDbContext())
         {
             var remaining = await db.WorkspaceMembers
                 .Where(wm => wm.WorkspaceId == workspace.Id && wm.Role == WorkspaceRole.Admin)
                 .ToListAsync();
-            Assert.Single(remaining);
-            Assert.Equal(secondAdmin.Id, remaining[0].UserId);
+            var single = Assert.Single(remaining);
+            Assert.Equal(secondAdmin.Id, single.UserId);
         }
 
-        // A non-Admin member cannot promote themselves out of the problem either (403, not 400).
         using var memberClient = await scenario.AsUserAsync(newcomer);
         Assert.Equal(
             HttpStatusCode.Forbidden,
@@ -467,73 +448,53 @@ public sealed class WorkspaceMemberApiTests : IClassFixture<DatabaseFixture>
     {
         await using var scenario = await _database.CreateScenarioAsync();
 
-        // The owner is deliberately not an Admin, so exactly one Admin exists in this workspace.
+        // Seeded directly with the OWNER AS A PLAIN MEMBER: CreateWorkspaceAsync always makes the
+        // owner an Admin, which would keep a second Admin alive and make the last-Admin guard
+        // unreachable (see the note on UpdateRole_OnTheLastAdmin_IsRejected).
         var owner = await scenario.CreateUserAsync("Chủ sở hữu");
         var lastAdmin = await scenario.CreateUserAsync("Admin duy nhất");
-        var member = await scenario.CreateUserAsync("Thành viên");
-        var workspace = await scenario.CreateWorkspaceAsync(owner, "Workspace của chủ");
-
-        await using (var db = scenario.NewDbContext())
-        {
-            db.WorkspaceMembers.AddRange(
-                new WorkspaceMember
-                {
-                    WorkspaceId = workspace.Id,
-                    UserId = lastAdmin.Id,
-                    Role = WorkspaceRole.Admin,
-                },
-                new WorkspaceMember
-                {
-                    WorkspaceId = workspace.Id,
-                    UserId = member.Id,
-                    Role = WorkspaceRole.Member,
-                });
-            await db.SaveChangesAsync();
-        }
-
-        // Two Admins: removing one of them is allowed, because the caller still remains.
         var secondAdmin = await scenario.CreateUserAsync("Admin thứ hai");
+        var workspace = await SeedWorkspaceWithMembersAsync(
+            scenario,
+            owner,
+            (owner, WorkspaceRole.Member),
+            (lastAdmin, WorkspaceRole.Admin),
+            (secondAdmin, WorkspaceRole.Admin));
+
+        using var client = await scenario.AsUserAsync(secondAdmin);
+
+        // Two Admins: removing one is allowed because the caller still remains.
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            (await client.DeleteAsync($"/api/workspaces/{workspace.Id}/members/{lastAdmin.Id}")).StatusCode);
+
+        // `secondAdmin` is now the last Admin. Keep a plain member in the workspace as a second
+        // caller: they cannot remove the last Admin (403 on the role, not 400 on the guard) …
+        var plainMember = await scenario.CreateUserAsync("Thành viên");
         await using (var db = scenario.NewDbContext())
         {
             db.WorkspaceMembers.Add(new WorkspaceMember
             {
                 WorkspaceId = workspace.Id,
-                UserId = secondAdmin.Id,
-                Role = WorkspaceRole.Admin,
+                UserId = plainMember.Id,
+                Role = WorkspaceRole.Member,
             });
             await db.SaveChangesAsync();
         }
 
-        using var client = await scenario.AsUserAsync(secondAdmin);
+        using var memberClient = await scenario.AsUserAsync(plainMember);
         Assert.Equal(
-            HttpStatusCode.NoContent,
-            (await client.DeleteAsync($"/api/workspaces/{workspace.Id}/members/{lastAdmin.Id}")).StatusCode);
+            HttpStatusCode.Forbidden,
+            (await memberClient.DeleteAsync($"/api/workspaces/{workspace.Id}/members/{secondAdmin.Id}")).StatusCode);
 
-        // `secondAdmin` is now the last Admin. Even an Admin acting on themselves through this route
-        // is refused by the self-removal guard, so assert through the remaining Admin path: promote
-        // the plain member, then try to remove them while they are the only other Admin.
-        await using (var db = scenario.NewDbContext())
-        {
-            var promoted = await db.WorkspaceMembers
-                .SingleAsync(wm => wm.WorkspaceId == workspace.Id && wm.UserId == member.Id);
-            promoted.Role = WorkspaceRole.Admin;
-            await db.SaveChangesAsync();
-        }
-
-        // Removing the second Admin leaves exactly one — allowed.
-        Assert.Equal(
-            HttpStatusCode.NoContent,
-            (await client.DeleteAsync($"/api/workspaces/{workspace.Id}/members/{member.Id}")).StatusCode);
-
-        // Now `secondAdmin` is the only Admin left; a plain member cannot remove them at all (403),
-        // and the last-Admin guard is what stops an Admin from doing it themselves.
+        // … and the workspace still has exactly one Admin.
         await using (var db = scenario.NewDbContext())
         {
             var remaining = await db.WorkspaceMembers
                 .Where(wm => wm.WorkspaceId == workspace.Id && wm.Role == WorkspaceRole.Admin)
                 .ToListAsync();
-            Assert.Single(remaining);
-            Assert.Equal(secondAdmin.Id, remaining[0].UserId);
+            var single = Assert.Single(remaining);
+            Assert.Equal(secondAdmin.Id, single.UserId);
         }
     }
 
@@ -580,6 +541,46 @@ public sealed class WorkspaceMemberApiTests : IClassFixture<DatabaseFixture>
             admin, "Workspace Thành Viên", (member, WorkspaceRole.Member));
 
         return (admin, workspace, member);
+    }
+
+    /// <summary>
+    /// Writes the workspace and its memberships straight to the database, so a suite can control the
+    /// owner's role.
+    /// <para>
+    /// <see cref="TestScenario.CreateWorkspaceAsync"/> always makes the owner an Admin — correct for
+    /// the production flow, but it makes the "last Admin" guard unreachable, because there is always
+    /// a second Admin. The guard's real shape is a workspace whose owner is NOT an Admin (created by
+    /// an earlier phase, or imported), which only a direct insert can reproduce.
+    /// </para>
+    /// </summary>
+    private static async Task<Workspace> SeedWorkspaceWithMembersAsync(
+        TestScenario scenario,
+        ApplicationUser owner,
+        params (ApplicationUser User, WorkspaceRole Role)[] members)
+    {
+        await using var db = scenario.NewDbContext();
+
+        var workspace = new Workspace
+        {
+            Id = Guid.NewGuid(),
+            Name = "Workspace kiểm thử",
+            OwnerId = owner.Id,
+        };
+
+        db.Workspaces.Add(workspace);
+
+        foreach (var (user, role) in members)
+        {
+            db.WorkspaceMembers.Add(new WorkspaceMember
+            {
+                WorkspaceId = workspace.Id,
+                UserId = user.Id,
+                Role = role,
+            });
+        }
+
+        await db.SaveChangesAsync();
+        return workspace;
     }
 
     private sealed record MemberDto

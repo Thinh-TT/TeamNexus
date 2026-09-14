@@ -13,6 +13,12 @@
 > `dotnet build TeamNexus.sln -m:1 -nr:false` = **0 warning / 0 error** ·
 > `dotnet test` = **total 371 / Passed 134 / Skipped 237 / Failed 0** · test thuần **134/134 PASS** ·
 > `dotnet ef migrations list` = **9** · `has-pending-model-changes` = **không có**.
+>
+> **CI thật (GitHub Actions, PostgreSQL 18 — các lần chạy của nhánh):**
+> run #1 = **`Failed: 7 / Passed: 364 / Skipped: 0 / Total: 371`** → cả 7 là **test sai**, đã sửa (§3.7).
+> run #2 = **`Failed: 1 / Passed: 370 / Skipped: 0 / Total: 371`** → `403` CSRF do token antiforgery gắn với
+> danh tính, đã sửa (§3.8).
+> Sau khi sửa: **kỳ vọng `Failed: 0 / Passed: 371 / Skipped: 0`** — **chưa chạy lại trên CI** tại thời điểm ghi tài liệu.
 
 > **Nguồn:** `Project-Documents/03-roadmap.md` → *Giai đoạn 11: Quản lý Member & Profile*.
 > **Tiền đề:** Giai đoạn 7 (AI Agent Executor) · 8 (Test/CI/Deploy) · 9 (Đơn giản hoá Role) · 10 (Nâng cao Task & Workspace UX) — **đã merge**.
@@ -210,6 +216,58 @@ Accept: đúng email ⇒ tạo membership **đúng `invited_role`** + Accepted +
 **token thô không xuất hiện** trong `activity_logs.payload`, `email_messages.body_preview`, hay response list.
 
 > ⚠️ **CHƯA CHẠY ĐƯỢC** trên máy không có PostgreSQL (xem §1.2). Đã chạy được: `dotnet build` **0/0**.
+
+### 3.7 🐞 **7 lỗi CI thật đã bắt & sửa** (run đầu tiên trên GitHub Actions: 364 pass / 7 fail)
+
+Không có lỗi nào ở **code sản phẩm** — cả 7 đều là **test sai**. Nhưng chúng đáng ghi lại vì
+4 trong 7 là **bẫy mà mọi người viết test tiếp theo trong repo này sẽ gặp lại**.
+
+| # | Test đỏ | Triệu chứng | Nguyên nhân thật | Cách sửa |
+|---|---|---|---|---|
+| **C1** | `InvitationApiTests.Invite_WithAnExplicitRole_StoresItForTheAcceptStep` | `Assert.Equal("Manager", created.InvitedRole)` nhận `null` | Test mời **chính email của manager đã seed** (`manager@example.test`) ⇒ API trả **400** `{ error }` (đã là thành viên). `InvitationDto` **deserialize "thành công"** từ body lỗi đó và mọi field thành `null` ⇒ assertion báo "null" thay vì "sai status" | Dùng email chưa tồn tại (`explicit.role@example.test`), **assert `201` trước** rồi mới assert field |
+| **C2** | `NotificationTriggerApiTests.ReassigningATask_NotifiesOnlyTheNewAssignee` | `PUT /api/tasks/{id}` ⇒ **404** | **Sai route.** `TasksEndpoints` map `PUT /api/boards/{boardId}/tasks/{taskId}` — **không** có `/api/tasks/{id}`. (`/api/tasks/{taskId}/comments` thì có, nên rất dễ nhầm) | Sửa URL sang `/api/boards/{boardId}/tasks/{taskId}` |
+| **C3** | `NotificationTriggerApiTests.EditingATaskWithoutChangingTheAssignee_NotifiesNobody` | như C2 | như C2 | như C2 |
+| **C4** | `NotificationTriggerApiTests.TheAlertsArePrivateAndReadableOnlyByTheirRecipient` | Manager thấy `UnreadCount = 1` (đúng ra 0) | **`TestScenario` dùng CHUNG một `CookieContainer` cho cả scenario** (`SessionCookieHandler`). `AsUserAsync(member)` **ghi đè** cookie access-token ⇒ `managerClient` cũ (chỉ là wrapper quanh jar đó) từ lúc đó **xác thực CHÍNH LÀ member**. Test vô tình kiểm member **hai lần** — và "Manager thấy 1" là vì **member thấy 1**. Đây là cái bẫy ẩn nhất trong cả repo: client không giữ danh tính, **jar mới là danh tính** | **Đăng nhập lại** (`AsUserAsync(manager)`) sau khi đã `AsUserAsync(member)` và dùng client mới cho mọi assertion phía Manager; thêm comment giải thích. Đồng thời thêm assertion **dương** (`Assert.Single` alert + `404` khi Manager mark-read + `200` khi chính chủ mark-read) |
+| **C5** | `WorkspaceMemberApiTests.UpdateRole_OnTheLastAdmin_IsRejected` | `Assert.Single` thấy **2** Admin | `TestScenario.CreateWorkspaceAsync` **luôn** đặt owner làm `Admin`. Vì vậy workspace tạo qua harness **luôn có ≥ 2 Admin** ⇒ guard "Admin cuối cùng" **không thể chạm tới** bằng `CreateWorkspaceAsync`. (Test cũng tự mâu thuẫn: seed owner là Member rồi mới dùng `CreateWorkspaceAsync` — owner bị đưa về Admin) | Thêm helper `SeedWorkspaceWithMembersAsync` ghi **trực tiếp** workspace + membership, cho phép **owner là Member**. Ghi rõ trong comment vì sao guard chỉ chạm tới được ở dạng dữ liệu đó |
+| **C6** | `WorkspaceMemberApiTests.RemoveMember_OnTheLastAdmin_IsRejected` | như C5 | như C5 | như C5 + bỏ bước promote trung gian, thay bằng caller thứ hai là Member ⇒ **403** |
+| **C7** | `ProfileApiTests.Leave_AsTheLastAdmin_IsRejected` | `400` mong đợi, nhận **`204`** | như C5: owner bị `CreateWorkspaceAsync` đặt làm Admin ⇒ luôn còn 1 Admin khác ⇒ rời được | như C5 |
+
+> **Kết luận khảo sát (giá trị thật của lần chạy CI này):** guard `Admin cuối cùng` **không phải code chết**, nhưng nó **không chạm tới được qua luồng production hiện tại** (mọi workspace đều có owner = Admin, và cả `UpdateRole`/`Remove`/`Leave` đều **từ chối chạm owner** ⇒ luôn còn ≥ 1 Admin). Nó vẫn giữ nguyên vì là **lưới an toàn** cho dữ liệu tạo trực tiếp (phase cũ, import) — và các test C5–C7 nay khoá đúng hành vi đó lại.
+>
+> **Bài học lặp lại (đã ghi ở Phase 10 §2.7, cần nhấn lần nữa):**
+> **(1)** `TestScenario` giữ **một cookie jar cho cả scenario** ⇒ sau `AsUserAsync(B)`, mọi client tạo trước đó đã là **B**. Muốn 2 danh tính cùng lúc ⇒ **đăng nhập lại** ngay trước khi dùng.
+> **(2)** Không có route `/api/tasks/{id}` cho PUT/DELETE task — chỉ có `/api/boards/{boardId}/tasks/{taskId}`.
+> **(3)** `ReadFromJsonAsync<T>()` **không ném** khi body là `{ error }` ⇒ phải **assert status trước**, nếu không test sẽ đỏ ở chỗ khó hiểu.
+> **(4)** `CreateWorkspaceAsync` đặt owner = Admin ⇒ mọi test "owner KHÔNG phải Admin" phải seed trực tiếp.
+
+### 3.8 🐞 **Lỗi CI #8 — antiforgery token gắn với danh tính (đã sửa)**
+
+Run CI thứ hai: **370 pass / 1 fail**. Test đỏ duy nhất:
+
+`NotificationTriggerApiTests.TheAlertsArePrivateAndReadableOnlyByTheirRecipient`
+→ `Assert.Equal(NotFound, foreign.StatusCode)` nhận **`Forbidden`**.
+
+**Đây không phải lỗi phân quyền của `NotificationService`** — nó là **CSRF 403**, và nguyên nhân nằm ở harness:
+
+> `EnsureAntiforgeryAsync` đặt `_xsrfToken`, và `TestHttpClient` **tự gắn token đó lên MỌI request** của **mọi** client
+> trong scenario. Nhưng ASP.NET Core **gắn antiforgery token với claims identity đã yêu cầu nó**: ở test này ta
+> đăng nhập **manager → member → manager**. Token đang cache là token **của member**, nên POST của manager bị
+> `AntiforgeryValidationEndpointFilter` trả **403** — trước cả khi chạm tới tầng service đang muốn kiểm (404).
+
+**Sửa:** dùng helper **đã có sẵn** trong harness — `TestScenario.PostWithFreshAntiforgeryAsync(client, url, content?)`
+(vốn đã tồn tại cho `RefreshAsync`/`LogoutAsync` và đã ghi đúng lý do trong doc comment của nó). Mở rộng nó nhận
+`HttpContent?` (mặc định `null`, không phá caller cũ) và dùng ở test này cho cả hai POST.
+
+**Hai chỗ đã sửa để tránh cùng cái bẫy:**
+1. `TheAlertsArePrivateAndReadableOnlyByTheirRecipient` — cả POST của manager (mong `404`) và của member (mong `200`).
+2. `InvitationApiTests.Accept_NeverWritesTheRawTokenIntoTheActivityLogOrTheEmailAudit` — **may mắn** đang xanh, nhưng
+   chỉ vì nó không assert status: POST của nó luôn bị **403** mà test vẫn đỏ-giả-xanh. Nay dùng helper + assert **`200`**,
+   nên phép kiểm "token không rò rỉ" mới thật sự dựa trên một lượt accept **thành công**.
+
+> **Rút ra thành quy tắc cho harness:** bất kỳ suite nào đăng nhập **hai người trở lên trong cùng một test** rồi gửi
+> **POST/PUT/DELETE** phải dùng `PostWithFreshAntiforgeryAsync` (hoặc `AsUserAsync` lại) — **không** dùng
+> `TestHttpClient.PostJsonAsync`, vì token cache thuộc về người đăng nhập **đầu tiên**. Kiểu lỗi này trả **403**,
+> rất dễ bị đọc nhầm thành "service chặn sai".
 
 ---
 
