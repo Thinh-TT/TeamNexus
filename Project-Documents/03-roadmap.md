@@ -180,12 +180,12 @@ Hoàn thiện UI cho các field task đã có schema nhưng chưa có giao diệ
 
 ## Giai đoạn 11: Quản lý Member & Profile (✅ HOÀN THÀNH — cả Backend & Frontend)
 
-> Schema mới: bảng `workspace_invitations` và `email_messages` (Migration `Phase11MemberProfile`). Dịch vụ email tích hợp qua FluentEmail hỗ trợ Postmark (API key) kèm MailKit SMTP / memory fallback cho môi trường test/dev.
+> Schema mới: bảng `workspace_invitations` và `email_messages` (Migration `Phase11MemberProfile`). Dịch vụ email tích hợp qua Resend API kết nối với tên miền riêng `teamnexus.cloud` (SPF/DKIM/DMARC qua Cloudflare DNS) kèm `NullEmailSender` fallback cho môi trường test/dev/CI.
 
 Xây luồng mời thành viên vào workspace qua email, quản lý danh sách member, profile cá nhân và notification center.
 
 **Yêu cầu hoàn thiện:**
-- [x] **Mời member qua email**: Manager/Admin nhập email → hệ thống lưu token SHA-256 an toàn và gửi link mời qua Postmark / MailKit → người nhận click link, chọn role (Member mặc định), tham gia workspace
+- [x] **Mời member qua email**: Manager/Admin nhập email → hệ thống lưu token SHA-256 an toàn và gửi link mời qua Resend (`noreply@teamnexus.cloud`) → người nhận click link, chọn role (Member mặc định), tham gia workspace
 - [x] **Gửi email nhanh**: Manager/Admin soạn tiêu đề + nội dung ngắn trong app → gửi đến inbox thật của một hoặc nhiều member (dùng cho thông báo họp, việc cần gấp...) kèm ghi nhận vào `email_messages`
 - [x] **Quản lý member**: xem danh sách thành viên + role, hủy invitation đang chờ (Manager/Admin), đổi role member (chỉ Admin), kick member (chỉ Admin)
 - [x] **Profile cá nhân**: xem/sửa display_name, avatar URL (validate an toàn); xem danh sách workspace đang tham gia + role của mình; tự rời workspace (chặn chủ sở hữu)
@@ -193,7 +193,8 @@ Xây luồng mời thành viên vào workspace qua email, quản lý danh sách 
 
 > **Trạng thái: ✅ ĐÃ HOÀN THÀNH & VERIFY ĐẦY ĐỦ.**
 > - **Backend:** **371 tests** (0 failed; CI PostgreSQL 18 assert 371/371 pass). Migration thứ 9 `Phase11MemberProfile` áp dụng thành công.
-> - **Frontend:** **359/359 tests passed (60 test files)**; `npm run lint` đạt 0 warning / 0 error; `npx tsc -b` exit 0; `npm run build` thành công.
+> - **Frontend:** **360/360 tests passed (60 test files)**; `npm run lint` đạt 0 warning / 0 error; `npx tsc -b` exit 0; `npm run build` thành công.
+> - **Live Deployment:** Đã cấu hình và kết nối thành công tên miền chính thức `https://app.teamnexus.cloud` (Vercel) và `https://api.teamnexus.cloud` (Render).
 > - Chi tiết: `tasks/phase-11-member-profile-management.md` và `report/phase-11-member-profile-management-test-report.md`.
 
 ## Giai đoạn 12: Dashboard & Tìm kiếm

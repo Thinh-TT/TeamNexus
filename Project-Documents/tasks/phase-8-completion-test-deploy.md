@@ -825,28 +825,30 @@ ENTRYPOINT ["dotnet", "TeamNexus.Api.dll"]
 
 | Provider | Callback path | URI production cần khai báo |
 |---|---|---|
-| Google | `/api/auth/callback/google` | `https://<api>.onrender.com/api/auth/callback/google` |
-| GitHub | `/api/auth/callback/github` | `https://<api>.onrender.com/api/auth/callback/github` |
+| Google | `/api/auth/callback/google` hoặc `/signin-google` | `https://api.teamnexus.cloud/signin-google`<br/>`https://api.teamnexus.cloud/api/auth/callback/google` |
+| GitHub | `/api/auth/callback/github` | `https://api.teamnexus.cloud/api/auth/callback/github`<br/>*(⚠️ Thứ tự: `/callback/github`, không phải `/github/callback`)* |
 
 **(c) Từng bước — Google Cloud Console:**
 1. [ ] [console.cloud.google.com](https://console.cloud.google.com) → chọn project đang dùng → **APIs & Services → Credentials**.
 2. [ ] Ở **OAuth 2.0 Client IDs**, bấm vào client **Web application** đang dùng → **Edit**.
-3. [ ] **Authorized redirect URIs → Add URI** → dán URI production ở bảng trên → **Save**.
+3. [ ] **Authorized JavaScript origins**: thêm `https://app.teamnexus.cloud` và `https://teamnexus.cloud`.
+4. [ ] **Authorized redirect URIs → Add URI** → thêm `https://api.teamnexus.cloud/signin-google` và `https://api.teamnexus.cloud/api/auth/callback/google` → **Save**.
    - ⚠️ **Giữ lại** URI localhost cũ, đừng xoá — nếu không, dev local sẽ hỏng.
-4. [ ] Nếu Google yêu cầu **Authorized JavaScript origins**: thêm `https://<fe>.vercel.app` (luồng của dự án là server-side redirect nên thường không bắt buộc, nhưng thêm cho chắc).
 5. [ ] Copy **Client ID**/**Client secret** → nhập vào env Render (§5.6).
 6. [ ] Nếu **OAuth consent screen** còn ở chế độ **Testing**: thêm email của bạn vào **Test users**, nếu không sẽ bị chặn khi đăng nhập bằng tài khoản khác.
 
 **(c) Từng bước — GitHub OAuth App:**
 1. [ ] GitHub → **Settings → Developer settings → OAuth Apps** → chọn app đang dùng → **Edit** (hoặc **New OAuth App**).
-2. [ ] **Authorization callback URL** → thêm/đổi thành `https://<api>.onrender.com/api/auth/callback/github`.
+2. [ ] **Homepage URL** → `https://app.teamnexus.cloud`.
+3. [ ] **Authorization callback URL** → thêm/đổi thành `https://api.teamnexus.cloud/api/auth/callback/github`.
    - ⚠️ GitHub chỉ cho **một** callback URL mỗi app. Muốn giữ cả localhost **và** production ⇒ tạo **app thứ hai** (một `TeamNexus Local`, một `TeamNexus Prod`) rồi dùng cặp Client ID/Secret khác nhau theo môi trường. Đây là cách đúng, đừng cố nhồi 2 URL vào 1 app.
-3. [ ] Copy **Client ID** + tạo/copy **Client secret** → nhập vào env Render (§5.6).
-4. [ ] Nếu app cũ đang là **OAuth App** thì không cần scope thêm; quyền `user:email` đã được code yêu cầu sẵn.
+4. [ ] Copy **Client ID** + tạo/copy **Client secret** → nhập vào env Render (§5.6).
+5. [ ] Nếu app cũ đang là **OAuth App** thì không cần scope thêm; quyền `user:email` đã được code yêu cầu sẵn.
 
 **(e) Kiểm tra thành công:**
-- [x] Mở `https://teamnexus-api.onrender.com/api/auth/login/google` ⇒ được đưa sang màn hình chọn tài khoản Google (không còn lỗi `invalid_client` hay `redirect_uri_mismatch`).
-- [x] Sau khi chọn tài khoản ⇒ được redirect về `https://team-nexus-taupe.vercel.app` (đúng `Frontend__BaseUrl`) với cookie được set.
+- [x] Mở `https://api.teamnexus.cloud/api/auth/login/google` ⇒ được đưa sang màn hình chọn tài khoản Google (không còn lỗi `invalid_client` hay `redirect_uri_mismatch`).
+- [x] Mở `https://api.teamnexus.cloud/api/auth/login/github` ⇒ chuyển hướng đúng đến trang ủy quyền GitHub.
+- [x] Sau khi chọn tài khoản ⇒ được redirect về `https://app.teamnexus.cloud` (đúng `Frontend__BaseUrl`) với cookie được set.
 - [x] Đăng nhập thành công, session được duy trì với cookie cross-site `SameSite=None; Secure`.
 
 **(f) Pitfall riêng:**
@@ -869,9 +871,12 @@ ENTRYPOINT ["dotnet", "TeamNexus.Api.dll"]
 | `ASPNETCORE_URLS` | `http://0.0.0.0:$PORT` | ✔ | ⚠️ Render gán port động — thiếu ⇒ 502 |
 | `ConnectionStrings__DefaultConnection` | `Host=<neon-host>;Port=5432;Database=neondb;Username=...;Password=...;SslMode=Require` | ✔ | Dùng **pooled** cho runtime, **direct** cho migrate |
 | `Jwt__SigningKey` | chuỗi ngẫu nhiên **≥ 32 byte** | ✔ | Key mới, **khác** key local; app fail-fast nếu thiếu/ngắn |
-| `Frontend__BaseUrl` | `https://<fe>.vercel.app` | ✔ | Nơi redirect sau login/logout |
-| `Cors__AllowedOrigins__0` | `https://<fe>.vercel.app` | ✔ | Thêm origin production; **giữ** localhost chỉ khi còn dev chung cấu hình |
+| `Frontend__BaseUrl` | `https://app.teamnexus.cloud` | ✔ | Nơi redirect sau login/logout |
+| `Cors__AllowedOrigins__0` | `https://app.teamnexus.cloud` | ✔ | Origin frontend production |
+| `Cors__AllowedOrigins__1` | `https://teamnexus.cloud` | ➖ | Apex domain (nếu dùng song song) |
 | `Auth__CookieSameSite` | `None` | ✔ | §3.1 — thiếu ⇒ không đăng nhập được cross-site |
+| `Email__ApiKey` | `re_...` | ✔ | Resend API Key để gửi mail thật |
+| `Email__FromAddress` | `TeamNexus <noreply@teamnexus.cloud>` | ✔ | Đã verify qua Cloudflare DNS |
 | `Authentication__Google__ClientId` | từ Google Console | ✔* | *nếu dùng Google |
 | `Authentication__Google__ClientSecret` | từ Google Console | ✔* | |
 | `Authentication__GitHub__ClientId` | từ GitHub OAuth App | ✔* | *nếu dùng GitHub |
@@ -888,7 +893,7 @@ ENTRYPOINT ["dotnet", "TeamNexus.Api.dll"]
 
 | Env | Giá trị | Bắt buộc | Ghi chú |
 |---|---|---|---|
-| `VITE_API_BASE_URL` | `https://<api>.onrender.com/api` | ✔ | Sửa xong **phải Redeploy**; dùng bởi cả `httpClient` và `resolveHubUrl` (§3.2) |
+| `VITE_API_BASE_URL` | `https://api.teamnexus.cloud/api` | ✔ | Sửa xong **phải Redeploy (Clear Build Cache)**; dùng bởi `httpClient` và `resolveHubUrl` |
 | `VITE_DEV_API_TARGET` | *(không đặt ở production)* | ➖ | Chỉ dùng cho Vite dev proxy ở local |
 
 **C. Local (User Secrets, không commit)**
@@ -896,6 +901,8 @@ ENTRYPOINT ["dotnet", "TeamNexus.Api.dll"]
 ```powershell
 dotnet user-secrets set --project src/TeamNexus.Api "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=TeamNexus;Username=postgres;Password=..."
 dotnet user-secrets set --project src/TeamNexus.Api "Jwt:SigningKey" "<key ≥ 32 byte>"
+dotnet user-secrets set --project src/TeamNexus.Api "Email:ApiKey" "re_..."
+dotnet user-secrets set --project src/TeamNexus.Api "Email:FromAddress" "TeamNexus <noreply@teamnexus.cloud>"
 dotnet user-secrets set --project src/TeamNexus.Api "Authentication:GitHub:ClientId" "<...>"
 dotnet user-secrets set --project src/TeamNexus.Api "Authentication:GitHub:ClientSecret" "<...>"
 dotnet user-secrets set --project src/TeamNexus.Api "Authentication:Google:ClientId" "<...>"
