@@ -62,10 +62,10 @@
 - **Lưu ý:** Khi triển khai, dùng package `signalr_netcore` để kết nối SignalR từ Flutter; áp dụng lại kinh nghiệm cấu hình network (LAN config, cleartext HTTP cho môi trường dev) đã từng xử lý ở UniShare nếu cần test trên thiết bị thật.
 
 ### 2.9. Email Transactional (Giai đoạn 11)
-- **Công nghệ:** [Resend](https://resend.com) API — free 3.000 email/tháng, không cần thẻ tín dụng, SDK .NET chính thức.
+- **Công nghệ:** [Resend](https://resend.com) API — free 3.000 email/tháng, không cần thẻ tín dụng, gọi qua HTTP REST Client nhẹ nhàng.
 - **Dùng cho:** email mời member vào workspace (link token), gửi email nhanh từ Manager đến member(s).
-- **Không dùng:** SendGrid (yêu cầu xác minh domain phức tạp hơn), SMTP tự cấu hình (không cần thiết ở quy mô này).
-- **Lưu ý:** API key lưu trong User Secrets (local) và environment variable (production Render); không commit vào repo. Domain gửi email có thể dùng subdomain miễn phí của Resend cho giai đoạn đầu.
+- **Domain & Xác thực:** Đã cấu hình xác thực tên miền chính thức `teamnexus.cloud` qua Cloudflare DNS (SPF, DKIM, DMARC), gửi mail đại diện dưới danh nghĩa `TeamNexus <noreply@teamnexus.cloud>` tới bất kỳ địa chỉ email nào (không bị giới hạn tài khoản dev).
+- **Lưu ý:** API key lưu trong User Secrets (local) và environment variable `Email__ApiKey` (production Render); không commit vào repo.
 
 ### 2.8. AI Agent Executor (Phase 7)
 - **Gán task cho Agent:** thêm pseudo-member `member_type = 'ai_agent'` trong `workspace_members` — gán qua đúng dropdown/kéo-thả assignee hiện có, không xây UI riêng.
@@ -86,14 +86,18 @@
 - **Real-time:** broadcast thay đổi trạng thái `agent_runs` qua `BoardHub` (SignalR) đã có, để trưởng nhóm thấy card đổi trạng thái ngay khi Agent bắt đầu/dừng/hỏi lại.
 
 
-## 3. Database & Hosting (free-tier)
+## 3. Database, Hosting & Phân Bổ Tên Miền (teamnexus.cloud)
 
-| Thành phần | Lựa chọn | Lưu ý |
-|---|---|---|
-| Database | Neon hoặc Supabase (PostgreSQL serverless) | Free tier giới hạn storage/compute — theo dõi quota và chính sách sleep |
-| API backend | Railway hoặc Render (free tier) | Cold start ảnh hưởng đến kết nối SignalR |
-| Frontend | Vercel hoặc Netlify (free tier) | Không vấn đề đáng kể |
-| File export tạm thời | Không lưu lâu dài, generate on-demand | Tránh phát sinh chi phí storage |
+Toàn bộ hệ thống production được quản lý định danh và bảo mật tập trung qua **Cloudflare DNS & SSL**:
+
+| Thành phần | Địa chỉ Production | Dịch vụ triển khai | Lưu ý kỹ thuật |
+|---|---|---|---|
+| **DNS & SSL** | `teamnexus.cloud` | Cloudflare (Free) | Quản lý DNS, SSL/TLS Full (Strict), bảo vệ DDoS và cấu hình auto DNS cho Resend |
+| **Frontend Web** | `https://app.teamnexus.cloud` | Vercel (Free) | React 19 + Vite + TypeScript, trỏ CNAME `cname.vercel-dns.com`. Biến môi trường: `VITE_API_BASE_URL=https://api.teamnexus.cloud/api` |
+| **Backend API** | `https://api.teamnexus.cloud` | Render Web Service (Free) | Chạy Docker container (`Dockerfile`, port 10000). Cấu hình `Auth__CookieSameSite=None`, `Cors__AllowedOrigins__0=https://app.teamnexus.cloud` |
+| **Database** | Neon Cloud | Neon PostgreSQL Serverless | Connection string SSL Mode `VerifyFull` / `Require`, tự động pooling |
+| **Email Service**| `noreply@teamnexus.cloud` | Resend + Cloudflare DNS | Đã cấu hình DKIM/SPF, gửi trực tiếp vào Inbox thành viên |
+| **File export** | In-memory stream | Backend (QuestPDF / ClosedXML) | Không lưu file tĩnh lâu dài trên server để tối ưu dung lượng |
 
 ## 4. CI/CD & Testing
 

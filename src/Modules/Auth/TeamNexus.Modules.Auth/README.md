@@ -33,9 +33,18 @@ dotnet user-secrets set --project src/TeamNexus.Api "Jwt:SigningKey" "<≥32 byt
 ```
 
 Callback URL cần đăng ký ở provider:
-- GitHub OAuth App → `http://localhost:5000/api/auth/callback/github`
-- Google Cloud Console (OAuth client, Web application) → `http://localhost:5000/api/auth/callback/google`
-  (+ Google Auth Platform: Audience `External`, Publishing status `Testing`, thêm test user)
+- **Môi trường Local (Dev):**
+  - GitHub OAuth App → `http://localhost:5000/api/auth/callback/github`
+  - Google Cloud Console → `http://localhost:5000/api/auth/callback/google`
+    (+ Google Auth Platform: Audience `External`, Publishing status `Testing`, thêm test user)
+- **Môi trường Production (`teamnexus.cloud`):**
+  - **GitHub OAuth App:**
+    - Homepage URL: `https://app.teamnexus.cloud`
+    - Authorization callback URL: `https://api.teamnexus.cloud/api/auth/callback/github`
+      *(Lưu ý thứ tự: `/callback/github`, không phải `/github/callback`)*
+  - **Google Cloud Console (Web application):**
+    - Authorized JavaScript origins: `https://app.teamnexus.cloud`, `https://teamnexus.cloud`
+    - Authorized redirect URIs: `https://api.teamnexus.cloud/signin-google` và `https://api.teamnexus.cloud/api/auth/callback/google`
 
 ## Test nhanh (dev)
 

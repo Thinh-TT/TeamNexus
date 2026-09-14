@@ -22,3 +22,10 @@ npm run lint       # oxlint
 ```
 
 Xem `.env.example` để đổi địa chỉ backend (VITE_DEV_API_TARGET) / base URL (VITE_API_BASE_URL).
+
+## Triển khai Production (Vercel)
+
+- **Domain chính thức:** `https://app.teamnexus.cloud`
+- **Cấu hình biến môi trường trên Vercel:**
+  - `VITE_API_BASE_URL`: `https://api.teamnexus.cloud/api`
+- **Lưu ý:** Biến môi trường Vite được nhúng tại **Build time**. Nếu thay đổi giá trị trên Vercel, bắt buộc phải chọn **Redeploy (Clear Build Cache)**.
