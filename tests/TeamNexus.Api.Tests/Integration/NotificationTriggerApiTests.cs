@@ -326,11 +326,21 @@ public sealed class NotificationTriggerApiTests : IClassFixture<DatabaseFixture>
         Assert.Empty(theirs.Items);
 
         // Marking somebody else's alert read must look like it does not exist (Phase 5 invariant).
-        var foreign = await freshManagerClient.Http.PostAsync($"/api/notifications/{alertId}/read", null);
+        //
+        // Two traps meet on this line, and both cost a CI run:
+        //   1. `AsUserAsync(member)` overwrote the scenario's shared cookie jar, so the original
+        //      `managerClient` was authenticating as the MEMBER from that point on — hence
+        //      `freshManagerClient`, created just above.
+        //   2. The cached antiforgery token still belongs to the member session, and ASP.NET Core
+        //      binds that token to the identity that requested it — so this POST first failed with
+        //      **403** (CSRF), not the 404 under test. Hence the fresh-token helper.
+        var foreign = await scenario.PostWithFreshAntiforgeryAsync(
+            freshManagerClient, $"/api/notifications/{alertId}/read");
         Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
 
-        // The recipient themselves can read it.
-        var own = await memberClient.Http.PostAsync($"/api/notifications/{alertId}/read", null);
+        // The recipient themselves can read it — with a token minted for THEIR session.
+        var own = await scenario.PostWithFreshAntiforgeryAsync(
+            memberClient, $"/api/notifications/{alertId}/read");
         Assert.Equal(HttpStatusCode.OK, own.StatusCode);
     }
 

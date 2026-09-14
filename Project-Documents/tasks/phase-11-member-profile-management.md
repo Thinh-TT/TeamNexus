@@ -14,8 +14,10 @@
 > `dotnet test` = **total 371 / Passed 134 / Skipped 237 / Failed 0** · test thuần **134/134 PASS** ·
 > `dotnet ef migrations list` = **9** · `has-pending-model-changes` = **không có**.
 >
-> **CI thật (GitHub Actions, PostgreSQL 18 — lần chạy đầu của nhánh):**
-> run #1 = **`Failed: 7 / Passed: 364 / Skipped: 0 / Total: 371`** → cả 7 là **test sai**, đã sửa hết (§3.7).
+> **CI thật (GitHub Actions, PostgreSQL 18 — các lần chạy của nhánh):**
+> run #1 = **`Failed: 7 / Passed: 364 / Skipped: 0 / Total: 371`** → cả 7 là **test sai**, đã sửa (§3.7).
+> run #2 = **`Failed: 1 / Passed: 370 / Skipped: 0 / Total: 371`** → `403` CSRF do token antiforgery gắn với
+> danh tính, đã sửa (§3.8).
 > Sau khi sửa: **kỳ vọng `Failed: 0 / Passed: 371 / Skipped: 0`** — **chưa chạy lại trên CI** tại thời điểm ghi tài liệu.
 
 > **Nguồn:** `Project-Documents/03-roadmap.md` → *Giai đoạn 11: Quản lý Member & Profile*.
@@ -237,6 +239,35 @@ Không có lỗi nào ở **code sản phẩm** — cả 7 đều là **test sai
 > **(2)** Không có route `/api/tasks/{id}` cho PUT/DELETE task — chỉ có `/api/boards/{boardId}/tasks/{taskId}`.
 > **(3)** `ReadFromJsonAsync<T>()` **không ném** khi body là `{ error }` ⇒ phải **assert status trước**, nếu không test sẽ đỏ ở chỗ khó hiểu.
 > **(4)** `CreateWorkspaceAsync` đặt owner = Admin ⇒ mọi test "owner KHÔNG phải Admin" phải seed trực tiếp.
+
+### 3.8 🐞 **Lỗi CI #8 — antiforgery token gắn với danh tính (đã sửa)**
+
+Run CI thứ hai: **370 pass / 1 fail**. Test đỏ duy nhất:
+
+`NotificationTriggerApiTests.TheAlertsArePrivateAndReadableOnlyByTheirRecipient`
+→ `Assert.Equal(NotFound, foreign.StatusCode)` nhận **`Forbidden`**.
+
+**Đây không phải lỗi phân quyền của `NotificationService`** — nó là **CSRF 403**, và nguyên nhân nằm ở harness:
+
+> `EnsureAntiforgeryAsync` đặt `_xsrfToken`, và `TestHttpClient` **tự gắn token đó lên MỌI request** của **mọi** client
+> trong scenario. Nhưng ASP.NET Core **gắn antiforgery token với claims identity đã yêu cầu nó**: ở test này ta
+> đăng nhập **manager → member → manager**. Token đang cache là token **của member**, nên POST của manager bị
+> `AntiforgeryValidationEndpointFilter` trả **403** — trước cả khi chạm tới tầng service đang muốn kiểm (404).
+
+**Sửa:** dùng helper **đã có sẵn** trong harness — `TestScenario.PostWithFreshAntiforgeryAsync(client, url, content?)`
+(vốn đã tồn tại cho `RefreshAsync`/`LogoutAsync` và đã ghi đúng lý do trong doc comment của nó). Mở rộng nó nhận
+`HttpContent?` (mặc định `null`, không phá caller cũ) và dùng ở test này cho cả hai POST.
+
+**Hai chỗ đã sửa để tránh cùng cái bẫy:**
+1. `TheAlertsArePrivateAndReadableOnlyByTheirRecipient` — cả POST của manager (mong `404`) và của member (mong `200`).
+2. `InvitationApiTests.Accept_NeverWritesTheRawTokenIntoTheActivityLogOrTheEmailAudit` — **may mắn** đang xanh, nhưng
+   chỉ vì nó không assert status: POST của nó luôn bị **403** mà test vẫn đỏ-giả-xanh. Nay dùng helper + assert **`200`**,
+   nên phép kiểm "token không rò rỉ" mới thật sự dựa trên một lượt accept **thành công**.
+
+> **Rút ra thành quy tắc cho harness:** bất kỳ suite nào đăng nhập **hai người trở lên trong cùng một test** rồi gửi
+> **POST/PUT/DELETE** phải dùng `PostWithFreshAntiforgeryAsync` (hoặc `AsUserAsync` lại) — **không** dùng
+> `TestHttpClient.PostJsonAsync`, vì token cache thuộc về người đăng nhập **đầu tiên**. Kiểu lỗi này trả **403**,
+> rất dễ bị đọc nhầm thành "service chặn sai".
 
 ---
 

@@ -517,12 +517,21 @@ public sealed class TestScenario : IAsyncDisposable
     /// claims-based user — so a token minted for the previous identity is rejected with 403. This is
     /// exactly the "fetch a fresh token on a CSRF 403" retry <c>httpClient.ts</c> implements.
     /// </para>
+    /// <para>
+    /// That second reason is why any suite that signs in <b>two people in turn</b> (Phase 11's
+    /// notification tests: Manager creates a task, the assignee reads the alert, then the Manager
+    /// tries to touch it) must use this helper rather than <c>TestHttpClient.PostJsonAsync</c> — the
+    /// cached token belongs to whoever signed in first, and the resulting 403 reads like a permission
+    /// bug in the service under test.
+    /// </para>
     /// </summary>
-    public async Task<HttpResponseMessage> PostWithFreshAntiforgeryAsync(TestHttpClient client, string url)
+    /// <param name="content">Optional body; e.g. the accept payload for an invitation.</param>
+    public async Task<HttpResponseMessage> PostWithFreshAntiforgeryAsync(
+        TestHttpClient client, string url, HttpContent? content = null)
     {
         await EnsureAntiforgeryAsync(client);
 
-        var request = new HttpRequestMessage(HttpMethod.Post, url);
+        var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
         return await client.SendAsync(request);
     }
 

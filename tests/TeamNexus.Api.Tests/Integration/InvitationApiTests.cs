@@ -626,7 +626,15 @@ public sealed class InvitationApiTests : IClassFixture<DatabaseFixture>
 
         var joiner = await scenario.CreateUserAsync("Người nhận", "secret@example.test");
         using var client = await scenario.AsUserAsync(joiner);
-        await client.PostJsonAsync("/api/invitations/accept", new { token = raw });
+
+        // Fresh antiforgery token for THIS session: the acceptance goes through the real pipeline and
+        // 200 is asserted below, so a CSRF 403 cannot masquerade as "nothing leaked".
+        var accepted = await scenario.PostWithFreshAntiforgeryAsync(
+            client,
+            "/api/invitations/accept",
+            JsonContent.Create(new { token = raw }));
+
+        Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
 
         await using var db = scenario.NewDbContext();
 
