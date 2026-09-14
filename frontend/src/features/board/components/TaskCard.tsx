@@ -13,6 +13,7 @@ import { Avatar, Card, Flex, Space, Tag, Tooltip, Typography } from 'antd'
 import dayjs from 'dayjs'
 import type { TaskPriority, TaskResponse } from '../types/board.types'
 import { agentApi } from '../../ai/services/agentApi'
+import { isOverdue, isTaskCompleted, overdueDays } from '../utils/taskDueDate'
 
 interface TaskCardProps {
   task: TaskResponse
@@ -58,6 +59,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     disabled: isDragOverlay,
   })
 
+  const priorityConfig = getPriorityConfig(task.priority)
+  const isCompleted = isTaskCompleted(task, isDoneColumn)
+  const taskIsOverdue = isOverdue(task, new Date(), isDoneColumn)
+  const daysOverdue = overdueDays(task, new Date(), isDoneColumn)
+
   const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
     transition,
@@ -68,16 +74,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       ? '0 12px 24px -4px rgba(0, 0, 0, 0.15), 0 8px 16px -4px rgba(0, 0, 0, 0.1)'
       : '0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04)',
     border: isDragOverlay ? '1.5px solid #6366f1' : '1px solid #e2e8f0',
+    borderLeft: taskIsOverdue
+      ? '3px solid #ef4444'
+      : isDragOverlay
+      ? '1.5px solid #6366f1'
+      : '1px solid #e2e8f0',
     borderRadius: 8,
     background: '#ffffff',
     transformOrigin: '50% 50%',
     rotate: isDragOverlay ? '2deg' : '0deg',
   }
-
-  const priorityConfig = getPriorityConfig(task.priority)
-  const isCompleted = isDoneColumn || !!task.completedAt
-  const isOverdue =
-    task.dueDate && !isCompleted && dayjs(task.dueDate).isBefore(dayjs(), 'day')
 
   const [clarificationQuestion, setClarificationQuestion] = React.useState<string | null>(null)
 
@@ -113,9 +119,18 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         bodyStyle={{ padding: '12px' }}
       >
         <Flex vertical gap={8}>
-          {/* Top meta: Priority + Labels */}
-          {(priorityConfig || (task.labels && task.labels.length > 0)) && (
+          {/* Top meta: Priority + Labels + Overdue badge */}
+          {(priorityConfig || (task.labels && task.labels.length > 0) || taskIsOverdue) && (
             <Flex wrap="wrap" gap={4} align="center">
+              {taskIsOverdue && (
+                <Tag
+                  color="error"
+                  style={{ margin: 0, fontSize: 11, lineHeight: '18px', borderRadius: 4 }}
+                  data-testid="task-card-overdue-badge"
+                >
+                  {`Quá hạn ${daysOverdue} ngày`}
+                </Tag>
+              )}
               {priorityConfig && (
                 <Tag
                   color={priorityConfig.color}
@@ -211,15 +226,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               {task.dueDate && (
                 <Tooltip
                   title={`Hạn chót: ${dayjs(task.dueDate).format('DD/MM/YYYY')}${
-                    isOverdue ? ' (Quá hạn)' : ''
+                    taskIsOverdue ? ' (Quá hạn)' : ''
                   }`}
                 >
                   <Space
                     size={3}
                     style={{
                       fontSize: 11.5,
-                      color: isOverdue ? '#ef4444' : isCompleted ? '#94a3b8' : '#64748b',
-                      fontWeight: isOverdue ? 600 : 400,
+                      color: taskIsOverdue ? '#ef4444' : isCompleted ? '#94a3b8' : '#64748b',
+                      fontWeight: taskIsOverdue ? 600 : 400,
                     }}
                   >
                     <CalendarOutlined />

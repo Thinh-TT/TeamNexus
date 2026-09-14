@@ -6,6 +6,8 @@ import { LoginPage } from '../features/auth/pages/LoginPage'
 import { BoardListPage } from '../features/board/pages/BoardListPage'
 import { BoardPage } from '../features/board/pages/BoardPage'
 import { ReportsPage } from '../features/reporting/pages/ReportsPage'
+import { WorkspaceSettingsPage } from '../features/workspace/pages/WorkspaceSettingsPage'
+import { WorkspaceActivityPage } from '../features/workspace/pages/WorkspaceActivityPage'
 
 export const AppRouter: React.FC = () => {
   return (
@@ -41,6 +43,22 @@ export const AppRouter: React.FC = () => {
           element={
             <ProtectedRoute>
               <ReportsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/workspaces/:workspaceId/settings"
+          element={
+            <ProtectedRoute>
+              <WorkspaceSettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/workspaces/:workspaceId/activity"
+          element={
+            <ProtectedRoute>
+              <WorkspaceActivityPage />
             </ProtectedRoute>
           }
         />
