@@ -18,11 +18,12 @@ describe('TaskCard', () => {
     description: 'Implement JWT with refresh token',
     position: 0,
     priority: 'Urgent',
-    dueDate: '2026-12-31T00:00:00Z',
+    dueDate: '2099-12-31T00:00:00Z',
     assigneeId: 'u-1',
     assigneeName: 'Alex Tran',
     createdAt: '2026-09-09T00:00:00Z',
     updatedAt: '2026-09-09T00:00:00Z',
+    completedAt: null,
     labels: [
       { id: 'lbl-1', workspaceId: 'ws-1', name: 'Security', color: '#ef4444', createdAt: '2026-09-09T00:00:00Z' },
     ],
@@ -76,5 +77,84 @@ describe('TaskCard', () => {
 
     expect(screen.getByTestId('agent-active-badge')).toBeInTheDocument()
     expect(screen.getByTestId('agent-assignee-avatar')).toBeInTheDocument()
+  })
+
+  it('renders overdue badge and red border when task is overdue', () => {
+    const overdueTask: TaskResponse = {
+      ...baseTask,
+      dueDate: '2020-01-01T00:00:00Z',
+      completedAt: null,
+    }
+
+    const { container } = renderWithDnd(<TaskCard task={overdueTask} isDoneColumn={false} />)
+
+    const badge = screen.getByTestId('task-card-overdue-badge')
+    expect(badge).toBeInTheDocument()
+    expect(badge.textContent).toContain('Quá hạn')
+
+    // Top-level draggable div has red borderLeft
+    const cardEl = container.firstChild as HTMLElement
+    expect(cardEl.style.borderLeft).toMatch(/3px solid (?:#ef4444|rgb\(239,\s*68,\s*68\))/)
+  })
+
+  it('does not render overdue badge when overdue task is completed or in done column', () => {
+    const overdueCompletedTask: TaskResponse = {
+      ...baseTask,
+      dueDate: '2020-01-01T00:00:00Z',
+      completedAt: '2020-01-02T00:00:00Z',
+    }
+
+    const { rerender } = renderWithDnd(
+      <TaskCard task={overdueCompletedTask} isDoneColumn={false} />
+    )
+    expect(screen.queryByTestId('task-card-overdue-badge')).not.toBeInTheDocument()
+
+    // Test in done column without completedAt
+    const overdueInDoneColumn: TaskResponse = {
+      ...baseTask,
+      dueDate: '2020-01-01T00:00:00Z',
+      completedAt: null,
+    }
+    rerender(<DndContext><TaskCard task={overdueInDoneColumn} isDoneColumn={true} /></DndContext>)
+    expect(screen.queryByTestId('task-card-overdue-badge')).not.toBeInTheDocument()
+  })
+
+  it('renders DD/MM format when due date is in the future', () => {
+    const futureTask: TaskResponse = {
+      ...baseTask,
+      dueDate: '2099-12-25T00:00:00Z',
+      completedAt: null,
+    }
+
+    renderWithDnd(<TaskCard task={futureTask} />)
+    expect(screen.getByText('25/12')).toBeInTheDocument()
+    expect(screen.queryByTestId('task-card-overdue-badge')).not.toBeInTheDocument()
+  })
+
+  it('does not render due date section when dueDate is null', () => {
+    const noDueDateTask: TaskResponse = {
+      ...baseTask,
+      dueDate: null,
+    }
+
+    const { container } = renderWithDnd(<TaskCard task={noDueDateTask} />)
+    expect(screen.queryByTestId('task-card-overdue-badge')).not.toBeInTheDocument()
+    expect(container.querySelector('.anticon-calendar')).toBeNull()
+  })
+
+  it('preserves priority tag and labels when overdue', () => {
+    const overdueWithLabels: TaskResponse = {
+      ...baseTask,
+      priority: 'Urgent',
+      dueDate: '2020-01-01T00:00:00Z',
+      labels: [
+        { id: 'l1', workspaceId: 'w1', name: 'Frontend', color: '#6366f1', createdAt: '' },
+      ],
+    }
+
+    renderWithDnd(<TaskCard task={overdueWithLabels} />)
+    expect(screen.getByTestId('task-card-overdue-badge')).toBeInTheDocument()
+    expect(screen.getByText('Khẩn cấp')).toBeInTheDocument()
+    expect(screen.getByText('Frontend')).toBeInTheDocument()
   })
 })

@@ -12,6 +12,7 @@ public static class BoardEndpoints
 {
     public static IEndpointRouteBuilder MapBoardModuleEndpoints(this IEndpointRouteBuilder endpoints)
     {
+        endpoints.MapWorkspacesEndpoints();
         endpoints.MapBoardsEndpoints();
         endpoints.MapColumnsEndpoints();
         endpoints.MapTasksEndpoints();

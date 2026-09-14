@@ -82,7 +82,9 @@ app.UseCors("WebFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
-// ---- Health & Workspace endpoints -------------------------------------
+// ---- Health ----------------------------------------------------------
+// Workspace endpoints (list/detail/rename/ownership/delete/activity) moved into the Board module
+// in Phase 10 §2 — see TeamNexus.Modules.Board/Endpoints/WorkspacesEndpoints.cs.
 var api = app.MapGroup("/api");
 api.MapGet("/health", () => Results.Ok(new
 {
@@ -90,55 +92,6 @@ api.MapGet("/health", () => Results.Ok(new
     service = "TeamNexus.Api",
     time = DateTimeOffset.UtcNow,
 }));
-
-api.MapGet("/workspaces", async (TeamNexus.Persistence.Data.TeamNexusDbContext db, HttpContext http, CancellationToken ct) =>
-{
-    var userIdClaim = http.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-    if (!Guid.TryParse(userIdClaim, out var userId))
-    {
-        return Results.Unauthorized();
-    }
-
-    var memberships = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(
-        db.WorkspaceMembers
-            .Include(wm => wm.Workspace)
-            .Where(wm => wm.UserId == userId && wm.Workspace != null),
-        ct);
-
-    if (memberships.Count == 0)
-    {
-        var defaultWs = new TeamNexus.Persistence.Data.Entities.Workspace
-        {
-            Id = Guid.NewGuid(),
-            Name = "Không Gian Làm Việc Chính",
-            Description = "Workspace mặc định để quản lý bảng Kanban",
-            OwnerId = userId,
-            CreatedAt = DateTimeOffset.UtcNow,
-            UpdatedAt = DateTimeOffset.UtcNow,
-        };
-        var defaultMember = new TeamNexus.Persistence.Data.Entities.WorkspaceMember
-        {
-            WorkspaceId = defaultWs.Id,
-            UserId = userId,
-            Role = TeamNexus.Persistence.Data.Entities.WorkspaceRole.Admin,
-            JoinedAt = DateTimeOffset.UtcNow,
-            Workspace = defaultWs,
-        };
-
-        db.Workspaces.Add(defaultWs);
-        db.WorkspaceMembers.Add(defaultMember);
-        await db.SaveChangesAsync(ct);
-        memberships.Add(defaultMember);
-    }
-
-    return Results.Ok(memberships.Select(wm => new
-    {
-        id = wm.WorkspaceId,
-        name = wm.Workspace?.Name ?? "Workspace",
-        description = wm.Workspace?.Description,
-        role = wm.Role.ToString(),
-    }));
-}).RequireAuthorization();
 
 // ---- Feature module endpoints -----------------------------------------
 app.MapAuthModuleEndpoints();

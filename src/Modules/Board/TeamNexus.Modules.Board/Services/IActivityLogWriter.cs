@@ -19,6 +19,19 @@ public static class ObserverActivityActions
     public const string TaskDeleted = "TaskDeleted";
 
     public const string CommentAdded = "CommentAdded";
+
+    // ---- workspace-level events (Phase 10 §2.2, decision D5) -----------------
+    // Recorded with board_id = NULL — ActivityLog documents that as "workspace-level events".
+    // action is free text, so these need no schema change and no CHECK update.
+
+    /// <summary>Workspace name and/or description changed (Manager+).</summary>
+    public const string WorkspaceUpdated = "WorkspaceUpdated";
+
+    /// <summary>Ownership handed to another member (owner/Admin).</summary>
+    public const string WorkspaceOwnerTransferred = "WorkspaceOwnerTransferred";
+
+    /// <summary>Workspace soft-deleted (owner/Admin).</summary>
+    public const string WorkspaceDeleted = "WorkspaceDeleted";
 }
 
 /// <summary>Entity types written to <c>activity_logs.entity_type</c>.</summary>
@@ -27,6 +40,9 @@ public static class ObserverEntityTypes
     public const string Task = "Task";
 
     public const string Comment = "Comment";
+
+    /// <summary>Workspace-level events (Phase 10 §2.2).</summary>
+    public const string Workspace = "Workspace";
 }
 
 /// <summary>

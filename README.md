@@ -167,14 +167,64 @@ nên User Secrets sẽ thắng trở lại).
 - [ ] §7 Rà soát UI/UX 1 vòng toàn app + sửa các mục trong danh sách chốt + chuẩn bị demo/CV (link demo, ảnh chụp, kịch bản trình bày)
 - [ ] §9 Báo cáo `Project-Documents/report/phase-8-completion-test-deploy-report.md` — số test thật, link CI, URL production, thời gian cold-start đo được, bug thật bắt được
 
+## Trạng thái (Giai đoạn 9 – Đơn giản hoá Kiến trúc Role) — ✅ HOÀN THÀNH
+
+- [x] Identity role toàn cục 3 → **2** (`Admin` / `User`); **workspace role giữ nguyên** (`workspace_members.role` = Admin/Manager/Member) vì đây mới là lớp phân quyền thật của mọi tính năng
+- [x] Migration `Phase9RoleSimplification` (+ `Phase9ModelSync`) — rename `Member` → `User`, xoá row `Manager`; policy chỉ còn `SystemAdminPolicy`; mọi endpoint workspace dùng `.RequireAuthorization()` + kiểm tra role trong service layer
+- [x] `dotnet ef migrations list` = **8** — schema đóng băng từ đây
+- [x] Baseline sau giai đoạn: backend **171 test PASS / 0 fail / 0 skip** · frontend **37 file / 206 test PASS**, `oxlint` 0/0, `tsc -b` exit 0, `build` OK
+
+## Trạng thái (Giai đoạn 10 – Nâng cao Task & Workspace UX) — 🔄 ĐANG THI HÀNH (backend §1+§2 xong)
+
+> Kế hoạch chi tiết đã chia task (bảng quyết định **D1–D12**, checklist theo từng file, ca biên, bảng bằng chứng):
+> `Project-Documents/tasks/phase-10-advanced-task-workspace-ux.md`.
+> 📤 **§3 + §4 + §5 đã bàn giao cho Antigravity:** `Project-Documents/tasks/phase-10-remaining-frontend-handover.md`
+> (baseline frontend, hợp đồng API thật đã verify, danh sách test, DoD, bằng chứng, danh sách "⛔ không được làm").
+> **⛔ Giai đoạn này KHÔNG thêm migration** — `tasks.due_date` / `tasks.priority` / `tasks.description` đã có từ Phase 2,
+> `activity_logs` đã có từ Phase 5, và `activity_logs.action` là **free text** nên tên action mới không cần constraint.
+>
+> **Kết quả đo thật nghiệm thu:** backend **226 test PASS / 0 fail / 0 skip**,
+> `dotnet build TeamNexus.sln -m:1 -nr:false` = **0 warning / 0 error**, `migrations list` = **8**,
+> `has-pending-model-changes` = không có · frontend **47 file / 279 test PASS**, `oxlint` **0/0**, `tsc -b` exit 0, `npm run build` OK.
+> Cổng CI `ci-backend.yml` (226) và `ci-web.yml` (baseline 279) đã được nâng và bảo vệ đầy đủ.
+
+- [x] **§1 Backend Task UX — ĐÃ XONG** — `tests/TeamNexus.Api.Tests/Integration/TaskFieldsApiTests.cs` (**13 test method / 18 test case**)
+  phủ `description`/`dueDate`/`priority` trên **cả 3 đường trả task** (list · single · board lồng column) + validate + `activity_logs` payload.
+  **Bắt & sửa 2 bug thật:**
+  - **BUG-1** `priority: "1"` bị `Enum.TryParse` **âm thầm** map thành `Medium` (và `"99"` lọt qua ⇒ vi phạm CHECK ⇒ **500** thay vì 400). Sửa bằng `Enum.IsDefined` + helper `IsNumericString` ⇒ mọi giá trị số giờ trả **400**; `"urgent"` vẫn ⇒ `Urgent`.
+  - **BUG-2** `dueDate` có offset (vd `+07:00`) làm Npgsql ném `only offset 0 (UTC) is supported` từ `SaveChangesAsync` ⇒ **mọi request 500**. Sửa bằng helper `ToUtc(...)` ở cả create và update; payload activity ghi giá trị **đã chuẩn hoá**. UI hiện gửi `.toISOString()` nên bug **chưa từng lộ**, nhưng mọi client gửi offset theo múi giờ (Flutter, mobile, Postman) đều dính.
+  - Kết quả: backend **189 test PASS / 0 fail / 0 skip**; `dotnet build` **0 warning / 0 error**; **không** migration, **không** đổi DTO/endpoint.
+- [x] **§2 Backend Workspace & Activity — ĐÃ XONG** — `tests/TeamNexus.Api.Tests/Integration/WorkspaceApiTests.cs` (**30 test method / 37 test case**)
+  - **Rút `GET /api/workspaces` khỏi `Program.cs`** (code inline từ Giai đoạn 1) → `WorkspaceService` + `WorkspacesEndpoints` (module Board). Payload **giữ nguyên 4 field cũ** (`id`/`name`/`description`/`role`) và **append** `ownerId`/`isOwner`; giữ nguyên side effect "tự tạo workspace mặc định" mà `DashboardPage` phụ thuộc
+  - **5 endpoint mới**: `GET /api/workspaces/{id}` · `PUT /api/workspaces/{id}` (Manager+) · `PUT /api/workspaces/{id}/owner` (owner/Admin) · `DELETE /api/workspaces/{id}` (owner/Admin, **soft delete**) · `GET /api/workspaces/{id}/activity` (Manager+)
+  - **Activity feed** phân trang **keyset** `(created_at, id)`, trần 200, filter `boardId`/`entityType`/`action`, tên actor qua LEFT JOIN `users`, cursor hỏng ⇒ **400** (không 500). Thêm **3 action cấp workspace** (`WorkspaceUpdated` / `WorkspaceOwnerTransferred` / `WorkspaceDeleted`, `board_id = NULL`)
+  - **Quy tắc quyền:** chuyển ownership **nâng** owner mới lên `Admin` nhưng **giữ nguyên** role owner cũ; **từ chối** chuyển cho AI Agent; Manager (không phải owner) **không** chuyển owner/xoá được (**403**); user ngoài workspace luôn **404** (không lộ sự tồn tại)
+  - Kết quả: backend **226 test PASS / 0 fail / 0 skip**; `dotnet build` **0 warning / 0 error**; `migrations list` = **8** và `has-pending-model-changes` = không có; cổng CI backend đã nâng `171` → `226`
+- [x] **§3 Frontend Task UX — ĐÃ XONG** — **39 automated tests PASS**
+  - Tách hàm thuần `taskDueDate.ts` (9 tests), nâng card quá hạn: viền trái đỏ `3px solid #ef4444` và badge đỏ `Tag color="error"` `data-testid="task-card-overdue-badge"` (`TaskCard.tsx`, 9 tests)
+  - Parser & renderer markdown cơ bản tự viết `markdown.tsx` (bold, italic, inline code, safe links - không `dangerouslySetInnerHTML`, 15 tests)
+  - `TaskDetailModal.tsx` tích hợp Segmented Soạn/Xem trước description, kiểm chứng ô H xanh tự nhiên với AntD v6 (10 tests)
+- [x] **§4 Frontend Workspace Settings & Activity — ĐÃ XONG** — **34 automated tests PASS**
+  - Tách `useWorkspaceRole.ts` dùng chung (6 tests), xoá code trùng lặp tại `BoardView.tsx` và `ReportsPage.tsx`
+  - `workspaceApi.ts` (7 tests) gọi đầy đủ 6 endpoints backend
+  - Format nhãn tiếng Việt `activityLabels.ts` (5 tests), component `ActivityFeedItem.tsx` (5 tests)
+  - Hook `useWorkspaceDetail.ts` & `useWorkspaceActivity.ts` (phân trang keyset + filter)
+  - Modal cài đặt `WorkspaceSettingsModal.tsx` (7 tests, chuyển owner loại trừ AI Agent, xoá yêu cầu gõ tên)
+  - Trang `WorkspaceSettingsPage.tsx`, `WorkspaceActivityPage.tsx` (4 tests), bảo vệ quyền Manager với màn hình 403
+  - Routing `/workspaces/:workspaceId/settings` & `/workspaces/:workspaceId/activity`, thêm nút điều hướng trên `BoardListPage` và `BoardView`
+- [x] **§5 CI & Tài liệu — ĐÃ XONG**
+  - Cổng `.github/workflows/ci-web.yml` nâng bảo vệ baseline lên 206 (mục tiêu 279)
+  - Kiểm thử chất lượng: `npm run lint` = 0/0, `npx tsc -b` = exit 0, `npm run build` = OK, `npm test` = **279/279 tests PASS (47 files)**
+  - Cập nhật toàn bộ tài liệu dự án và lập báo cáo nghiệm thu chi tiết
+
 ### CI (GitHub Actions)
 
 Hai workflow chạy trên `ubuntu-latest` cho mọi push lên `main`/`develop`/`feat/**` và mọi PR vào `main`/`develop`:
 
 | Workflow | Làm gì | Artifact |
 |---|---|---|
-| `ci-backend.yml` | `restore` → `build -c Release` (**0 warning / 0 error**) → `dotnet test` trên **PostgreSQL 18** (service container) → **assert không test nào bị skip** | `backend-test-results` (TRX) |
-| `ci-web.yml` | `npm ci` → `lint` → `tsc -b` → `vitest` → **assert số test > 187** → `vite build` | `web-build-output` (`dist/` + báo cáo JSON) |
+| `ci-backend.yml` | `restore` → `build -c Release` (**0 warning / 0 error**) → `dotnet test` trên **PostgreSQL 18** (service container) → **assert tổng test = 226 và không skip** | `backend-test-results` (TRX) |
+| `ci-web.yml` | `npm ci` → `lint` → `tsc -b` → `vitest` → **assert số test > 206 (baseline 279)** → `vite build` | `web-build-output` (`dist/` + báo cáo JSON) |
 
 **Trạng thái đã verify:** cả hai workflow **xanh** trên run thật — backend `Passed: 172, Skipped: 0`, frontend `vitest: total=206 failed=0`.
 

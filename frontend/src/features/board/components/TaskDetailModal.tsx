@@ -29,6 +29,7 @@ import {
   Modal,
   Popconfirm,
   Row,
+  Segmented,
   Select,
   Space,
   Tabs,
@@ -39,6 +40,7 @@ import {
 import dayjs from 'dayjs'
 import { useAuth } from '../../auth/hooks/useAuth'
 import { boardApi } from '../services/boardApi'
+import { renderMarkdown } from '../utils/markdown'
 import type {
   ColumnResponse,
   CommentResponse,
@@ -146,6 +148,10 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
       // ignore
     }
   }
+
+  // Description tab mode (Soạn vs Xem trước)
+  const [descMode, setDescMode] = useState<'write' | 'preview'>('write')
+  const descriptionWatch = Form.useWatch('description', form)
 
   // Sync task data into form and fetch comments
   useEffect(() => {
@@ -323,7 +329,10 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   return (
     <Modal
       open={open}
-      onCancel={onClose}
+      onCancel={() => {
+        setDescMode('write')
+        onClose()
+      }}
       width={780}
       style={{ top: 32 }}
       footer={null}
@@ -435,14 +444,51 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             </div>
 
             {/* Description */}
-            <Form.Item name="description" label="Mô tả chi tiết" style={{ marginBottom: 16 }}>
-              <Input.TextArea
-                rows={4}
-                placeholder="Thêm mô tả chi tiết cho thẻ này..."
-                style={{ borderRadius: 8 }}
-                onBlur={handleSaveMetadata}
-              />
-            </Form.Item>
+            <div style={{ marginBottom: 16 }}>
+              <Flex justify="space-between" align="center" style={{ marginBottom: 8 }}>
+                <Typography.Text style={{ fontSize: 13, fontWeight: 500 }}>
+                  Mô tả chi tiết
+                </Typography.Text>
+                <Segmented
+                  size="small"
+                  value={descMode}
+                  onChange={(val) => setDescMode(val as 'write' | 'preview')}
+                  options={[
+                    { label: 'Soạn', value: 'write' },
+                    { label: 'Xem trước', value: 'preview' },
+                  ]}
+                />
+              </Flex>
+
+              <div style={{ display: descMode === 'write' ? 'block' : 'none' }}>
+                <Form.Item name="description" noStyle>
+                  <Input.TextArea
+                    rows={4}
+                    placeholder="Thêm mô tả chi tiết cho thẻ này..."
+                    style={{ borderRadius: 8 }}
+                    onBlur={handleSaveMetadata}
+                  />
+                </Form.Item>
+              </div>
+
+              {descMode === 'preview' && (
+                <div
+                  data-testid="description-preview"
+                  style={{
+                    minHeight: 96,
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#f8fafc',
+                    lineHeight: '1.6',
+                  }}
+                >
+                  {renderMarkdown(descriptionWatch) || (
+                    <Typography.Text type="secondary">Chưa có mô tả</Typography.Text>
+                  )}
+                </div>
+              )}
+            </div>
 
             <Divider style={{ margin: '16px 0' }} />
 

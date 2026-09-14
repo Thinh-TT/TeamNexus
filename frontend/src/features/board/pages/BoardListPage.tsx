@@ -5,9 +5,11 @@ import {
   DeleteOutlined,
   EditOutlined,
   FolderOpenOutlined,
+  HistoryOutlined,
   PlusOutlined,
   ProjectOutlined,
   ReloadOutlined,
+  SettingOutlined,
 } from '@ant-design/icons'
 import {
   Avatar,
@@ -28,6 +30,7 @@ import {
 import dayjs from 'dayjs'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../auth/hooks/useAuth'
+import { useWorkspaceRole } from '../../../shared/hooks/useWorkspaceRole'
 import { BoardModal } from '../components/BoardModal'
 import { boardApi } from '../services/boardApi'
 import type { BoardResponse, CreateBoardRequest, UpdateBoardRequest } from '../types/board.types'
@@ -38,6 +41,7 @@ export const BoardListPage: React.FC = () => {
   const { workspaceId } = useParams<{ workspaceId: string }>()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const { isManagerOrAdmin } = useWorkspaceRole(workspaceId)
 
   const [boards, setBoards] = useState<BoardResponse[]>([])
   const [loading, setLoading] = useState(true)
@@ -180,6 +184,24 @@ export const BoardListPage: React.FC = () => {
               >
                 Báo cáo
               </Button>
+              {isManagerOrAdmin && (
+                <>
+                  <Button
+                    icon={<HistoryOutlined />}
+                    style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}
+                    onClick={() => navigate(`/workspaces/${workspaceId}/activity`)}
+                  >
+                    Hoạt động
+                  </Button>
+                  <Button
+                    icon={<SettingOutlined />}
+                    style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}
+                    onClick={() => navigate(`/workspaces/${workspaceId}/settings`)}
+                  >
+                    Cài đặt
+                  </Button>
+                </>
+              )}
               <Button
                 type="primary"
                 icon={<PlusOutlined />}

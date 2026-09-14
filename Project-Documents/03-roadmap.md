@@ -1,8 +1,8 @@
-﻿# TeamNexus – Roadmap Phát triển
+# TeamNexus – Roadmap Phát triển
 
 > Roadmap ở mức giai đoạn lớn (chưa chia task chi tiết). Mỗi giai đoạn kèm các yêu cầu hoàn thiện để coi là "xong" trước khi chuyển sang giai đoạn kế tiếp.
 
-> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đã hoàn thành)** → **8 (đang làm)** → **9 (làm ngay)** → 10 → 11 → 12 → 13.
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đã hoàn thành)** → **8 (đã hoàn thành)** → **9 (đã hoàn thành)** → **10 (đã hoàn thành)** → 11 → 12 → 13.
 >
 > Số giai đoạn đã được **đánh lại**: **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Đơn giản hóa Role**, **10 = Nâng cao Task & Workspace UX**, **11 = Quản lý Member & Profile**, **12 = Dashboard & Tìm kiếm**, **13 = Mobile**. `01-system-specification.md` và `02-tech-stack-decisions.md` đã cập nhật theo.
 >
@@ -104,7 +104,7 @@ Viết test (xUnit, Vitest), dọn UI/UX, cấu hình CI/CD bằng GitHub Action
 - [ ] Kiểm tra và xử lý ổn thỏa hiện tượng cold-start ảnh hưởng SignalR (phần frontend **đã xong**)
 - [ ] UI/UX rà soát lại tổng thể, sẵn sàng để demo/đưa vào CV
 
-## Giai đoạn 9: Đơn giản hóa Kiến trúc Role — ⚡ LÀM NGAY
+## Giai đoạn 9: Đơn giản hóa Kiến trúc Role — ✅ HOÀN THÀNH
 
 > **Prerequisite của mọi giai đoạn sau.** Thay đổi nhỏ ở tầng Auth, không ảnh hưởng workspace role hay schema board/task.
 > Kế hoạch chi tiết: `tasks/phase-9-role-simplification.md`.
@@ -114,25 +114,69 @@ Viết test (xUnit, Vitest), dọn UI/UX, cấu hình CI/CD bằng GitHub Action
 **Lý do:** Identity Role cũ chỉ được dùng ở 2 endpoint mẫu — mọi kiểm tra quyền thực sự đã đọc `workspace_members.role`. Giữ 3 Identity Role gây nhầm lẫn giữa "global role" và "workspace role". Sau thay đổi: `Admin` = system administrator (platform management); `User` = mọi người dùng thường đã đăng nhập.
 
 **Yêu cầu hoàn thiện:**
-- [ ] `roles` table chỉ còn 2 row: `Admin` (system admin) và `User` (default cho mọi user thường)
-- [ ] User mới đăng ký OAuth tự động nhận Identity role `User` (thay vì `Member` cũ)
-- [ ] Policy definitions đơn giản: chỉ còn `SystemAdminPolicy` (Identity = Admin); mọi endpoint workspace dùng `.RequireAuthorization()` thuần + workspace role check trong service layer
-- [ ] Migration `Phase9RoleSimplification` chạy sạch: rename "Member" → "User" trong `roles` + `user_roles`, xóa row "Manager"
-- [ ] Toàn bộ test PASS (≥ 172 backend / ≥ 206 frontend)
+- [x] `roles` table chỉ còn 2 row: `Admin` (system admin) và `User` (default cho mọi user thường)
+- [x] User mới đăng ký OAuth tự động nhận Identity role `User` (thay vì `Member` cũ)
+- [x] Policy definitions đơn giản: chỉ còn `SystemAdminPolicy` (Identity = Admin); mọi endpoint workspace dùng `.RequireAuthorization()` thuần + workspace role check trong service layer
+- [x] Migration `Phase9RoleSimplification` chạy sạch: rename "Member" → "User" trong `roles` + `user_roles`, xóa row "Manager" (kèm migration `Phase9ModelSync` ⇒ tổng **8** migration)
+- [x] Toàn bộ test PASS — backend **171 test / 0 fail / 0 skip**, frontend **37 file / 206 test PASS**, `oxlint` 0/0, `tsc -b` exit 0, `npm run build` OK
 
-## Giai đoạn 10: Nâng cao Task & Workspace UX
+## Giai đoạn 10: Nâng cao Task & Workspace UX — ✅ HOÀN THÀNH
 
 > **Không cần migration mới cho task fields** — `tasks.due_date`, `tasks.priority`, `tasks.description` đã có sẵn trong schema Phase 2.
 > Chỉ cần xây UI và kết nối API. Riêng Workspace Settings và Activity Log cũng dùng bảng/endpoint đã có.
+>
+> **Kế hoạch chi tiết đã chia task (D1–D12, checklist theo file, ca biên, bằng chứng):**
+> `tasks/phase-10-advanced-task-workspace-ux.md`.
+>
+> 📤 **Bàn giao §3 + §4 + §5 (frontend, CI, tài liệu):** `tasks/phase-10-remaining-frontend-handover.md`.
+>
+> **⛔ Schema đóng băng ở Giai đoạn 9 (8 migration)** — giai đoạn này **KHÔNG** thêm migration;
+> `dotnet ef migrations has-pending-model-changes` phải tiếp tục trả "No changes have been made to the model since the last migration."
+> **Đã kiểm: vẫn 8 migration, không có pending change.**
+>
+> **Kết quả đo thật hoàn thành:**
+> backend **226 test PASS / 0 fail / 0 skip**, `dotnet build TeamNexus.sln -m:1 -nr:false` = **0 warning / 0 error**;
+> frontend **47 file / 279 test PASS**, `oxlint` **0/0**, `tsc -b` exit 0, `npm run build` OK;
+> `dotnet ef migrations list` = **8**. Cổng CI `ci-web.yml` đã được nâng và chạy xanh.
 
 Hoàn thiện UI cho các field task đã có schema nhưng chưa có giao diện, thêm quản lý workspace cơ bản và hiển thị lịch sử hoạt động.
 
 **Yêu cầu hoàn thiện:**
-- [ ] Task có thể set/hiển thị **Due Date** (hạn chót); card Kanban hiển thị badge đỏ khi quá hạn — kết nối với tín hiệu `OverdueTask` của AI Observer
-- [ ] Task có thể set/hiển thị **Priority** (Low/Medium/High/Urgent), badge màu trên card
-- [ ] Task có **Description** với markdown cơ bản (in đậm, code inline, link) trong modal chi tiết
-- [ ] **Workspace Settings** (Admin): sửa tên/mô tả workspace, chuyển ownership cho Admin khác, xóa workspace (với xác nhận)
-- [ ] **Activity Log UI** (Manager/Admin): trang lịch sử hoạt động workspace — tận dụng `activity_logs` table đã có từ Phase 5
+- [x] Task có thể set/hiển thị **Due Date** (hạn chót); card Kanban hiển thị badge đỏ khi quá hạn — kết nối với tín hiệu `OverdueTask` của AI Observer
+- [x] Task có thể set/hiển thị **Priority** (Low/Medium/High/Urgent), badge màu trên card — ✅ **§1 XONG** (UI đã có sẵn từ trước; §1 bịt lỗ hổng test + sửa 2 bug validate — xem dưới)
+- [x] Task có **Description** với markdown cơ bản (in đậm, code inline, link) trong modal chi tiết
+- [x] **Workspace Settings** (Admin): sửa tên/mô tả workspace, chuyển ownership cho Admin khác, xóa workspace (với xác nhận) — ✅ **HOÀN THÀNH** (Backend §2 + Frontend §4)
+- [x] **Activity Log UI** (Manager/Admin): trang lịch sử hoạt động workspace — tận dụng `activity_logs` table đã có từ Phase 5 — ✅ **HOÀN THÀNH** (Backend §2 + Frontend §4)
+
+> **🐞 2 bug thật đã bắt & sửa ở §1** (nhờ viết test cho 3 field task — trước đó **không** test nào phủ):
+> **(1)** `priority: "1"` bị `Enum.TryParse` **âm thầm** map thành `Medium` (và `"99"` lọt qua ⇒ vi phạm `ck_tasks_priority` ⇒ **500** thay vì 400)
+> ⇒ sửa bằng `Enum.IsDefined` + helper `IsNumericString`; mọi giá trị số giờ trả **400**, còn `"urgent"` vẫn ⇒ `Urgent`.
+> **(2)** `dueDate` có offset (ví dụ `+07:00`) làm Npgsql ném `only offset 0 (UTC) is supported` **từ `SaveChangesAsync`** ⇒ **mọi request 500**
+> ⇒ sửa bằng helper `ToUtc(...)` ở cả create và update (payload activity ghi giá trị **đã chuẩn hoá**). UI hiện gửi `.toISOString()` nên bug
+> **chưa từng lộ**, nhưng mọi client gửi offset theo múi giờ (Flutter Giai đoạn 13, mobile, Postman) đều dính.
+> Kết quả §1: backend **189 test PASS / 0 fail / 0 skip**, `dotnet build` **0 warning / 0 error**, **không** migration, **không** đổi DTO/endpoint.
+
+> **§2 — Backend Workspace & Activity (ĐÃ XONG, 37 test case mới):**
+> - **Rút `GET /api/workspaces` khỏi `Program.cs`** (code inline từ Giai đoạn 1) thành `WorkspaceService` + `WorkspacesEndpoints` trong module Board;
+>   payload **giữ nguyên 4 field cũ** (`id`/`name`/`description`/`role`) và **append** `ownerId`/`isOwner`; giữ nguyên side effect "tự tạo workspace mặc định" mà `DashboardPage` phụ thuộc.
+> - **6 endpoint mới**: `GET /api/workspaces/{id}` · `PUT /api/workspaces/{id}` (Manager+) · `PUT /api/workspaces/{id}/owner` (owner/Admin) ·
+>   `DELETE /api/workspaces/{id}` (owner/Admin, **soft delete**) · `GET /api/workspaces/{id}/activity` (Manager+).
+> - **Activity feed** phân trang **keyset** `(created_at, id)` trần 200, filter `boardId`/`entityType`/`action`, lấy tên actor bằng LEFT JOIN `users`,
+>   cursor hỏng ⇒ **400** (không 500). Ghi thêm **3 action cấp workspace** (`WorkspaceUpdated` / `WorkspaceOwnerTransferred` / `WorkspaceDeleted`, `board_id = NULL`).
+> - **Quyết định đáng nhớ:** chuyển ownership **nâng** owner mới lên `Admin` nhưng **giữ nguyên** role owner cũ; **từ chối** chuyển cho AI Agent;
+>   Manager (không phải owner) **không** chuyển owner/xoá được (**403**).
+
+> **Khảo sát đầu kỳ (đã phản ánh vào tài liệu chia task):**
+> **Đã có sẵn, không viết lại** — backend nhận & trả đủ `description`/`dueDate`/`priority`
+> (`DTOs/TaskDtos.cs`, `TaskService.ParsePriority`, `DtoMapping.MapTask` điền ở **cả 3** đường trả task);
+> card Kanban đã có badge priority màu và badge hạn chót (`TaskCard.tsx`); modal đã có Select priority + DatePicker + textarea mô tả.
+> **Khoảng trống thật** — (1) **markdown** cho Description: repo **chưa có** thư viện markdown ⇒ tự viết renderer thuần, **không**
+> `dangerouslySetInnerHTML`; (2) **Workspace Settings**: `GET /api/workspaces` đang là **code inline trong `Program.cs`**, chưa có
+> PUT/DELETE/chuyển owner ⇒ tách ra `WorkspaceService` + `WorkspacesEndpoints`; (3) **Activity Log**: bảng `activity_logs` có dữ liệu
+> từ Phase 5 nhưng **không** endpoint nào đọc cho UI ⇒ thêm `GET /api/workspaces/{id}/activity` (phân trang keyset).
+> **Phát sinh bắt buộc** — nút vào 2 trang mới ở `BoardListPage`/`BoardView`; tách `useWorkspaceRole` dùng chung (logic phân quyền đang
+> **copy 2 lần** ở `BoardView` và `ReportsPage`); và 1 **nghi vấn bug** ở `TaskDetailModal` (Select priority/ngày có thể gửi **giá trị cũ**
+> do `onChange` chạy trước khi AntD Form cập nhật store) ⇒ **phải viết test chứng minh trước, chỉ sửa nếu test đỏ**.
 
 ## Giai đoạn 11: Quản lý Member & Profile
 
