@@ -6,7 +6,6 @@ import {
 } from '@ant-design/icons'
 import {
   Alert,
-  Avatar,
   Button,
   Card,
   Flex,
@@ -18,20 +17,19 @@ import {
   Typography,
 } from 'antd'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { useAuth } from '../../auth/hooks/useAuth'
 import { useWorkspaceRole } from '../../../shared/hooks/useWorkspaceRole'
+import { AppHeader } from '../../../shared/components/AppHeader'
 import { ReportExportDrawer } from '../components/ReportExportDrawer'
 import { ReportFilters } from '../components/ReportFilters'
 import { ReportSummaryPanel } from '../components/ReportSummaryPanel'
 import { useReportSummary } from '../hooks/useReportSummary'
 
-const { Header, Content } = Layout
+const { Content } = Layout
 
 export const ReportsPage: React.FC = () => {
   const { workspaceId = '' } = useParams<{ workspaceId: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { user, logout } = useAuth()
 
   const initialBoardId = searchParams.get('boardId') || undefined
   const [selectedBoardId, setSelectedBoardId] = useState<string | undefined>(initialBoardId)
@@ -71,24 +69,7 @@ export const ReportsPage: React.FC = () => {
   if (!isManagerOrAdmin) {
     return (
       <Layout style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
-        <Header
-          style={{
-            backgroundColor: '#0f172a',
-            padding: '0 24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <Typography.Title level={4} style={{ color: '#fff', margin: 0 }}>
-            TeamNexus
-          </Typography.Title>
-          <Space>
-            <Button type="primary" danger onClick={() => logout()}>
-              Đăng xuất
-            </Button>
-          </Space>
-        </Header>
+        <AppHeader workspaceId={workspaceId} />
         <Content style={{ padding: '60px 24px', maxWidth: 800, margin: '0 auto', width: '100%' }}>
           <Card style={{ borderRadius: 12 }}>
             <Result
@@ -110,33 +91,7 @@ export const ReportsPage: React.FC = () => {
   return (
     <Layout style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
       {/* App Header */}
-      <Header
-        style={{
-          backgroundColor: '#0f172a',
-          padding: '0 24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <Flex align="center" gap={12}>
-          <Typography.Title level={4} style={{ color: '#fff', margin: 0 }}>
-            TeamNexus
-          </Typography.Title>
-        </Flex>
-
-        <Space size="middle">
-          <Avatar src={user?.avatarUrl} style={{ backgroundColor: '#6366f1' }}>
-            {user?.displayName?.[0]?.toUpperCase() ?? 'U'}
-          </Avatar>
-          <Typography.Text style={{ color: '#fff', fontWeight: 500 }}>
-            {user?.displayName ?? user?.email}
-          </Typography.Text>
-          <Button type="primary" danger onClick={() => logout()}>
-            Đăng xuất
-          </Button>
-        </Space>
-      </Header>
+      <AppHeader workspaceId={workspaceId} />
 
       {/* Main Content */}
       <Content style={{ padding: '32px 24px', maxWidth: 1200, margin: '0 auto', width: '100%' }}>

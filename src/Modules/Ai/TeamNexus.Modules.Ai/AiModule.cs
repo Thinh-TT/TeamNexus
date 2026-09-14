@@ -11,6 +11,7 @@ using TeamNexus.Modules.Ai.Services;
 using TeamNexus.Modules.Ai.Services.Agent;
 using TeamNexus.Modules.Ai.Services.Agent.Agents;
 using TeamNexus.Modules.Ai.Services.Appliers;
+using TeamNexus.Modules.Ai.Services.Email;
 using TeamNexus.Modules.Board.Endpoints;
 using TeamNexus.Modules.Board.Services;
 using TeamNexus.Shared.Endpoints;
@@ -34,6 +35,9 @@ public static class AiModule
 
     /// <summary>Name of the <see cref="IHttpClientFactory"/> client used for Tavily web search (Phase 7 §4.3).</summary>
     public const string TavilyHttpClientName = "Tavily";
+
+    /// <summary>Name of the <see cref="IHttpClientFactory"/> client used for Resend email (Phase 11 §2).</summary>
+    public const string EmailHttpClientName = "Resend";
 
     public static IServiceCollection AddAiModule(
         this IServiceCollection services,
@@ -91,8 +95,68 @@ public static class AiModule
         services.AddOptions<ObserverOptions>()
             .Bind(configuration.GetSection(ObserverOptions.SectionName));
         services.AddScoped<INotificationService, NotificationService>();
+
+        // User-facing alerts (Phase 11 §6.4): Board declares the port + a no-op default, this line
+        // overrides it — the same ordering rule as IEmailGateway/IActivityLogWriter above.
+        services.AddScoped<INotificationWriter, NotificationWriter>();
         services.AddScoped<IObserverService, ObserverService>();
         services.AddHostedService<ObserverBackgroundService>();
+
+        // ---- Transactional email (Phase 11 §2) --------------------------------
+        // Same switch shape as DeepSeek/Tavily: no key ⇒ the offline NullEmailSender, so invitations
+        // and quick emails stay fully exercisable in dev and CI can never send real mail.
+        services.AddOptions<EmailOptions>()
+            .Bind(configuration.GetSection(EmailOptions.SectionName));
+
+        services.AddHttpClient(EmailHttpClientName, (provider, client) =>
+        {
+            var options = provider.GetRequiredService<IOptions<EmailOptions>>().Value;
+            client.Timeout = options.Timeout;
+        });
+
+        services.AddScoped<IEmailSender>(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<EmailOptions>>().Value;
+
+            return options.HasApiKey
+                ? ActivatorUtilities.CreateInstance<ResendEmailSender>(provider)
+                : ActivatorUtilities.CreateInstance<NullEmailSender>(provider);
+        });
+
+        // The one gateway every transactional email goes through (audit row + per-workspace quota).
+        services.AddScoped<IEmailDispatcher, EmailDispatcher>();
+
+        // Board's email port (Phase 11 §2, decision D9): Board declares + registers NullEmailGateway,
+        // and this line — which MUST stay after AddBoardModule in Program.cs — overrides it, exactly
+        // like IActivityLogWriter and IAiAgentResolver above.
+        services.AddScoped<IEmailGateway, EmailGateway>();
+
+        // Board's invitation settings (accept-link base URL + lifetime) are owned by the Email
+        // section, so Ai supplies them too — same override rule.
+        services.AddScoped(provider =>
+        {
+            var email = provider.GetRequiredService<IOptions<EmailOptions>>().Value;
+
+            return new WorkspaceEmailOptions
+            {
+                MaxRecipientsPerQuickEmail = email.MaxRecipientsPerQuickEmail,
+                MaxEmailsPerHourPerWorkspace = email.MaxEmailsPerHourPerWorkspace,
+            };
+        });
+
+        services.AddScoped(provider =>
+        {
+            var email = provider.GetRequiredService<IOptions<EmailOptions>>().Value;
+            var frontend = provider.GetRequiredService<IConfiguration>().GetSection("Frontend:BaseUrl").Value;
+
+            return new InvitationSettings
+            {
+                FrontendBaseUrl = string.IsNullOrWhiteSpace(frontend)
+                    ? "http://localhost:5173"
+                    : frontend,
+                InvitationExpiryDays = email.InvitationExpiryDays,
+            };
+        });
 
         // ---- AI Agent Executor (Phase 7 §4.11) -------------------------------
         // §4.11 registers the agent's options, transports, tools, orchestrator and reaper here so
@@ -255,5 +319,19 @@ public static class AiModule
             effectiveAgent.MaxRunLlmCalls,
             effectiveAgent.MaxAttachmentBytes / 1024,
             tavily.UseBearerAuth ? TavilyOptions.AuthModeBearer : TavilyOptions.AuthModeBody);
+
+        // Transactional email (Phase 11 §2): whether real mail can leave the process, and the
+        // quota guardrail that protects the free tier. Contains no secret.
+        var email = configuration.GetSection(EmailOptions.SectionName).Get<EmailOptions>()
+                    ?? new EmailOptions();
+
+        logger.LogInformation(
+            "Ai module: Email provider={Provider}, from={FromAddress}, invitationExpiryDays={ExpiryDays}, "
+            + "quickEmailMaxRecipients={MaxRecipients}, hourlyCap={HourlyCap}.",
+            email.HasApiKey ? nameof(ResendEmailSender) : nameof(NullEmailSender),
+            email.FromAddress,
+            email.InvitationExpiryDays,
+            email.MaxRecipientsPerQuickEmail,
+            email.MaxEmailsPerHourPerWorkspace);
     }
 }

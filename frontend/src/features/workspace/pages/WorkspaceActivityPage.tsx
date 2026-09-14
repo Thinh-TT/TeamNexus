@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeftOutlined,
   FilterOutlined,
@@ -24,8 +24,9 @@ import { boardApi } from '../../board/services/boardApi'
 import type { BoardResponse } from '../../board/types/board.types'
 import { ActivityFeedItem } from '../components/ActivityFeedItem'
 import { useWorkspaceActivity } from '../hooks/useWorkspaceActivity'
+import { AppHeader } from '../../../shared/components/AppHeader'
 
-const { Header, Content } = Layout
+const { Content } = Layout
 
 export const WorkspaceActivityPage: React.FC = () => {
   const { workspaceId = '' } = useParams<{ workspaceId: string }>()
@@ -48,10 +49,13 @@ export const WorkspaceActivityPage: React.FC = () => {
       .catch(() => {})
   }, [workspaceId])
 
-  const filterParams = {
-    entityType: entityFilter === 'ALL' ? undefined : entityFilter,
-    boardId: selectedBoardId,
-  }
+  const filterParams = useMemo(
+    () => ({
+      entityType: entityFilter === 'ALL' ? undefined : entityFilter,
+      boardId: selectedBoardId,
+    }),
+    [entityFilter, selectedBoardId]
+  )
 
   const {
     items,
@@ -89,7 +93,9 @@ export const WorkspaceActivityPage: React.FC = () => {
 
   return (
     <Layout style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
-      <Header
+      <AppHeader workspaceId={workspaceId} />
+
+      <div
         style={{
           backgroundColor: '#ffffff',
           borderBottom: '1px solid #e2e8f0',
@@ -104,7 +110,15 @@ export const WorkspaceActivityPage: React.FC = () => {
           <Button
             type="text"
             icon={<ArrowLeftOutlined />}
-            onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
+            aria-label="Quay lại"
+            data-testid="back-to-boards-btn"
+            onClick={() => {
+              if (workspaceId) {
+                navigate(`/workspaces/${workspaceId}/boards`)
+              } else {
+                navigate(-1)
+              }
+            }}
           />
           <Typography.Title level={4} style={{ margin: 0, color: '#0f172a' }}>
             <HistoryOutlined style={{ marginRight: 8, color: '#6366f1' }} />
@@ -112,10 +126,16 @@ export const WorkspaceActivityPage: React.FC = () => {
           </Typography.Title>
         </Flex>
 
-        <Button icon={<ReloadOutlined />} onClick={reload}>
-          Làm mới
-        </Button>
-      </Header>
+        <Space>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={reload}
+            loading={activityLoading && items.length === 0}
+          >
+            Làm mới
+          </Button>
+        </Space>
+      </div>
 
       <Content style={{ padding: '24px 32px', maxWidth: 900, margin: '0 auto', width: '100%' }}>
         {/* Filters Card */}

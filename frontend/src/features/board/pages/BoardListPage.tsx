@@ -10,9 +10,9 @@ import {
   ProjectOutlined,
   ReloadOutlined,
   SettingOutlined,
+  TeamOutlined,
 } from '@ant-design/icons'
 import {
-  Avatar,
   Button,
   Card,
   Col,
@@ -29,18 +29,17 @@ import {
 } from 'antd'
 import dayjs from 'dayjs'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useAuth } from '../../auth/hooks/useAuth'
 import { useWorkspaceRole } from '../../../shared/hooks/useWorkspaceRole'
+import { AppHeader } from '../../../shared/components/AppHeader'
 import { BoardModal } from '../components/BoardModal'
 import { boardApi } from '../services/boardApi'
 import type { BoardResponse, CreateBoardRequest, UpdateBoardRequest } from '../types/board.types'
 
-const { Header, Content } = Layout
+const { Content } = Layout
 
 export const BoardListPage: React.FC = () => {
   const { workspaceId } = useParams<{ workspaceId: string }>()
   const navigate = useNavigate()
-  const { user, logout } = useAuth()
   const { isManagerOrAdmin } = useWorkspaceRole(workspaceId)
 
   const [boards, setBoards] = useState<BoardResponse[]>([])
@@ -129,33 +128,16 @@ export const BoardListPage: React.FC = () => {
   return (
     <Layout style={{ minHeight: '100vh', background: '#f8fafc' }}>
       {/* Top Header */}
-      <Header
-        style={{
-          background: '#0f172a',
-          padding: '0 24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <Flex align="center" gap={12}>
-          <Typography.Title level={3} style={{ color: '#fff', margin: 0 }}>
-            TeamNexus
-          </Typography.Title>
-        </Flex>
-
-        <Space size="middle">
-          <Avatar src={user?.avatarUrl} style={{ backgroundColor: '#6366f1' }}>
-            {user?.displayName?.[0]?.toUpperCase() ?? 'U'}
-          </Avatar>
-          <Typography.Text style={{ color: '#fff', fontWeight: 500 }}>
-            {user?.displayName ?? user?.email}
-          </Typography.Text>
-          <Button type="primary" danger onClick={() => logout()}>
-            Đăng xuất
-          </Button>
-        </Space>
-      </Header>
+      <AppHeader workspaceId={workspaceId}>
+        <Button
+          icon={<TeamOutlined />}
+          style={{ borderRadius: 8, borderColor: '#475569', color: '#fff', background: 'transparent' }}
+          onClick={() => navigate(`/workspaces/${workspaceId}/members`)}
+          data-testid="nav-members-header-btn"
+        >
+          Thành viên
+        </Button>
+      </AppHeader>
 
       <Content style={{ padding: '32px 24px', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
         <Flex vertical gap="large">
@@ -177,6 +159,14 @@ export const BoardListPage: React.FC = () => {
               <Tooltip title="Làm mới">
                 <Button icon={<ReloadOutlined />} onClick={fetchBoards} />
               </Tooltip>
+              <Button
+                icon={<TeamOutlined />}
+                style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}
+                onClick={() => navigate(`/workspaces/${workspaceId}/members`)}
+                data-testid="nav-members-toolbar-btn"
+              >
+                Thành viên
+              </Button>
               <Button
                 icon={<BarChartOutlined />}
                 style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}

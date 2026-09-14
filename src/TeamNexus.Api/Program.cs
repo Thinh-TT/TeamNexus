@@ -33,7 +33,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddAuthModule(builder.Configuration);
 
 // Board module: Kanban CRUD services + SignalR hub registration (Phase 2 §2–§3).
-builder.Services.AddBoardModule();
+builder.Services.AddBoardModule(builder.Configuration);
 
 // Ai module: DeepSeek config + DI wiring for AI Smart Setup (Phase 3 §1).
 builder.Services.AddAiModule(builder.Configuration);

@@ -70,6 +70,27 @@ public interface INotificationService
 
     /// <summary>Total unread notifications of the recipient (badge count).</summary>
     Task<int> CountUnreadAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Fan-out of ONE alert to an <b>explicit</b> set of recipients — the non-Observer path
+    /// (Phase 11 §6.2): task assignments and comments on a task someone is responsible for.
+    /// <para>
+    /// No deduplication window: the callers are already idempotent per event (a task is assigned
+    /// once, a comment is written once), so a dedupe key could only swallow a genuine second alert.
+    /// Duplicate ids and the acting user are handled by the caller, not here.
+    /// </para>
+    /// </summary>
+    /// <param name="recipientUserIds">
+    /// Empty ⇒ nothing is written (logged, never thrown): the caller's write has already committed.
+    /// </param>
+    Task<int> NotifyUsersAsync(
+        Guid workspaceId,
+        IReadOnlyCollection<Guid> recipientUserIds,
+        string type,
+        string title,
+        string message,
+        string? payloadJson = null,
+        CancellationToken ct = default);
 }
 
 public sealed class NotificationService : INotificationService
@@ -267,6 +288,71 @@ public sealed class NotificationService : INotificationService
 
     public Task<int> CountUnreadAsync(Guid userId, CancellationToken ct = default)
         => _db.Notifications.CountAsync(n => n.RecipientUserId == userId && !n.IsRead, ct);
+
+    // ---- user-facing alerts (Phase 11 §6.2) --------------------------------
+
+    /// <summary>
+    /// Recipient cap for one user-facing alert. The Observer cap is bound to
+    /// <c>Observer:MaxManagersPerWorkspace</c>, which is named for a different question ("how many
+    /// managers can we bother?") — reusing it here would make a task assignment silently stop being
+    /// delivered when someone tunes the Observer.
+    /// </summary>
+    public const int MaxRecipientsPerNotification = 100;
+
+    public async Task<int> NotifyUsersAsync(
+        Guid workspaceId,
+        IReadOnlyCollection<Guid> recipientUserIds,
+        string type,
+        string title,
+        string message,
+        string? payloadJson = null,
+        CancellationToken ct = default)
+    {
+        var recipients = (recipientUserIds ?? [])
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .Take(MaxRecipientsPerNotification)
+            .ToList();
+
+        if (recipients.Count == 0)
+        {
+            return 0;
+        }
+
+        var rows = recipients
+            .Select(userId => new Notification
+            {
+                WorkspaceId = workspaceId,
+                RecipientUserId = userId,
+                Type = type,
+                Title = Truncate(title, 200),
+                Message = Truncate(message, 2000),
+                Payload = payloadJson,
+            })
+            .ToList();
+
+        _db.Notifications.AddRange(rows);
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "Notification {Type} written for {Recipients} recipient(s) of workspace {WorkspaceId}.",
+            type,
+            rows.Count,
+            workspaceId);
+
+        return rows.Count;
+    }
+
+    /// <summary>
+    /// Clamps a value to a column limit. The callers pass user content (a task title, a comment
+    /// excerpt), so an over-long value must be trimmed rather than turning a successful write into a
+    /// database error — and the comment excerpt is a preview, never the full text.
+    /// </summary>
+    public static string Truncate(string? value, int max)
+    {
+        var text = value ?? string.Empty;
+        return text.Length <= max ? text : text[..max];
+    }
 
     // ---- helpers -----------------------------------------------------------
 

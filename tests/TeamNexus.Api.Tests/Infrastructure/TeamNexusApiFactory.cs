@@ -138,6 +138,9 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
         // the same trick is what keeps offline verification at zero token cost during development.
         builder.UseSetting("DeepSeek:ApiKey", " ");
         builder.UseSetting("Tavily:ApiKey", " ");
+        // Phase 11 §2: one space, not the empty string — same trick as the two above. Without it a
+        // developer's User Secrets key would make the suite send REAL email on every invitation test.
+        builder.UseSetting("Email:ApiKey", " ");
         builder.UseSetting("Agent:Enabled", AgentEnabled ? "true" : "false");
         builder.UseSetting("Reports:Enabled", ReportsEnabled ? "true" : "false");
         builder.UseSetting("Observer:Enabled", "false");

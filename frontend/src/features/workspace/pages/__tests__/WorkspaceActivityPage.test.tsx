@@ -72,6 +72,7 @@ describe('WorkspaceActivityPage', () => {
       <MemoryRouter initialEntries={[initialUrl]}>
         <Routes>
           <Route path="/workspaces/:workspaceId/activity" element={<WorkspaceActivityPage />} />
+          <Route path="/workspaces/:workspaceId/boards" element={<div>Trang danh sách bảng</div>} />
         </Routes>
       </MemoryRouter>
     )
@@ -164,6 +165,20 @@ describe('WorkspaceActivityPage', () => {
     await waitFor(() => {
       expect(screen.getByText('403')).toBeInTheDocument()
       expect(screen.getByText(/Chỉ Manager hoặc Admin/)).toBeInTheDocument()
+    })
+  })
+
+  it('navigates back to boards when back button is clicked', async () => {
+    renderPage()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('back-to-boards-btn')).toBeInTheDocument()
+    })
+
+    fireEvent.click(screen.getByTestId('back-to-boards-btn'))
+
+    await waitFor(() => {
+      expect(screen.getByText('Trang danh sách bảng')).toBeInTheDocument()
     })
   })
 })

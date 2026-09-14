@@ -51,7 +51,7 @@ describe('NotificationDrawer', () => {
   it('renders drawer header, unread badge, and notification items when open', async () => {
     renderComponent(true)
 
-    expect(await screen.findByText('Cảnh báo AI Observer')).toBeInTheDocument()
+    expect(await screen.findByText('Trung tâm thông báo')).toBeInTheDocument()
     expect(screen.getByText('1 chưa đọc')).toBeInTheDocument()
     expect(await screen.findByText('Task bị đứng yên')).toBeInTheDocument()
     expect(screen.getByText('Đọc tất cả')).toBeInTheDocument()
@@ -95,5 +95,34 @@ describe('NotificationDrawer', () => {
     expect(
       await screen.findByText('Không có cảnh báo chưa đọc nào.')
     ).toBeInTheDocument()
+  })
+
+  it('renders without workspaceId without crashing and hides board navigation link', async () => {
+    vi.mocked(notificationApi.listNotifications).mockResolvedValueOnce({
+      unreadCount: 1,
+      items: [
+        {
+          id: 'notif-2',
+          workspaceId: 'ws-1',
+          type: 'TaskAssigned',
+          title: 'Được giao thẻ mới',
+          message: 'Bạn được giao thẻ API Backend',
+          payload: { boardId: 'b-1' },
+          isRead: false,
+          createdAt: '2026-09-11T10:00:00Z',
+          readAt: null,
+        },
+      ],
+    })
+
+    render(
+      <MemoryRouter>
+        <NotificationDrawer open={true} onClose={vi.fn()} />
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByText('Được giao thẻ mới')).toBeInTheDocument()
+    // Không có workspaceId -> không hiện link mở board
+    expect(screen.queryByText('Mở bảng Kanban liên quan')).not.toBeInTheDocument()
   })
 })

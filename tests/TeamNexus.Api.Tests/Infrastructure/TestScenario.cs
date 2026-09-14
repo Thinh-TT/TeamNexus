@@ -111,6 +111,9 @@ public sealed class TestScenario : IAsyncDisposable
             "ai_observer_runs", "ai_action_logs", "task_labels", "tasks", "board_columns", "boards",
             "labels", "workspace_members", "refresh_tokens", "user_roles", "user_claims",
             "user_tokens", "user_logins", "users", "workspaces",
+            // Phase 11 §1: without these two the invitation/email state leaks between tests and the
+            // suite turns flaky (the partial unique index on Pending invitations makes it fail loudly).
+            "email_messages", "workspace_invitations",
         ];
 
         var present = wanted.Where(existing.Contains).ToList();

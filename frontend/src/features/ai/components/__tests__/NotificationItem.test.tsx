@@ -124,4 +124,60 @@ describe('NotificationItem', () => {
       unmount()
     })
   })
+
+  it('renders translated labels for Phase 11 notification types: TaskAssigned, CommentOnTask, WorkspaceInvitation', () => {
+    const phase11Types = [
+      { type: 'TaskAssigned', expected: 'Được giao thẻ' },
+      { type: 'CommentOnTask', expected: 'Bình luận mới' },
+      { type: 'WorkspaceInvitation', expected: 'Lời mời workspace' },
+    ]
+
+    phase11Types.forEach(({ type, expected }) => {
+      const notif: NotificationResponse = {
+        ...mockNotification,
+        id: `n-${type}`,
+        type: type as any,
+      }
+
+      const { unmount } = render(
+        <MemoryRouter>
+          <NotificationItem
+            notification={notif}
+            onMarkRead={vi.fn()}
+            workspaceId="ws-1"
+          />
+        </MemoryRouter>
+      )
+
+      expect(screen.getByText(expected)).toBeInTheDocument()
+      unmount()
+    })
+  })
+
+  it('renders neutrally without severity tag when notification payload has no severity', () => {
+    const noSeverityNotif: NotificationResponse = {
+      ...mockNotification,
+      id: 'n-no-sev',
+      type: 'TaskAssigned',
+      payload: {
+        taskId: 't-1',
+        boardId: 'b-1',
+      },
+    }
+
+    render(
+      <MemoryRouter>
+        <NotificationItem
+          notification={noSeverityNotif}
+          onMarkRead={vi.fn()}
+          workspaceId="ws-1"
+        />
+      </MemoryRouter>
+    )
+
+    // Không hiển thị chip CRITICAL hay MEDIUM đỏ/cảnh báo
+    expect(screen.queryByText('CRITICAL')).not.toBeInTheDocument()
+    expect(screen.queryByText('MEDIUM')).not.toBeInTheDocument()
+    expect(screen.getByText('Được giao thẻ')).toBeInTheDocument()
+  })
 })

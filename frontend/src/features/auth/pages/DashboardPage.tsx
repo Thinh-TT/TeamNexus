@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react'
 import {
-  Avatar,
   Button,
   Card,
   Descriptions,
@@ -16,11 +15,12 @@ import {
 import { httpClient } from '../../../shared/api'
 import { useAuth } from '../hooks/useAuth'
 import { workspaceApi } from '../../workspace/services/workspaceApi'
+import { AppHeader } from '../../../shared/components/AppHeader'
 
-const { Header, Content } = Layout
+const { Content } = Layout
 
 export const DashboardPage: React.FC = () => {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const [workspace, setWorkspace] = useState<{ id: string; name: string } | null>(null)
   const [rbacLoading, setRbacLoading] = useState<string | null>(null)
   const [rbacResult, setRbacResult] = useState<{ status: 'success' | 'error'; msg: string } | null>(
@@ -65,30 +65,7 @@ export const DashboardPage: React.FC = () => {
 
   return (
     <Layout style={{ minHeight: '100vh', background: '#f8fafc' }}>
-      <Header
-        style={{
-          background: '#0f172a',
-          padding: '0 24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <Typography.Title level={3} style={{ color: '#fff', margin: 0 }}>
-          TeamNexus
-        </Typography.Title>
-        <Space size="middle">
-          <Avatar src={user?.avatarUrl} style={{ backgroundColor: '#6366f1' }}>
-            {user?.displayName?.[0]?.toUpperCase() ?? 'U'}
-          </Avatar>
-          <Typography.Text style={{ color: '#fff', fontWeight: 500 }}>
-            {user?.displayName ?? user?.email}
-          </Typography.Text>
-          <Button type="primary" danger onClick={() => logout()}>
-            Đăng xuất
-          </Button>
-        </Space>
-      </Header>
+      <AppHeader workspaceId={workspace?.id} />
 
       <Content style={{ padding: '32px 24px', maxWidth: 960, margin: '0 auto', width: '100%' }}>
         <Flex vertical gap="large">

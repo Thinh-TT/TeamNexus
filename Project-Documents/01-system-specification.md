@@ -42,8 +42,13 @@ Tách biệt rõ ràng hai lớp phân quyền: **Identity Role toàn cục** (`
 ### 9. Nâng cao Task & Workspace UX — Giai đoạn 10
 Hoàn thiện UI cho các field task đã có schema: **Due Date** (hiển thị badge đỏ khi quá hạn, kết nối AI Observer), **Priority** (badge màu Low/Medium/High/Urgent), **Description** (markdown cơ bản). Thêm **Workspace Settings** cho Admin (sửa tên/mô tả, chuyển ownership, xóa workspace) và **Activity Log UI** cho Manager/Admin (lịch sử ai làm gì trong workspace).
 
-### 10. Quản lý Member & Profile — Giai đoạn 11
-**Mời member qua email:** Manager/Admin nhập email → hệ thống gửi link mời qua Resend API → người nhận click link, chọn role (mặc định Member), tham gia workspace. **Gửi email nhanh:** Manager soạn tiêu đề + nội dung ngắn trong app, chọn member(s) nhận → gửi đến inbox thật qua Resend (dùng cho thông báo họp, việc cần gấp). **Quản lý member:** xem danh sách, đổi role (Admin), kick member (Admin). **Profile cá nhân:** sửa display_name và avatar, xem workspace đang tham gia, tự rời workspace. **Notification Center:** badge unread + drawer thông báo tại header (assign task, comment mới, được mời vào workspace).
+### 10. Quản lý Member & Profile — Giai đoạn 11 ✅
+- **Mời member qua email:** Manager/Admin nhập email → hệ thống lưu token băm SHA-256 an toàn trong DB và gửi link mời qua Postmark / MailKit → người nhận click link, tham gia workspace đúng vai trò chỉ định.
+- **Quy trình chấp nhận lời mời:** Truy cập `/invitations/accept?token=...`; nếu chưa đăng nhập, hệ thống lưu tạm token tại `sessionStorage` (`pending_invite_token`) và điều hướng tới `/login`, sau khi đăng nhập/đăng ký thành công sẽ tự động quay lại chấp nhận. Ghi nhận thành viên mới và lưu vết vào Activity Log.
+- **Gửi email nhanh:** Manager/Admin soạn tiêu đề + nội dung ngắn trong app, chọn danh sách người nhận → gửi tới inbox thật của thành viên kèm theo dõi lịch sử gửi trong `email_messages`.
+- **Quản lý member:** Xem danh sách thành viên (phân biệt Người thật / AI Agent), huỷ lời mời đang chờ (Manager/Admin), đổi vai trò thành viên (chỉ Admin/Owner), khai trừ thành viên (chỉ Admin/Owner).
+- **Profile cá nhân:** Xem và cập nhật tên hiển thị, URL avatar (xác thực an toàn scheme `http://` / `https://`); xem danh sách workspace đang tham gia kèm vai trò; tự rời workspace (chặn chủ sở hữu tự rời nếu chưa chuyển giao quyền).
+- **Trung tâm thông báo (Notification Center):** Tích hợp chuông báo badge số lượng chưa đọc trên `AppHeader` dùng chung, Drawer thông báo hỗ trợ lọc Chưa đọc / Tất cả cho cả cảnh báo AI Observer và thông báo nghiệp vụ (được assign task, comment mới, được mời vào workspace).
 
 ### 11. Dashboard & Tìm kiếm — Giai đoạn 12
 **Dashboard tổng quan workspace:** hiển thị "Task của tôi" (sắp đến hạn, quá hạn, mới giao), hoạt động gần đây, tóm tắt board, cảnh báo AI Observer chưa đọc. **Tìm kiếm & Lọc task:** theo tên, assignee, label, priority, trạng thái, due date trong phạm vi workspace/board. **@mention trong comment:** tag thành viên với `@tên`, kích hoạt thông báo cho người được tag.

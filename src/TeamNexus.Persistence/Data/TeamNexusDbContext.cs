@@ -50,6 +50,11 @@ public class TeamNexusDbContext
 
     public DbSet<TaskAttachment> TaskAttachments => Set<TaskAttachment>();
 
+    // Member management & email (Phase 11 §1): workspace invitations + transactional-email log.
+    public DbSet<WorkspaceInvitation> WorkspaceInvitations => Set<WorkspaceInvitation>();
+
+    public DbSet<EmailMessage> EmailMessages => Set<EmailMessage>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
