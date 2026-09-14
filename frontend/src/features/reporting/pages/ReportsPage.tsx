@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import {
   ArrowLeftOutlined,
   DownloadOutlined,
@@ -19,7 +19,7 @@ import {
 } from 'antd'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../auth/hooks/useAuth'
-import { httpClient } from '../../../shared/api/httpClient'
+import { useWorkspaceRole } from '../../../shared/hooks/useWorkspaceRole'
 import { ReportExportDrawer } from '../components/ReportExportDrawer'
 import { ReportFilters } from '../components/ReportFilters'
 import { ReportSummaryPanel } from '../components/ReportSummaryPanel'
@@ -38,40 +38,8 @@ export const ReportsPage: React.FC = () => {
   const [from, setFrom] = useState<string | undefined>(undefined)
   const [to, setTo] = useState<string | undefined>(undefined)
 
-  const [checkingRole, setCheckingRole] = useState<boolean>(true)
-  const [isManagerOrAdmin, setIsManagerOrAdmin] = useState<boolean>(false)
+  const { isManagerOrAdmin, loading: checkingRole } = useWorkspaceRole(workspaceId)
   const [exportDrawerOpen, setExportDrawerOpen] = useState<boolean>(false)
-
-  // Verify role before fetching report
-  useEffect(() => {
-    let ignore = false
-
-    httpClient
-      .get<Array<{ id: string; role: string }>>('/workspaces')
-      .then((res) => {
-        if (!ignore && res.data) {
-          const currentWs = res.data.find((w) => w.id === workspaceId)
-          if (currentWs) {
-            const role = currentWs.role?.toLowerCase()
-            setIsManagerOrAdmin(role === 'manager' || role === 'admin')
-          }
-        }
-      })
-      .catch(() => {
-        if (!ignore) {
-          setIsManagerOrAdmin(false)
-        }
-      })
-      .finally(() => {
-        if (!ignore) {
-          setCheckingRole(false)
-        }
-      })
-
-    return () => {
-      ignore = true
-    }
-  }, [workspaceId])
 
   const { report, status, error, reload, setBoard, setRange } = useReportSummary(
     isManagerOrAdmin ? workspaceId : '',

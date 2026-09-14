@@ -15,6 +15,7 @@ import {
 } from 'antd'
 import { httpClient } from '../../../shared/api'
 import { useAuth } from '../hooks/useAuth'
+import { workspaceApi } from '../../workspace/services/workspaceApi'
 
 const { Header, Content } = Layout
 
@@ -27,11 +28,11 @@ export const DashboardPage: React.FC = () => {
   )
 
   useEffect(() => {
-    httpClient
-      .get<Array<{ id: string; name: string; role: string }>>('/workspaces')
-      .then((res) => {
-        if (res.data && res.data.length > 0) {
-          setWorkspace(res.data[0])
+    workspaceApi
+      .list()
+      .then((list) => {
+        if (list && list.length > 0) {
+          setWorkspace(list[0])
         }
       })
       .catch(() => {})

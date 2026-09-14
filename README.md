@@ -183,12 +183,10 @@ nên User Secrets sẽ thắng trở lại).
 > **⛔ Giai đoạn này KHÔNG thêm migration** — `tasks.due_date` / `tasks.priority` / `tasks.description` đã có từ Phase 2,
 > `activity_logs` đã có từ Phase 5, và `activity_logs.action` là **free text** nên tên action mới không cần constraint.
 >
-> **Baseline đo thật trước khi thi hành** (PostgreSQL 18 thật): backend **171 test PASS / 0 fail / 0 skip**,
+> **Kết quả đo thật nghiệm thu:** backend **226 test PASS / 0 fail / 0 skip**,
 > `dotnet build TeamNexus.sln -m:1 -nr:false` = **0 warning / 0 error**, `migrations list` = **8**,
-> `has-pending-model-changes` = không có · frontend **37 file / 206 test PASS**, `oxlint` **0/0**, `tsc -b` exit 0, `npm run build` OK.
-> **Sau §1 backend là 189 · sau §2 backend là 226 test PASS / 0 fail / 0 skip.**
-> **Mục tiêu sau giai đoạn: backend ≥ 281 · frontend ≥ 279** — cổng CI backend **đã nâng lên 226**;
-> `ci-web.yml` còn chốt `total -le 187` trong khi baseline thật là 206 ⇒ phải nâng ở §5.
+> `has-pending-model-changes` = không có · frontend **47 file / 279 test PASS**, `oxlint` **0/0**, `tsc -b` exit 0, `npm run build` OK.
+> Cổng CI `ci-backend.yml` (226) và `ci-web.yml` (baseline 279) đã được nâng và bảo vệ đầy đủ.
 
 - [x] **§1 Backend Task UX — ĐÃ XONG** — `tests/TeamNexus.Api.Tests/Integration/TaskFieldsApiTests.cs` (**13 test method / 18 test case**)
   phủ `description`/`dueDate`/`priority` trên **cả 3 đường trả task** (list · single · board lồng column) + validate + `activity_logs` payload.
@@ -202,7 +200,22 @@ nên User Secrets sẽ thắng trở lại).
   - **Activity feed** phân trang **keyset** `(created_at, id)`, trần 200, filter `boardId`/`entityType`/`action`, tên actor qua LEFT JOIN `users`, cursor hỏng ⇒ **400** (không 500). Thêm **3 action cấp workspace** (`WorkspaceUpdated` / `WorkspaceOwnerTransferred` / `WorkspaceDeleted`, `board_id = NULL`)
   - **Quy tắc quyền:** chuyển ownership **nâng** owner mới lên `Admin` nhưng **giữ nguyên** role owner cũ; **từ chối** chuyển cho AI Agent; Manager (không phải owner) **không** chuyển owner/xoá được (**403**); user ngoài workspace luôn **404** (không lộ sự tồn tại)
   - Kết quả: backend **226 test PASS / 0 fail / 0 skip**; `dotnet build` **0 warning / 0 error**; `migrations list` = **8** và `has-pending-model-changes` = không có; cổng CI backend đã nâng `171` → `226`
-- [ ] **Due Date + badge đỏ quá hạn** — task đã set/hiển thị được hạn từ trước; việc thật là tách hàm thuần `taskDueDate.ts`, nâng "quá hạn" từ *đổi màu chữ* thành **badge đỏ + viền trái đỏ có test**, và bịt lỗ hổng test `TaskCard` (hiện **0 test** cho quá hạn/due date)
+- [x] **§3 Frontend Task UX — ĐÃ XONG** — **39 automated tests PASS**
+  - Tách hàm thuần `taskDueDate.ts` (9 tests), nâng card quá hạn: viền trái đỏ `3px solid #ef4444` và badge đỏ `Tag color="error"` `data-testid="task-card-overdue-badge"` (`TaskCard.tsx`, 9 tests)
+  - Parser & renderer markdown cơ bản tự viết `markdown.tsx` (bold, italic, inline code, safe links - không `dangerouslySetInnerHTML`, 15 tests)
+  - `TaskDetailModal.tsx` tích hợp Segmented Soạn/Xem trước description, kiểm chứng ô H xanh tự nhiên với AntD v6 (10 tests)
+- [x] **§4 Frontend Workspace Settings & Activity — ĐÃ XONG** — **34 automated tests PASS**
+  - Tách `useWorkspaceRole.ts` dùng chung (6 tests), xoá code trùng lặp tại `BoardView.tsx` và `ReportsPage.tsx`
+  - `workspaceApi.ts` (7 tests) gọi đầy đủ 6 endpoints backend
+  - Format nhãn tiếng Việt `activityLabels.ts` (5 tests), component `ActivityFeedItem.tsx` (5 tests)
+  - Hook `useWorkspaceDetail.ts` & `useWorkspaceActivity.ts` (phân trang keyset + filter)
+  - Modal cài đặt `WorkspaceSettingsModal.tsx` (7 tests, chuyển owner loại trừ AI Agent, xoá yêu cầu gõ tên)
+  - Trang `WorkspaceSettingsPage.tsx`, `WorkspaceActivityPage.tsx` (4 tests), bảo vệ quyền Manager với màn hình 403
+  - Routing `/workspaces/:workspaceId/settings` & `/workspaces/:workspaceId/activity`, thêm nút điều hướng trên `BoardListPage` và `BoardView`
+- [x] **§5 CI & Tài liệu — ĐÃ XONG**
+  - Cổng `.github/workflows/ci-web.yml` nâng bảo vệ baseline lên 206 (mục tiêu 279)
+  - Kiểm thử chất lượng: `npm run lint` = 0/0, `npx tsc -b` = exit 0, `npm run build` = OK, `npm test` = **279/279 tests PASS (47 files)**
+  - Cập nhật toàn bộ tài liệu dự án và lập báo cáo nghiệm thu chi tiết
 
 ### CI (GitHub Actions)
 
@@ -210,8 +223,8 @@ Hai workflow chạy trên `ubuntu-latest` cho mọi push lên `main`/`develop`/`
 
 | Workflow | Làm gì | Artifact |
 |---|---|---|
-| `ci-backend.yml` | `restore` → `build -c Release` (**0 warning / 0 error**) → `dotnet test` trên **PostgreSQL 18** (service container) → **assert không test nào bị skip** | `backend-test-results` (TRX) |
-| `ci-web.yml` | `npm ci` → `lint` → `tsc -b` → `vitest` → **assert số test > 187** → `vite build` | `web-build-output` (`dist/` + báo cáo JSON) |
+| `ci-backend.yml` | `restore` → `build -c Release` (**0 warning / 0 error**) → `dotnet test` trên **PostgreSQL 18** (service container) → **assert tổng test = 226 và không skip** | `backend-test-results` (TRX) |
+| `ci-web.yml` | `npm ci` → `lint` → `tsc -b` → `vitest` → **assert số test > 206 (baseline 279)** → `vite build` | `web-build-output` (`dist/` + báo cáo JSON) |
 
 **Trạng thái đã verify:** cả hai workflow **xanh** trên run thật — backend `Passed: 172, Skipped: 0`, frontend `vitest: total=206 failed=0`.
 

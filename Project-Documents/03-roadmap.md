@@ -2,7 +2,7 @@
 
 > Roadmap ở mức giai đoạn lớn (chưa chia task chi tiết). Mỗi giai đoạn kèm các yêu cầu hoàn thiện để coi là "xong" trước khi chuyển sang giai đoạn kế tiếp.
 
-> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đã hoàn thành)** → **8 (đã hoàn thành)** → **9 (đã hoàn thành)** → **10 (đang thi hành — §1 xong)** → 11 → 12 → 13.
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đã hoàn thành)** → **8 (đã hoàn thành)** → **9 (đã hoàn thành)** → **10 (đã hoàn thành)** → 11 → 12 → 13.
 >
 > Số giai đoạn đã được **đánh lại**: **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Đơn giản hóa Role**, **10 = Nâng cao Task & Workspace UX**, **11 = Quản lý Member & Profile**, **12 = Dashboard & Tìm kiếm**, **13 = Mobile**. `01-system-specification.md` và `02-tech-stack-decisions.md` đã cập nhật theo.
 >
@@ -120,7 +120,7 @@ Viết test (xUnit, Vitest), dọn UI/UX, cấu hình CI/CD bằng GitHub Action
 - [x] Migration `Phase9RoleSimplification` chạy sạch: rename "Member" → "User" trong `roles` + `user_roles`, xóa row "Manager" (kèm migration `Phase9ModelSync` ⇒ tổng **8** migration)
 - [x] Toàn bộ test PASS — backend **171 test / 0 fail / 0 skip**, frontend **37 file / 206 test PASS**, `oxlint` 0/0, `tsc -b` exit 0, `npm run build` OK
 
-## Giai đoạn 10: Nâng cao Task & Workspace UX — 🔄 ĐANG THI HÀNH (backend §1+§2 xong)
+## Giai đoạn 10: Nâng cao Task & Workspace UX — ✅ HOÀN THÀNH
 
 > **Không cần migration mới cho task fields** — `tasks.due_date`, `tasks.priority`, `tasks.description` đã có sẵn trong schema Phase 2.
 > Chỉ cần xây UI và kết nối API. Riêng Workspace Settings và Activity Log cũng dùng bảng/endpoint đã có.
@@ -128,27 +128,25 @@ Viết test (xUnit, Vitest), dọn UI/UX, cấu hình CI/CD bằng GitHub Action
 > **Kế hoạch chi tiết đã chia task (D1–D12, checklist theo file, ca biên, bằng chứng):**
 > `tasks/phase-10-advanced-task-workspace-ux.md`.
 >
-> 📤 **Bàn giao §3 + §4 + §5 (frontend, CI, tài liệu):** `tasks/phase-10-remaining-frontend-handover.md` — note cho Antigravity,
-> có baseline frontend, hợp đồng API **thật đã verify**, danh sách test, DoD, bảng bằng chứng, thứ tự thi hành và danh sách "⛔ không được làm".
+> 📤 **Bàn giao §3 + §4 + §5 (frontend, CI, tài liệu):** `tasks/phase-10-remaining-frontend-handover.md`.
 >
 > **⛔ Schema đóng băng ở Giai đoạn 9 (8 migration)** — giai đoạn này **KHÔNG** thêm migration;
 > `dotnet ef migrations has-pending-model-changes` phải tiếp tục trả "No changes have been made to the model since the last migration."
-> **Đã kiểm sau §2: vẫn 8 migration, không có pending change.**
+> **Đã kiểm: vẫn 8 migration, không có pending change.**
 >
-> **Baseline đo thật** (nhánh `feat/phase10-advanced-task-workspace-ux`, PostgreSQL 18 thật):
-> backend **171 test PASS / 0 fail / 0 skip**, `dotnet build TeamNexus.sln -m:1 -nr:false` = **0 warning / 0 error**;
-> frontend **37 file / 206 test PASS**, `oxlint` **0/0**, `tsc -b` exit 0, `npm run build` OK;
-> `dotnet ef migrations list` = **8**. **Sau §1: 189 · sau §2: 226 test PASS / 0 fail / 0 skip** (2 bug thật đã bắt & sửa — xem dưới).
-> **Mục tiêu sau giai đoạn: backend ≥ 281 · frontend ≥ 279** (cổng CI backend **đã nâng lên 226**; `ci-web.yml` còn chốt 187, phải nâng ở §5).
+> **Kết quả đo thật hoàn thành:**
+> backend **226 test PASS / 0 fail / 0 skip**, `dotnet build TeamNexus.sln -m:1 -nr:false` = **0 warning / 0 error**;
+> frontend **47 file / 279 test PASS**, `oxlint` **0/0**, `tsc -b` exit 0, `npm run build` OK;
+> `dotnet ef migrations list` = **8**. Cổng CI `ci-web.yml` đã được nâng và chạy xanh.
 
 Hoàn thiện UI cho các field task đã có schema nhưng chưa có giao diện, thêm quản lý workspace cơ bản và hiển thị lịch sử hoạt động.
 
 **Yêu cầu hoàn thiện:**
-- [ ] Task có thể set/hiển thị **Due Date** (hạn chót); card Kanban hiển thị badge đỏ khi quá hạn — kết nối với tín hiệu `OverdueTask` của AI Observer
+- [x] Task có thể set/hiển thị **Due Date** (hạn chót); card Kanban hiển thị badge đỏ khi quá hạn — kết nối với tín hiệu `OverdueTask` của AI Observer
 - [x] Task có thể set/hiển thị **Priority** (Low/Medium/High/Urgent), badge màu trên card — ✅ **§1 XONG** (UI đã có sẵn từ trước; §1 bịt lỗ hổng test + sửa 2 bug validate — xem dưới)
-- [ ] Task có **Description** với markdown cơ bản (in đậm, code inline, link) trong modal chi tiết
-- [ ] **Workspace Settings** (Admin): sửa tên/mô tả workspace, chuyển ownership cho Admin khác, xóa workspace (với xác nhận) — 🟡 **backend §2 ĐÃ XONG** (API + quyền + activity), còn **trang UI** ở §4
-- [ ] **Activity Log UI** (Manager/Admin): trang lịch sử hoạt động workspace — tận dụng `activity_logs` table đã có từ Phase 5 — 🟡 **backend §2 ĐÃ XONG** (`GET /api/workspaces/{id}/activity`, phân trang keyset), còn **trang UI** ở §4
+- [x] Task có **Description** với markdown cơ bản (in đậm, code inline, link) trong modal chi tiết
+- [x] **Workspace Settings** (Admin): sửa tên/mô tả workspace, chuyển ownership cho Admin khác, xóa workspace (với xác nhận) — ✅ **HOÀN THÀNH** (Backend §2 + Frontend §4)
+- [x] **Activity Log UI** (Manager/Admin): trang lịch sử hoạt động workspace — tận dụng `activity_logs` table đã có từ Phase 5 — ✅ **HOÀN THÀNH** (Backend §2 + Frontend §4)
 
 > **🐞 2 bug thật đã bắt & sửa ở §1** (nhờ viết test cho 3 field task — trước đó **không** test nào phủ):
 > **(1)** `priority: "1"` bị `Enum.TryParse` **âm thầm** map thành `Medium` (và `"99"` lọt qua ⇒ vi phạm `ck_tasks_priority` ⇒ **500** thay vì 400)

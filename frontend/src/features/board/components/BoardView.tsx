@@ -23,6 +23,7 @@ import {
   ReloadOutlined,
   RobotOutlined,
   SearchOutlined,
+  SettingOutlined,
   SyncOutlined,
 } from '@ant-design/icons'
 import {
@@ -37,7 +38,7 @@ import {
   Typography,
 } from 'antd'
 import { useNavigate } from 'react-router-dom'
-import { httpClient } from '../../../shared/api'
+import { useWorkspaceRole } from '../../../shared/hooks/useWorkspaceRole'
 import { useBoard } from '../hooks/useBoard'
 import type {
   ColumnResponse,
@@ -186,7 +187,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
   const [observerRunsOpen, setObserverRunsOpen] = useState(false)
   const [pendingAiActionCount, setPendingAiActionCount] = useState<number>(0)
   const [unreadNotificationCount, setUnreadNotificationCount] = useState<number>(0)
-  const [isManagerOrAdmin, setIsManagerOrAdmin] = useState<boolean>(false)
+  const { isManagerOrAdmin } = useWorkspaceRole(workspaceId)
 
   // Fetch pending AI actions count on mount / board change
   const refreshPendingCount = useCallback(() => {
@@ -204,27 +205,6 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
       .then((res) => setUnreadNotificationCount(res.unreadCount))
       .catch(() => {})
   }, [])
-
-  // Check role in workspace
-  useEffect(() => {
-    let ignore = false
-    httpClient
-      .get<Array<{ id: string; role: string }>>('/workspaces')
-      .then((res) => {
-        if (!ignore && res.data) {
-          const currentWs = res.data.find((w) => w.id === workspaceId)
-          if (currentWs) {
-            const role = currentWs.role?.toLowerCase()
-            setIsManagerOrAdmin(role === 'manager' || role === 'admin')
-          }
-        }
-      })
-      .catch(() => {})
-
-    return () => {
-      ignore = true
-    }
-  }, [workspaceId])
 
   useEffect(() => {
     let ignore = false
@@ -489,6 +469,44 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
                 }}
               >
                 Báo cáo
+              </Button>
+            )}
+
+            {/* Workspace Activity (Manager/Admin only) */}
+            {isManagerOrAdmin && (
+              <Button
+                icon={<HistoryOutlined />}
+                onClick={() =>
+                  navigate(`/workspaces/${workspaceId}/activity`)
+                }
+                style={{
+                  borderRadius: 8,
+                  borderColor: '#818cf8',
+                  color: '#4338ca',
+                  fontWeight: 500,
+                  backgroundColor: '#eef2ff',
+                }}
+              >
+                Hoạt động
+              </Button>
+            )}
+
+            {/* Workspace Settings (Manager/Admin only) */}
+            {isManagerOrAdmin && (
+              <Button
+                icon={<SettingOutlined />}
+                onClick={() =>
+                  navigate(`/workspaces/${workspaceId}/settings`)
+                }
+                style={{
+                  borderRadius: 8,
+                  borderColor: '#818cf8',
+                  color: '#4338ca',
+                  fontWeight: 500,
+                  backgroundColor: '#eef2ff',
+                }}
+              >
+                Cài đặt
               </Button>
             )}
 
