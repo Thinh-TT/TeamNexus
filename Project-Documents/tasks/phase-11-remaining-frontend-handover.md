@@ -269,6 +269,20 @@ Nội dung: logo/title · `children` · `NotificationBell` · `Dropdown` avatar 
 > **Kỳ vọng tổng frontend: 279 → ~341 test · 47 → ~62 file.**
 > **Giữ xanh toàn bộ test cũ.** Nếu buộc phải sửa test cũ ⇒ ghi rõ **lý do + tên test** vào báo cáo.
 
+### 4.1 ⚠️ Bốn cái bẫy test — CI thật đã đỏ vì chúng (đọc trước khi viết test)
+
+Run CI đầu tiên của nhánh: **7 test đỏ / 364 xanh**. **Cả 7 là test SAI, không phải bug sản phẩm**, nhưng
+2 trong 4 bẫy dưới đây áp dụng thẳng cho test **frontend** bạn sắp viết:
+
+| Bẫy | Chi tiết | Áp dụng cho |
+|---|---|---|
+| **B1 — "assert status trước"** | `ReadFromJsonAsync<T>()` **không ném** khi body là `{ error }`: nó deserialize "thành công" và mọi field thành `null`. Một test quên assert status sẽ đỏ ở chỗ khó hiểu (`Expected "Manager", Actual null`) thay vì "sai status" | **Có** — test `memberApi`/`profileApi` phải assert status/`rejects` **trước** khi soi payload |
+| **B2 — sai route** | Không có `/api/tasks/{id}` cho PUT/DELETE task (chỉ có `/api/boards/{boardId}/tasks/{taskId}`). Nhưng `/api/tasks/{id}/comments` **thì có** ⇒ rất dễ nhầm | **Có** — đừng "đoán" URL; dùng đúng bảng ở §2 |
+| **B3 — danh tính test dùng chung** | `TestScenario` giữ **một cookie jar cho cả scenario**: sau khi đăng nhập user B, client tạo trước đó **đã là B** | **Không** (frontend mock API bằng `vi.mock`) — nhưng nếu bạn viết test backend thì nhớ |
+| **B4 — harness đặt owner = Admin** | `TestScenario.CreateWorkspaceAsync` **luôn** đặt owner làm `Admin` ⇒ guard "Admin cuối cùng" không chạm tới được qua harness | **Không** — nhưng đừng giả định "owner luôn là Admin" trong test UI: **seed dữ liệu cho `isOwner=true` + `role='Member'` vẫn hợp lệ** với backend, và UI phải xử lý được (disable "Rời" theo `isOwner`, không theo `role`) |
+
+> Chi tiết đầy đủ 7 lỗi + cách sửa: `tasks/phase-11-member-profile-management.md` §3.7.
+
 ---
 
 ## 5. §8 — CI & tài liệu

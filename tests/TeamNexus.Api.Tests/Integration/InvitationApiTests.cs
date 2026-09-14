@@ -225,11 +225,18 @@ public sealed class InvitationApiTests : IClassFixture<DatabaseFixture>
         var (manager, workspace, _) = await SeedWorkspaceAsync(scenario);
         using var client = await scenario.AsUserAsync(manager);
 
-        var created = await (await client.PostJsonAsync(
+        var response = await client.PostJsonAsync(
             $"/api/workspaces/{workspace.Id}/invitations",
-            new { email = "manager@example.test", role = "manager" })).Content.ReadFromJsonAsync<InvitationDto>();
+            // NOT the seeded manager's own address: an existing member is rejected with 400, and an
+            // error body ("{ error }") would still deserialize into the DTO as all-nulls — which is
+            // how this test first "passed" its way into a red CI run.
+            new { email = "explicit.role@example.test", role = "manager" });
 
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var created = await response.Content.ReadFromJsonAsync<InvitationDto>();
         Assert.Equal("Manager", created!.InvitedRole);
+        Assert.Equal("explicit.role@example.test", created.InvitedEmail);
     }
 
     [Fact]

@@ -117,7 +117,7 @@ public sealed class NotificationTriggerApiTests : IClassFixture<DatabaseFixture>
         }
 
         var response = await client.PutJsonAsync(
-            $"/api/tasks/{created!.Id}",
+            $"/api/boards/{workspace.Board.Id}/tasks/{created!.Id}",
             new
             {
                 title = "Đổi người",
@@ -156,7 +156,7 @@ public sealed class NotificationTriggerApiTests : IClassFixture<DatabaseFixture>
 
         // Same assignee, everything else different: this must NOT re-notify (no spam on every save).
         var response = await client.PutJsonAsync(
-            $"/api/tasks/{created!.Id}",
+            $"/api/boards/{workspace.Board.Id}/tasks/{created!.Id}",
             new
             {
                 title = "Tiêu đề mới",
@@ -299,25 +299,39 @@ public sealed class NotificationTriggerApiTests : IClassFixture<DatabaseFixture>
             new { title = "Riêng tư", columnId = workspace.Todo.Id, assigneeId = member.Id }))
             .Content.ReadFromJsonAsync<CreatedTaskDto>();
 
+        Assert.NotNull(created);
+
+        // ---- as the assignee: the alert is there ----
         using var memberClient = await scenario.AsUserAsync(member);
         var mine = await memberClient.GetJsonAsync<NotificationListDto>("/api/notifications");
 
         Assert.NotNull(mine);
         Assert.Equal(1, mine!.UnreadCount);
-        Assert.Equal(MemberNotificationTypes.TaskAssigned, mine.Items[0].Type);
+        var alert = Assert.Single(mine.Items);
+        Assert.Equal(MemberNotificationTypes.TaskAssigned, alert.Type);
 
-        // The Manager triggered the alert but is not its recipient, so it must not appear for them.
-        var theirs = await managerClient.GetJsonAsync<NotificationListDto>("/api/notifications");
+        var alertId = alert.Id;
+
+        // ---- as the Manager: nothing, and no way to touch it ----
+        //
+        // `AsUserAsync(member)` above OVERWROTE the scenario's shared cookie jar, so `managerClient`
+        // — which is only a wrapper around that jar (SessionCookieHandler) — would now authenticate as
+        // the member. Re-signing in is not decoration: without it these assertions silently test the
+        // member twice, which is exactly how this test first failed in CI.
+        using var freshManagerClient = await scenario.AsUserAsync(manager);
+
+        var theirs = await freshManagerClient.GetJsonAsync<NotificationListDto>("/api/notifications");
         Assert.NotNull(theirs);
         Assert.Equal(0, theirs!.UnreadCount);
+        Assert.Empty(theirs.Items);
 
-        // And marking it read must stay impossible for anybody but the recipient.
-        var foreign = await managerClient.Http.PostAsync(
-            $"/api/notifications/{mine.Items[0].Id}/read",
-            null);
+        // Marking somebody else's alert read must look like it does not exist (Phase 5 invariant).
+        var foreign = await freshManagerClient.Http.PostAsync($"/api/notifications/{alertId}/read", null);
         Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
 
-        _ = created;
+        // The recipient themselves can read it.
+        var own = await memberClient.Http.PostAsync($"/api/notifications/{alertId}/read", null);
+        Assert.Equal(HttpStatusCode.OK, own.StatusCode);
     }
 
     // ---- helpers -----------------------------------------------------------
