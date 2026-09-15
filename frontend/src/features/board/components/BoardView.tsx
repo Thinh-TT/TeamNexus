@@ -32,6 +32,7 @@ import {
   Flex,
   Input,
   Select,
+  Space,
   Spin,
   Tag,
   Tooltip,
@@ -263,6 +264,14 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
     return result
   }, [tasksByColumn, searchQuery, priorityFilter])
 
+  const totalTaskCount = useMemo(() => {
+    return Object.values(tasksByColumn).reduce((acc, tasks) => acc + tasks.length, 0)
+  }, [tasksByColumn])
+
+  const filteredTaskCount = useMemo(() => {
+    return Object.values(filteredTasksByColumn).reduce((acc, tasks) => acc + tasks.length, 0)
+  }, [filteredTasksByColumn])
+
   // ---- Drag & Drop Event Handlers ----
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event
@@ -346,13 +355,13 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
         overflow: 'hidden',
       }}
     >
-      {/* Top Bar */}
+      {/* Top Bar - Tier 1: Board Info & Main Action Buttons */}
       <div
         style={{
           background: '#ffffff',
-          borderBottom: '1px solid #e2e8f0',
-          padding: '12px 24px',
-          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.03)',
+          borderBottom: '1px solid #f1f5f9',
+          padding: '10px 24px',
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
         }}
       >
         <Flex justify="space-between" align="center" wrap="wrap" gap={12}>
@@ -362,10 +371,11 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
               type="text"
               icon={<ArrowLeftOutlined />}
               onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
+              style={{ borderRadius: 8 }}
             />
             <div>
               <Flex align="center" gap={8}>
-                <Typography.Title level={4} style={{ margin: 0, color: '#0f172a' }}>
+                <Typography.Title level={4} style={{ margin: 0, color: '#0f172a', fontWeight: 600 }}>
                   {board?.name ?? 'Kanban Board'}
                 </Typography.Title>
                 {renderConnectionStatus(connectionStatus, reconnect, isColdStarting)}
@@ -378,48 +388,59 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
             </div>
           </Flex>
 
-          {/* Right: Search, Filter, Actions */}
-          <Flex align="center" gap={10} wrap="wrap">
-            <Input
-              prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
-              placeholder="Tìm kiếm thẻ, nhãn, người..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              allowClear
-              style={{ width: 220, borderRadius: 8 }}
-            />
+          {/* Right: Primary Actions & Tools */}
+          <Flex align="center" gap={8} wrap="wrap">
+            {/* Workspace Navigation (Manager/Admin only) */}
+            {isManagerOrAdmin && (
+              <Space size={6}>
+                <Button
+                  icon={<BarChartOutlined />}
+                  onClick={() =>
+                    navigate(`/workspaces/${workspaceId}/reports?boardId=${boardId}`)
+                  }
+                  style={{
+                    borderRadius: 8,
+                    borderColor: '#e2e8f0',
+                    color: '#475569',
+                    fontSize: 12.5,
+                  }}
+                >
+                  Báo cáo
+                </Button>
 
-            <Button
-              type="link"
-              size="small"
-              onClick={() => {
-                const qParam = searchQuery.trim() ? `&q=${encodeURIComponent(searchQuery.trim())}` : ''
-                navigate(`/workspaces/${workspaceId}/search?boardId=${boardId}${qParam}`)
-              }}
-              data-testid="board-search-workspace-btn"
-              style={{ padding: '0 4px', fontSize: 13 }}
-            >
-              Tìm trong workspace →
-            </Button>
+                <Button
+                  icon={<HistoryOutlined />}
+                  onClick={() =>
+                    navigate(`/workspaces/${workspaceId}/activity`)
+                  }
+                  style={{
+                    borderRadius: 8,
+                    borderColor: '#e2e8f0',
+                    color: '#475569',
+                    fontSize: 12.5,
+                  }}
+                >
+                  Hoạt động
+                </Button>
 
-            <Select
-              value={priorityFilter}
-              onChange={setPriorityFilter}
-              style={{ width: 140 }}
-              options={[
-                { value: 'ALL', label: 'Tất cả mức độ' },
-                { value: 'Urgent', label: '🔴 Khẩn cấp' },
-                { value: 'High', label: '🟠 Cao' },
-                { value: 'Medium', label: '🔵 Trung bình' },
-                { value: 'Low', label: '⚪ Thấp' },
-              ]}
-            />
+                <Button
+                  icon={<SettingOutlined />}
+                  onClick={() =>
+                    navigate(`/workspaces/${workspaceId}/settings`)
+                  }
+                  style={{
+                    borderRadius: 8,
+                    borderColor: '#e2e8f0',
+                    color: '#475569',
+                    fontSize: 12.5,
+                  }}
+                >
+                  Cài đặt
+                </Button>
+              </Space>
+            )}
 
-            <Tooltip title="Làm mới dữ liệu">
-              <Button icon={<ReloadOutlined />} onClick={refetch} />
-            </Tooltip>
-
-            {/* AI Notifications Button with Unread Badge */}
+            {/* AI Action Buttons */}
             <Badge count={unreadNotificationCount} offset={[-4, 4]}>
               <Button
                 icon={<BellOutlined />}
@@ -428,13 +449,13 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
                   borderRadius: 8,
                   borderColor: '#cbd5e1',
                   color: '#475569',
+                  fontSize: 12.5,
                 }}
               >
                 Cảnh báo AI
               </Button>
             </Badge>
 
-            {/* AI History Button with Pending Badge */}
             <Badge count={pendingAiActionCount} offset={[-4, 4]}>
               <Button
                 icon={<HistoryOutlined />}
@@ -443,13 +464,13 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
                   borderRadius: 8,
                   borderColor: '#cbd5e1',
                   color: '#475569',
+                  fontSize: 12.5,
                 }}
               >
                 Lịch sử AI
               </Button>
             </Badge>
 
-            {/* AI Observer Runs (Manager/Admin only) */}
             {isManagerOrAdmin && (
               <Button
                 icon={<RadarChartOutlined />}
@@ -460,66 +481,10 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
                   color: '#4338ca',
                   fontWeight: 500,
                   backgroundColor: '#eef2ff',
+                  fontSize: 12.5,
                 }}
               >
                 AI Observer
-              </Button>
-            )}
-
-            {/* Reports (Manager/Admin only) */}
-            {isManagerOrAdmin && (
-              <Button
-                icon={<BarChartOutlined />}
-                onClick={() =>
-                  navigate(`/workspaces/${workspaceId}/reports?boardId=${boardId}`)
-                }
-                style={{
-                  borderRadius: 8,
-                  borderColor: '#818cf8',
-                  color: '#4338ca',
-                  fontWeight: 500,
-                  backgroundColor: '#eef2ff',
-                }}
-              >
-                Báo cáo
-              </Button>
-            )}
-
-            {/* Workspace Activity (Manager/Admin only) */}
-            {isManagerOrAdmin && (
-              <Button
-                icon={<HistoryOutlined />}
-                onClick={() =>
-                  navigate(`/workspaces/${workspaceId}/activity`)
-                }
-                style={{
-                  borderRadius: 8,
-                  borderColor: '#818cf8',
-                  color: '#4338ca',
-                  fontWeight: 500,
-                  backgroundColor: '#eef2ff',
-                }}
-              >
-                Hoạt động
-              </Button>
-            )}
-
-            {/* Workspace Settings (Manager/Admin only) */}
-            {isManagerOrAdmin && (
-              <Button
-                icon={<SettingOutlined />}
-                onClick={() =>
-                  navigate(`/workspaces/${workspaceId}/settings`)
-                }
-                style={{
-                  borderRadius: 8,
-                  borderColor: '#818cf8',
-                  color: '#4338ca',
-                  fontWeight: 500,
-                  backgroundColor: '#eef2ff',
-                }}
-              >
-                Cài đặt
               </Button>
             )}
 
@@ -532,11 +497,13 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
                 color: '#4f46e5',
                 fontWeight: 500,
                 backgroundColor: '#f5f3ff',
+                fontSize: 12.5,
               }}
             >
               AI Smart Setup
             </Button>
 
+            {/* Primary Action Button */}
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -544,11 +511,85 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
                 setEditingColumn(null)
                 setColumnModalOpen(true)
               }}
-              style={{ backgroundColor: '#6366f1', borderRadius: 8 }}
+              style={{
+                backgroundColor: '#6366f1',
+                borderRadius: 8,
+                fontWeight: 500,
+                boxShadow: '0 2px 4px rgba(99, 102, 241, 0.25)',
+              }}
             >
               Thêm cột
             </Button>
           </Flex>
+        </Flex>
+      </div>
+
+      {/* Top Bar - Tier 2: Search, Filters & Summary */}
+      <div
+        style={{
+          background: '#ffffff',
+          borderBottom: '1px solid #e2e8f0',
+          padding: '8px 24px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        {/* Left: Search & Workspace Search Link */}
+        <Flex align="center" gap={10} style={{ flex: '1 1 320px', maxWidth: 520 }}>
+          <Input
+            prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
+            placeholder="Tìm kiếm thẻ, nhãn, người..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            allowClear
+            style={{ width: 260, borderRadius: 8 }}
+          />
+
+          <Button
+            type="link"
+            size="small"
+            onClick={() => {
+              const qParam = searchQuery.trim() ? `&q=${encodeURIComponent(searchQuery.trim())}` : ''
+              navigate(`/workspaces/${workspaceId}/search?boardId=${boardId}${qParam}`)
+            }}
+            data-testid="board-search-workspace-btn"
+            style={{ padding: '0 4px', fontSize: 13, color: '#6366f1' }}
+          >
+            Tìm trong workspace →
+          </Button>
+        </Flex>
+
+        {/* Right: Filter & Quick Summary */}
+        <Flex align="center" gap={10}>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {searchQuery || priorityFilter !== 'ALL'
+              ? `Hiển thị ${filteredTaskCount}/${totalTaskCount} thẻ (${columns.length} cột)`
+              : `${columns.length} cột · ${totalTaskCount} thẻ`}
+          </Typography.Text>
+
+          <Select
+            value={priorityFilter}
+            onChange={setPriorityFilter}
+            style={{ width: 140 }}
+            options={[
+              { value: 'ALL', label: 'Tất cả mức độ' },
+              { value: 'Urgent', label: '🔴 Khẩn cấp' },
+              { value: 'High', label: '🟠 Cao' },
+              { value: 'Medium', label: '🔵 Trung bình' },
+              { value: 'Low', label: '⚪ Thấp' },
+            ]}
+          />
+
+          <Tooltip title="Làm mới dữ liệu">
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={refetch}
+              style={{ borderRadius: 8 }}
+            />
+          </Tooltip>
         </Flex>
       </div>
 
@@ -592,19 +633,31 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
             style={{
               minWidth: 260,
               width: 260,
-              borderRadius: 12,
+              borderRadius: 14,
               border: '1.5px dashed #cbd5e1',
               padding: '16px',
               textAlign: 'center',
-              backgroundColor: '#ffffff60',
+              backgroundColor: '#ffffff80',
               cursor: 'pointer',
+              transition: 'all 0.18s ease-in-out',
             }}
             onClick={() => {
               setEditingColumn(null)
               setColumnModalOpen(true)
             }}
           >
-            <Button type="dashed" block icon={<PlusOutlined />}>
+            <Button
+              type="dashed"
+              block
+              icon={<PlusOutlined />}
+              style={{
+                borderRadius: 8,
+                height: 38,
+                borderColor: '#cbd5e1',
+                color: '#64748b',
+                fontWeight: 500,
+              }}
+            >
               Thêm cột mới
             </Button>
           </div>
