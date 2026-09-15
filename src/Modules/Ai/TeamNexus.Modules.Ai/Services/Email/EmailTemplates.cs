@@ -44,7 +44,7 @@ public static class EmailTemplates
               {BODY}
               <hr style="margin:24px 0;border:none;border-top:1px solid #e2e8f0;" />
               <p style="margin:0;font-size:12px;color:#64748b;">
-                Email tự động từ TeamNexus — vui lòng không trả lời trực tiếp email này.
+                Nếu có thắc mắc về lời mời này, bạn có thể phản hồi trực tiếp email hoặc liên hệ với quản trị viên.
               </p>
             </div>
           </body>
