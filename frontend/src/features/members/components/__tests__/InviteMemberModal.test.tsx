@@ -47,26 +47,24 @@ describe('InviteMemberModal component', () => {
       'email with space@domain.com',
     ]
 
+    render(
+      <InviteMemberModal
+        open={true}
+        onClose={vi.fn()}
+        onInvite={vi.fn()}
+      />
+    )
+
+    const input = screen.getByPlaceholderText('nhanvien@example.com')
+    const submitBtn = screen.getByRole('button', { name: 'Gửi lời mời' })
+
     for (const badEmail of invalidEmails) {
-      const { unmount } = render(
-        <InviteMemberModal
-          open={true}
-          onClose={vi.fn()}
-          onInvite={vi.fn()}
-        />
-      )
-
-      const input = screen.getByPlaceholderText('nhanvien@example.com')
       fireEvent.change(input, { target: { value: badEmail } })
-
-      const submitBtn = screen.getByRole('button', { name: 'Gửi lời mời' })
       fireEvent.click(submitBtn)
 
       expect(
         await screen.findByText('Định dạng email không hợp lệ')
       ).toBeInTheDocument()
-
-      unmount()
     }
   })
 
