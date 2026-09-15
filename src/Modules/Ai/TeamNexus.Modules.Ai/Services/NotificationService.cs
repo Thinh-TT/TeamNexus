@@ -58,9 +58,17 @@ public interface INotificationService
         AgentNotification notification,
         CancellationToken ct = default);
 
-    /// <summary>Notifications of one recipient, newest first, optionally filtered by read state.</summary>
+    /// <summary>
+    /// Notifications of one recipient, newest first, optionally filtered by read state and by alert
+    /// family (Phase 12 §3.4).
+    /// </summary>
+    /// <param name="kind">
+    /// The type whitelist to restrict to, or <c>null</c> for every kind (the <c>kind</c> query
+    /// parameter was absent). Callers build it through <see cref="NotificationVocabulary.Parse"/>.
+    /// The unread count is computed over the <b>same</b> filter, so the badge always explains the list.
+    /// </param>
     Task<NotificationListResponse> ListAsync(
-        Guid userId, bool? isRead, int take, CancellationToken ct = default);
+        Guid userId, bool? isRead, IReadOnlyList<string>? kind, int take, CancellationToken ct = default);
 
     /// <summary>Marks one notification read; 404 when it is not this recipient's (idempotent).</summary>
     Task<NotificationResponse> MarkReadAsync(Guid notificationId, Guid userId, CancellationToken ct = default);
@@ -234,7 +242,7 @@ public sealed class NotificationService : INotificationService
     }
 
     public async Task<NotificationListResponse> ListAsync(
-        Guid userId, bool? isRead, int take, CancellationToken ct = default)
+        Guid userId, bool? isRead, IReadOnlyList<string>? kind, int take, CancellationToken ct = default)
     {
         var limit = take <= 0 ? DefaultListTake : Math.Clamp(take, 1, MaxListTake);
 
@@ -247,14 +255,30 @@ public sealed class NotificationService : INotificationService
             query = query.Where(n => n.IsRead == isRead.Value);
         }
 
+        if (kind is { Count: > 0 })
+        {
+            // Filtered in SQL, not in memory: the count below must be computed over exactly the rows the
+            // list can return, which a client-side filter cannot guarantee.
+            query = query.Where(n => kind.Contains(n.Type));
+        }
+
         var rows = await query
             .OrderByDescending(n => n.CreatedAt)
             .Take(limit)
             .ToListAsync(ct);
 
-        // Unread count is a total, not the count within the page (badge semantics).
-        var unread = await _db.Notifications
-            .CountAsync(n => n.RecipientUserId == userId && !n.IsRead, ct);
+        // Unread count is a total, not the count within the page (badge semantics) — and it honours the
+        // same type filter, so `kind=observer&isRead=false` answers "how many Observer alerts are
+        // waiting for me", which is what the dashboard tile needs.
+        var unreadQuery = _db.Notifications
+            .Where(n => n.RecipientUserId == userId && !n.IsRead);
+
+        if (kind is { Count: > 0 })
+        {
+            unreadQuery = unreadQuery.Where(n => kind.Contains(n.Type));
+        }
+
+        var unread = await unreadQuery.CountAsync(ct);
 
         return new NotificationListResponse(unread, rows.Select(ToResponse).ToList());
     }

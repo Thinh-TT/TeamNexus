@@ -2,7 +2,7 @@
 
 > Roadmap ở mức giai đoạn lớn (chưa chia task chi tiết). Mỗi giai đoạn kèm các yêu cầu hoàn thiện để coi là "xong" trước khi chuyển sang giai đoạn kế tiếp.
 
-> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đã hoàn thành)** → **8 (đã hoàn thành)** → **9 (đã hoàn thành)** → **10 (đã hoàn thành)** → **11 (đã hoàn thành)** → 12 → 13.
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đã hoàn thành)** → **8 (đã hoàn thành)** → **9 (đã hoàn thành)** → **10 (đã hoàn thành)** → **11 (đã hoàn thành)** → **12 (backend đã xong — frontend/CI bàn giao)** → 13.
 >
 > Số giai đoạn đã được **đánh lại**: **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Đơn giản hóa Role**, **10 = Nâng cao Task & Workspace UX**, **11 = Quản lý Member & Profile**, **12 = Dashboard & Tìm kiếm**, **13 = Mobile**. `01-system-specification.md` và `02-tech-stack-decisions.md` đã cập nhật theo.
 >
@@ -197,32 +197,40 @@ Xây luồng mời thành viên vào workspace qua email, quản lý danh sách 
 > - **Live Deployment:** Đã cấu hình và kết nối thành công tên miền chính thức `https://app.teamnexus.cloud` (Vercel) và `https://api.teamnexus.cloud` (Render).
 > - Chi tiết: `tasks/phase-11-member-profile-management.md` và `report/phase-11-member-profile-management-test-report.md`.
 
-## Giai đoạn 12: Dashboard & Tìm kiếm — 📋 **ĐÃ CHIA TASK (chưa viết code)**
+## Giai đoạn 12: Dashboard & Tìm kiếm — 🔄 **BACKEND XONG; frontend + CI bàn giao antigravity**
 
 > Xây trên dữ liệu từ Phase 10+11. Dashboard có giá trị cao khi workspace có nhiều member và task có due date.
 >
-> **Kế hoạch chi tiết đã chia task (D1–D13, P1–P6, ca biên, bằng chứng):**
+> **Kế hoạch chi tiết đã chia task (D1–D13, P1–P13, ca biên, bằng chứng):**
 > `tasks/phase-12-dashboard-search.md`.
+> **📤 Bàn giao §4 + §5 + §6 + CI (frontend):** `tasks/phase-12-remaining-frontend-handover.md`.
 >
 > **⛔ Schema đóng băng ở Giai đoạn 11 (9 migration)** — giai đoạn này **KHÔNG** thêm migration, **KHÔNG** bảng/cột/index mới.
 > `@mention` dùng cột `notifications.type` (text tự do) + `notifications.payload` (jsonb) sẵn có —
-> `dotnet ef migrations has-pending-model-changes` phải tiếp tục trả "No changes have been made to the model since the last migration."
+> `dotnet ef migrations has-pending-model-changes` vẫn trả "No changes have been made to the model since the last migration."
 >
-> **Baseline đo thật tại phiên lập kế hoạch:**
-> backend **371 test / 0 fail** (134 PASS + **237 SKIP** vì mật khẩu Postgres local khác `postgres/postgres` — xem §1.2 của tài liệu);
-> frontend **360 test PASS / 60 file**; `dotnet build TeamNexus.sln -m:1 -nr:false` = **0 warning / 0 error**; `dotnet ef migrations list` = **9**.
+> **Kết quả backend đo thật (PostgreSQL 18 Docker, cổng 5433):**
+> `dotnet test` = **Failed 0 / Passed 423 / Skipped 0 / Total 423** (baseline trước giai đoạn là **371** ⇒ **+52** test mới);
+> `dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental` = **0 warning / 0 error**; `dotnet ef migrations list` = **9**.
+> Phân bổ: `DashboardApiTests` 14 · `TaskSearchApiTests` 24 · `CommentMentionApiTests` 10 · `NotificationTriggerApiTests` +4.
 
 Trang tổng quan workspace sau đăng nhập và khả năng tìm kiếm/lọc task nâng cao.
 
 **Yêu cầu hoàn thiện:**
 - [ ] **Dashboard tổng quan**: trang chủ workspace hiển thị "Task của tôi" (sắp đến hạn, quá hạn, mới giao), hoạt động gần đây (recent activity feed), tóm tắt board (số task theo trạng thái), cảnh báo AI Observer chưa đọc
+  - ✅ **Backend XONG** — `GET /api/workspaces/{id}/dashboard` (Member+, 404 người ngoài) + tham số `kind` trên `GET /api/notifications` để tách riêng "cảnh báo AI Observer chưa đọc"
+  - ⬜ **Frontend** — `WorkspaceDashboardPage` tại `/workspaces/:id/dashboard` (bàn giao antigravity)
 - [ ] **Tìm kiếm & Lọc task**: tìm task theo tên, assignee, label, priority, trạng thái, due date — trong phạm vi workspace hoặc board đang xem
+  - ✅ **Backend XONG** — `GET /api/workspaces/{id}/tasks/search` (11 tham số, keyset `(updated_at, id)`); `GET /api/boards/{id}/tasks` **giữ nguyên** shape mảng
+  - ⬜ **Frontend** — trang `/workspaces/:id/search` + nút "Tìm trong workspace" ở `BoardView` (bàn giao antigravity)
 - [ ] **@mention trong comment**: tag thành viên bằng `@tên` (autocomplete), kích hoạt thông báo cho người được tag — mở rộng `notifications` table
+  - ✅ **Backend XONG** — `CreateCommentRequest.MentionUserIds` (**id tường minh**, server **không** parse `@tên`) + type `CommentMention` (jsonb, **không** cần migration)
+  - ⬜ **Frontend** — `Mentions` của antd v6 trong `TaskDetailModal` + nhãn "Được nhắc đến" (bàn giao antigravity)
 
 > **Khảo sát đầu kỳ (đã phản ánh vào tài liệu chia task):**
 > **Đã có sẵn, không viết lại** — `BoardView` **đã có** lọc client theo title/description/assignee/label + priority (nhưng thiếu trạng thái/due date và không tìm xuyên board);
 > `CommentService` đã có 1 row `CommentOnTask` cho assignee; hạ tầng notification + `AppHeader`/`NotificationBell`/drawer
-> đã đủ (Phase 11); 3 vocabulary notification đã tách sẵn; `activity_labels` UI, `taskDueDate.ts`, `useWorkspaceMembers`, `useWorkspaceRole` dùng lại được.
+> đã đủ (Phase 11); 3 vocabulary notification đã tách sẵn; `activityLabels` UI, `taskDueDate.ts`, `useWorkspaceMembers`, `useWorkspaceRole` dùng lại được.
 > **Khoảng trống thật** — (1) **Dashboard**: `DashboardPage` vẫn là trang demo Phase 1 (ô nhập Workspace ID + 3 nút test RBAC), **không** có API/service/hook nào;
 > (2) **Search**: chưa có endpoint tìm xuyên board (chỉ có `GET /api/boards/{id}/tasks`), chưa lọc theo trạng thái/due date;
 > (3) **Mention**: chưa có gì (`grep -i mention` toàn repo = 1 dòng comment).

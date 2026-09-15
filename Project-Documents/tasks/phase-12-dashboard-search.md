@@ -1,6 +1,20 @@
 # Giai đoạn 12 — Dashboard & Tìm kiếm (Kế hoạch chia task)
 
-> **Trạng thái thi hành:** 📋 **KẾ HOẠCH ĐÃ CHỐT — chưa viết code.** Chia thành **§1 (Dashboard backend) · §2 (Search backend) · §3 (Mention backend + `kind` filter) · §4 (Dashboard frontend) · §5 (Search frontend) · §6 (Mention frontend) · §7 (CI & tài liệu)**.
+> **Trạng thái thi hành:** 🔄 **Backend XONG (§1, §2, §3 + P1/P2); frontend + CI bàn giao antigravity** (`tasks/phase-12-remaining-frontend-handover.md`).
+> ✅ **P1/P2 Refactor** (`TaskReadHelpers`, `TimeProvider`) — hồi quy **76/76 PASS** ·
+> ✅ **§1 Dashboard backend** — `DashboardApiTests` **14/14 PASS** ·
+> ✅ **§2 Search backend** — `TaskSearchApiTests` **24/24 PASS** ·
+> ✅ **§3 Mention backend** — `CommentMentionApiTests` **10/10 PASS** ·
+> ✅ **§3.4 `kind` filter** — 4 test mới trong `NotificationTriggerApiTests` ·
+> ⬜ **§4/§5/§6 Frontend** và **§7.2 CI** — đã viết note bàn giao.
+>
+> **Đo thật trên PostgreSQL 18 (Docker, cổng 5433 — xem §1.2):**
+> `dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental` = **0 warning / 0 error** ·
+> `dotnet test` = **Failed 0 / Passed 423 / Skipped 0 / Total 423** (⏱ 68 s) ·
+> `dotnet ef migrations list` = **9** · `has-pending-model-changes` = **không có**.
+>
+> **Baseline trước giai đoạn này là 371** ⇒ `423 = 371 + 52` test mới
+> (**14** dashboard + **24** search + **10** mention + **4** `kind`).
 >
 > **Nguồn:** `Project-Documents/03-roadmap.md` → *Giai đoạn 12: Dashboard & Tìm kiếm* (3 ô A/B/C).
 > **Tiền đề đã merge:** Giai đoạn 7 (AI Agent Executor) · 8 (Test/CI/Deploy) · 9 (Đơn giản hoá Role) · 10 (Nâng cao Task & Workspace UX) · **11 (Quản lý Member & Profile)**.
@@ -120,41 +134,57 @@ src/TeamNexus.Persistence/Migrations/*.cs → 9 (mới nhất 20260914105025_Pha
 | **P5** | `RecentActivities` của dashboard **luôn trả `payload = null`** | `payload` là jsonb tùy ý (`assigneeId`, `columnId`, `titleChanged`…). Trả nguyên payload cho **mọi thành viên** là mở rộng bề mặt dữ liệu ngoài yêu cầu. FE chỉ cần `action` + `authorName` + `entityType` để hiện nhãn tiếng Việt qua `activityLabels.ts` |
 | **P6** | Frontend **GIỮ** `GET /api/workspaces` trong `DashboardPage` gốc | Side effect "tự tạo workspace mặc định" mà `DashboardPage` phụ thuộc (Phase 11 §7 ghi rõ `UserProfileService.ListMyWorkspacesAsync` **cố tình không** tái dùng `WorkspaceService.ListForUserAsync` vì lý do này). Route mới `/workspaces/:id/dashboard` **không** gọi lại endpoint tạo hộ đó |
 
+### 2.2 Quyết định **chốt khi hiện thực** (khác/ bổ sung bản kế hoạch đầu — ghi lại để không bị coi là sai lệch)
+
+| # | Quyết định | Vì sao |
+|---|---|---|
+| **P7** | **`dueSoon` LOẠI TRỪ `overdue`** (bản kế hoạch đầu nói ngược lại) | 3 tab là một **phân hoạch theo mức khẩn cấp** ("đã trễ" / "sắp tới hạn" / "vừa được giao"); task vừa bị server gọi là quá hạn mà hiện tiếp ở "sắp đến hạn" thì dashboard tự mâu thuẫn. Task **vẫn có thể** nằm ở cả "Quá hạn" và "Mới giao" (2 lát cắt độc lập) |
+| **P8** | **`days=0` clamp về 1** (không quay về mặc định 3) | `Clamp(value, fallback, min, max)` coi "ngoài khoảng" là clamp; chỉ `null` mới dùng mặc định — đúng tiền lệ `WorkspaceActivityService.ClampTake` |
+| **P9** | Search **validate `assigneeId` phải là thành viên workspace ⇒ 400** | Không task nào có thể khớp một người ngoài workspace ⇒ trả trang rỗng sẽ trông y hệt "không có kết quả", không phân biệt được với lỗi gõ. Cùng lý do với `labelIds` |
+| **P10** | `kind=member` gồm **4** type (có `CommentMention`), không phải 3 | Mention là thông báo nghiệp vụ hướng thành viên; nếu để ngoài `member` thì ô "Trung tâm thông báo" không lọc được nó |
+| **P11** | Test Phase 11 `TheAlertsArePrivateAndReadableOnlyByTheirRecipient` **phải sửa** | Lần chạy đầu tiên với DB thật phát hiện **lỗi harness tiềm ẩn**: sau `AsUserAsync(manager)`, mọi client tạo trước đó (**kể cả `memberClient`**) đã xác thực **là manager** vì `TestScenario` dùng **chung một cookie jar**. Test cũ chỉ đăng nhập lại phía Manager mà quên phía member ⇒ POST cuối nhận **404** thay vì **200**. Sửa bằng đăng nhập lại **cả hai** phía. **Đây là test cũ duy nhất phải sửa** — ghi vào báo cáo theo yêu cầu §9 |
+| **P12** | `TestScenario.CreateScenarioAsync(scriptedAi, clock)` nhận thêm `clock`; có `clock`/`scriptedAi` ⇒ **host riêng**, không có ⇒ host chung. Thêm `CreateClockScenarioAsync(clock)` + `TeamNexusApiFactory.Clock` | Bucket của dashboard định nghĩa bằng **biên thời gian**; assert biên với đồng hồ thật là flaky theo cấu trúc (request chạy sau khi test tính `UtcNow` vài ms). Đúng tinh thần "hàm tất định" của `ReportAggregator` |
+| **P13** | Trong test, `created_at`/`updated_at` phải `UPDATE` **sau** `SaveChanges` | `TeamNexusDbContext.StampAuditableTimestamps` đặt cả hai cột bằng **đồng hồ thật** cho mọi `Added` `IAuditableEntity` (chỉ ghi khi `Added`/`Modified`, **không** khôi phục giá trị caller đặt) ⇒ mọi test cửa sổ thời gian sẽ xanh vì **lý do sai**. Đã ghi rõ trong doc comment của helper seed |
+
 ---
 
-## 3. §1 + §2 + §3.4 — Backend
+## 3. §1 + §2 + §3.4 — Backend — ✅ **XONG**
 
-### 3.1 File **mới**
+### 3.1 File **mới** (đã tạo)
 
 | File | Nội dung |
 |---|---|
 | `Board/DTOs/DashboardDtos.cs` | `DashboardTaskItem`, `DashboardTaskBucket`, `DashboardBoardSummary`, `DashboardBoardColumnCount`, `DashboardActivityItem`, `DashboardSummary`, `DashboardResponse` (shape chốt ở §3.3) |
 | `Board/DTOs/TaskSearchDtos.cs` | `TaskSearchItem(TaskResponse Task, string BoardName, string ColumnName, bool IsDoneColumn)`, `TaskSearchResponse(IReadOnlyList<TaskSearchItem> Items, string? NextCursor, bool HasMore, bool HasQuery)` |
 | `Board/Services/DashboardService.cs` | `IDashboardService.GetAsync(workspaceId, userId, days, take, ct)` — `RequireMemberAsync` rồi 6 truy vấn **có bound** (§3.3) |
-| `Board/Services/TaskSearchService.cs` | `ITaskSearchService.SearchAsync(TaskSearchQuery query, ct)` + record nội bộ `TaskSearchQuery` (**không** bind trực tiếp từ query string) |
+| `Board/Services/ITaskSearchService.cs` | `ITaskSearchService.SearchAsync(TaskSearchRequest, Guid userId, ct)` + record **public** `TaskSearchRequest` (phải public vì xuất hiện trong signature của interface — **CS0051**) |
+| `Board/Services/TaskSearchService.cs` | Cài đặt: scope board/label/assignee → dựng `IQueryable` → keyset `(updated_at DESC, id DESC)` + rank theo vị trí khớp title → nạp labels/comment/agent-run theo lô cho **trang hiện tại** |
 | `Board/Services/TaskReadHelpers.cs` (**P1**) | `internal static` — `LoadLabelsByTaskAsync`, `LoadCommentCountsAsync`, `ResolveAssigneeIsAiAgentAsync` (move nguyên SQL từ `TaskService`) |
 | `Board/Endpoints/DashboardEndpoints.cs` | `GET /api/workspaces/{workspaceId:guid}/dashboard?days=&take=` — `RequireAuthorization` + `DomainExceptionFilter` |
-| `Board/Endpoints/TaskSearchEndpoints.cs` | `GET /api/workspaces/{workspaceId:guid}/tasks/search` + 11 tham số (§3.4) — `RequireAuthorization` + `DomainExceptionFilter` |
-| `Ai/Services/NotificationVocabulary.cs` | Ánh xạ `kind` → 3 tập type (Observer · agent · member). **Không** sửa `NotificationTypes.All` |
-| `tests/…/Integration/DashboardApiTests.cs` | **D-1 … D-14** (§3.6) |
-| `tests/…/Integration/TaskSearchApiTests.cs` | **S-1 … S-16** (§3.6) |
-| `tests/…/Integration/CommentMentionApiTests.cs` | **M-1 … M-10** (§3.6) |
+| `Board/Endpoints/TaskSearchEndpoints.cs` | `GET /api/workspaces/{workspaceId:guid}/tasks/search` + 11 tham số (§3.4) — parse/validate tại handler, `RequireAuthorization` + `DomainExceptionFilter` |
+| `Ai/Services/NotificationVocabulary.cs` | Ánh xạ `kind` → 3 tập type (Observer · agent · member) + `Parse` ném **400** cho giá trị lạ. **Không** sửa `NotificationTypes.All` |
+| `tests/…/Infrastructure/FixedTimeProvider.cs` | `TimeProvider` đóng băng tại một mốc, cho suite dashboard |
+| `tests/…/Integration/DashboardApiTests.cs` | **D-1 … D-14** — ✅ **14/14 PASS** |
+| `tests/…/Integration/TaskSearchApiTests.cs` | **S-1 … S-16** (24 method do có `[Theory]`) — ✅ **24/24 PASS** |
+| `tests/…/Integration/CommentMentionApiTests.cs` | **M-1 … M-10** — ✅ **10/10 PASS** |
 
-### 3.2 File **sửa**
+### 3.2 File **sửa** (đã sửa)
 
 | File | Thay đổi |
 |---|---|
 | `Board/Endpoints/BoardEndpoints.cs` | +`endpoints.MapDashboardEndpoints(); endpoints.MapTaskSearchEndpoints();` |
-| `Board/BoardModule.cs` | +`IDashboardService`, `ITaskSearchService`, `services.AddSingleton(TimeProvider.System)` (**P2**) |
+| `Board/BoardModule.cs` | +`IDashboardService`, `ITaskSearchService`, `services.TryAddSingleton(TimeProvider.System)` (**P2**) |
 | `Board/Services/TaskService.cs` | **Chỉ thay 3 khối private bằng gọi `TaskReadHelpers`** (**P1**). Hành vi/SQL **không đổi** |
 | `Board/DTOs/CommentDtos.cs` | `CreateCommentRequest(string Content, IReadOnlyList<Guid>? MentionUserIds = null)` (**D13**) |
-| `Board/Services/CommentService.cs` | +`NotifyMentionedAsync` (gọi **sau** `NotifyAssigneeAsync`); **giữ nguyên** `NotifyAssigneeAsync` |
-| `Board/Services/INotificationWriter.cs` | +`MemberNotificationTypes.CommentMention = "CommentMention"` |
+| `Board/Services/CommentService.cs` | +`ResolveMentionedMembersAsync` (validate **trước khi ghi**) +`NotifyMentionedAsync` (sau `NotifyAssigneeAsync`); **giữ nguyên** `NotifyAssigneeAsync` |
+| `Board/Services/INotificationWriter.cs` | +`MemberNotificationTypes.CommentMention = "CommentMention"`; +`MemberNotificationLimits.MaxMentionedUsers = 20` |
 | `Ai/Services/MemberNotificationTypes.cs` | +`CommentMention = Board.Services.MemberNotificationTypes.CommentMention` (alias, đúng tiền lệ 3 hằng đang có) |
-| `Ai/Services/NotificationService.cs` | `ListAsync(Guid userId, bool? isRead, NotificationKind? kind, int take, ct)`; `CountUnreadAsync` nhận **cùng bộ lọc** (**D4**). Giữ overload cũ để không phá caller hiện có |
-| `Ai/Endpoints/NotificationEndpoints.cs` | +bind `string? kind`; parse **chặt** (`observer`/`agent`/`member`, khác ⇒ **400**) |
+| `Ai/Services/NotificationService.cs` | `ListAsync(Guid userId, bool? isRead, IReadOnlyList<string>? kind, int take, ct)`; **`UnreadCount` tính theo CÙNG bộ lọc** (**D4**) |
+| `Ai/Endpoints/NotificationEndpoints.cs` | +bind `string? kind`; `NotificationVocabulary.Parse(kind)` ⇒ giá trị lạ **400** |
 | `Ai/DTOs/NotificationDtos.cs` | **KHÔNG đổi** — `NotificationResponse` / `NotificationListResponse` giữ nguyên shape |
-| `tests/…/Integration/NotificationTriggerApiTests.cs` | +4 test hồi quy/`kind` (§3.6) |
+| `tests/…/Infrastructure/TeamNexusApiFactory.cs` | +property `Clock` (`TimeProvider?`, qua `ConfigureTestServices`) (**P12**) |
+| `tests/…/Infrastructure/DatabaseFixture.cs` | `CreateScenarioAsync(scriptedAi, clock)`; có DI-override ⇒ **host riêng**, không có ⇒ host chung; +`CreateClockScenarioAsync(clock)` (**P12**) |
+| `tests/…/Integration/NotificationTriggerApiTests.cs` | +4 test `kind` (N-13…N-16) + **sửa 1 test Phase 11** (**P11** — ghi rõ trong báo cáo) |
 
 ### 3.3 Hợp đồng API backend **chốt** (frontend dùng đúng, không đoán)
 
@@ -212,7 +242,7 @@ interface DashboardResponse {
 **Thứ tự sắp xếp chốt:** `overdue` sắp `dueDate ASC` (quá hạn lâu nhất trước) → `title ASC` → `id ASC`; `dueSoon` sắp `dueDate ASC`; `recentlyAssigned` sắp `createdAt DESC`.
 **`count` là tổng thật**, `items` bị `take` cắt ⇒ UI luôn hiển thị **số đúng** ở tiêu đề tab.
 **Một task CÓ THỂ xuất hiện ở nhiều bucket** (vừa "quá hạn" vừa "mới giao") — **cố ý**: đó là 3 lát cắt khác nhau trên cùng một tập.
-**`dueSoon` KHÔNG loại trừ `overdue`:** một task quá hạn vẫn có mặt ở cả hai bucket. UI hiển thị độc lập theo tab.
+**`dueSoon` LOẠI TRỪ `overdue`** (chốt khi hiện thực §1 — bản kế hoạch đầu nói ngược lại): 3 tab là một **phân hoạch theo mức khẩn cấp** ("đã trễ" / "sắp tới hạn" / "vừa được giao"); nếu task vừa bị server gọi là quá hạn lại hiện tiếp ở tab "sắp đến hạn" thì dashboard tự mâu thuẫn. Vì vậy `summary.overdue` + `dueSoon.count` không cộng lại thành một con số có nghĩa — mỗi tab là một câu hỏi riêng.
 
 #### B. Search
 
@@ -478,22 +508,25 @@ dotnet test --filter "FullyQualifiedName~EmailTemplateTests" → 14/14 PASS (h�
 
 ### 7.1 Con số mục tiêu
 
-| Chỉ số | Baseline **đo được** | Kỳ vọng sau Giai đoạn 12 |
+| Chỉ số | Baseline **đo được** | Kết quả **đo thật** |
 |---|---|---|
-| Backend `dotnet test` (**DB thật**, `Skipped: 0`) | **371** ⚠️ *chưa đo được — §1.2* | **≈ 415** (371 + 44) — **chốt bằng số thật** |
-| Backend `dotnet test` (không DB — vẫn phải chạy) | 134 pass / 237 skip | `Failed 0` (số mới cũng bị skip, **không** dùng làm bằng chứng DoD) |
-| `dotnet build TeamNexus.sln -m:1 -nr:false` | 0 / 0 | ✅ 0 / 0 |
-| Frontend `npm test` | ✅ **360** / 60 file | **≈ 453** (~72 file) |
-| Frontend `npm run lint` · `npx tsc -b` · `npm run build` | 0/0 · exit 0 · OK | giữ nguyên |
+| Backend `dotnet test` (**DB thật**, `Skipped: 0`) | **371** (134 PASS + 237 SKIP vì chưa nối DB — §1.2) | ✅ **423** (Failed **0** / Skipped **0**) = 371 + **52** |
+| Backend `dotnet test` (không DB — vẫn phải chạy được) | 134 pass / 237 skip | ✅ không đổi hành vi skip; **không** dùng làm bằng chứng DoD |
+| `dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental` | 0 / 0 | ✅ **0 / 0** |
+| Frontend `npm test` | ✅ **360** / 60 file | ⬜ **≈ 453** (~72 file) — chờ antigravity |
+| Frontend `npm run lint` · `npx tsc -b` · `npm run build` | 0/0 · exit 0 · OK | ⬜ giữ nguyên |
 | `dotnet ef migrations list` | ✅ **9** | ✅ **9** (KHÔNG đổi) |
-| `has-pending-model-changes` | sạch | ✅ sạch |
+| `has-pending-model-changes` | sạch | ✅ **"No changes have been made to the model since the last migration."** |
+
+**Phân bổ 52 test backend mới:** `DashboardApiTests` **14** · `TaskSearchApiTests` **24** ·
+`CommentMentionApiTests` **10** · `NotificationTriggerApiTests` **+4**.
 
 ### 7.2 ⚙️ CI phải nâng (làm **SAU CÙNG**, khi số thật đã đo)
 
 | # | File | Việc |
 |---|---|---|
-| 1 | `.github/workflows/ci-backend.yml` | `if ($total -ne 371)` ⇒ **số thật**; cập nhật comment chuỗi `… → 371 (Giai đoạn 11) → <mới> (Giai đoạn 12)` |
-| 2 | `.github/workflows/ci-web.yml` | `if ($total -le 279)` ⇒ **`-le <baseline mới>`** + comment baseline |
+| 1 | `.github/workflows/ci-backend.yml` | `if ($total -ne 371)` ⇒ **`-ne 423`**; cập nhật comment chuỗi `… → 371 (Giai đoạn 11) → 423 (Giai đoạn 12)` |
+| 2 | `.github/workflows/ci-web.yml` | `if ($total -le 279)` ⇒ **`-le <baseline mới>`** (≥ số test thật sau khi frontend xong) + comment baseline |
 
 ### 7.3 Tài liệu phải cập nhật
 
@@ -518,10 +551,10 @@ báo cáo tại `Project-Documents/report/phase-12-dashboard-search-test-report.
 
 | # | Bằng chứng | Ngưỡng | Trạng thái |
 |---|---|---|---|
-| 1 | `dotnet build TeamNexus.sln -m:1 -nr:false` | 0 warning / 0 error | ⬜ sau mỗi bước |
-| 2 | `dotnet ef migrations list` + `has-pending-model-changes` | **9** / sạch | ⬜ |
-| 3 | `dotnet test` với `TEAMNEXUS_TEST_DB` (Docker `postgres:18` cổng 5433 — §1.2) | **`Skipped: 0`**, `Failed: 0`, `Total` = baseline + 44 | ⬜ |
-| 4 | `npm run lint` / `npx tsc -b` / `npm test` / `npm run build` | 0-0 / exit 0 / ≥ 453 / OK | ⬜ |
+| 1 | `dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental` | 0 warning / 0 error | ✅ **đạt** (sau mỗi bước) |
+| 2 | `dotnet ef migrations list` + `has-pending-model-changes` | **9** / sạch | ✅ **đạt** (9 · *"No changes have been made…"*) |
+| 3 | `dotnet test` với `TEAMNEXUS_TEST_DB` (Docker `postgres:18` cổng 5433 — §1.2) | `Skipped: 0`, `Failed: 0`, `Total 423` | ✅ **đạt** (423/0/0 · 68 s) |
+| 4 | `npm run lint` / `npx tsc -b` / `npm test` / `npm run build` | 0-0 / exit 0 / ≥ 453 / OK | ⬜ **chờ antigravity** |
 | 5 | **1 lượt thao tác thật, có ảnh**: mở `/workspaces/{id}/dashboard` thấy 3 tab "Task của tôi" + tóm tắt board + hoạt động gần đây; vào `/search` lọc theo nhãn + khoảng hạn rồi "Tải thêm"; gõ `@` trong bình luận ⇒ chọn người ⇒ **chuông header nổi số** ⇒ drawer hiện "Được nhắc đến" | — | ⬜ |
 | 6 | 2 workflow CI xanh | `ci-backend` (total = số thật, skipped 0) + `ci-web` (≥ baseline mới) | ⬜ |
 

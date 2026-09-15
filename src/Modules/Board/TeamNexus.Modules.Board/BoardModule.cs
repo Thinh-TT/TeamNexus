@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using TeamNexus.Modules.Board.Endpoints;
 using TeamNexus.Modules.Board.Services;
 using TeamNexus.Shared.Endpoints;
@@ -21,6 +22,9 @@ public static class BoardModule
         services.AddScoped<IWorkspaceMemberService, WorkspaceMemberService>();
         services.AddScoped<IWorkspaceService, WorkspaceService>();
         services.AddScoped<IWorkspaceActivityService, WorkspaceActivityService>();
+        // Phase 12: workspace dashboard (read-only) + cross-board task search.
+        services.AddScoped<IDashboardService, DashboardService>();
+        services.AddScoped<ITaskSearchService, TaskSearchService>();
         services.AddScoped<IInvitationService, InvitationService>();
         services.AddScoped<IQuickEmailService, QuickEmailService>();
         services.AddScoped<IUserProfileService, UserProfileService>();
@@ -30,6 +34,10 @@ public static class BoardModule
         services.AddScoped<ILabelService, LabelService>();
         services.AddScoped<ICommentService, CommentService>();
         services.AddScoped<IBoardEventPublisher, BoardEventPublisher>();
+
+        // Clock for the dashboard's time-window buckets (Phase 12 §P2). TryAdd so a test host — or a
+        // later module — can swap in a fixed clock without fighting this registration.
+        services.TryAddSingleton(TimeProvider.System);
 
         // Activity log port (Phase 5 §2): Board declares it, module Ai registers the real EF
         // adapter. That registration wins because Program.cs calls AddBoardModule before

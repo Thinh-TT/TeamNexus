@@ -140,31 +140,6 @@ public sealed class DatabaseFixture : IAsyncLifetime
         }
     }
 
-    /// <summary>Wipes every data table and returns a scenario bound to a clean database.</summary>
-    public async Task<TestScenario> CreateScenarioAsync(ScriptedAiProvider? scriptedAi = null)
-    {
-        Require();
-
-        // Held until the returned scenario is disposed: see DatabaseLock's remarks.
-        await DatabaseLock.WaitAsync();
-
-        try
-        {
-            var scenario = new TestScenario(
-                Factory,
-                releaseDatabaseLock: () => DatabaseLock.Release(),
-                scriptedAiProvider: scriptedAi);
-
-            await scenario.ResetDatabaseAsync();
-            return scenario;
-        }
-        catch
-        {
-            DatabaseLock.Release();
-            throw;
-        }
-    }
-
     /// <summary>
     /// A scenario whose host answers AI calls with <paramref name="scripted"/> instead of the
     /// production <c>FakeAiProvider</c>. Because the provider lives in DI, this scenario needs its
@@ -203,9 +178,67 @@ public sealed class DatabaseFixture : IAsyncLifetime
         }
     }
 
+    /// <summary>Wipes every data table and returns a scenario bound to a clean database.</summary>
+    public async Task<TestScenario> CreateScenarioAsync(ScriptedAiProvider? scriptedAi = null, TimeProvider? clock = null)
+    {
+        Require();
+
+        // Held until the returned scenario is disposed: see DatabaseLock's remarks.
+        await DatabaseLock.WaitAsync();
+
+        try
+        {
+            // The shared host is reused for every ordinary scenario. A DI override (scripted AI, a
+            // fixed clock) cannot be applied to it, so those cases build their own host — the cost is
+            // a real ASP.NET Core host build, which is why it is opt-in rather than the default.
+            var needsOwnHost = scriptedAi is not null || clock is not null;
+
+            var factory = needsOwnHost
+                ? new TeamNexusApiFactory
+                {
+                    ConnectionString = ConnectionString,
+                    ScriptedAi = scriptedAi,
+                    Clock = clock,
+                }
+                : Factory;
+
+            var scenario = new TestScenario(
+                factory,
+                releaseDatabaseLock: () =>
+                {
+                    DatabaseLock.Release();
+
+                    if (needsOwnHost)
+                    {
+                        factory.Dispose();
+                    }
+                },
+                scriptedAiProvider: scriptedAi);
+
+            await scenario.ResetDatabaseAsync();
+            return scenario;
+        }
+        catch
+        {
+            DatabaseLock.Release();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// A scenario whose host resolves <paramref name="clock"/> as <see cref="TimeProvider"/> (Phase 12).
+    /// <para>
+    /// The clock lives in DI, so — exactly like the scripted-AI case — this cannot reuse the shared
+    /// host and gets its own. It exists because the dashboard's buckets are defined by time
+    /// boundaries, and a boundary assertion against the wall clock is flaky by construction (the
+    /// request runs milliseconds after the test computes its own <c>UtcNow</c>).
+    /// </para>
+    /// </summary>
+    public Task<TestScenario> CreateClockScenarioAsync(TimeProvider clock)
+        => CreateScenarioAsync(clock: clock);
+
     /// <summary>The shared host every scenario talks to (also used for the raw-SQL cleanup).</summary>
     public TeamNexusApiFactory Factory => TeamNexusApiFactory.Shared;
-
     /// <summary>
     /// A <see cref="TeamNexusDbContext"/> resolved from the application's scope — exactly the model
     /// production uses.

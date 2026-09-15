@@ -65,6 +65,12 @@ public sealed class CommentService : ICommentService
         await _access.RequireMemberAsync(task.Board!.WorkspaceId, userId, ct);
         ValidateContent(request.Content);
 
+        // Validate the mentioned ids BEFORE writing anything: a comment that names somebody who cannot
+        // be mentioned must not exist at all, or the workspace is left with a comment whose alert never
+        // arrived (Phase 12 §3.4 step 2).
+        var mentioned = await ResolveMentionedMembersAsync(
+            task.Board.WorkspaceId, request.MentionUserIds, ct);
+
         var comment = new TaskComment
         {
             TaskId = taskId,
@@ -92,9 +98,12 @@ public sealed class CommentService : ICommentService
                 ActivityJson)), ct);
 
         // Phase 11 §6.6: tell the person the task belongs to. Only the assignee — fanning out to the
-        // whole workspace would be noise, and @mention (which does need a wider audience) is
-        // Giai đoạn 12.
+        // whole workspace would be noise.
         await NotifyAssigneeAsync(task, comment, userId, ct);
+
+        // Phase 12 §3.4: the people explicitly tagged. Runs after the assignee alert so the two can
+        // never notify the same person twice.
+        await NotifyMentionedAsync(task, comment, mentioned, userId, ct);
 
         return response;
     }
@@ -137,6 +146,108 @@ public sealed class CommentService : ICommentService
                 $"{authorName}: {excerpt}",
                 JsonSerializer.Serialize(
                     new { boardId = task.BoardId, taskId = task.Id, commentId = comment.Id },
+                    ActivityJson)),
+            ct);
+    }
+
+    /// <summary>
+    /// Validates and de-duplicates the ids the comment named (Phase 12 §3.4).
+    /// <para>
+    /// <b>Human members only.</b> The AI Agent is a <c>workspace_members</c> row with no inbox, and
+    /// mentioning it would produce an alert nobody reads (the same exclusion
+    /// <see cref="NotifyAssigneeAsync"/> makes). A user outside the workspace is a <b>400</b>: they
+    /// cannot even see the task, so an alert about it would leak the existence of work they have no
+    /// access to.
+    /// </para>
+    /// </summary>
+    private async Task<IReadOnlyList<Guid>> ResolveMentionedMembersAsync(
+        Guid workspaceId, IReadOnlyList<Guid>? mentionUserIds, CancellationToken ct)
+    {
+        if (mentionUserIds is null || mentionUserIds.Count == 0)
+        {
+            return [];
+        }
+
+        var requested = mentionUserIds
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        if (requested.Count == 0)
+        {
+            return [];
+        }
+
+        if (requested.Count > MemberNotificationLimits.MaxMentionedUsers)
+        {
+            throw new BadRequestException(
+                $"A comment can mention at most {MemberNotificationLimits.MaxMentionedUsers} people.");
+        }
+
+        var valid = await _db.WorkspaceMembers
+            .Where(wm => wm.WorkspaceId == workspaceId
+                         && requested.Contains(wm.UserId)
+                         && wm.MemberType == MemberType.Human)
+            .Select(wm => wm.UserId)
+            .ToListAsync(ct);
+
+        if (valid.Count != requested.Count)
+        {
+            throw new BadRequestException(
+                "Mentioned users must be members of this workspace (and cannot be the AI Agent).");
+        }
+
+        return valid;
+    }
+
+    /// <summary>
+    /// Alerts the people a comment explicitly tagged (Phase 12 §3.4).
+    /// <para>
+    /// The author is dropped (nobody needs to be told about their own sentence) and so is anyone who
+    /// already received the assignee alert above — one comment must never produce two rows for the same
+    /// person, because the bell would then count the same event twice.
+    /// </para>
+    /// </summary>
+    private async Task NotifyMentionedAsync(
+        BoardTask task,
+        TaskComment comment,
+        IReadOnlyList<Guid> mentioned,
+        Guid actorId,
+        CancellationToken ct)
+    {
+        if (mentioned.Count == 0)
+        {
+            return;
+        }
+
+        var recipients = mentioned
+            .Where(id => id != actorId && id != task.AssigneeId)
+            .ToList();
+
+        if (recipients.Count == 0)
+        {
+            return;
+        }
+
+        var authorName = comment.Author?.DisplayName ?? "Ai đó";
+        var excerpt = MemberNotificationLimits.Clamp(comment.Content, MemberNotificationLimits.CommentExcerpt);
+
+        await _notifications.NotifyAsync(
+            new MemberNotification(
+                task.Board!.WorkspaceId,
+                recipients,
+                MemberNotificationTypes.CommentMention,
+                "Bạn được nhắc đến trong một bình luận",
+                // A preview, never the full body: the notification is a pointer to the task.
+                $"{authorName}: {excerpt}",
+                JsonSerializer.Serialize(
+                    new
+                    {
+                        boardId = task.BoardId,
+                        taskId = task.Id,
+                        commentId = comment.Id,
+                        mentionedCount = recipients.Count,
+                    },
                     ActivityJson)),
             ct);
     }

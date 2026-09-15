@@ -28,4 +28,14 @@ public static class MemberNotificationTypes
 
     /// <summary>The recipient was invited to a workspace (reserved for the in-app mirror).</summary>
     public const string WorkspaceInvitation = Board.Services.MemberNotificationTypes.WorkspaceInvitation;
+
+    /// <summary>
+    /// The recipient was tagged with <c>@tên</c> in a comment (Phase 12 §3).
+    /// <para>
+    /// Joined in the same request as the other member types, so it reaches the database as
+    /// <c>notifications.type = 'CommentMention'</c> (14 characters — well inside the column's 32), and
+    /// joined in <c>NotificationVocabulary.Member</c> so the <c>kind=member</c> filter can find it.
+    /// </para>
+    /// </summary>
+    public const string CommentMention = Board.Services.MemberNotificationTypes.CommentMention;
 }

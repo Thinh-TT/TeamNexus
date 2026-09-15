@@ -92,6 +92,17 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
     public bool ReportsEnabled { get; init; } = true;
 
     /// <summary>
+    /// Overrides the clock the app resolves as <see cref="TimeProvider"/> (Phase 12 §P2).
+    /// <para>
+    /// Registered through <c>ConfigureTestServices</c>, which runs <b>after</b> the app's own
+    /// registrations — so this wins even though <c>AddBoardModule</c> also registers
+    /// <c>TimeProvider.System</c>. Defaults to the system clock: an ordinary suite keeps real time,
+    /// and only the dashboard suite swaps in <see cref="FixedTimeProvider"/>.
+    /// </para>
+    /// </summary>
+    public TimeProvider? Clock { get; init; }
+
+    /// <summary>
     /// Overrides <c>Agent:RunTimeoutSeconds</c>. Defaults to the production 300 s so ordinary suites
     /// can never trip the wall-clock guardrail; the one suite that tests that guardrail lowers it.
     /// </summary>
@@ -167,6 +178,14 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
             // the one the container resolves (unlike a plain ConfigureServices call).
             builder.ConfigureTestServices(services =>
                 services.AddSingleton<IAiProvider>(ScriptedAi));
+        }
+
+        if (Clock is not null)
+        {
+            // Same "runs last" trick: AddBoardModule registers TimeProvider.System, and this single
+            // registration replaces it for the whole host (Phase 12 §P2).
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton(Clock));
         }
     }
 }
