@@ -207,6 +207,29 @@ describe('boardStore', () => {
       expect(state.tasksByColumn['col-2'][0].completedAt).not.toBeNull()
     })
 
+    it('applyTaskMoved: does not duplicate task when called after optimisticMoveTask', () => {
+      // 1. User drags task-1 from col-1 to col-2 (optimistic update)
+      useBoardStore.getState().optimisticMoveTask('task-1', 'col-1', 'col-2', 0)
+
+      // Verify intermediate state
+      expect(useBoardStore.getState().tasksByColumn['col-1']).toHaveLength(1)
+      expect(useBoardStore.getState().tasksByColumn['col-2']).toHaveLength(1)
+
+      // 2. Real-time SignalR TaskMoved event arrives from server
+      useBoardStore.getState().applyTaskMoved({
+        taskId: 'task-1',
+        fromColumnId: 'col-1',
+        toColumnId: 'col-2',
+        position: 0,
+      })
+
+      // Must remain exactly 1 task in col-2, NOT 2 (no duplicate card)
+      const state = useBoardStore.getState()
+      expect(state.tasksByColumn['col-1']).toHaveLength(1)
+      expect(state.tasksByColumn['col-2']).toHaveLength(1)
+      expect(state.tasksByColumn['col-2'][0].id).toBe('task-1')
+    })
+
     it('applyTaskDeleted: removes task from column and clears activeTask if open', () => {
       const target = useBoardStore.getState().tasksByColumn['col-1'].find((t) => t.id === 'task-1')!
       useBoardStore.getState().setActiveTask(target)

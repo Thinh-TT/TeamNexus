@@ -128,9 +128,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         },
       })
     } else {
-      destTasks.splice(newPosition, 0, updatedTask)
+      const cleanDestTasks = destTasks.filter((t) => t.id !== taskId)
+      const insertPos = Math.max(0, Math.min(newPosition, cleanDestTasks.length))
+      cleanDestTasks.splice(insertPos, 0, updatedTask)
       const renumberedSource = sourceTasks.map((t, idx) => ({ ...t, position: idx }))
-      const renumberedDest = destTasks.map((t, idx) => ({ ...t, position: idx }))
+      const renumberedDest = cleanDestTasks.map((t, idx) => ({ ...t, position: idx }))
       set({
         tasksByColumn: {
           ...currentTasksByColumn,
@@ -180,22 +182,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     const { tasksByColumn, activeTask } = get()
     const newTasksByColumn: Record<string, TaskResponse[]> = {}
 
-    // Find and remove task from any previous column, then add to task.columnId
+    // Find and remove task from any previous column, then add cleanly to task.columnId
     Object.entries(tasksByColumn).forEach(([colId, tasks]) => {
+      const filtered = tasks.filter((t) => t.id !== task.id)
       if (colId === task.columnId) {
-        const index = tasks.findIndex((t) => t.id === task.id)
-        if (index !== -1) {
-          const updated = [...tasks]
-          updated[index] = task
-          updated.sort((a, b) => a.position - b.position)
-          newTasksByColumn[colId] = updated
-        } else {
-          const updated = [...tasks, task]
-          updated.sort((a, b) => a.position - b.position)
-          newTasksByColumn[colId] = updated
-        }
+        const updated = [...filtered, task].sort((a, b) => a.position - b.position)
+        newTasksByColumn[colId] = updated.map((t, idx) => ({ ...t, position: idx }))
       } else {
-        newTasksByColumn[colId] = tasks.filter((t) => t.id !== task.id)
+        newTasksByColumn[colId] = filtered
       }
     })
 
@@ -207,29 +201,17 @@ export const useBoardStore = create<BoardState>((set, get) => ({
 
   applyTaskMoved: ({ taskId, fromColumnId, toColumnId, position }) => {
     const { tasksByColumn, columns, activeTask } = get()
-    const fromTasks = tasksByColumn[fromColumnId] ? [...tasksByColumn[fromColumnId]] : []
-    const toTasks =
-      fromColumnId === toColumnId
-        ? fromTasks
-        : tasksByColumn[toColumnId]
-        ? [...tasksByColumn[toColumnId]]
-        : []
 
-    // Locate the task
+    // 1. Locate the task across all columns and simultaneously remove it from all columns
     let task: TaskResponse | undefined
-    const fromIndex = fromTasks.findIndex((t) => t.id === taskId)
-    if (fromIndex !== -1) {
-      ;[task] = fromTasks.splice(fromIndex, 1)
-    } else {
-      // Look across other columns in case fromColumnId was out of sync
-      for (const colId of Object.keys(tasksByColumn)) {
-        const idx = tasksByColumn[colId].findIndex((t) => t.id === taskId)
-        if (idx !== -1) {
-          task = tasksByColumn[colId][idx]
-          tasksByColumn[colId] = tasksByColumn[colId].filter((t) => t.id !== taskId)
-          break
-        }
+    const cleanTasksByColumn: Record<string, TaskResponse[]> = {}
+
+    for (const [colId, tasks] of Object.entries(tasksByColumn)) {
+      const found = tasks.find((t) => t.id === taskId)
+      if (found) {
+        task = found
       }
+      cleanTasksByColumn[colId] = tasks.filter((t) => t.id !== taskId)
     }
 
     if (!task) return
@@ -242,29 +224,24 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       completedAt: destCol?.isDone ? task.completedAt || new Date().toISOString() : null,
     }
 
-    if (fromColumnId === toColumnId) {
-      fromTasks.splice(position, 0, updatedTask)
-      const renumberedFrom = fromTasks.map((t, i) => ({ ...t, position: i }))
-      set({
-        tasksByColumn: {
-          ...tasksByColumn,
-          [toColumnId]: renumberedFrom,
-        },
-        activeTask: activeTask?.id === taskId ? updatedTask : activeTask,
-      })
-    } else {
-      toTasks.splice(position, 0, updatedTask)
-      const renumberedFrom = fromTasks.map((t, i) => ({ ...t, position: i }))
-      const renumberedTo = toTasks.map((t, i) => ({ ...t, position: i }))
-      set({
-        tasksByColumn: {
-          ...tasksByColumn,
-          [fromColumnId]: renumberedFrom,
-          [toColumnId]: renumberedTo,
-        },
-        activeTask: activeTask?.id === taskId ? updatedTask : activeTask,
-      })
+    // 2. Insert into destination column at target position
+    const destTasks = cleanTasksByColumn[toColumnId] ? [...cleanTasksByColumn[toColumnId]] : []
+    const insertPos = Math.max(0, Math.min(position, destTasks.length))
+    destTasks.splice(insertPos, 0, updatedTask)
+
+    // 3. Renumber positions
+    cleanTasksByColumn[toColumnId] = destTasks.map((t, idx) => ({ ...t, position: idx }))
+    if (fromColumnId !== toColumnId && cleanTasksByColumn[fromColumnId]) {
+      cleanTasksByColumn[fromColumnId] = cleanTasksByColumn[fromColumnId].map((t, idx) => ({
+        ...t,
+        position: idx,
+      }))
     }
+
+    set({
+      tasksByColumn: cleanTasksByColumn,
+      activeTask: activeTask?.id === taskId ? updatedTask : activeTask,
+    })
   },
 
   applyTaskDeleted: (taskId) => {

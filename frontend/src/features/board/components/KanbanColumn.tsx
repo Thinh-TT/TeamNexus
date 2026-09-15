@@ -129,16 +129,17 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
     <div
       ref={setNodeRef}
       style={{
-        width: 290,
-        minWidth: 290,
-        maxWidth: 290,
+        width: 300,
+        minWidth: 300,
+        maxWidth: 300,
         display: 'flex',
         flexDirection: 'column',
-        borderRadius: 12,
-        backgroundColor: isOver ? '#f1f5f9' : '#f8fafc',
+        borderRadius: 14,
+        backgroundColor: isOver ? '#eef2ff' : '#f8fafc',
         border: isOver ? '1.5px dashed #6366f1' : '1px solid #e2e8f0',
         transition: 'all 0.18s ease-in-out',
-        maxHeight: 'calc(100vh - 180px)',
+        maxHeight: 'calc(100vh - 175px)',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
       }}
     >
       {/* Column Header */}
@@ -185,6 +186,8 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
               boxShadow: 'none',
               fontWeight: 600,
               fontSize: 11,
+              borderRadius: 10,
+              padding: '0 4px',
             }}
           />
         </Flex>

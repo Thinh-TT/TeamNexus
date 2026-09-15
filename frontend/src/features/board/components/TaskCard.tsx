@@ -64,22 +64,34 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const taskIsOverdue = isOverdue(task, new Date(), isDoneColumn)
   const daysOverdue = overdueDays(task, new Date(), isDoneColumn)
 
+  const [isHovered, setIsHovered] = React.useState(false)
+
   const style: React.CSSProperties = {
     transform: CSS.Translate.toString(transform),
-    transition,
+    transition: transition
+      ? `${transition}, box-shadow 0.18s ease, border-color 0.18s ease`
+      : 'box-shadow 0.18s ease, border-color 0.18s ease, transform 0.18s ease',
     opacity: isDragging ? 0.35 : 1,
     cursor: 'grab',
     userSelect: 'none',
     boxShadow: isDragOverlay
-      ? '0 12px 24px -4px rgba(0, 0, 0, 0.15), 0 8px 16px -4px rgba(0, 0, 0, 0.1)'
-      : '0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04)',
-    border: isDragOverlay ? '1.5px solid #6366f1' : '1px solid #e2e8f0',
+      ? '0 16px 32px -4px rgba(0, 0, 0, 0.18), 0 8px 16px -4px rgba(0, 0, 0, 0.1)'
+      : isHovered && !isDragging
+      ? '0 6px 14px -2px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04)'
+      : '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
+    border: isDragOverlay
+      ? '1.5px solid #6366f1'
+      : isHovered && !isDragging
+      ? '1px solid #cbd5e1'
+      : '1px solid #e2e8f0',
     borderLeft: taskIsOverdue
       ? '3px solid #ef4444'
       : isDragOverlay
       ? '1.5px solid #6366f1'
+      : isHovered && !isDragging
+      ? '1px solid #cbd5e1'
       : '1px solid #e2e8f0',
-    borderRadius: 8,
+    borderRadius: 10,
     background: '#ffffff',
     transformOrigin: '50% 50%',
     rotate: isDragOverlay ? '2deg' : '0deg',
@@ -110,45 +122,76 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     }
   }, [task.id, task.activeAgentRunId])
 
+  const visibleLabels = task.labels?.slice(0, 2) || []
+  const extraLabels = task.labels && task.labels.length > 2 ? task.labels.slice(2) : []
+
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} onClick={onClick}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      onClick={onClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       <Card
         size="small"
-        bordered={false}
+        variant="borderless"
         style={{ background: 'transparent' }}
-        bodyStyle={{ padding: '12px' }}
+        styles={{ body: { padding: '11px 12px' } }}
       >
-        <Flex vertical gap={8}>
+        <Flex vertical gap={7}>
           {/* Top meta: Priority + Labels + Overdue badge */}
-          {(priorityConfig || (task.labels && task.labels.length > 0) || taskIsOverdue) && (
+          {(priorityConfig || (task.labels && task.labels.length > 0) || taskIsOverdue || task.activeAgentRunId) && (
             <Flex wrap="wrap" gap={4} align="center">
               {taskIsOverdue && (
                 <Tag
                   color="error"
-                  style={{ margin: 0, fontSize: 11, lineHeight: '18px', borderRadius: 4 }}
+                  style={{ margin: 0, fontSize: 10.5, lineHeight: '18px', borderRadius: 4, fontWeight: 500 }}
                   data-testid="task-card-overdue-badge"
                 >
                   {`Quá hạn ${daysOverdue} ngày`}
                 </Tag>
               )}
               {priorityConfig && (
-                <Tag
-                  color={priorityConfig.color}
-                  style={{ margin: 0, fontSize: 11, lineHeight: '18px', borderRadius: 4 }}
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    fontSize: 11,
+                    fontWeight: 500,
+                    color: priorityConfig.color,
+                    backgroundColor: priorityConfig.bg,
+                    border: `1px solid ${priorityConfig.border}`,
+                    borderRadius: 4,
+                    padding: '0 6px',
+                    lineHeight: '18px',
+                  }}
                 >
+                  <span
+                    style={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: '50%',
+                      backgroundColor: priorityConfig.color,
+                      display: 'inline-block',
+                    }}
+                  />
                   {priorityConfig.label}
-                </Tag>
+                </span>
               )}
-              {task.labels?.map((label) => (
+              {visibleLabels.map((label) => (
                 <Tag
                   key={label.id}
                   style={{
                     margin: 0,
-                    fontSize: 11,
+                    fontSize: 10.5,
                     lineHeight: '18px',
                     borderRadius: 4,
-                    backgroundColor: `${label.color}15`,
-                    borderColor: `${label.color}40`,
+                    backgroundColor: `${label.color}14`,
+                    borderColor: `${label.color}35`,
                     color: label.color,
                     fontWeight: 500,
                   }}
@@ -156,11 +199,38 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   {label.name}
                 </Tag>
               ))}
+              {extraLabels.length > 0 && (
+                <Tooltip
+                  title={
+                    <Flex vertical gap={2} style={{ padding: '2px 0' }}>
+                      {extraLabels.map((l) => (
+                        <span key={l.id} style={{ fontSize: 11.5 }}>{l.name}</span>
+                      ))}
+                    </Flex>
+                  }
+                >
+                  <Tag
+                    style={{
+                      margin: 0,
+                      fontSize: 10,
+                      lineHeight: '18px',
+                      borderRadius: 4,
+                      backgroundColor: '#f1f5f9',
+                      borderColor: '#cbd5e1',
+                      color: '#475569',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    +{extraLabels.length}
+                  </Tag>
+                </Tooltip>
+              )}
               {task.activeAgentRunId && (
                 <Tag
                   color="purple"
                   icon={<RobotOutlined />}
-                  style={{ margin: 0, fontSize: 11, lineHeight: '18px', borderRadius: 4 }}
+                  style={{ margin: 0, fontSize: 10.5, lineHeight: '18px', borderRadius: 4 }}
                   data-testid="agent-active-badge"
                 >
                   AI Agent
