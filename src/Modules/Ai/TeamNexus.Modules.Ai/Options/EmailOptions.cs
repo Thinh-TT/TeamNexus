@@ -19,7 +19,7 @@ public sealed class EmailOptions
     public string BaseUrl { get; set; } = "https://api.resend.com";
 
     /// <summary>Sender identity. The Resend onboarding address works without a verified domain.</summary>
-    public string FromAddress { get; set; } = "TeamNexus <onboarding@resend.dev>";
+    public string FromAddress { get; set; } = "TeamNexus <invitations@mail.teamnexus.cloud>";
 
     public int TimeoutSeconds { get; set; } = 15;
 
