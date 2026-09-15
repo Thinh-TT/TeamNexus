@@ -237,23 +237,41 @@ nên User Secrets sẽ thắng trở lại).
   - Kiểm thử chất lượng: `npm run lint` = 0/0, `npx tsc -b` = exit 0, `npm run build` = OK, `npm test` = **359/359 tests PASS**
   - Hoàn tất cập nhật DB Design (9 migrations), Roadmap, System Spec và Báo cáo kiểm thử Giai đoạn 11
 
+## Trạng thái (Giai đoạn 12 – Dashboard & Tìm kiếm) — ✅ HOÀN THÀNH
+
+- [x] **§1–§3 Backend Dashboard, Search & Mention — ĐÃ XONG** — **423 tests PASS** (0 failed, 0 skipped, đo trên PostgreSQL 18; +52 tests mới).
+  - Không thêm migration mới: giữ nguyên 9 migrations (`has-pending-model-changes` sạch).
+  - Endpoint Dashboard `GET /api/workspaces/{id}/dashboard`: tổng hợp KPI "Task của tôi" (Quá hạn, Sắp đến hạn, Mới giao), tóm tắt các Board trong workspace, và hoạt động gần đây.
+  - Endpoint Tìm kiếm `GET /api/workspaces/{id}/tasks/search`: lọc task đa chiều (board, assignee, priority, labels AND, status, due date range), phân trang keyset an toàn `(updated_at DESC, id DESC)`.
+  - Endpoint Mention & Notification: trích xuất danh sách `mentionUserIds` an toàn, gửi thông báo `CommentMention` (jsonb payload) và lọc theo `kind` (observer/agent/member).
+- [x] **§4–§6 Frontend Dashboard, Search UI & @mention — ĐÃ XONG** — **406/406 tests PASS (77 test files)**
+  - Trang Dashboard Workspace (`WorkspaceDashboardPage.tsx` tại `/workspaces/:workspaceId/dashboard`): 3 tab "Task của tôi" với count thật, thẻ thống kê tiến độ board, recent activity feed và drawer cảnh báo AI Observer.
+  - Trang Tìm kiếm Task (`TaskSearchPage.tsx` tại `/workspaces/:workspaceId/search`): bộ lọc nâng cao, phân trang tải thêm keyset, sync 2 chiều URL params; nút "Tìm trong workspace →" tại `BoardView`.
+  - @mention trong bình luận: sử dụng antd `Mentions` trong `TaskDetailModal`, hỗ trợ autocomplete danh sách thành viên con người, gửi `mentionUserIds` tường minh; nhãn "Được nhắc đến" trong Notification Center.
+  - Chuyển đổi trang `/` (`DashboardPage.tsx`) thành danh sách các workspace người dùng tham gia.
+- [x] **§7 CI & Tài liệu — ĐÃ XONG**
+  - Cập nhật `.github/workflows/ci-backend.yml`: assert 423 tests backend (0 skipped).
+  - Cập nhật `.github/workflows/ci-web.yml`: assert số test ≥ 406 (baseline 406 tests, 77 files).
+  - Kiểm thử chất lượng: `npm run lint` = 0/0 (194 files), `npx tsc -b` = exit 0, `npm run build` = OK.
+  - Cập nhật Roadmap, DB Design, System Spec và Báo cáo kiểm thử Giai đoạn 12.
+
 ### CI (GitHub Actions)
 
 Hai workflow chạy trên `ubuntu-latest` cho mọi push lên `main`/`develop`/`feat/**` và mọi PR vào `main`/`develop`:
 
 | Workflow | Làm gì | Artifact |
 |---|---|---|
-| `ci-backend.yml` | `restore` → `build -c Release` (**0 warning / 0 error**) → `dotnet test` trên **PostgreSQL 18** (service container) → **assert tổng test = 371 và không skip** | `backend-test-results` (TRX) |
-| `ci-web.yml` | `npm ci` → `lint` → `tsc -b` → `vitest` → **assert số test > 279 (baseline 359)** → `vite build` | `web-build-output` (`dist/` + báo cáo JSON) |
+| `ci-backend.yml` | `restore` → `build -c Release` (**0 warning / 0 error**) → `dotnet test` trên **PostgreSQL 18** (service container) → **assert tổng test = 423 và không skip** | `backend-test-results` (TRX) |
+| `ci-web.yml` | `npm ci` → `lint` → `tsc -b` → `vitest` → **assert số test ≥ 406 (baseline 406 tests, 77 files)** → `vite build` | `web-build-output` (`dist/` + báo cáo JSON) |
 
-**Trạng thái đã verify:** cả hai workflow **xanh** trên run thật — backend `Passed: 172, Skipped: 0`, frontend `vitest: total=206 failed=0`.
+**Trạng thái đã verify:** cả hai workflow **xanh** trên run thật — backend `Passed: 423, Skipped: 0`, frontend `vitest: total=406 failed=0`.
 
 - **Vì sao không có workflow deploy:** Render và Vercel tự deploy từ GitHub (quyết định **D11**). Nhờ vậy CI **không giữ một secret nào** —
   toàn bộ cấu hình cho test do `TeamNexusApiFactory` cấp bằng code (`Jwt:SigningKey` test, `DeepSeek:ApiKey` rỗng ⇒ dùng fake provider).
   Hệ quả đã biết: **migration lên DB cloud là bước thủ công** (xem `Project-Documents/tasks/phase-8-completion-test-deploy.md` §5.7).
-- **Hai cổng chống "xanh giả":** `vitest` vẫn xanh nếu ai đó xoá test ⇒ CI đọc báo cáo JSON và **fail nếu tổng ≤ 187**.
+- **Hai cổng chống "xanh giả":** `vitest` vẫn xanh nếu ai đó xoá test ⇒ CI đọc báo cáo JSON và **fail nếu tổng < 406**.
   Và **một test bị `SKIP` vẫn tính là xanh** ⇒ job backend đọc counters trong TRX và **fail nếu `skipped > 0`**
-  (lần chạy CI đầu tiên đã lọt lưới đúng kiểu này: job xanh nhưng chỉ **111/172** test thực sự chạy — xem §4.6 của task doc).
+  (job backend assert chặt `total = 423` và `skipped = 0`).
 - **Node 24 (không phải 22):** `vitest` khai báo `engines: ^22.12.0 || ^24.0.0 || >=26.0.0`, nên Node 22.0–22.11 sẽ hỏng; 24 cũng khớp máy dev.
 
 ### Chạy test backend (§2 đã xong)
@@ -261,7 +279,7 @@ Hai workflow chạy trên `ubuntu-latest` cho mọi push lên `main`/`develop`/`
 ```bash
 # Cần một PostgreSQL thật (schema dùng jsonb/bytea/advisory lock/CHECK ⇒ KHÔNG dùng EF InMemory).
 # Fixture tự tạo database test nếu chưa có và tự chạy migration một lần cho cả process.
-$env:TEAMNEXUS_TEST_DB = "Host=localhost;Port=5432;Database=TeamNexus_Test;Username=postgres;Password=..."
+$env:TEAMNEXUS_TEST_DB = "Host=localhost;Port=5433;Database=TeamNexus_Test;Username=postgres;Password=postgres"
 
 dotnet test tests/TeamNexus.Api.Tests/TeamNexus.Api.Tests.csproj
 
@@ -272,8 +290,8 @@ dotnet run --project tests/TeamNexus.Api.Tests -- -class TeamNexus.Api.Tests.Pur
 docker run --name teamnexus-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:18
 ```
 
-> **Không có DB ⇒ không fail:** nhóm test thuần (ưu tiên 1) vẫn chạy (**98 PASS**), nhóm cần DB tự **skip kèm thông báo**
-> hành động được (**74 SKIP**, 0 fail) — đúng quyết định D4 của giai đoạn 8. Fixture in một dòng cho biết DB có sẵn sàng hay không;
+> **Không có DB ⇒ không fail:** nhóm test thuần (ưu tiên 1) vẫn chạy (**134 PASS**), nhóm cần DB tự **skip kèm thông báo**
+> hành động được (**289 SKIP**, 0 fail) — đúng quyết định D4 của giai đoạn 8. Fixture in một dòng cho biết DB có sẵn sàng hay không;
 > **trên CI thì skip bị coi là lỗi** (job backend fail nếu `skipped > 0`), vì ở đó PostgreSQL đã được bảo đảm bằng service container.
 
 ### Chạy test frontend
@@ -286,6 +304,6 @@ npm run lint && npx tsc -b && npm test && npm run build
 npm test -- --reporter=json --outputFile=test-results.json
 ```
 
-> Kết quả hiện tại: **60 file / 359 test PASS** (baseline cuối Giai đoạn 8 là 206; Giai đoạn 10 là 279; Giai đoạn 11 bổ sung 13 file test mới đạt 359 tests PASS, 0 fail, 0 warning lint).
+> Kết quả hiện tại: **77 file / 406 test PASS** (baseline cuối Giai đoạn 8 là 206; Giai đoạn 10 là 279; Giai đoạn 11 là 360; Giai đoạn 12 bổ sung 17 file test mới đạt 406 tests PASS, 0 fail, 0 warning lint).
 
 

@@ -43,14 +43,16 @@ public static class NotificationEndpoints
 
     private static async Task<IResult> ListAsync(
         string? isRead,
+        string? kind,
         int? take,
         HttpContext http,
         INotificationService notifications,
         CancellationToken ct)
     {
         // take <= 0 falls back to the service default (20); the service clamps to 1..100.
+        // kind is parsed strictly here: an unknown family must be a 400, never "no notifications".
         var result = await notifications.ListAsync(
-            http.RequireUserId(), ParseIsRead(isRead), take ?? 0, ct);
+            http.RequireUserId(), ParseIsRead(isRead), NotificationVocabulary.Parse(kind), take ?? 0, ct);
 
         return Results.Ok(result);
     }

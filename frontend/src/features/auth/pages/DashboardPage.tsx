@@ -1,88 +1,77 @@
 import React, { useEffect, useState } from 'react'
 import {
+  AppstoreOutlined,
+  DashboardOutlined,
+  FolderOpenOutlined,
+  ProjectOutlined,
+} from '@ant-design/icons'
+import {
   Button,
   Card,
   Descriptions,
+  Empty,
   Flex,
   Input,
   Layout,
-  Result,
+  List,
   Space,
   Tag,
   Typography,
-  message,
 } from 'antd'
-import { httpClient } from '../../../shared/api'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { workspaceApi } from '../../workspace/services/workspaceApi'
+import type { WorkspaceSummary } from '../../workspace/types/workspace.types'
 import { AppHeader } from '../../../shared/components/AppHeader'
 
 const { Content } = Layout
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth()
-  const [workspace, setWorkspace] = useState<{ id: string; name: string } | null>(null)
-  const [rbacLoading, setRbacLoading] = useState<string | null>(null)
-  const [rbacResult, setRbacResult] = useState<{ status: 'success' | 'error'; msg: string } | null>(
-    null
-  )
+  const navigate = useNavigate()
+  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
+  const [manualWsId, setManualWsId] = useState<string>('')
 
   useEffect(() => {
     workspaceApi
       .list()
       .then((list) => {
         if (list && list.length > 0) {
-          setWorkspace(list[0])
+          setWorkspaces(list)
+          setManualWsId(list[0].id)
         }
       })
       .catch(() => {})
   }, [])
 
-  const handleTestEndpoint = async (endpoint: string, label: string) => {
-    setRbacLoading(endpoint)
-    setRbacResult(null)
-    try {
-      const res = await httpClient.get<{ message?: string; displayName?: string }>(endpoint)
-      const msgText = res.data?.message ?? JSON.stringify(res.data)
-      setRbacResult({ status: 'success', msg: `[${label}] Success: ${msgText}` })
-      message.success(`Gọi endpoint ${label} thành công!`)
-    } catch (err: unknown) {
-      const errorResponse = (err as { response?: { status?: number; data?: { error?: string } } })
-        ?.response
-      const statusCode = errorResponse?.status ?? 500
-      const errorMsg =
-        statusCode === 403
-          ? '403 Forbidden (Bạn không có quyền truy cập endpoint này)'
-          : statusCode === 401
-          ? '401 Unauthorized (Phiên làm việc hết hạn)'
-          : `${statusCode} Error: ${errorResponse?.data?.error ?? 'Lỗi không xác định'}`
-      setRbacResult({ status: 'error', msg: `[${label}] ${errorMsg}` })
-      message.error(`Gọi endpoint ${label} thất bại: ${errorMsg}`)
-    } finally {
-      setRbacLoading(null)
-    }
-  }
-
   return (
     <Layout style={{ minHeight: '100vh', background: '#f8fafc' }}>
-      <AppHeader workspaceId={workspace?.id} />
+      <AppHeader workspaceId={workspaces[0]?.id} />
 
       <Content style={{ padding: '32px 24px', maxWidth: 960, margin: '0 auto', width: '100%' }}>
         <Flex vertical gap="large">
-          <Card title="Thông tin Tài khoản" style={{ borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+          <Card
+            title="Thông tin Tài khoản"
+            style={{ borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
+          >
             <Descriptions column={{ xs: 1, sm: 2 }}>
-              <Descriptions.Item label="Tên hiển thị">{user?.displayName ?? 'Chưa cập nhật'}</Descriptions.Item>
+              <Descriptions.Item label="Tên hiển thị">
+                {user?.displayName ?? 'Chưa cập nhật'}
+              </Descriptions.Item>
               <Descriptions.Item label="Email">{user?.email}</Descriptions.Item>
               <Descriptions.Item label="ID">{user?.id}</Descriptions.Item>
-              <Descriptions.Item label="Vai trò (Roles)">
+              <Descriptions.Item label="Vai trò hệ thống">
                 {user?.roles && user.roles.length > 0 ? (
                   user.roles.map((role) => (
-                    <Tag color={role === 'Admin' ? 'red' : role === 'Manager' ? 'gold' : 'blue'} key={role}>
+                    <Tag
+                      color={role === 'Admin' ? 'red' : role === 'Manager' ? 'gold' : 'blue'}
+                      key={role}
+                    >
                       {role}
                     </Tag>
                   ))
                 ) : (
-                  <Tag>No role</Tag>
+                  <Tag>User</Tag>
                 )}
               </Descriptions.Item>
             </Descriptions>
@@ -91,78 +80,99 @@ export const DashboardPage: React.FC = () => {
           <Card
             title={
               <Flex align="center" gap={8}>
-                <span style={{ fontSize: 16 }}>📊 Không Gian Làm Việc (Kanban Boards - Phase 2)</span>
+                <AppstoreOutlined style={{ color: '#6366f1' }} />
+                <span>Workspace của bạn</span>
               </Flex>
             }
             style={{ borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
           >
             <Typography.Paragraph type="secondary">
-              Truy cập các bảng Kanban của Workspace để quản lý công việc và cộng tác thời gian thực:
+              Danh sách các Không gian làm việc mà bạn đang tham gia:
             </Typography.Paragraph>
 
-            <Flex gap={12} align="center" wrap="wrap">
-              <Input
-                placeholder="Nhập Workspace ID (Guid)..."
-                id="dashboard-workspace-input"
-                value={workspace?.id ?? ''}
-                onChange={(e) =>
-                  setWorkspace((prev) =>
-                    prev ? { ...prev, id: e.target.value } : { id: e.target.value, name: 'Workspace' }
-                  )
-                }
-                style={{ maxWidth: 380, borderRadius: 8 }}
+            {workspaces.length === 0 ? (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="Bạn chưa tham gia Không gian làm việc nào"
               />
-              <Button
-                type="primary"
-                style={{ backgroundColor: '#6366f1', borderRadius: 8 }}
-                onClick={() => {
-                  const input = document.getElementById('dashboard-workspace-input') as HTMLInputElement
-                  const wsId = input?.value.trim() || workspace?.id || '00000000-0000-0000-0000-000000000001'
-                  window.location.href = `/workspaces/${wsId}/boards`
-                }}
-              >
-                Mở Danh Sách Bảng {workspace?.name ? `(${workspace.name})` : ''} →
-              </Button>
-            </Flex>
-          </Card>
+            ) : (
+              <List
+                dataSource={workspaces}
+                renderItem={(ws) => (
+                  <List.Item
+                    key={ws.id}
+                    style={{
+                      padding: '16px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 8,
+                      marginBottom: 12,
+                      background: '#fff',
+                    }}
+                  >
+                    <Flex justify="space-between" align="center" style={{ width: '100%' }} wrap="wrap" gap={12}>
+                      <div>
+                        <Typography.Text strong style={{ fontSize: 16, color: '#0f172a' }}>
+                          {ws.name}
+                        </Typography.Text>
+                        <Tag color="purple" style={{ marginLeft: 8 }}>
+                          {ws.role}
+                        </Tag>
+                        {ws.description && (
+                          <Typography.Paragraph type="secondary" style={{ margin: '4px 0 0 0', fontSize: 13 }}>
+                            {ws.description}
+                          </Typography.Paragraph>
+                        )}
+                        <Typography.Text type="secondary" style={{ display: 'block', fontSize: 12, marginTop: 4 }}>
+                          ID: {ws.id}
+                        </Typography.Text>
+                      </div>
 
-          <Card title="Kiểm tra Phân quyền RBAC (Phase 1 §3.3)" style={{ borderRadius: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-            <Typography.Paragraph type="secondary">
-              Nhấn các nút bên dưới để thử nghiệm gửi request tới các endpoints backend được bảo vệ bởi Policy-based Authorization:
-            </Typography.Paragraph>
-
-            <Space wrap size="middle" style={{ marginBottom: 16 }}>
-              <Button
-                type="default"
-                loading={rbacLoading === '/auth/me'}
-                onClick={() => handleTestEndpoint('/auth/me', 'Member Policy (/api/auth/me)')}
-              >
-                Test Member Access
-              </Button>
-              <Button
-                type="default"
-                loading={rbacLoading === '/manager/ping'}
-                onClick={() => handleTestEndpoint('/manager/ping', 'Manager Policy (/api/manager/ping)')}
-              >
-                Test Manager Access
-              </Button>
-              <Button
-                type="default"
-                loading={rbacLoading === '/admin/ping'}
-                onClick={() => handleTestEndpoint('/admin/ping', 'Admin Policy (/api/admin/ping)')}
-              >
-                Test Admin Access
-              </Button>
-            </Space>
-
-            {rbacResult && (
-              <Result
-                status={rbacResult.status}
-                title={rbacResult.status === 'success' ? 'Truy cập Thành công' : 'Truy cập Bị từ chối / Lỗi'}
-                subTitle={rbacResult.msg}
-                style={{ padding: '16px 0 0 0' }}
+                      <Space>
+                        <Button
+                          type="primary"
+                          icon={<DashboardOutlined />}
+                          style={{ backgroundColor: '#6366f1', borderRadius: 6 }}
+                          onClick={() => navigate(`/workspaces/${ws.id}/dashboard`)}
+                        >
+                          Tổng quan
+                        </Button>
+                        <Button
+                          icon={<ProjectOutlined />}
+                          style={{ borderRadius: 6 }}
+                          onClick={() => navigate(`/workspaces/${ws.id}/boards`)}
+                        >
+                          Bảng Kanban
+                        </Button>
+                      </Space>
+                    </Flex>
+                  </List.Item>
+                )}
               />
             )}
+
+            <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid #f1f5f9' }}>
+              <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 13 }}>
+                Hoặc nhập Workspace ID thủ công:
+              </Typography.Text>
+              <Flex gap={12} align="center" wrap="wrap">
+                <Input
+                  placeholder="Nhập Workspace ID (Guid)..."
+                  id="dashboard-workspace-input"
+                  value={manualWsId}
+                  onChange={(e) => setManualWsId(e.target.value)}
+                  style={{ maxWidth: 380, borderRadius: 8 }}
+                />
+                <Button
+                  icon={<FolderOpenOutlined />}
+                  onClick={() => {
+                    const wsId = manualWsId.trim() || '00000000-0000-0000-0000-000000000001'
+                    navigate(`/workspaces/${wsId}/dashboard`)
+                  }}
+                >
+                  Vào Dashboard →
+                </Button>
+              </Flex>
+            </div>
           </Card>
         </Flex>
       </Content>

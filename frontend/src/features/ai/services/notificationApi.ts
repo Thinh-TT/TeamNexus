@@ -11,6 +11,7 @@ export const notificationApi = {
   listNotifications: async (params?: {
     isRead?: boolean
     take?: number
+    kind?: 'observer' | 'agent' | 'member'
   }): Promise<NotificationListResponse> => {
     const queryParams: Record<string, string | number> = {}
     if (typeof params?.isRead === 'boolean') {
@@ -18,6 +19,9 @@ export const notificationApi = {
     }
     if (typeof params?.take === 'number') {
       queryParams.take = params.take
+    }
+    if (params?.kind) {
+      queryParams.kind = params.kind
     }
     const res = await httpClient.get<NotificationListResponse>('/notifications', {
       params: queryParams,

@@ -13,6 +13,8 @@ public static class BoardEndpoints
     public static IEndpointRouteBuilder MapBoardModuleEndpoints(this IEndpointRouteBuilder endpoints)
     {
         endpoints.MapWorkspacesEndpoints();
+        endpoints.MapDashboardEndpoints();
+        endpoints.MapTaskSearchEndpoints();
         endpoints.MapBoardsEndpoints();
         endpoints.MapColumnsEndpoints();
         endpoints.MapTasksEndpoints();

@@ -78,6 +78,15 @@ public static class MemberNotificationTypes
     /// frontend label map does not have to change when the mirror is added.
     /// </summary>
     public const string WorkspaceInvitation = "WorkspaceInvitation";
+
+    /// <summary>
+    /// Someone wrote <c>@tên</c> pointing at the recipient in a comment (Phase 12 §3).
+    /// <para>
+    /// Written by our own code from the ids the client sent explicitly — the server never parses
+    /// <c>@tên</c> out of the text, so this type can never be produced by guessing somebody's name.
+    /// </para>
+    /// </summary>
+    public const string CommentMention = "CommentMention";
 }
 
 /// <summary>
@@ -95,6 +104,9 @@ public static class MemberNotificationLimits
 
     /// <summary>A comment excerpt is a preview, never the full text (the alert is a pointer).</summary>
     public const int CommentExcerpt = 120;
+
+    /// <summary>Upper bound on how many people one comment may mention.</summary>
+    public const int MaxMentionedUsers = 20;
 
     /// <summary>Clamps a value to <paramref name="max"/> characters.</summary>
     public static string Clamp(string? value, int max)
