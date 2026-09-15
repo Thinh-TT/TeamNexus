@@ -39,6 +39,8 @@ export const getTypeText = (type: NotificationType | string): string => {
       return 'Được giao thẻ'
     case 'CommentOnTask':
       return 'Bình luận mới'
+    case 'CommentMention':
+      return 'Được nhắc đến'
     case 'WorkspaceInvitation':
       return 'Lời mời workspace'
     default:

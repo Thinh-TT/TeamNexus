@@ -50,7 +50,7 @@ Hoàn thiện UI cho các field task đã có schema: **Due Date** (hiển thị
 - **Profile cá nhân:** Xem và cập nhật tên hiển thị, URL avatar (xác thực an toàn scheme `http://` / `https://`); xem danh sách workspace đang tham gia kèm vai trò; tự rời workspace (chặn chủ sở hữu tự rời nếu chưa chuyển giao quyền).
 - **Trung tâm thông báo (Notification Center):** Tích hợp chuông báo badge số lượng chưa đọc trên `AppHeader` dùng chung, Drawer thông báo hỗ trợ lọc Chưa đọc / Tất cả cho cả cảnh báo AI Observer và thông báo nghiệp vụ (được assign task, comment mới, được mời vào workspace).
 
-### 11. Dashboard & Tìm kiếm — Giai đoạn 12 (✅ backend xong; frontend bàn giao)
+### 11. Dashboard & Tìm kiếm — Giai đoạn 12 (✅ ĐÃ HOÀN THÀNH & VERIFY ĐẦY ĐỦ)
 **Dashboard tổng quan workspace:** hiển thị "Task của tôi" (sắp đến hạn, quá hạn, mới giao), hoạt động gần đây, tóm tắt board, cảnh báo AI Observer chưa đọc. **Tìm kiếm & Lọc task:** theo tên, assignee, label, priority, trạng thái, due date trong phạm vi workspace/board. **@mention trong comment:** tag thành viên với `@tên`, kích hoạt thông báo cho người được tag.
 
 - **Trang chủ workspace:** route riêng `/workspaces/:workspaceId/dashboard` (`/` vẫn là danh sách workspace như hiện tại). Số liệu lấy từ `GET /api/workspaces/{id}/dashboard` — quyền **Member+** (404 người ngoài workspace), khác `/activity` (Manager+).

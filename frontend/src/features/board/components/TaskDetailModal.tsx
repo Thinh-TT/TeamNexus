@@ -25,6 +25,7 @@ import {
   Flex,
   Form,
   Input,
+  Mentions,
   type MenuProps,
   Modal,
   Popconfirm,
@@ -41,6 +42,7 @@ import dayjs from 'dayjs'
 import { useAuth } from '../../auth/hooks/useAuth'
 import { boardApi } from '../services/boardApi'
 import { renderMarkdown } from '../utils/markdown'
+import { extractMentionUserIds } from '../utils/mentionUtils'
 import type {
   ColumnResponse,
   CommentResponse,
@@ -239,7 +241,11 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
     setIsSubmittingComment(true)
     try {
-      const req: CreateCommentRequest = { content: trimmed }
+      const mentionUserIds = extractMentionUserIds(newCommentContent, members, user?.id)
+      const req: CreateCommentRequest = {
+        content: trimmed,
+        mentionUserIds: mentionUserIds.length > 0 ? mentionUserIds : undefined,
+      }
       const newComment = await boardApi.createComment(task.id, req)
       setComments((prev) => [...prev, newComment])
       setNewCommentContent('')
@@ -620,12 +626,19 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                           {user?.displayName?.[0]?.toUpperCase() ?? 'U'}
                         </Avatar>
                         <div style={{ flex: 1 }}>
-                          <Input.TextArea
+                          <Mentions
                             placeholder="Viết bình luận..."
                             value={newCommentContent}
-                            onChange={(e) => setNewCommentContent(e.target.value)}
+                            onChange={(val) => setNewCommentContent(val)}
                             rows={2}
-                            style={{ resize: 'none', borderRadius: 8 }}
+                            style={{ resize: 'none', borderRadius: 8, width: '100%' }}
+                            prefix="@"
+                            options={members
+                              .filter((m) => m.memberType !== 'ai_agent' && Boolean(m.displayName))
+                              .map((m) => ({
+                                value: m.displayName,
+                                label: m.displayName,
+                              }))}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                                 handleAddComment()

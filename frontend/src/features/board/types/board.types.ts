@@ -136,6 +136,7 @@ export interface AttachLabelRequest {
 
 export interface CreateCommentRequest {
   content: string
+  mentionUserIds?: string[]
 }
 
 export interface UpdateCommentRequest {

@@ -8,6 +8,7 @@ export type NotificationType =
   | 'AgentOutputPending'
   | 'TaskAssigned'
   | 'CommentOnTask'
+  | 'CommentMention'
   | 'WorkspaceInvitation'
 export type NotificationSeverity = 'Low' | 'Medium' | 'High' | 'Critical'
 export type ObserverRunStatus = 'Running' | 'Completed' | 'Skipped' | 'Failed'
@@ -20,6 +21,8 @@ export interface NotificationPayload {
   invitationId?: string
   taskIds?: string[]
   userIds?: string[]
+  mentionedCount?: number
+  mentionUserIds?: string[]
   severity?: NotificationSeverity
   model?: string | null
   tokens?: number | null
