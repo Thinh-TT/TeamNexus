@@ -11,6 +11,8 @@ import { WorkspaceActivityPage } from '../features/workspace/pages/WorkspaceActi
 import { WorkspaceMembersPage } from '../features/members/pages/WorkspaceMembersPage'
 import { ProfilePage } from '../features/profile/pages/ProfilePage'
 import { AcceptInvitationPage } from '../features/invitations/pages/AcceptInvitationPage'
+import { WorkspaceDashboardPage } from '../features/dashboard/pages/WorkspaceDashboardPage'
+import { TaskSearchPage } from '../features/search/pages/TaskSearchPage'
 
 export const AppRouter: React.FC = () => {
   return (
@@ -23,6 +25,22 @@ export const AppRouter: React.FC = () => {
           element={
             <ProtectedRoute>
               <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/workspaces/:workspaceId/dashboard"
+          element={
+            <ProtectedRoute>
+              <WorkspaceDashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/workspaces/:workspaceId/search"
+          element={
+            <ProtectedRoute>
+              <TaskSearchPage />
             </ProtectedRoute>
           }
         />

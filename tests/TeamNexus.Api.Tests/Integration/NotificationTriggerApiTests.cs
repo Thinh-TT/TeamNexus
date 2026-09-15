@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using TeamNexus.Api.Tests.Infrastructure;
 using TeamNexus.Modules.Ai.Services;
+using TeamNexus.Modules.Ai.Services.Agent;
 using TeamNexus.Persistence.Data.Entities;
 
 namespace TeamNexus.Api.Tests.Integration;
@@ -339,9 +340,118 @@ public sealed class NotificationTriggerApiTests : IClassFixture<DatabaseFixture>
         Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
 
         // The recipient themselves can read it — with a token minted for THEIR session.
+        //
+        // Trap 3 (caught by the first full-DB run of this suite, Phase 12 §3.7): `freshManagerClient`
+        // created just above re-signed the shared jar as the MANAGER, so `memberClient` — still the
+        // same wrapper around that one jar — now authenticates as the manager too, and this POST
+        // answered 404 exactly like the foreign attempt. Re-signing in as the member restores both the
+        // identity AND a matching antiforgery token. The lesson is symmetric: with one cookie jar per
+        // scenario, EVERY identity switch invalidates every client created before it.
+        using var freshMemberClient = await scenario.AsUserAsync(member);
         var own = await scenario.PostWithFreshAntiforgeryAsync(
-            memberClient, $"/api/notifications/{alertId}/read");
+            freshMemberClient, $"/api/notifications/{alertId}/read");
         Assert.Equal(HttpStatusCode.OK, own.StatusCode);
+    }
+
+    // ---- alert families (Phase 12 §3.4) ------------------------------------
+
+    [Fact]
+    public async Task KindObserver_ReturnsOnlyObserverAlerts_AndACountThatMatchesThem()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var (manager, workspace, member, _) = await SeedBoardAsync(scenario);
+
+        // One Observer alert and one member alert for the same recipient, so a missing filter is
+        // impossible to miss: the two families must not be mixed.
+        await SeedNotificationAsync(scenario, workspace.Workspace.Id, manager.Id, NotificationTypes.OverdueTask, "Quá hạn");
+        await SeedNotificationAsync(scenario, workspace.Workspace.Id, manager.Id, MemberNotificationTypes.TaskAssigned, "Được giao thẻ");
+
+        using var client = await scenario.AsUserAsync(manager);
+        var observer = await client.GetJsonAsync<NotificationListDto>("/api/notifications?kind=observer");
+
+        Assert.NotNull(observer);
+        Assert.Single(observer!.Items);
+        Assert.Equal(NotificationTypes.OverdueTask, observer.Items[0].Type);
+
+        // The badge is what the dashboard tile shows, so it must count the SAME rows as the list.
+        Assert.Equal(1, observer.UnreadCount);
+    }
+
+    [Fact]
+    public async Task KindMember_IncludesMentions_AndKindAgent_IncludesAgentAlerts()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var (manager, workspace, member, _) = await SeedBoardAsync(scenario);
+
+        await SeedNotificationAsync(scenario, workspace.Workspace.Id, manager.Id, MemberNotificationTypes.CommentMention, "Được nhắc đến");
+        await SeedNotificationAsync(scenario, workspace.Workspace.Id, manager.Id, MemberNotificationTypes.CommentOnTask, "Bình luận mới");
+        await SeedNotificationAsync(scenario, workspace.Workspace.Id, manager.Id, AgentNotificationTypes.RunFailed, "Agent lỗi");
+        await SeedNotificationAsync(scenario, workspace.Workspace.Id, manager.Id, NotificationTypes.OverdueTask, "Quá hạn");
+
+        using var client = await scenario.AsUserAsync(manager);
+
+        var member3 = await client.GetJsonAsync<NotificationListDto>("/api/notifications?kind=member");
+        Assert.NotNull(member3);
+        Assert.Equal(2, member3!.Items.Count);
+        Assert.Contains(member3.Items, i => i.Type == MemberNotificationTypes.CommentMention);
+        Assert.Equal(2, member3.UnreadCount);
+
+        var agent = await client.GetJsonAsync<NotificationListDto>("/api/notifications?kind=agent");
+        Assert.NotNull(agent);
+        Assert.Single(agent!.Items);
+        Assert.Equal(AgentNotificationTypes.RunFailed, agent.Items[0].Type);
+    }
+
+    [Fact]
+    public async Task AnUnknownKind_IsRejected()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var (manager, _, _, _) = await SeedBoardAsync(scenario);
+
+        using var client = await scenario.AsUserAsync(manager);
+        var response = await client.GetAsync("/api/notifications?kind=blah");
+
+        // A typo must never look like "you have no notifications".
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task WithoutTheKindFilter_EveryFamilyIsStillReturned()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var (manager, workspace, member, _) = await SeedBoardAsync(scenario);
+
+        await SeedNotificationAsync(scenario, workspace.Workspace.Id, manager.Id, MemberNotificationTypes.TaskAssigned, "Được giao thẻ");
+        await SeedNotificationAsync(scenario, workspace.Workspace.Id, manager.Id, NotificationTypes.OverdueTask, "Quá hạn");
+        await SeedNotificationAsync(scenario, workspace.Workspace.Id, manager.Id, AgentNotificationTypes.OutputPending, "Chờ duyệt");
+
+        using var client = await scenario.AsUserAsync(manager);
+        var all = await client.GetJsonAsync<NotificationListDto>("/api/notifications");
+
+        // Regression guard: the new parameter is additive, so the default behaviour is unchanged.
+        Assert.NotNull(all);
+        Assert.Equal(3, all!.Items.Count);
+        Assert.Equal(3, all.UnreadCount);
+    }
+
+    /// <summary>
+    /// Writes one notification straight to the table. These four tests are about the <b>read</b> filter,
+    /// so the writers are irrelevant — and using one would drag an unrelated trigger into the fixture.
+    /// </summary>
+    private static async Task SeedNotificationAsync(
+        TestScenario scenario, Guid workspaceId, Guid recipientUserId, string type, string title)
+    {
+        await using var db = scenario.NewDbContext();
+        db.Notifications.Add(new Notification
+        {
+            Id = Guid.NewGuid(),
+            WorkspaceId = workspaceId,
+            RecipientUserId = recipientUserId,
+            Type = type,
+            Title = title,
+            Message = $"{title} — nội dung",
+        });
+        await db.SaveChangesAsync();
     }
 
     // ---- helpers -----------------------------------------------------------

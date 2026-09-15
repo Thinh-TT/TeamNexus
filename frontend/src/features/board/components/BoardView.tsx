@@ -389,6 +389,19 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
               style={{ width: 220, borderRadius: 8 }}
             />
 
+            <Button
+              type="link"
+              size="small"
+              onClick={() => {
+                const qParam = searchQuery.trim() ? `&q=${encodeURIComponent(searchQuery.trim())}` : ''
+                navigate(`/workspaces/${workspaceId}/search?boardId=${boardId}${qParam}`)
+              }}
+              data-testid="board-search-workspace-btn"
+              style={{ padding: '0 4px', fontSize: 13 }}
+            >
+              Tìm trong workspace →
+            </Button>
+
             <Select
               value={priorityFilter}
               onChange={setPriorityFilter}

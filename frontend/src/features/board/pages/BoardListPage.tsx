@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import {
   ArrowLeftOutlined,
   BarChartOutlined,
+  DashboardOutlined,
   DeleteOutlined,
   EditOutlined,
   FolderOpenOutlined,
@@ -9,6 +10,7 @@ import {
   PlusOutlined,
   ProjectOutlined,
   ReloadOutlined,
+  SearchOutlined,
   SettingOutlined,
   TeamOutlined,
 } from '@ant-design/icons'
@@ -156,6 +158,22 @@ export const BoardListPage: React.FC = () => {
             </Flex>
 
             <Space>
+              <Button
+                icon={<DashboardOutlined />}
+                style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}
+                onClick={() => navigate(`/workspaces/${workspaceId}/dashboard`)}
+                data-testid="nav-dashboard-btn"
+              >
+                Tổng quan
+              </Button>
+              <Button
+                icon={<SearchOutlined />}
+                style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}
+                onClick={() => navigate(`/workspaces/${workspaceId}/search`)}
+                data-testid="nav-search-btn"
+              >
+                Tìm kiếm
+              </Button>
               <Tooltip title="Làm mới">
                 <Button icon={<ReloadOutlined />} onClick={fetchBoards} />
               </Tooltip>

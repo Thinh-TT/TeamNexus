@@ -2,7 +2,7 @@
 
 > Roadmap ở mức giai đoạn lớn (chưa chia task chi tiết). Mỗi giai đoạn kèm các yêu cầu hoàn thiện để coi là "xong" trước khi chuyển sang giai đoạn kế tiếp.
 
-> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đã hoàn thành)** → **8 (đã hoàn thành)** → **9 (đã hoàn thành)** → **10 (đã hoàn thành)** → **11 (đã hoàn thành)** → 12 → 13.
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đã hoàn thành)** → **8 (đã hoàn thành)** → **9 (đã hoàn thành)** → **10 (đã hoàn thành)** → **11 (đã hoàn thành)** → **12 (backend đã xong — frontend/CI bàn giao)** → 13.
 >
 > Số giai đoạn đã được **đánh lại**: **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Đơn giản hóa Role**, **10 = Nâng cao Task & Workspace UX**, **11 = Quản lý Member & Profile**, **12 = Dashboard & Tìm kiếm**, **13 = Mobile**. `01-system-specification.md` và `02-tech-stack-decisions.md` đã cập nhật theo.
 >
@@ -197,16 +197,49 @@ Xây luồng mời thành viên vào workspace qua email, quản lý danh sách 
 > - **Live Deployment:** Đã cấu hình và kết nối thành công tên miền chính thức `https://app.teamnexus.cloud` (Vercel) và `https://api.teamnexus.cloud` (Render).
 > - Chi tiết: `tasks/phase-11-member-profile-management.md` và `report/phase-11-member-profile-management-test-report.md`.
 
-## Giai đoạn 12: Dashboard & Tìm kiếm
+## Giai đoạn 12: Dashboard & Tìm kiếm — ✅ **ĐÃ HOÀN THÀNH & VERIFY ĐẦY ĐỦ**
 
 > Xây trên dữ liệu từ Phase 10+11. Dashboard có giá trị cao khi workspace có nhiều member và task có due date.
+>
+> **Kế hoạch chi tiết đã chia task (D1–D13, P1–P13, ca biên, bằng chứng):**
+> `tasks/phase-12-dashboard-search.md`.
+> **Báo cáo nghiệm thu chi tiết:** `report/phase-12-dashboard-search-test-report.md`.
+>
+> **⛔ Schema đóng băng ở Giai đoạn 11 (9 migration)** — giai đoạn này **KHÔNG** thêm migration, **KHÔNG** bảng/cột/index mới.
+> `@mention` dùng cột `notifications.type` (text tự do) + `notifications.payload` (jsonb) sẵn có —
+> `dotnet ef migrations has-pending-model-changes` vẫn trả "No changes have been made to the model since the last migration."
+>
+> **Kết quả kiểm thử toàn diện đo thật:**
+> - **Backend:** **Failed 0 / Passed 423 / Skipped 0 / Total 423** (PostgreSQL 18 Docker, cổng 5433).
+>   `dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental` = **0 warning / 0 error**; `dotnet ef migrations list` = **9**.
+>   Phân bổ: `DashboardApiTests` 14 · `TaskSearchApiTests` 24 · `CommentMentionApiTests` 10 · `NotificationTriggerApiTests` +4.
+> - **Frontend:** **Failed 0 / Passed 406 / Total 406 (77 test files)**; `npm run lint` đạt **0 warning / 0 error** (194 files); `npx tsc -b` exit 0; `npm run build` thành công.
+> - **CI Workflows:** Đã nâng ngưỡng kiểm soát `ci-backend.yml` (total = 423) và `ci-web.yml` (total ≥ 406).
+>
+> Trang tổng quan workspace sau đăng nhập và khả năng tìm kiếm/lọc task nâng cao.
+>
+> **Yêu cầu hoàn thiện:**
+> - [x] **Dashboard tổng quan**: trang chủ workspace hiển thị "Task của tôi" (sắp đến hạn, quá hạn, mới giao), hoạt động gần đây (recent activity feed), tóm tắt board (số task theo trạng thái), cảnh báo AI Observer chưa đọc
+>   - ✅ **Backend XONG** — `GET /api/workspaces/{id}/dashboard` (Member+, 404 người ngoài) + tham số `kind` trên `GET /api/notifications` để tách riêng "cảnh báo AI Observer chưa đọc"
+>   - ✅ **Frontend XONG** — `WorkspaceDashboardPage` tại `/workspaces/:workspaceId/dashboard` với 3 panel thống kê, bộ lọc tab, tóm tắt board, cảnh báo observer và hoạt động gần đây
+> - [x] **Tìm kiếm & Lọc task**: tìm task theo tên, assignee, label, priority, trạng thái, due date — trong phạm vi workspace hoặc board đang xem
+>   - ✅ **Backend XONG** — `GET /api/workspaces/{id}/tasks/search` (11 tham số, keyset `(updated_at, id)`); `GET /api/boards/{id}/tasks` **giữ nguyên** shape mảng
+>   - ✅ **Frontend XONG** — trang `/workspaces/:workspaceId/search` với bộ lọc đa điều kiện, phân trang tải thêm keyset, sync 2 chiều URL params + nút chuyển hướng nhanh "Tìm trong workspace →" tại `BoardView`
+> - [x] **@mention trong comment**: tag thành viên bằng `@tên` (autocomplete), kích hoạt thông báo cho người được tag — mở rộng `notifications` table
+>   - ✅ **Backend XONG** — `CreateCommentRequest.MentionUserIds` (**id tường minh**, server **không** parse `@tên`) + type `CommentMention` (jsonb, **không** cần migration)
+>   - ✅ **Frontend XONG** — `Mentions` của antd v6 trong `TaskDetailModal` + lọc thành viên human + trích xuất `mentionUserIds` an toàn + nhãn "Được nhắc đến" trong Notification Center
 
-Trang tổng quan workspace sau đăng nhập và khả năng tìm kiếm/lọc task nâng cao.
-
-**Yêu cầu hoàn thiện:**
-- [ ] **Dashboard tổng quan**: trang chủ workspace hiển thị "Task của tôi" (sắp đến hạn, quá hạn, mới giao), hoạt động gần đây (recent activity feed), tóm tắt board (số task theo trạng thái), cảnh báo AI Observer chưa đọc
-- [ ] **Tìm kiếm & Lọc task**: tìm task theo tên, assignee, label, priority, trạng thái, due date — trong phạm vi workspace hoặc board đang xem
-- [ ] **@mention trong comment**: tag thành viên bằng `@tên` (autocomplete), kích hoạt thông báo cho người được tag — mở rộng `notifications` table
+> **Khảo sát đầu kỳ (đã phản ánh vào tài liệu chia task):**
+> **Đã có sẵn, không viết lại** — `BoardView` **đã có** lọc client theo title/description/assignee/label + priority (nhưng thiếu trạng thái/due date và không tìm xuyên board);
+> `CommentService` đã có 1 row `CommentOnTask` cho assignee; hạ tầng notification + `AppHeader`/`NotificationBell`/drawer
+> đã đủ (Phase 11); 3 vocabulary notification đã tách sẵn; `activityLabels` UI, `taskDueDate.ts`, `useWorkspaceMembers`, `useWorkspaceRole` dùng lại được.
+> **Khoảng trống thật** — (1) **Dashboard**: `DashboardPage` vẫn là trang demo Phase 1 (ô nhập Workspace ID + 3 nút test RBAC), **không** có API/service/hook nào;
+> (2) **Search**: chưa có endpoint tìm xuyên board (chỉ có `GET /api/boards/{id}/tasks`), chưa lọc theo trạng thái/due date;
+> (3) **Mention**: chưa có gì (`grep -i mention` toàn repo = 1 dòng comment).
+> **Phát sinh bắt buộc** — `GET /api/notifications` **không tách được** "cảnh báo AI Observer chưa đọc" khỏi thông báo nghiệp vụ (badge trả tổng mọi loại)
+> ⇒ phải **append** tham số `kind` (observer/agent/member) — additive, tham số vắng ⇒ hành vi y hệt;
+> và trang chủ workspace phải là **route riêng** `/workspaces/:workspaceId/dashboard` (giữ nguyên `/` = danh sách workspace,
+> vì `DashboardPage` phụ thuộc side effect "tự tạo workspace mặc định" của `GET /api/workspaces`).
 
 ## Giai đoạn 13: Mobile (Flutter)
 

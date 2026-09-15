@@ -180,4 +180,33 @@ describe('NotificationItem', () => {
     expect(screen.queryByText('MEDIUM')).not.toBeInTheDocument()
     expect(screen.getByText('Được giao thẻ')).toBeInTheDocument()
   })
+
+  it('renders CommentMention type as "Được nhắc đến" and handles null payload gracefully', () => {
+    const mentionNotif: NotificationResponse = {
+      ...mockNotification,
+      id: 'n-mention',
+      type: 'CommentMention',
+      title: 'Bạn được nhắc đến trong một bình luận',
+      message: 'Trần An: Nhờ bạn xem lại phần auth',
+      payload: null,
+    }
+
+    render(
+      <MemoryRouter>
+        <NotificationItem
+          notification={mentionNotif}
+          onMarkRead={vi.fn()}
+          workspaceId="ws-1"
+        />
+      </MemoryRouter>
+    )
+
+    expect(screen.getByText('Bạn được nhắc đến trong một bình luận')).toBeInTheDocument()
+    expect(screen.getByText('Được nhắc đến')).toBeInTheDocument()
+
+    // Expand details to see message
+    const expandBtn = screen.getAllByRole('button')[1]
+    fireEvent.click(expandBtn)
+    expect(screen.getByText('Trần An: Nhờ bạn xem lại phần auth')).toBeInTheDocument()
+  })
 })

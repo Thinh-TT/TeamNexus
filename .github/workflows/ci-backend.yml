@@ -104,7 +104,7 @@ jobs:
       # DatabaseFixture cố tình bỏ qua cả nhóm test cần DB (Phase 8 D4) — trên CI điều đó KHÔNG
       # bao giờ được phép xảy ra, vì service container ở trên là để bảo đảm có DB thật.
       # Lần chạy CI đầu tiên đã lọt lưới đúng kiểu này: job xanh nhưng chỉ 111/172 test thực sự chạy.
-      # Con số kỳ vọng: 171 (Giai đoạn 9) → 189 (Giai đoạn 10 §1) → 226 (Giai đoạn 10 §2) → 371 (Giai đoạn 11).
+      # Con số kỳ vọng: 171 (Giai đoạn 9) → 189 (Giai đoạn 10 §1) → 226 (Giai đoạn 10 §2) → 371 (Giai đoạn 11) → 423 (Giai đoạn 12).
       - name: Assert no test was skipped
         shell: pwsh
         run: |
@@ -120,8 +120,8 @@ jobs:
           if ($skipped -gt 0) {
             throw "Có $skipped test bị SKIP trên CI — DB test không sẵn sàng? Job này chỉ xanh khi MỌI test thực sự chạy."
           }
-          if ($total -ne 371) {
-            throw "Số test backend đã đổi: $total (kỳ vọng 371). Nếu là chủ ý, cập nhật con số này và tài liệu."
+          if ($total -ne 423) {
+            throw "Số test backend đã đổi: $total (kỳ vọng 423). Nếu là chủ ý, cập nhật con số này và tài liệu."
           }
 
       - name: Upload test results

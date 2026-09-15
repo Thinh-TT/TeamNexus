@@ -67,10 +67,11 @@ public sealed class TaskService : ITaskService
             .ToListAsync(ct);
 
         var taskIds = tasks.Select(t => t.Id).ToList();
-        var counts = await LoadCommentCountsAsync(taskIds, ct);
-        var labelsByTask = await LoadLabelsByTaskAsync(taskIds, ct);
+        var counts = await TaskReadHelpers.LoadCommentCountsAsync(_db, taskIds, ct);
+        var labelsByTask = await TaskReadHelpers.LoadLabelsByTaskAsync(_db, taskIds, ct);
         var activeRunIds = await AgentRunLookup.LoadActiveRunIdsAsync(_db, taskIds, ct);
-        var assigneeIsAiAgent = await ResolvePageAssigneeIsAiAgentAsync(board.WorkspaceId, tasks, ct);
+        var assigneeIsAiAgent = await TaskReadHelpers.ResolveAssigneeIsAiAgentAsync(
+            _agents, board.WorkspaceId, tasks, ct);
 
         return tasks.Select(t => DtoMapping.MapTask(
             t,
@@ -92,9 +93,10 @@ public sealed class TaskService : ITaskService
         var count = await _db.TaskComments
             .CountAsync(c => c.TaskId == taskId, ct);
 
-        var labels = await LoadLabelsByTaskAsync([taskId], ct);
+        var labels = await TaskReadHelpers.LoadLabelsByTaskAsync(_db, [taskId], ct);
         var activeRunIds = await AgentRunLookup.LoadActiveRunIdsAsync(_db, [taskId], ct);
-        var assigneeIsAiAgent = await ResolvePageAssigneeIsAiAgentAsync(workspaceId, [task], ct);
+        var assigneeIsAiAgent = await TaskReadHelpers.ResolveAssigneeIsAiAgentAsync(
+            _agents, workspaceId, [task], ct);
 
         return DtoMapping.MapTask(
             task,
@@ -389,28 +391,10 @@ public sealed class TaskService : ITaskService
             : _db.Users.FirstOrDefaultAsync(u => u.Id == assigneeId.Value, ct);
 
     /// <summary>
-    /// Phase 7 §3.3 — <c>AssigneeIsAiAgent</c> for a whole page. There is exactly ONE agent per
-    /// workspace (partial unique index <c>uq_workspace_members_ai_agent</c>), so the resolver is
-    /// asked once per distinct assignee in the page rather than once per task. If a workspace ever
-    /// gets several agents this must become a set-based lookup.
+    /// Phase 7 §3.3 — <c>AssigneeIsAiAgent</c> for a whole page, and the labels/comment-count
+    /// loaders, now live in <see cref="TaskReadHelpers"/> (Phase 12 §P1) because
+    /// <see cref="TaskSearchService"/> renders the same card shape and must not duplicate them.
     /// </summary>
-    private async Task<bool> ResolvePageAssigneeIsAiAgentAsync(
-        Guid workspaceId, IReadOnlyList<BoardTask> tasks, CancellationToken ct)
-    {
-        foreach (var assigneeId in tasks
-                     .Where(t => t.AssigneeId.HasValue)
-                     .Select(t => t.AssigneeId!.Value)
-                     .Distinct())
-        {
-            if (await _agents.IsAiAgentAsync(workspaceId, assigneeId, ct))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private async Task<BoardEntity> RequireVisibleBoardAsync(Guid boardId, Guid userId, CancellationToken ct)
     {
         var board = await _db.Boards
@@ -480,42 +464,6 @@ public sealed class TaskService : ITaskService
                     new { boardId = task.BoardId, taskId = task.Id, columnId = task.ColumnId },
                     ActivityJson)),
             ct);
-    }
-
-    private async Task<Dictionary<Guid, IReadOnlyList<LabelResponse>>> LoadLabelsByTaskAsync(
-        List<Guid> taskIds, CancellationToken ct)
-    {
-        if (taskIds.Count == 0)
-        {
-            return [];
-        }
-
-        var links = await _db.TaskLabels
-            .Where(tl => taskIds.Contains(tl.TaskId))
-            .Include(tl => tl.Label)
-            .AsNoTracking()
-            .ToListAsync(ct);
-
-        return links
-            .Where(tl => tl.Label is not null)
-            .GroupBy(tl => tl.TaskId)
-            .ToDictionary(
-                g => g.Key,
-                g => (IReadOnlyList<LabelResponse>)g.Select(tl => DtoMapping.MapLabel(tl.Label!)).ToList());
-    }
-
-    private async Task<Dictionary<Guid, int>> LoadCommentCountsAsync(List<Guid> taskIds, CancellationToken ct)
-    {
-        if (taskIds.Count == 0)
-        {
-            return [];
-        }
-
-        return await _db.TaskComments
-            .Where(c => taskIds.Contains(c.TaskId))
-            .GroupBy(c => c.TaskId)
-            .Select(g => new { TaskId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.TaskId, x => x.Count, ct);
     }
 
     private static TaskPriority? ParsePriority(string? value)
