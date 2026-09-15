@@ -2,11 +2,11 @@
 
 > Roadmap ở mức giai đoạn lớn (chưa chia task chi tiết). Mỗi giai đoạn kèm các yêu cầu hoàn thiện để coi là "xong" trước khi chuyển sang giai đoạn kế tiếp.
 
-> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (đã hoàn thành)** → **8 (đã hoàn thành)** → **9 (đã hoàn thành)** → **10 (đã hoàn thành)** → **11 (đã hoàn thành)** → **12 (backend đã xong — frontend/CI bàn giao)** → 13.
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (✅)** → **8 (✅)** → **9 (✅)** → **10 (✅)** → **11 (✅)** → **12 (✅)** → 13 → 14 → 15 → 16.
 >
-> Số giai đoạn đã được **đánh lại**: **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Đơn giản hóa Role**, **10 = Nâng cao Task & Workspace UX**, **11 = Quản lý Member & Profile**, **12 = Dashboard & Tìm kiếm**, **13 = Mobile**. `01-system-specification.md` và `02-tech-stack-decisions.md` đã cập nhật theo.
+> Số giai đoạn đã được **đánh lại** (lần 2 — sau Giai đoạn 12): **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Đơn giản hóa Role**, **10 = Nâng cao Task & Workspace UX**, **11 = Quản lý Member & Profile**, **12 = Dashboard & Tìm kiếm**, **13 = Trực quan hóa & Thông báo**, **14 = Nâng cao AI**, **15 = Tích hợp bên ngoài**, **16 = Mobile (Flutter)**. `01-system-specification.md` và `02-tech-stack-decisions.md` sẽ cập nhật khi mỗi giai đoạn bắt đầu.
 >
-> **Lưu ý khi đọc tài liệu cũ:** các tài liệu đã đóng băng của giai đoạn 4/5/6 (`tasks/phase-4..6-*.md`, `report/phase-5-*`, `report/phase-6-*`) vẫn dùng cách đánh số cũ — Giai đoạn 9 (cũ) = Mobile, nay là **Giai đoạn 13**.
+> **Lưu ý khi đọc tài liệu cũ:** các tài liệu đã đóng băng của giai đoạn 4/5/6 (`tasks/phase-4..6-*.md`, `report/phase-5-*`, `report/phase-6-*`) vẫn dùng cách đánh số cũ — Giai đoạn 9 (cũ) = Mobile, nay là **Giai đoạn 16**.
 
 ## Giai đoạn 1: Nền tảng & Auth
 
@@ -241,14 +241,62 @@ Xây luồng mời thành viên vào workspace qua email, quản lý danh sách 
 > và trang chủ workspace phải là **route riêng** `/workspaces/:workspaceId/dashboard` (giữ nguyên `/` = danh sách workspace,
 > vì `DashboardPage` phụ thuộc side effect "tự tạo workspace mặc định" của `GET /api/workspaces`).
 
-## Giai đoạn 13: Mobile (Flutter)
+## Giai đoạn 13: Trực quan hóa & Thông báo Chủ động
 
-> **Chưa bắt đầu — dự kiến sau Giai đoạn 12.** Nội dung giữ nguyên từ roadmap cũ (trước đây là Giai đoạn 9).
+> **Chưa bắt đầu — dự kiến sau Giai đoạn 12.**
+> **Độ phức tạp kỹ thuật: 🟢 Thấp** — tận dụng tối đa code sẵn có, không cần migration mới.
+> Không cần API mới ngoại trừ `GET /api/workspaces/{id}/tasks/search` (đã có từ Phase 12) và `EmailGateway` (đã có từ Phase 11).
 
-Sau khi bản Web ổn định, xây app Flutter dùng chung API, tích hợp signalr_netcore cho real-time và kiểm thử trên thiết bị thật.
+Bổ sung khả năng xem task theo chiều thời gian (Calendar), biểu đồ tiến độ trực quan trong app, và email digest tóm tắt hàng ngày/tuần cho từng thành viên — tất cả tận dụng dữ liệu đã có (`due_date`, `completed_at`, `activity_logs`, Resend API).
+
+**Yêu cầu hoàn thiện:**
+- [ ] **Calendar View**: tab "Lịch" trong `BoardView` hiển thị task theo ngày bằng antd `Calendar`; click ngày mở `/search?dueFrom=&dueTo=` — **không cần API mới**
+- [ ] **Burndown Chart & Velocity**: biểu đồ open/done theo tuần trong `ReportsPage` (tính từ `completed_at` + `activity_logs`); không thêm thư viện npm ngoài (antd `Statistic`/`Progress` đủ dùng)
+- [ ] **Email Digest hàng ngày**: `BackgroundService` mới chạy mỗi sáng, gọi `DashboardService` lấy "task của tôi", gửi qua `EmailGateway` (Resend) — tận dụng template Phase 11; người dùng có thể bật/tắt trong Profile Settings
+- [ ] Toàn bộ test vẫn xanh (`dotnet test`, `npm test`); không migration mới
+
+---
+
+## Giai đoạn 14: Nâng cao AI
+
+> **Chưa bắt đầu — dự kiến sau Giai đoạn 13.**
+> **Độ phức tạp kỹ thuật: 🟡 Trung bình** — mở rộng `IAiProvider`, `ObserverService`, `SmartSetupService` đã có; cần endpoint mới và có thể thêm 1 migration nhỏ.
+
+Nâng AI từ vai trò quan sát/đề xuất lên tương tác trực tiếp trong ngữ cảnh task, đồng thời cải thiện Observer thành công cụ dự báo rủi ro chủ động thay vì chỉ phát hiện sau khi xảy ra.
+
+**Yêu cầu hoàn thiện:**
+- [ ] **AI Task Chat**: nút "Hỏi AI" trong `TaskDetailModal` — người dùng chat với AI trong ngữ cảnh task (title, description, comment); backend dùng `IAiProvider` + streaming SSE; kết quả đi qua Accountability Layer (Pending → Approve/Reject)
+- [ ] **Observer Dự báo Rủi ro**: thêm signal `AtRiskDeadline` (task chưa done, còn < 20% thời gian nhưng 0 update trong 48h) và `ProjectHealthScore` (0–100 tổng hợp) vào `ObserverSignalDetector`; hiển thị gauge "Sức khỏe dự án" trên `WorkspaceDashboardPage`
+- [ ] **AI Board Template**: mở rộng Smart Setup (Phase 3) — AI đề xuất luôn cấu trúc board (column) và 5–10 task khởi đầu dựa trên mô tả dự án; UI preview trước khi confirm qua Accountability Layer
+- [ ] Guardrail và giới hạn token áp dụng cho mọi tính năng mới; test coverage ≥ baseline
+
+---
+
+## Giai đoạn 15: Tích hợp bên ngoài
+
+> **Chưa bắt đầu — dự kiến sau Giai đoạn 14.**
+> **Độ phức tạp kỹ thuật: 🔴 Cao** — webhook, OAuth của bên thứ ba, lưu trữ token bảo mật, xử lý eventual consistency.
+
+Kết nối TeamNexus với hệ sinh thái công cụ phát triển phổ biến: thông báo sang Slack/Discord, liên kết task với GitHub PR/Issue.
+
+**Yêu cầu hoàn thiện:**
+- [ ] **Slack / Discord Notification**: Workspace Settings → nhập Webhook URL; `SlackNotificationGateway : IExternalNotificationGateway` (adapter pattern, đúng tiền lệ `EmailGateway`); gửi khi AI Observer phát hiện tín hiệu, task overdue, member mới join
+- [ ] **GitHub Integration**: Workspace Settings → nhập repo + Personal Access Token (mã hóa); task có thể gắn GitHub Issue/PR URL; webhook `POST /api/webhooks/github` → khi PR merge tự động move task sang cột `is_done`; chip "PR #123" trong `TaskCard` với link ngoài
+- [ ] Webhook endpoint xác thực chữ ký HMAC-SHA256 (GitHub secret); token bên thứ ba được mã hóa khi lưu DB
+- [ ] Hoạt động khi workspace không cấu hình tích hợp (graceful degradation)
+
+---
+
+## Giai đoạn 16: Mobile (Flutter)
+
+> **Chưa bắt đầu — dự kiến sau khi bản Web đã có đủ tích hợp bên ngoài.**
+> **Độ phức tạp kỹ thuật: 🔴 Cao** — nền tảng mới, cần xử lý OAuth flow trên mobile, real-time SignalR trên Flutter.
+> Nội dung giữ nguyên từ roadmap cũ (trước đây là Giai đoạn 13 → 9 cũ).
+
+Sau khi bản Web ổn định, xây app Flutter dùng chung toàn bộ API đã có, tích hợp `signalr_netcore` cho real-time và kiểm thử trên thiết bị thật. `dueDate` offset và priority enum đã được xử lý đúng ở backend (Phase 10 BUG-1/BUG-2) — Flutter sẽ hưởng lợi trực tiếp.
 
 **Yêu cầu hoàn thiện:**
 - [ ] App Flutter kết nối và xác thực được với API đã có (dùng chung OAuth/JWT flow)
-- [ ] Các màn hình chính (Board, Task, thông báo AI Observer) hoạt động trên Flutter
+- [ ] Các màn hình chính (Board Kanban, Task Detail, Dashboard, thông báo AI Observer) hoạt động trên Flutter
 - [ ] Real-time qua `signalr_netcore` hoạt động tương đương bản Web
 - [ ] Kiểm thử thành công trên thiết bị thật (không chỉ emulator)
