@@ -11,7 +11,7 @@ kết hợp Kanban real-time với AI Agent (xem `Project-Documents/`).
 - 🌐 **Web App (Frontend)**: [https://app.teamnexus.cloud](https://app.teamnexus.cloud) *(Host trên Vercel, quản lý DNS & SSL qua Cloudflare)*
 - ⚙️ **API Backend**: [https://api.teamnexus.cloud](https://api.teamnexus.cloud) *(Host trên Render với Docker .NET 10; Base API: `/api`)*
 - ✉️ **Transactional Email**: `TeamNexus <noreply@teamnexus.cloud>` *(Xác thực SPF, DKIM, DMARC qua Cloudflare DNS + Resend API)*
-- 🗄️ **Database**: Neon Serverless PostgreSQL (Singapore `ap-southeast-1`, 9/9 EF Core migrations)
+- 🗄️ **Database**: Neon Serverless PostgreSQL (Singapore `ap-southeast-1`, 10/10 EF Core migrations)
 
 > 💡 **Lưu ý Cold-start**: Do chạy trên Free Tier của Render, khi không có request trong 15 phút máy chủ sẽ tạm ngủ. Request đầu tiên có thể mất ~30–60 giây để máy chủ thức dậy. Giao diện frontend đã tích hợp sẵn cơ chế auto-reconnect & thông báo tiếng Việt mượt mà.
 
@@ -49,7 +49,7 @@ npm run dev
 
 ### Migration (EF Core)
 
-Một chuỗi migration duy nhất trên `TeamNexusDbContext` (xem `Project-Documents/04-database-design.md` §1.1). Hiện có **9** migration, mới nhất là `Phase11MemberProfile` (Giai đoạn 11 — quản lý lời mời workspace, nhật ký gửi email `email_messages`, hồ sơ cá nhân và trung tâm thông báo).
+Một chuỗi migration duy nhất trên `TeamNexusDbContext` (xem `Project-Documents/04-database-design.md` §1.1). Hiện có **10** migration, mới nhất là `Phase13DailyDigest` (Giai đoạn 13 — thêm cột `users.digest_enabled` để bật/tắt email tóm tắt hằng ngày).
 
 ```bash
 dotnet ef migrations list   --project src/TeamNexus.Persistence --startup-project src/TeamNexus.Api
@@ -255,16 +255,34 @@ nên User Secrets sẽ thắng trở lại).
   - Kiểm thử chất lượng: `npm run lint` = 0/0 (194 files), `npx tsc -b` = exit 0, `npm run build` = OK.
   - Cập nhật Roadmap, DB Design, System Spec và Báo cáo kiểm thử Giai đoạn 12.
 
+## Trạng thái (Giai đoạn 13 – Trực quan hóa & Thông báo Chủ động) — 🔄 Backend ✅ XONG · Frontend 📤 bàn giao
+
+- [x] **Backend — ĐÃ XONG & VERIFY** — **480 tests PASS** (0 failed, 0 skipped, đo trên PostgreSQL 18; baseline 423 ⇒ **+57**).
+  - **1 migration additive:** `Phase13DailyDigest` → `users.digest_enabled` (`boolean NOT NULL DEFAULT true`) ⇒ `dotnet ef migrations list` = **10**, `has-pending-model-changes` **sạch**. **Không** bảng mới, **không** cột nào khác bị sửa.
+  - **Endpoint mới** `GET /api/workspaces/{id}/reports/progress-series` (Manager+): chuỗi `openTasks`/`completions`/`creations` theo **ngày** (≤ 60 ngày) hoặc theo **tuần** (> 60, mốc Thứ Hai), `tzOffsetMinutes` clamp `±840` + echo giá trị thực dùng, cap 90 bucket + cờ `truncated`. Tính bằng **hàm thuần** `ReportAggregator.BuildProgressSeries` ⇒ test biên thời gian chạy không cần DB.
+  - **Email digest hàng ngày:** `DigestOptions` (**mặc định `Enabled = false`**) · `DailyDigestRunner` (scoped ⇒ gọi trực tiếp được từ test) · `DailyDigestBackgroundService` (bọc try/catch **mọi** tick — không giết host) · `EmailTemplates.DailyDigest` (hàm thuần, HTML-escape **mọi** giá trị, giữ dấu tiếng Việt) · port `IDailyDigestService`/`NullDailyDigestService` ở module Board, **tái dùng `IDashboardService`** (không có truy vấn thứ hai ⇒ email và web không thể lệch số).
+  - **Chống trùng ở tầng DB** (`email_messages` kind `DailyDigest` + `to_email` + ngày) ⇒ host free-tier ngủ/thức nhiều lần trong ngày vẫn **tối đa 1 email/người/ngày**. Digest **không** tạo `notifications`, **không** ghi `activity_logs` (có test khẳng định).
+  - **Profile opt-out:** `digestEnabled` **append cuối** `GET/PUT /api/users/me`; trên `PUT`, field **vắng ⇒ giữ nguyên** (client cũ không vô tình tắt digest).
+  - Phân bổ +57 test: `ReportProgressSeriesTests` 17 · `ReportProgressSeriesApiTests` 10 · `DigestTemplateTests` 13 · `DailyDigestTests` 14 · `ProfileApiTests` +3.
+- [x] **Frontend — ĐÃ XONG & VERIFY** — **508 tests PASS** (86 file, 0 fail; baseline 407/77 file ⇒ **+101 tests / +9 file**).
+  - **Calendar View** — tab "Lịch" trong `BoardView` (antd `Calendar`): thẻ xếp theo **hạn chót địa phương**, tràn thì gộp `+N`, bấm một ngày mở `/search?boardId=&dueFrom=&dueTo=`, bấm thẻ mở modal chi tiết. **Thuần client, không API mới**; chuyển view bằng `Segmented` (mặc định vẫn là Kanban) nên 11 test cũ của `BoardView` không đổi.
+  - **Burndown + Velocity** trong `ReportsPage` — biểu đồ cột vẽ bằng CSS + `Statistic`/`Tooltip` (**không** thêm thư viện npm), lấy từ endpoint `progress-series`; lỗi của chuỗi thời gian chỉ hiện `Alert` cục bộ, **không** làm hỏng khối báo cáo đã tải.
+  - **Digest toggle** — tab "Thông báo" trong `ProfilePage`; mở thẳng tab khi URL có `#notifications` (đích link "Tắt nhận" trong email); gửi kèm `displayName`/`avatarUrl` để không ghi đè, và **rollback** công tắc khi API lỗi.
+- [x] **§7 CI & Tài liệu — ĐÃ XONG**
+  - `.github/workflows/ci-backend.yml`: assert **480** tests backend (0 skipped).
+  - `.github/workflows/ci-web.yml`: nâng baseline `406` → **`508`** (baseline Giai đoạn 13).
+  - Kiểm thử chất lượng: `npm run lint` = **0/0** (212 files), `npx tsc -b` = **exit 0**, `npm run build` = **OK**. Backend: `dotnet build` **0/0**, `dotnet test` **480** trên PostgreSQL thật.
+
 ### CI (GitHub Actions)
 
 Hai workflow chạy trên `ubuntu-latest` cho mọi push lên `main`/`develop`/`feat/**` và mọi PR vào `main`/`develop`:
 
 | Workflow | Làm gì | Artifact |
 |---|---|---|
-| `ci-backend.yml` | `restore` → `build -c Release` (**0 warning / 0 error**) → `dotnet test` trên **PostgreSQL 18** (service container) → **assert tổng test = 423 và không skip** | `backend-test-results` (TRX) |
-| `ci-web.yml` | `npm ci` → `lint` → `tsc -b` → `vitest` → **assert số test ≥ 406 (baseline 406 tests, 77 files)** → `vite build` | `web-build-output` (`dist/` + báo cáo JSON) |
+| `ci-backend.yml` | `restore` → `build -c Release` (**0 warning / 0 error**) → `dotnet test` trên **PostgreSQL 18** (service container) → **assert tổng test = 480 và không skip** | `backend-test-results` (TRX) |
+| `ci-web.yml` | `npm ci` → `lint` → `tsc -b` → `vitest` → **assert số test ≥ 508 (baseline Giai đoạn 13)** → `vite build` | `web-build-output` (`dist/` + báo cáo JSON) |
 
-**Trạng thái đã verify:** cả hai workflow **xanh** trên run thật — backend `Passed: 423, Skipped: 0`, frontend `vitest: total=406 failed=0`.
+**Trạng thái:** đo trên máy dev — backend `Passed: 480, Skipped: 0` (PostgreSQL thật), frontend `508 passed / 0 failed`, lint 0/0, `tsc -b` exit 0, build OK. ⬜ Chưa chạy lại trên GitHub Actions sau Giai đoạn 13.
 
 - **Vì sao không có workflow deploy:** Render và Vercel tự deploy từ GitHub (quyết định **D11**). Nhờ vậy CI **không giữ một secret nào** —
   toàn bộ cấu hình cho test do `TeamNexusApiFactory` cấp bằng code (`Jwt:SigningKey` test, `DeepSeek:ApiKey` rỗng ⇒ dùng fake provider).
@@ -304,6 +322,6 @@ npm run lint && npx tsc -b && npm test && npm run build
 npm test -- --reporter=json --outputFile=test-results.json
 ```
 
-> Kết quả hiện tại: **77 file / 406 test PASS** (baseline cuối Giai đoạn 8 là 206; Giai đoạn 10 là 279; Giai đoạn 11 là 360; Giai đoạn 12 bổ sung 17 file test mới đạt 406 tests PASS, 0 fail, 0 warning lint).
+> Kết quả hiện tại: **86 file / 508 test PASS** (baseline cuối Giai đoạn 8 là 206; Giai đoạn 10 là 279; Giai đoạn 11 là 360; Giai đoạn 12 ghi 406 nhưng **đo thật là 407**; Giai đoạn 13 bổ sung 9 file test mới ⇒ **508** — số đo thắng tài liệu).
 
 

@@ -56,7 +56,9 @@ jobs:
         run: npm test -- --reporter=default --reporter=json --outputFile=test-results.json
 
       # Cổng bảo vệ baseline: exit code của vitest vẫn xanh nếu ai đó XOÁ bớt test.
-      # Baseline cuối Giai đoạn 8 là 206 test (37 file); Giai đoạn 10 là 279 test (47 file); Giai đoạn 11 là 360 test (60 file); Giai đoạn 12 là 406 test (77 file).
+      # Baseline: Giai đoạn 8 = 206 (37 file); Giai đoạn 10 = 279 (47 file); Giai đoạn 11 = 360 (60 file);
+      # Giai đoạn 12 ghi 406 nhưng máy dev ĐO ĐƯỢC 407 (77 file) — "số đo thắng tài liệu";
+      # Giai đoạn 13 = 508 (86 file): Calendar (GĐ13 §1) + Burndown/Velocity (§4) + digest toggle (§5).
       - name: Assert test count did not regress
         shell: pwsh
         run: |
@@ -65,7 +67,7 @@ jobs:
           $failed = [int]$report.numFailedTests
           Write-Host "vitest: total=$total failed=$failed"
           if ($failed -ne 0) { throw "vitest reported $failed failing tests" }
-          if ($total -lt 406) { throw "Số test đã tụt: $total (baseline cuối Giai đoạn 11 là 360, Giai đoạn 12 là 406)" }
+          if ($total -lt 508) { throw "Số test đã tụt: $total (baseline Giai đoạn 13 là 508)" }
 
       - name: Build (vite)
         run: npm run build

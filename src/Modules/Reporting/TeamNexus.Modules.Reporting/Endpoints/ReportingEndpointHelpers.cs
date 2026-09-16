@@ -55,4 +55,29 @@ internal static class ReportingEndpointHelpers
 
         throw new InvalidReportParameterException(parameterName, trimmed);
     }
+
+    /// <summary>
+    /// Parse <c>tzOffsetMinutes</c> (Phase 13 §2.3) — **strict, không clamp ở đây**.
+    /// <para>
+    /// Giá trị không parse được (chữ, số thực, rỗng khoảng trắng) ⇒ <b>400</b>: đó là lỗi của client.
+    /// Giá trị **parse được nhưng ngoài khoảng hợp lệ** (ví dụ <c>99999</c>) **không** phải lỗi — đây là
+    /// knob UI, và <c>ReportAggregator</c> clamp về <c>±840</c> rồi echo giá trị thực dùng trong response,
+    /// đúng tiền lệ <c>ClampTake</c> của <c>WorkspaceActivityService</c>.
+    /// </para>
+    /// </summary>
+    public static int? ParseTzOffsetMinutes(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            return null;
+        }
+
+        if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return parsed;
+        }
+
+        throw new InvalidReportParameterException("tzOffsetMinutes", trimmed);
+    }
 }

@@ -80,10 +80,20 @@ public sealed class UserProfileService : IUserProfileService
         }
 
         // `users` has no `updated_at` and ApplicationUser does not implement IAuditableEntity
-        // (Phase 1 schema), so exactly these two columns change — the audit stamping convention
+        // (Phase 1 schema), so exactly these columns change — the audit stamping convention
         // simply does not apply to this table.
         user.DisplayName = displayName;
         user.AvatarUrl = avatarUrl;
+
+        // Phase 13 §3.4: an ABSENT value means "not mentioned", not "off". A client that predates the
+        // digest feature sends only displayName/avatarUrl, and defaulting the missing field to false here
+        // would silently unsubscribe every user the moment they edited their display name. `false` only
+        // ever arrives as an explicit instruction.
+        if (request.DigestEnabled is { } digestEnabled)
+        {
+            user.DigestEnabled = digestEnabled;
+        }
+
         await _db.SaveChangesAsync(ct);
 
         return ToResponse(user);
@@ -158,5 +168,11 @@ public sealed class UserProfileService : IUserProfileService
            ?? throw new NotFoundException("Không tìm thấy tài khoản.");
 
     private static UserProfileResponse ToResponse(ApplicationUser user)
-        => new(user.Id, user.Email ?? string.Empty, user.DisplayName, user.AvatarUrl, user.CreatedAt);
+        => new(
+            user.Id,
+            user.Email ?? string.Empty,
+            user.DisplayName,
+            user.AvatarUrl,
+            user.CreatedAt,
+            user.DigestEnabled);
 }

@@ -144,3 +144,69 @@ export interface DownloadReportParams {
   from?: string
   to?: string
 }
+
+// ---- chuỗi thời gian Burndown/Velocity (Giai đoạn 13 §4) -------------------
+//
+// Hợp đồng khớp 1-1 với `ReportProgressSeriesResponse` của backend
+// (`GET /api/workspaces/{id}/reports/progress-series`). Các bất biến dưới đây **đã có test backend**
+// chứng minh — client phải dựa vào chúng, không được "sửa" lại:
+//   • `days` và `weeks` LOẠI TRỪ nhau: đúng một trong hai có dữ liệu.
+//   • `openTasks` = số thẻ mở ở CUỐI ngày và CỐ Ý không trừ `completions` cùng ngày
+//     ⇒ `openTasks − completions` là đường lý tưởng và luôn >= 0.
+//   • Mọi mốc luôn đủ bucket (kể cả bucket toàn số 0) ⇒ biểu đồ không nhảy cột.
+
+/** `date` = mỗi bucket một ngày; `week` = mỗi bucket một tuần (mốc Thứ Hai). */
+export type ReportSeriesMode = 'date' | 'week'
+
+/** Một ngày trong chuỗi. `date` là ngày **theo múi giờ đã chọn** (`YYYY-MM-DD`), không phải mốc UTC. */
+export interface ReportDailyProgressPoint {
+  date: string
+  openTasks: number
+  completions: number
+  creations: number
+}
+
+/** Một tuần trong chuỗi; `weekStart` luôn là **Thứ Hai**. */
+export interface ReportWeeklyProgressPoint {
+  weekStart: string
+  completions: number
+  creations: number
+  openAtEnd: number
+}
+
+export interface ReportVelocityResponse {
+  avgCompletionsPerWeek: number
+  completedInRange: number
+  openAtEnd: number
+}
+
+export interface ReportSeriesTruncationResponse {
+  bucketCapReached: boolean
+  maxBuckets: number
+}
+
+export interface ReportProgressSeriesResponse {
+  workspaceId: string
+  scope: ReportScopeResponse
+  period: ReportPeriodResponse
+  mode: ReportSeriesMode
+  /** 1 khi `mode = 'date'`, 7 khi `mode = 'week'`. */
+  bucketDays: number
+  /** Rỗng khi `mode = 'week'`. */
+  days: ReportDailyProgressPoint[]
+  /** Rỗng khi `mode = 'date'`. */
+  weeks: ReportWeeklyProgressPoint[]
+  velocity: ReportVelocityResponse
+  metricDefinitions: Record<string, string>
+  truncated: ReportSeriesTruncationResponse
+  /** Giá trị **thực dùng sau clamp** — hiển thị nó để một tham số sai không âm thầm đổi số liệu. */
+  tzOffsetMinutes: number
+}
+
+export interface ReportProgressSeriesParams {
+  from?: string
+  to?: string
+  boardId?: string
+  /** UTC + giá trị này, đơn vị phút (VN = `+420`). Xem `timeZoneOffsetMinutes()`. */
+  tzOffsetMinutes?: number
+}

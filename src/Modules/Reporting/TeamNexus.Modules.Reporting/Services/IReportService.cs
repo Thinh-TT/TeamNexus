@@ -55,4 +55,29 @@ public interface IReportService
         Guid workspaceId,
         Guid userId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Chuỗi thời gian <c>openTasks</c>/<c>completions</c>/<c>creations</c> cho biểu đồ Burndown/Velocity
+    /// (Phase 13 §2).
+    /// <para>
+    /// Cùng validate/quyền như <see cref="GetSummaryAsync"/> (**Manager+**): dữ liệu này là một lát cắt của
+    /// báo cáo nên không có lý do gì cho nó một bề mặt quyền khác.
+    /// </para>
+    /// </summary>
+    /// <param name="tzOffsetMinutes">
+    /// Múi giờ người xem (UTC + giá trị này), đơn vị phút. <c>null</c> ⇒ <c>0</c> (UTC); giá trị ngoài
+    /// <c>±840</c> bị clamp (không 400 — đây là knob UI) và giá trị thực dùng được trả lại trong response.
+    /// </param>
+    /// <exception cref="ReportingDisabledException">Reporting đang tắt (503).</exception>
+    /// <exception cref="InvalidReportRangeException"><paramref name="from"/> sau <paramref name="to"/> (400).</exception>
+    /// <exception cref="ForbiddenException">Caller không phải Manager/Admin (403).</exception>
+    /// <exception cref="NotFoundException">Workspace/board không thấy hoặc không thuộc quyền (404).</exception>
+    Task<ReportProgressSeries> GetProgressSeriesAsync(
+        Guid workspaceId,
+        Guid? boardId,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        int? tzOffsetMinutes,
+        Guid userId,
+        CancellationToken ct = default);
 }

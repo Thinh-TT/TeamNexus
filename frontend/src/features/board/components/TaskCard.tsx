@@ -11,9 +11,10 @@ import {
 } from '@ant-design/icons'
 import { Avatar, Card, Flex, Space, Tag, Tooltip, Typography } from 'antd'
 import dayjs from 'dayjs'
-import type { TaskPriority, TaskResponse } from '../types/board.types'
+import type { TaskResponse } from '../types/board.types'
 import { agentApi } from '../../ai/services/agentApi'
 import { isOverdue, isTaskCompleted, overdueDays } from '../utils/taskDueDate'
+import { getPriorityConfig } from '../utils/taskPriority'
 
 interface TaskCardProps {
   task: TaskResponse
@@ -22,20 +23,6 @@ interface TaskCardProps {
   isDragOverlay?: boolean
 }
 
-const getPriorityConfig = (priority: TaskPriority | null) => {
-  switch (priority) {
-    case 'Urgent':
-      return { color: 'error', label: 'Khẩn cấp', bg: '#fef2f2', border: '#fecaca' }
-    case 'High':
-      return { color: 'warning', label: 'Cao', bg: '#fffbeb', border: '#fde68a' }
-    case 'Medium':
-      return { color: 'processing', label: 'Trung bình', bg: '#eff6ff', border: '#bfdbfe' }
-    case 'Low':
-      return { color: 'default', label: 'Thấp', bg: '#f8fafc', border: '#e2e8f0' }
-    default:
-      return null
-  }
-}
 
 export const TaskCard: React.FC<TaskCardProps> = ({
   task,

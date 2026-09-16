@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text.Encodings.Web;
 using System.Text.Unicode;
+using TeamNexus.Modules.Board.DTOs;
+using TeamNexus.Modules.Board.Services;
 
 namespace TeamNexus.Modules.Ai.Services.Email;
 
@@ -14,6 +16,12 @@ public static class EmailKinds
 
     /// <summary>Short message a Manager composes and sends to members (Phase 11 ô B).</summary>
     public const string QuickEmail = "QuickEmail";
+
+    /// <summary>
+    /// The scheduled "your work today" digest (Phase 13 ô C). One row per recipient per day, which is also
+    /// what makes the send idempotent — see <c>DailyDigestRunner</c>.
+    /// </summary>
+    public const string DailyDigest = "DailyDigest";
 }
 
 /// <summary>
@@ -150,6 +158,198 @@ public static class EmailTemplates
     /// </summary>
     public static string InvitationPreview(string workspaceName)
         => Truncate($"Lời mời tham gia workspace \"{workspaceName}\".", 500);
+
+    /// <summary>
+    /// The daily digest: what is overdue, what is due soon and what was assigned recently, per workspace
+    /// (Phase 13 §3.3).
+    /// <para>
+    /// <b>Pure.</b> No clock (the date arrives as <c>content.SendDateLocal</c>), no EF, no I/O — so the
+    /// wording, the escaping and the bucketing can be verified by a plain unit test, exactly like
+    /// <see cref="Invitation"/> and <see cref="Quick"/>. That matters more here than anywhere else,
+    /// because every value in this mail is user-controlled (task titles, board names, workspace names) and
+    /// a task titled <c>&lt;script&gt;</c> would otherwise render as markup in the recipient's client.
+    /// </para>
+    /// <para>
+    /// The plain-text body is a real alternative, not a stripped copy: readers of a text-only client get
+    /// the same information and both call-to-action links.
+    /// </para>
+    /// </summary>
+    public static (string Subject, string TextBody, string HtmlBody) DailyDigest(DailyDigestContent content)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+
+        var dateLabel = content.SendDateLocal.ToString(
+            "dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+
+        var safeName = Encode(content.RecipientDisplayName);
+        var safeDashboardUrl = Encode(content.DashboardUrl);
+        var safeUnsubscribeUrl = Encode(content.UnsubscribeUrl);
+
+        var subject = Truncate($"TeamNexus — việc của bạn hôm {dateLabel}");
+
+        var text = new System.Text.StringBuilder();
+        text.AppendLine($"Xin chào {content.RecipientDisplayName},".TrimEnd());
+        text.AppendLine();
+        text.AppendLine($"Đây là tóm tắt công việc của bạn ngày {dateLabel}.");
+        text.AppendLine();
+
+        foreach (var section in content.Workspaces)
+        {
+            text.AppendLine($"== {section.Dashboard.WorkspaceName} ==");
+
+            foreach (var bucket in Buckets(section))
+            {
+                if (bucket.Items.Count == 0)
+                {
+                    continue;
+                }
+
+                text.AppendLine($"{bucket.Title} ({bucket.Total}):");
+
+                foreach (var item in bucket.Items)
+                {
+                    text.AppendLine($"  - {item.Title}{context(item)}");
+                }
+
+                if (bucket.Total > bucket.Items.Count)
+                {
+                    text.AppendLine($"  … và {bucket.Total - bucket.Items.Count} thẻ khác");
+                }
+
+                text.AppendLine();
+            }
+        }
+
+        text.AppendLine($"Mở bảng điều khiển: {content.DashboardUrl}");
+        text.AppendLine($"Tắt nhận email tóm tắt: {content.UnsubscribeUrl}");
+
+        var html = new System.Text.StringBuilder();
+        html.AppendLine($"""
+              <h3 style="margin:0 0 12px;font-size:16px;">Việc của bạn hôm {dateLabel}</h3>
+              <p style="margin:0 0 16px;line-height:1.6;">Xin chào <strong>{safeName}</strong>,</p>
+            """);
+
+        foreach (var section in content.Workspaces)
+        {
+            html.AppendLine($"""
+              <h4 style="margin:16px 0 8px;font-size:14px;color:#4338ca;">
+                {Encode(section.Dashboard.WorkspaceName)}
+              </h4>
+              <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            """);
+
+            foreach (var bucket in Buckets(section))
+            {
+                if (bucket.Items.Count == 0)
+                {
+                    continue;
+                }
+
+                var rows = new System.Text.StringBuilder();
+                foreach (var item in bucket.Items)
+                {
+                    rows.AppendLine($"""
+                    <tr>
+                      <td style="padding:4px 0;border-bottom:1px solid #e2e8f0;">
+                        {Encode(item.Title)}
+                        <span style="color:#64748b;">{Encode(context(item))}</span>
+                      </td>
+                    </tr>
+                    """);
+                }
+
+                var more = bucket.Total > bucket.Items.Count
+                    ? $"<p style=\"margin:4px 0 0;font-size:12px;color:#64748b;\">… và {bucket.Total - bucket.Items.Count} thẻ khác</p>"
+                    : string.Empty;
+
+                html.AppendLine($"""
+                  <tr>
+                    <td style="padding:8px 0 2px;font-weight:600;">
+                      {Encode(bucket.Title)} ({bucket.Total})
+                    </td>
+                  </tr>
+                  {rows}{more}
+                """);
+            }
+
+            html.AppendLine("</table>");
+        }
+
+        html.AppendLine($"""
+              <p style="margin:20px 0 8px;">
+                <a href="{safeDashboardUrl}"
+                   style="display:inline-block;background:#6366f1;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;">
+                  Mở bảng điều khiển
+                </a>
+              </p>
+              <p style="margin:0;font-size:12px;color:#64748b;">
+                Không muốn nhận email này nữa?
+                <a href="{safeUnsubscribeUrl}" style="color:#6366f1;">Tắt nhận email tóm tắt</a>.
+              </p>
+            """);
+
+        return (subject, text.ToString().TrimEnd(), HtmlTemplate.Replace("{BODY}", html.ToString()));
+    }
+
+    /// <summary>
+    /// Short preview for the digest audit row: the date plus how many workspaces it covers. The task
+    /// titles stay out of it — <c>email_messages</c> is a queryable column and already holds a preview,
+    /// not a second copy of the mail.
+    /// </summary>
+    public static string DailyDigestPreview(int workspaceCount, DateOnly sendDate)
+        => Truncate(
+            $"Tóm tắt công việc ngày {sendDate:dd/MM/yyyy} ({workspaceCount} workspace).",
+            500);
+
+    /// <summary>One rendered section of the digest: a heading, the exact total and the listed tasks.</summary>
+    private sealed record DigestBucket(string Title, int Total, IReadOnlyList<DashboardTaskItem> Items);
+
+    /// <summary>
+    /// Projects a workspace's dashboard into the three buckets the mail shows, in urgency order.
+    /// <para>
+    /// Reuses <c>DashboardResponse.MyTasks</c> verbatim — including Phase 12's deliberate rule that
+    /// <c>dueSoon</c> excludes <c>overdue</c> — so the e-mail and the web page can never disagree about
+    /// which task is in which bucket.
+    /// </para>
+    /// </summary>
+    private static IEnumerable<DigestBucket> Buckets(DailyDigestWorkspaceSection section)
+    {
+        var myTasks = section.Dashboard.MyTasks;
+
+        yield return new DigestBucket("Quá hạn", myTasks.Overdue.Count, myTasks.Overdue.Items);
+        yield return new DigestBucket("Sắp đến hạn", myTasks.DueSoon.Count, myTasks.DueSoon.Items);
+        yield return new DigestBucket("Mới được giao", myTasks.RecentlyAssigned.Count, myTasks.RecentlyAssigned.Items);
+    }
+
+    /// <summary>
+    /// The parenthetical after a task title: board, due date, priority and lateness — only the parts that
+    /// exist, so a task with no due date never prints "null".
+    /// </summary>
+    private static string context(DashboardTaskItem item)
+    {
+        var parts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(item.BoardName))
+        {
+            parts.Add(item.BoardName);
+        }
+
+        if (item.OverdueByDays is { } days)
+        {
+            parts.Add($"Quá hạn {days} ngày");
+        }
+        else if (item.DueDate is { } due)
+        {
+            parts.Add($"Hạn {due.UtcDateTime:dd/MM}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.Priority))
+        {
+            parts.Add(item.Priority!);
+        }
+
+        return parts.Count == 0 ? string.Empty : $" ({string.Join(" · ", parts)})";
+    }
 
     /// <summary>Preview for a quick email: the sender's own opening words, capped and flattened.</summary>
     public static string QuickPreview(string body)

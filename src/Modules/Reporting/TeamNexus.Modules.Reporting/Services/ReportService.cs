@@ -142,6 +142,106 @@ public sealed class ReportService : IReportService
             .ToList();
     }
 
+    public async Task<ReportProgressSeries> GetProgressSeriesAsync(
+        Guid workspaceId,
+        Guid? boardId,
+        DateTimeOffset? from,
+        DateTimeOffset? to,
+        int? tzOffsetMinutes,
+        Guid userId,
+        CancellationToken ct = default)
+    {
+        EnsureEnabled();
+        await _access.RequireManagerAsync(workspaceId, userId, ct);
+
+        var range = ValidateRange(from, to, DateTimeOffset.UtcNow);
+        await ResolveBoardScopeAsync(workspaceId, boardId, ct);
+
+        // Cùng bộ truy vấn board/column/task như /summary, nhưng KHÔNG nạp activity_logs và
+        // ai_observer_runs: chuỗi thời gian chỉ cần `created_at`/`completed_at`. Nạp thừa hai bảng đó
+        // vừa tốn I/O vừa mở rộng bề mặt dữ liệu mà không có ai đọc.
+        var boards = await _db.Boards
+            .AsNoTracking()
+            .Where(b => b.WorkspaceId == workspaceId && (boardId == null || b.Id == boardId.Value))
+            .Select(b => new ReportBoardSnapshot(b.Id, b.Name))
+            .ToListAsync(ct);
+
+        var boardIds = boards.Select(b => b.BoardId).ToList();
+
+        var columns = await _db.BoardColumns
+            .AsNoTracking()
+            .Where(c => boardIds.Contains(c.BoardId))
+            .Select(c => new ReportColumnSnapshot(c.Id, c.BoardId, c.Name, c.IsDone))
+            .ToListAsync(ct);
+
+        var tasks = await LoadSeriesTasksAsync(boardIds, range, ct);
+
+        // `Now` của snapshot không được BuildProgressSeries dùng để dựng ngày (nó lấy biên từ Range), nên
+        // truyền Range.To — vẫn là một mốc thuộc kỳ báo cáo, không phải DateTimeOffset.UtcNow.
+        var snapshot = new ReportWorkspaceSnapshot(
+            workspaceId,
+            string.Empty,
+            range,
+            boards,
+            columns,
+            tasks,
+            new ReportActivitySnapshot(0, 0, []),
+            [],
+            0,
+            range.To);
+
+        return ReportAggregator.BuildProgressSeries(snapshot, _options.ToThresholds(), tzOffsetMinutes);
+    }
+
+    /// <summary>
+    /// Nạp task cho chuỗi thời gian, **lọc ngay ở DB** (Phase 13 §2).
+    /// <para>
+    /// Điều kiện <c>created_at &lt;= To OR (completed_at IS NOT NULL AND completed_at &gt;= From)</c> lấy
+    /// đúng những task có thể ảnh hưởng tới cửa sổ:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description>tạo trước <c>From</c> và vẫn mở ⇒ nằm trong <c>openTasks</c> của ngày đầu;</description></item>
+    /// <item><description>tạo trước <c>From</c> và đóng trong cửa sổ ⇒ đóng góp cả <c>openTasks</c> lẫn <c>completions</c>;</description></item>
+    /// <item><description>tạo sau <c>To</c> ⇒ bị loại ở đây (và bộ lọc <c>createdAt_localDay &lt;= d</c> trong aggregator cũng không bao giờ chọn tới).</description></item>
+    /// </list>
+    /// <para>
+    /// Query filter của <c>BoardTask</c> đã loại task soft-delete và task của board soft-deleted, nên
+    /// không phải tự lọc lại.
+    /// </para>
+    /// </summary>
+    private Task<List<ReportTaskSnapshot>> LoadSeriesTasksAsync(
+        IReadOnlyList<Guid> boardIds,
+        ReportRange range,
+        CancellationToken ct)
+    {
+        if (boardIds.Count == 0)
+        {
+            return Task.FromResult(new List<ReportTaskSnapshot>());
+        }
+
+        return _db.Tasks
+            .AsNoTracking()
+            .Where(t => boardIds.Contains(t.BoardId)
+                        && (t.CreatedAt <= range.To
+                            || (t.CompletedAt != null && t.CompletedAt >= range.From)))
+            .Select(t => new ReportTaskSnapshot(
+                t.Id,
+                t.BoardId,
+                t.Board!.Name,
+                t.ColumnId,
+                t.Column!.Name,
+                t.Column != null && t.Column.IsDone,
+                t.Title,
+                t.AssigneeId,
+                t.Assignee != null ? t.Assignee.DisplayName : null,
+                t.Priority != null ? t.Priority.ToString() : null,
+                t.DueDate,
+                t.CreatedAt,
+                t.UpdatedAt,
+                t.CompletedAt))
+            .ToListAsync(ct);
+    }
+
     // ---- bước 1–5: validate ------------------------------------------------
 
     /// <summary>Fail nhanh khi tính năng tắt — **trước** mọi truy vấn (kể cả truy vấn quyền).</summary>

@@ -55,6 +55,14 @@ public sealed class ReportsOptions
     /// </summary>
     public bool ExcludeDoneOverdue { get; set; } = true;
 
+    // ---- chuỗi thời gian cho Burndown/Velocity (Phase 13 §2) ----------------
+
+    /// <summary>Cap số bucket của chuỗi thời gian theo ngày (khoảng dài hơn bị cắt từ đầu).</summary>
+    public int MaxSeriesBuckets { get; set; } = 90;
+
+    /// <summary>Khoảng từ số ngày này trở lên ⇒ gộp bucket theo **tuần** thay vì theo ngày.</summary>
+    public int SeriesWeeklyThresholdDays { get; set; } = 60;
+
     // ---- derived -----------------------------------------------------------
 
     /// <summary>
@@ -70,7 +78,9 @@ public sealed class ReportsOptions
             MaxActionsPerReport: Math.Max(1, MaxActionsPerReport),
             MaxRangeDays: maxRangeDays,
             DefaultRangeDays: Math.Clamp(DefaultRangeDays, 1, maxRangeDays),
-            ExcludeDoneOverdue: ExcludeDoneOverdue);
+            ExcludeDoneOverdue: ExcludeDoneOverdue,
+            MaxSeriesBuckets: Math.Clamp(MaxSeriesBuckets, 1, Math.Max(1, maxRangeDays)),
+            SeriesWeeklyThresholdDays: Math.Clamp(SeriesWeeklyThresholdDays, 1, Math.Max(1, maxRangeDays)));
     }
 
     /// <summary>

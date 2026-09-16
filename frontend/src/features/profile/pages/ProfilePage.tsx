@@ -13,6 +13,7 @@ import {
   Popconfirm,
   Space,
   Spin,
+  Switch,
   Tabs,
   Tag,
   Tooltip,
@@ -24,6 +25,7 @@ import {
   GlobalOutlined,
   LogoutOutlined,
   ProjectOutlined,
+  BellOutlined,
   SaveOutlined,
   UserOutlined,
 } from '@ant-design/icons'
@@ -48,6 +50,46 @@ export const ProfilePage: React.FC = () => {
   const [workspaces, setWorkspaces] = useState<MyWorkspaceResponse[]>([])
   const [loadingWorkspaces, setLoadingWorkspaces] = useState(false)
   const [workspaceError, setWorkspaceError] = useState<string | null>(null)
+
+  /**
+   * Email tóm tắt hằng ngày (Giai đoạn 13 §3.4).
+   *
+   * <p>
+   * Trạng thái lấy từ `GET /api/users/me` chứ **không** từ `useAuthStore`: `/api/auth/me` — endpoint
+   * bootstrap của store — **không** trả `digestEnabled`, nên nếu đọc từ store thì công tắc sẽ luôn hiện
+   * `false` và người dùng sẽ tưởng digest của họ đang tắt.
+   * </p>
+   */
+  const [digestEnabled, setDigestEnabled] = useState<boolean>(true)
+  const [savingDigest, setSavingDigest] = useState(false)
+  const [loadingDigest, setLoadingDigest] = useState(true)
+
+  /** Tab đang mở; mặc định mở tab "Thông báo" khi URL có `#notifications` (link "Tắt nhận" trong email). */
+  const [activeTab, setActiveTab] = useState<string>(() =>
+    typeof window !== 'undefined' && window.location.hash === '#notifications'
+      ? 'notifications'
+      : 'profile'
+  )
+
+  const fetchProfile = useCallback(async () => {
+    try {
+      setLoadingDigest(true)
+      const profile = await profileApi.getProfile()
+      setDigestEnabled(profile.digestEnabled)
+    } catch {
+      // Fail-soft: không tải được hồ sơ thì công tắc ở trạng thái mặc định và người dùng vẫn dùng được
+      // phần còn lại của trang. Không hiện `message.error` ở đây vì lỗi này không do người dùng gây ra
+      // và thao tác bật/tắt vẫn sẽ báo lỗi nếu thật sự hỏng.
+    } finally {
+      setLoadingDigest(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    Promise.resolve().then(() => {
+      void fetchProfile()
+    })
+  }, [fetchProfile])
 
   // Prefill form từ auth store hoặc api
   useEffect(() => {
@@ -112,6 +154,43 @@ export const ProfilePage: React.FC = () => {
     }
   }
 
+  /**
+   * Bật/tắt email tóm tắt hằng ngày (Giai đoạn 13 §3.4).
+   *
+   * <p>
+   * Gửi **cả** `displayName`/`avatarUrl` vì `PUT /api/users/me` yêu cầu `displayName` và ghi đè hai
+   * field đó — nếu chỉ gửi `digestEnabled`, tên hiển thị sẽ bị ghi rỗng.
+   * </p>
+   *
+   * <p>
+   * <b>Rollback khi lỗi:</b> công tắc đổi trước (optimistic) để bấm có cảm giác tức thì, nhưng nếu API
+   * hỏng thì trả về trạng thái cũ. Giữ nguyên trạng thái mới sau khi lỗi sẽ khiến người dùng tin rằng
+   * digest đã tắt trong khi server vẫn đang gửi.
+   * </p>
+   */
+  const handleToggleDigest = async (next: boolean) => {
+    const previous = digestEnabled
+    setDigestEnabled(next)
+    setSavingDigest(true)
+
+    try {
+      const updated = await profileApi.updateProfile({
+        displayName: form.getFieldValue('displayName') || user?.displayName || '',
+        avatarUrl: form.getFieldValue('avatarUrl')?.trim() || null,
+        digestEnabled: next,
+      })
+
+      setDigestEnabled(updated.digestEnabled)
+      message.success(next ? 'Đã bật email tóm tắt hằng ngày' : 'Đã tắt email tóm tắt hằng ngày')
+    } catch (err: any) {
+      setDigestEnabled(previous)
+      const msg = err?.response?.data?.error || 'Không thể cập nhật tuỳ chọn thông báo'
+      message.error(msg)
+    } finally {
+      setSavingDigest(false)
+    }
+  }
+
   return (
     <Layout style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
       <AppHeader />
@@ -123,7 +202,8 @@ export const ProfilePage: React.FC = () => {
 
         <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
           <Tabs
-            defaultActiveKey="profile"
+            activeKey={activeTab}
+            onChange={setActiveTab}
             items={[
               {
                 key: 'profile',
@@ -340,6 +420,47 @@ export const ProfilePage: React.FC = () => {
                         )}
                       />
                     )}
+                  </div>
+                ),
+              },
+              {
+                key: 'notifications',
+                label: (
+                  <span>
+                    <BellOutlined style={{ marginRight: 6 }} />
+                    Thông báo
+                  </span>
+                ),
+                children: (
+                  <div style={{ maxWidth: 620, padding: '12px 0' }} data-testid="notification-settings">
+                    <Flex vertical gap={12}>
+                      <div>
+                        <Typography.Title level={5} style={{ margin: 0, color: '#0f172a' }}>
+                          Email tóm tắt công việc hằng ngày
+                        </Typography.Title>
+                        <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                          Gửi mỗi sáng: thẻ quá hạn, sắp đến hạn và vừa được giao cho bạn. Bạn có thể tắt
+                          bất cứ lúc nào.
+                        </Typography.Text>
+                      </div>
+
+                      <Flex align="center" gap={12}>
+                        <Switch
+                          checked={digestEnabled}
+                          loading={savingDigest || loadingDigest}
+                          onChange={(checked) => void handleToggleDigest(checked)}
+                          data-testid="digest-toggle"
+                        />
+                        <Typography.Text>{digestEnabled ? 'Đang bật' : 'Đang tắt'}</Typography.Text>
+                      </Flex>
+
+                      <Alert
+                        type="info"
+                        showIcon
+                        message="Digest chỉ gửi khi bạn có việc cần làm"
+                        description="Nếu không có thẻ nào đang mở, hệ thống sẽ không gửi email — bạn sẽ không nhận thư rỗng."
+                      />
+                    </Flex>
                   </div>
                 ),
               },
