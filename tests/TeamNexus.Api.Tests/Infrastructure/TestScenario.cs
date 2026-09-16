@@ -61,6 +61,17 @@ public sealed class TestScenario : IAsyncDisposable
     /// <summary>Services from the running host (resolve the real <c>AuthService</c>, providers, …).</summary>
     public IServiceProvider Services => _factory.Services;
 
+    /// <summary>
+    /// The host this scenario talks to (Phase 13).
+    /// <para>
+    /// Exposed so a suite that must resolve a service <b>directly</b> — rather than over HTTP — can do it
+    /// against the same host, and therefore the same clock and the same DI overrides, as the scenario it
+    /// seeded. Resolving from <c>TeamNexusApiFactory.Shared</c> instead would silently bypass a
+    /// <see cref="FixedTimeProvider"/> and make the assertion depend on the wall clock.
+    /// </para>
+    /// </summary>
+    public WebApplicationFactory<Program> Factory => _factory;
+
     /// <summary>The scripted provider installed by <c>WithScriptedAiAsync</c>, when present.</summary>
     public ScriptedAiProvider? ScriptedAi => _scriptedAiProvider;
 

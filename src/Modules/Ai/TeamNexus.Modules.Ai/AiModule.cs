@@ -126,6 +126,22 @@ public static class AiModule
         // The one gateway every transactional email goes through (audit row + per-workspace quota).
         services.AddScoped<IEmailDispatcher, EmailDispatcher>();
 
+        // ---- Daily digest (Phase 13 §3.3) --------------------------------------
+        // The digest is the only feature here that mails people unprompted, so it ships switched OFF
+        // (DigestOptions.Enabled defaults to false): turning it on is one explicit setting in production,
+        // and a fresh clone / a test run / CI can never send mail by accident.
+        services.AddOptions<DigestOptions>()
+            .Bind(configuration.GetSection(DigestOptions.SectionName));
+
+        // Renders the digest and hands it to the one dispatcher that owns the email_messages audit row.
+        services.AddScoped<IDigestGateway, DigestGateway>();
+
+        // The pass itself is a scoped service so a test can run it directly — no timer, no waiting.
+        services.AddScoped<IDailyDigestRunner, DailyDigestRunner>();
+
+        // ... and the hosted service only decides WHEN to ask for it.
+        services.AddHostedService<DailyDigestBackgroundService>();
+
         // Board's email port (Phase 11 §2, decision D9): Board declares + registers NullEmailGateway,
         // and this line — which MUST stay after AddBoardModule in Program.cs — overrides it, exactly
         // like IActivityLogWriter and IAiAgentResolver above.
@@ -333,5 +349,21 @@ public static class AiModule
             email.InvitationExpiryDays,
             email.MaxRecipientsPerQuickEmail,
             email.MaxEmailsPerHourPerWorkspace);
+
+        // Daily digest (Phase 13 §3): exactly ONE line so it is obvious at a glance whether the only
+        // unprompted-email feature in the codebase is on and when it fires. Contains no secret.
+        var digest = configuration.GetSection(DigestOptions.SectionName).Get<DigestOptions>()
+                     ?? new DigestOptions();
+
+        logger.LogInformation(
+            "Ai module: Digest enabled={Enabled}, sendAt={Hour:00}:{Minute:00} (UTC+{OffsetMinutes}), "
+            + "pollInterval={PollInterval}, maxUsersPerRun={MaxUsers}, maxDailyEmails={MaxEmails}.",
+            digest.Enabled,
+            digest.EffectiveSendAtLocalHour,
+            digest.EffectiveSendAtLocalMinute,
+            digest.EffectiveTimeZoneOffsetMinutes,
+            digest.PollInterval,
+            digest.EffectiveMaxUsersPerRun,
+            digest.EffectiveMaxDailyEmails);
     }
 }

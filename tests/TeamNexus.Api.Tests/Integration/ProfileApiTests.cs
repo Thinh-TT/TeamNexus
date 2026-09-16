@@ -357,6 +357,81 @@ public sealed class ProfileApiTests : IClassFixture<DatabaseFixture>
     /// <summary>
     /// Writes the workspace and its memberships straight to the database, so a suite can control the
     /// owner's role.
+    // ---- daily digest preference (Phase 13 §3.4) ---------------------------
+
+    [Fact]
+    public async Task PE1_ProfileExposesTheDigestPreferenceAndDefaultsToOptedIn()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var user = await scenario.CreateUserAsync("Người dùng", "digest.default@example.test");
+        using var client = await scenario.AsUserAsync(user);
+
+        var profile = await client.GetJsonAsync<ProfileDto>("/api/users/me");
+
+        Assert.NotNull(profile);
+
+        // Opted IN by default: the migration adds the column with `DEFAULT true`, so nobody's behaviour
+        // changes the day it appears.
+        Assert.True(profile!.DigestEnabled);
+    }
+
+    [Fact]
+    public async Task PE2_UpdatingThePreferencePersistsIt()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var user = await scenario.CreateUserAsync("Người dùng", "digest.toggle@example.test");
+        using var client = await scenario.AsUserAsync(user);
+
+        var updated = await (await client.PutJsonAsync(
+                "/api/users/me",
+                new { displayName = "Người dùng", avatarUrl = (string?)null, digestEnabled = false }))
+            .Content.ReadFromJsonAsync<ProfileDto>();
+
+        Assert.False(updated!.DigestEnabled);
+
+        // Reloaded from the database, not from the response object.
+        var reloaded = await client.GetJsonAsync<ProfileDto>("/api/users/me");
+        Assert.False(reloaded!.DigestEnabled);
+
+        // …and back on again, so the switch is not a one-way ratchet.
+        var reEnabled = await (await client.PutJsonAsync(
+                "/api/users/me",
+                new { displayName = "Người dùng", avatarUrl = (string?)null, digestEnabled = true }))
+            .Content.ReadFromJsonAsync<ProfileDto>();
+
+        Assert.True(reEnabled!.DigestEnabled);
+    }
+
+    [Fact]
+    public async Task PE3_AClientThatOmitsThePreferenceDoesNotTurnTheDigestOff()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var user = await scenario.CreateUserAsync("Tên cũ", "digest.omitted@example.test");
+        using var client = await scenario.AsUserAsync(user);
+
+        // Turn it off first, so "unchanged" cannot be confused with "already true by default".
+        await client.PutJsonAsync(
+            "/api/users/me",
+            new { displayName = "Tên cũ", avatarUrl = (string?)null, digestEnabled = false });
+
+        // A pre-Phase-13 client sends only the two fields it knows about. Treating the absent flag as
+        // `false` would unsubscribe the user the moment they edited their display name.
+        var updated = await (await client.PutJsonAsync(
+                "/api/users/me",
+                new { displayName = "Tên mới", avatarUrl = (string?)null }))
+            .Content.ReadFromJsonAsync<ProfileDto>();
+
+        Assert.Equal("Tên mới", updated!.DisplayName);
+        Assert.False(updated.DigestEnabled);
+
+        var reloaded = await client.GetJsonAsync<ProfileDto>("/api/users/me");
+        Assert.False(reloaded!.DigestEnabled);
+    }
+
+    // ---- helpers ------------------------------------------------------------
+
+    /// <summary>
+    /// A workspace whose owner is not necessarily an Admin, for the guard cases.
     /// <para>
     /// <see cref="TestScenario.CreateWorkspaceAsync"/> always makes the owner an Admin — correct for
     /// the production flow, but it makes the "last Admin" guard unreachable, because there is always
@@ -401,6 +476,9 @@ public sealed class ProfileApiTests : IClassFixture<DatabaseFixture>
         public string? DisplayName { get; init; }
         public string? AvatarUrl { get; init; }
         public DateTimeOffset CreatedAt { get; init; }
+
+        /// <summary>Phase 13 §3.4 — appended to the payload, so older clients keep working unchanged.</summary>
+        public bool DigestEnabled { get; init; }
     }
 
     private sealed record MyWorkspaceDto

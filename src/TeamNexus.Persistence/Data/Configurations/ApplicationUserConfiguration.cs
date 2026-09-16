@@ -17,5 +17,12 @@ public sealed class ApplicationUserConfiguration : IEntityTypeConfiguration<Appl
 
         builder.Property(u => u.AvatarUrl)
             .HasMaxLength(2048);
+
+        // Daily work digest opt-out (Phase 13 §3.1). The database default is what makes the
+        // migration additive: existing rows receive `true` without a backfill statement, so
+        // nobody's behaviour changes the day the column appears.
+        builder.Property(u => u.DigestEnabled)
+            .HasDefaultValue(true)
+            .IsRequired();
     }
 }

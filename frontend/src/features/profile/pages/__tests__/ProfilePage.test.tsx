@@ -214,4 +214,134 @@ describe('ProfilePage', () => {
       await screen.findByText('Bạn chưa tham gia không gian làm việc nào.')
     ).toBeInTheDocument()
   })
+
+  // ---- Giai đoạn 13 §5: email digest opt-out ------------------------------
+
+  /** Mở tab "Thông báo" và trả về công tắc. */
+  const openNotificationTab = async () => {
+    fireEvent.click(screen.getByText('Thông báo'))
+    return await screen.findByTestId('digest-toggle')
+  }
+
+  const profileWithDigest = (digestEnabled: boolean) => ({
+    id: 'u-1',
+    email: 'user@example.com',
+    displayName: 'Thinh Tran',
+    avatarUrl: 'https://example.com/avatar.png',
+    createdAt: '2026-01-01T00:00:00Z',
+    digestEnabled,
+  })
+
+  it('PF-1: tab "Thông báo" hiện và công tắc phản ánh digestEnabled từ API', async () => {
+    // Cố ý để `true` để chứng minh giá trị đến từ API, không phải mặc định của state.
+    vi.mocked(profileApi.getProfile).mockResolvedValue(profileWithDigest(true))
+
+    render(
+      <MemoryRouter>
+        <ProfilePage />
+      </MemoryRouter>
+    )
+
+    const toggle = await openNotificationTab()
+
+    await waitFor(() => {
+      expect(toggle).toHaveAttribute('aria-checked', 'true')
+    })
+
+    expect(screen.getByText(/Email tóm tắt công việc hằng ngày/)).toBeInTheDocument()
+  })
+
+  it('PF-1b: digestEnabled = false từ API ⇒ công tắc tắt', async () => {
+    vi.mocked(profileApi.getProfile).mockResolvedValue(profileWithDigest(false))
+
+    render(
+      <MemoryRouter>
+        <ProfilePage />
+      </MemoryRouter>
+    )
+
+    const toggle = await openNotificationTab()
+
+    await waitFor(() => {
+      expect(toggle).toHaveAttribute('aria-checked', 'false')
+    })
+
+    expect(screen.getByText('Đang tắt')).toBeInTheDocument()
+  })
+
+  it('PF-2: bật/tắt ⇒ gửi digestEnabled và GIỮ NGUYÊN displayName/avatarUrl', async () => {
+    vi.mocked(profileApi.getProfile).mockResolvedValue(profileWithDigest(true))
+    vi.mocked(profileApi.updateProfile).mockResolvedValue(profileWithDigest(false))
+
+    render(
+      <MemoryRouter>
+        <ProfilePage />
+      </MemoryRouter>
+    )
+
+    const toggle = await openNotificationTab()
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'true'))
+
+    fireEvent.click(toggle)
+
+    await waitFor(() => {
+      expect(profileApi.updateProfile).toHaveBeenCalled()
+    })
+
+    // Gửi kèm hai field còn lại vì PUT yêu cầu displayName và ghi đè cả hai — bỏ chúng đi sẽ xoá tên
+    // hiển thị của người dùng.
+    expect(vi.mocked(profileApi.updateProfile).mock.calls[0][0]).toEqual({
+      displayName: 'Thinh Tran',
+      avatarUrl: 'https://example.com/avatar.png',
+      digestEnabled: false,
+    })
+  })
+
+  it('PF-3: API lỗi ⇒ message.error tiếng Việt và ROLLBACK công tắc', async () => {
+    const errorSpy = vi.spyOn(message, 'error').mockImplementation(() => ({}) as any)
+    vi.mocked(profileApi.getProfile).mockResolvedValue(profileWithDigest(true))
+    vi.mocked(profileApi.updateProfile).mockRejectedValue({
+      response: { data: { error: 'Không thể cập nhật tuỳ chọn thông báo' } },
+    })
+
+    render(
+      <MemoryRouter>
+        <ProfilePage />
+      </MemoryRouter>
+    )
+
+    const toggle = await openNotificationTab()
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'true'))
+
+    fireEvent.click(toggle)
+
+    // Giữ nguyên trạng thái mới sau lỗi sẽ khiến người dùng tin digest đã tắt trong khi server vẫn gửi.
+    await waitFor(() => {
+      expect(toggle).toHaveAttribute('aria-checked', 'true')
+    })
+
+    expect(errorSpy).toHaveBeenCalled()
+    errorSpy.mockRestore()
+  })
+
+  it('PF-4: hash #notifications ⇒ mở thẳng tab "Thông báo" (đích link "Tắt nhận" trong email)', async () => {
+    vi.mocked(profileApi.getProfile).mockResolvedValue(profileWithDigest(true))
+
+    const originalHash = window.location.hash
+    window.location.hash = '#notifications'
+
+    try {
+      render(
+        <MemoryRouter>
+          <ProfilePage />
+        </MemoryRouter>
+      )
+
+      // Không cần bấm tab nào: nội dung tab Thông báo phải đã hiển thị.
+      expect(await screen.findByTestId('notification-settings')).toBeInTheDocument()
+      expect(screen.getByTestId('digest-toggle')).toBeInTheDocument()
+    } finally {
+      window.location.hash = originalHash
+    }
+  })
 })

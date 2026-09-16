@@ -1,6 +1,6 @@
 import React from 'react'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { BoardView } from '../BoardView'
 import { aiActionApi } from '../../../ai/services/aiActionApi'
@@ -349,5 +349,81 @@ describe('BoardView', () => {
     expect(screen.getByText('Mất kết nối')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Kết nối lại' })).toBeInTheDocument()
     unmount4()
+  })
+
+  /**
+   * Giai đoạn 13 §1 — chuyển chế độ xem Kanban ⇄ Lịch.
+   *
+   * Điều quan trọng nhất ở đây là **mặc định không đổi**: 11 test phía trên khẳng định nội dung Kanban
+   * ngay khi mount, nên nếu ai đó đổi mặc định sang `calendar` (hoặc dùng antd `Tabs`, vốn không render
+   * children của tab không hoạt động) thì cả loạt test đó sẽ đỏ.
+   */
+  describe('chuyển chế độ xem (Kanban ⇄ Lịch)', () => {
+    /** Task có hạn chót để lịch có gì đó hiển thị. */
+    const tasksWithDueDate: TaskResponse[] = [
+      {
+        ...mockTasks[0],
+        dueDate: '2099-06-20T09:00:00',
+      },
+    ]
+
+    const switchTo = (label: string) => {
+      const switcher = screen.getByTestId('board-view-switch')
+      const option = within(switcher).getByText(label)
+      fireEvent.click(option)
+    }
+
+    beforeEach(() => {
+      mockUseBoardResult.tasksByColumn = { 'col-1': tasksWithDueDate }
+    })
+
+    afterEach(() => {
+      mockUseBoardResult.tasksByColumn = { 'col-1': mockTasks }
+    })
+
+    it('mặc định là chế độ Kanban (hành vi cũ không đổi)', () => {
+      renderComponent()
+
+      expect(screen.getByTestId('board-view-switch')).toBeInTheDocument()
+      expect(screen.getByText('To Do')).toBeInTheDocument()
+      expect(screen.queryByTestId('task-calendar')).not.toBeInTheDocument()
+    })
+
+    it('chọn "Lịch" ⇒ hiện lịch và ẩn cột Kanban', () => {
+      renderComponent()
+      switchTo('Lịch')
+
+      expect(screen.getByTestId('task-calendar')).toBeInTheDocument()
+      expect(screen.queryByText('To Do')).not.toBeInTheDocument()
+    })
+
+    it('quay lại "Bảng Kanban" ⇒ cột và thẻ trở lại đầy đủ', () => {
+      renderComponent()
+
+      switchTo('Lịch')
+      expect(screen.queryByText('To Do')).not.toBeInTheDocument()
+
+      switchTo('Bảng Kanban')
+
+      expect(screen.queryByTestId('task-calendar')).not.toBeInTheDocument()
+      expect(screen.getByText('To Do')).toBeInTheDocument()
+      expect(screen.getByText('Deploy to Staging')).toBeInTheDocument()
+    })
+
+    it('lịch nhận đúng tập thẻ mà Kanban đang hiển thị (kể cả khi đang lọc)', () => {
+      renderComponent()
+
+      // Lọc theo từ khoá rồi mới sang lịch: lịch phải theo bộ lọc đang bật, không hiện toàn bộ board.
+      fireEvent.change(screen.getByPlaceholderText('Tìm kiếm thẻ, nhãn, người...'), {
+        target: { value: 'Deploy' },
+      })
+
+      switchTo('Lịch')
+
+      expect(screen.getByTestId('task-calendar')).toBeInTheDocument()
+      const calendar = screen.getByTestId('task-calendar')
+      expect(calendar.textContent).toContain('Deploy to Staging')
+      expect(calendar.textContent).not.toContain('Write Documentation')
+    })
   })
 })

@@ -28,6 +28,8 @@ public static class BoardModule
         services.AddScoped<IInvitationService, InvitationService>();
         services.AddScoped<IQuickEmailService, QuickEmailService>();
         services.AddScoped<IUserProfileService, UserProfileService>();
+        // Phase 13: assembles the daily digest from the workspace dashboards (read-only).
+        services.AddScoped<IDailyDigestService, DailyDigestService>();
         services.AddScoped<IBoardService, BoardService>();
         services.AddScoped<IColumnService, ColumnService>();
         services.AddScoped<ITaskService, TaskService>();

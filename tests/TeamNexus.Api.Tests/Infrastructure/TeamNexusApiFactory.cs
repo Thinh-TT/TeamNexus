@@ -92,6 +92,18 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
     public bool ReportsEnabled { get; init; } = true;
 
     /// <summary>
+    /// Overrides <c>Digest:Enabled</c> (Phase 13 §3.3). Defaults to <c>false</c> so no suite can send a
+    /// real digest by accident; the digest suites opt in.
+    /// </summary>
+    public bool DigestEnabled { get; init; }
+
+    /// <summary>
+    /// Overrides <c>Digest:SendAtLocalHour</c>. The digest suites set 0 so "today's digest is due" is true
+    /// at any wall-clock time, instead of the test having to wait for the production 08:00.
+    /// </summary>
+    public int DigestSendAtLocalHour { get; init; } = 8;
+
+    /// <summary>
     /// Overrides the clock the app resolves as <see cref="TimeProvider"/> (Phase 12 §P2).
     /// <para>
     /// Registered through <c>ConfigureTestServices</c>, which runs <b>after</b> the app's own
@@ -155,6 +167,19 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Agent:Enabled", AgentEnabled ? "true" : "false");
         builder.UseSetting("Reports:Enabled", ReportsEnabled ? "true" : "false");
         builder.UseSetting("Observer:Enabled", "false");
+
+        // Phase 13 §3.3 (P4): the digest is the one feature that e-mails people unprompted, so the suite
+        // turns it off explicitly. Without this, a developer's own appsettings/User Secrets value would
+        // decide whether the integration suites send real mail — the exact hazard `Email:ApiKey` above
+        // already guards against. The digest suites opt back in per test.
+        builder.UseSetting("Digest:Enabled", DigestEnabled ? "true" : "false");
+        builder.UseSetting(
+            "Digest:SendAtLocalHour",
+            DigestSendAtLocalHour.ToString(CultureInfo.InvariantCulture));
+
+        // The digest timer must not race the assertions (the same reason the Observer gets a 1-hour delay):
+        // the suites call `IDailyDigestRunner.RunOnceAsync` directly instead.
+        builder.UseSetting("Digest:StartupDelaySeconds", "3600");
 
         // The suites assert on behaviour, not on logs; EF's per-statement Information logging would
         // otherwise bury a real failure in thousands of lines.

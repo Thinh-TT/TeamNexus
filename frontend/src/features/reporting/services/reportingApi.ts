@@ -4,6 +4,8 @@ import type {
   GetReportSummaryParams,
   ReportBoardOptionResponse,
   ReportExportResult,
+  ReportProgressSeriesParams,
+  ReportProgressSeriesResponse,
   ReportSummaryResponse,
 } from '../types/reporting.types'
 
@@ -45,6 +47,38 @@ export const reportingApi = {
     const res = await httpClient.get<ReportBoardOptionResponse[]>(
       `/workspaces/${workspaceId}/reports/boards`
     )
+    return res.data
+  },
+
+  /**
+   * Chuỗi thời gian cho biểu đồ Burndown/Velocity (Giai đoạn 13 §4).
+   *
+   * <para>
+   * Tự dựng `URLSearchParams` (giống `workspaceApi.getActivity`) chứ **không** để axios serialize, vì
+   * cần bỏ tham số rỗng nhưng **giữ `tzOffsetMinutes = 0`**: `0` là "UTC" — một giá trị hợp lệ, không
+   * phải "chưa đặt". Nếu để lọt qua bộ lọc rỗng, người dùng ở UTC sẽ nhận số liệu tính theo múi giờ
+   * của server một cách tình cờ.
+   * </para>
+   */
+  async getProgressSeries(
+    workspaceId: string,
+    params?: ReportProgressSeriesParams
+  ): Promise<ReportProgressSeriesResponse> {
+    const query = new URLSearchParams()
+
+    if (params?.from) query.append('from', params.from)
+    if (params?.to) query.append('to', params.to)
+    if (params?.boardId) query.append('boardId', params.boardId)
+    if (typeof params?.tzOffsetMinutes === 'number') {
+      query.append('tzOffsetMinutes', String(params.tzOffsetMinutes))
+    }
+
+    const qs = query.toString()
+    const url = qs
+      ? `/workspaces/${workspaceId}/reports/progress-series?${qs}`
+      : `/workspaces/${workspaceId}/reports/progress-series`
+
+    const res = await httpClient.get<ReportProgressSeriesResponse>(url)
     return res.data
   },
 

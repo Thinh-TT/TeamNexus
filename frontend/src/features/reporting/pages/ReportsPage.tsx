@@ -19,9 +19,12 @@ import {
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useWorkspaceRole } from '../../../shared/hooks/useWorkspaceRole'
 import { AppHeader } from '../../../shared/components/AppHeader'
+import { BurndownChart } from '../components/BurndownChart'
 import { ReportExportDrawer } from '../components/ReportExportDrawer'
 import { ReportFilters } from '../components/ReportFilters'
 import { ReportSummaryPanel } from '../components/ReportSummaryPanel'
+import { VelocityPanel } from '../components/VelocityPanel'
+import { useReportProgressSeries } from '../hooks/useReportProgressSeries'
 import { useReportSummary } from '../hooks/useReportSummary'
 
 const { Content } = Layout
@@ -40,6 +43,24 @@ export const ReportsPage: React.FC = () => {
   const [exportDrawerOpen, setExportDrawerOpen] = useState<boolean>(false)
 
   const { report, status, error, reload, setBoard, setRange } = useReportSummary(
+    isManagerOrAdmin ? workspaceId : '',
+    { boardId: selectedBoardId, from, to }
+  )
+
+  /**
+   * Chuỗi thời gian cho biểu đồ (Giai đoạn 13 §4).
+   *
+   * <p>
+   * Request **độc lập** với `/reports/summary`: nếu endpoint chuỗi lỗi (hoặc chậm), khối báo cáo đã tải
+   * xong vẫn phải hiển thị. Gộp hai thứ vào một trạng thái lỗi sẽ biến một sự cố nhỏ thành cả trang trắng.
+   * </p>
+   */
+  const {
+    series,
+    status: seriesStatus,
+    error: seriesError,
+    reload: reloadSeries,
+  } = useReportProgressSeries(
     isManagerOrAdmin ? workspaceId : '',
     { boardId: selectedBoardId, from, to }
   )
@@ -164,6 +185,33 @@ export const ReportsPage: React.FC = () => {
           ) : report ? (
             <ReportSummaryPanel report={report} />
           ) : null}
+
+          {/*
+            Biểu đồ Burndown + Năng suất (Giai đoạn 13 §4).
+
+            Khối này có trạng thái lỗi RIÊNG: endpoint chuỗi thời gian hỏng thì chỉ hiện `Alert` ở đây,
+            phần `ReportSummaryPanel` phía trên vẫn nguyên vẹn. Gộp chung một trạng thái lỗi sẽ biến một
+            sự cố nhỏ thành cả trang báo cáo không dùng được.
+          */}
+          {seriesError ? (
+            <Alert
+              type="error"
+              showIcon
+              message="Không thể tải biểu đồ tiến độ"
+              description={seriesError}
+              action={
+                <Button size="small" type="primary" onClick={() => void reloadSeries()}>
+                  Thử lại
+                </Button>
+              }
+              data-testid="progress-series-error"
+            />
+          ) : (
+            <Flex vertical gap="large">
+              <BurndownChart series={series} loading={seriesStatus === 'loading'} />
+              <VelocityPanel series={series} />
+            </Flex>
+          )}
         </Flex>
 
         {/* Export Drawer */}

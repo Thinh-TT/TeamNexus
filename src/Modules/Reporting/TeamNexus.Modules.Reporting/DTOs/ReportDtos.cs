@@ -161,3 +161,100 @@ public sealed record ReportBoardOptionResponse(Guid Id, string Name, int TaskCou
         return new ReportBoardOptionResponse(option.Id, option.Name, option.TaskCount, option.IsDoneColumns);
     }
 }
+
+// ---- chuỗi thời gian Burndown/Velocity (Phase 13 §2) -----------------------
+
+/// <summary>
+/// Một mốc trong chuỗi thời gian. <c>Date</c> là ngày **theo múi giờ người xem** (đã áp
+/// <c>tzOffsetMinutes</c>), serialize thành <c>YYYY-MM-DD</c> — không phải mốc UTC nửa đêm.
+/// </summary>
+public sealed record ReportDailyProgressResponse(
+    DateOnly Date,
+    int OpenTasks,
+    int Completions,
+    int Creations)
+{
+    public static ReportDailyProgressResponse From(ReportDailyProgress point)
+    {
+        ArgumentNullException.ThrowIfNull(point);
+
+        return new ReportDailyProgressResponse(point.Date, point.OpenTasks, point.Completions, point.Creations);
+    }
+}
+
+/// <summary>Một mốc tuần (<c>WeekStart</c> = Thứ Hai) khi <c>mode = "week"</c>.</summary>
+public sealed record ReportWeeklyProgressResponse(
+    DateOnly WeekStart,
+    int Completions,
+    int Creations,
+    int OpenAtEnd)
+{
+    public static ReportWeeklyProgressResponse From(ReportWeeklyProgress point)
+    {
+        ArgumentNullException.ThrowIfNull(point);
+
+        return new ReportWeeklyProgressResponse(point.WeekStart, point.Completions, point.Creations, point.OpenAtEnd);
+    }
+}
+
+/// <summary>Chỉ số năng suất suy ra từ chuỗi — luôn có ở cả hai <c>mode</c>.</summary>
+public sealed record ReportVelocityResponse(
+    double AvgCompletionsPerWeek,
+    int CompletedInRange,
+    int OpenAtEnd)
+{
+    public static ReportVelocityResponse From(ReportVelocity velocity)
+    {
+        ArgumentNullException.ThrowIfNull(velocity);
+
+        return new ReportVelocityResponse(
+            velocity.AvgCompletionsPerWeek, velocity.CompletedInRange, velocity.OpenAtEnd);
+    }
+}
+
+/// <summary>Cảnh báo chuỗi bị cắt bởi cap bucket (chỉ áp cho <c>mode = "date"</c>).</summary>
+public sealed record ReportSeriesTruncationResponse(bool BucketCapReached, int MaxBuckets);
+
+/// <summary>
+/// Chuỗi thời gian trả cho <c>GET /api/workspaces/{workspaceId}/reports/progress-series</c> (Phase 13 §2.3).
+/// <para>
+/// <c>Days</c> và <c>Weeks</c> **loại trừ nhau**: đúng một trong hai có dữ liệu (mảng còn lại rỗng) để
+/// client không phải suy đoán từ <c>mode</c>.
+/// </para>
+/// <para>
+/// <c>TzOffsetMinutes</c> là giá trị **thực dùng sau clamp** — client hiển thị nó để một tham số sai
+/// không âm thầm cho ra số liệu khác mà không dấu vết.
+/// </para>
+/// </summary>
+public sealed record ReportProgressSeriesResponse(
+    Guid WorkspaceId,
+    ReportScopeResponse Scope,
+    ReportPeriodResponse Period,
+    string Mode,
+    int BucketDays,
+    IReadOnlyList<ReportDailyProgressResponse> Days,
+    IReadOnlyList<ReportWeeklyProgressResponse> Weeks,
+    ReportVelocityResponse Velocity,
+    IReadOnlyDictionary<string, string> MetricDefinitions,
+    ReportSeriesTruncationResponse Truncated,
+    int TzOffsetMinutes)
+{
+    /// <summary>Domain → HTTP (một chiều, cùng tiền lệ <see cref="ReportSummaryResponse.From"/>).</summary>
+    public static ReportProgressSeriesResponse From(ReportProgressSeries series)
+    {
+        ArgumentNullException.ThrowIfNull(series);
+
+        return new ReportProgressSeriesResponse(
+            series.WorkspaceId,
+            new ReportScopeResponse(series.Scope.Type, series.Scope.BoardId, series.Scope.BoardName),
+            new ReportPeriodResponse(series.Range.From, series.Range.To, series.Range.Days, series.Range.Clamped),
+            series.Mode,
+            series.BucketDays,
+            series.Days.Select(ReportDailyProgressResponse.From).ToList(),
+            series.Weeks.Select(ReportWeeklyProgressResponse.From).ToList(),
+            ReportVelocityResponse.From(series.Velocity),
+            series.MetricDefinitions,
+            new ReportSeriesTruncationResponse(series.BucketCapReached, series.MaxBuckets),
+            series.TzOffsetMinutes);
+    }
+}

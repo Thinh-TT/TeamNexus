@@ -32,11 +32,41 @@ public static class ReportingEndpoints
         group.MapGet("/summary", GetSummaryAsync).RequireAuthorization();
         group.MapGet("/export", ExportAsync).RequireAuthorization();
         group.MapGet("/boards", ListBoardsAsync).RequireAuthorization();
+        group.MapGet("/progress-series", GetProgressSeriesAsync).RequireAuthorization();
 
         return endpoints;
     }
 
     // ---- handlers ----------------------------------------------------------
+
+    /// <summary>
+    /// Chuỗi thời gian cho biểu đồ Burndown/Velocity (Phase 13 §2.3).
+    /// <para>
+    /// <c>tzOffsetMinutes</c> là knob UI: parse sai ⇒ **400**, parse được nhưng ngoài khoảng ⇒ **clamp** và
+    /// giá trị thực dùng được echo lại trong response (cùng luật với <c>take</c>/<c>days</c> của Phase 12).
+    /// </para>
+    /// </summary>
+    private static async Task<IResult> GetProgressSeriesAsync(
+        Guid workspaceId,
+        Guid? boardId,
+        string? from,
+        string? to,
+        string? tzOffsetMinutes,
+        HttpContext http,
+        IReportService reports,
+        CancellationToken ct)
+    {
+        var series = await reports.GetProgressSeriesAsync(
+            workspaceId,
+            boardId,
+            ReportingEndpointHelpers.ParseIso8601(from, "from"),
+            ReportingEndpointHelpers.ParseIso8601(to, "to"),
+            ReportingEndpointHelpers.ParseTzOffsetMinutes(tzOffsetMinutes),
+            http.RequireUserId(),
+            ct);
+
+        return Results.Ok(ReportProgressSeriesResponse.From(series));
+    }
 
     private static async Task<IResult> GetSummaryAsync(
         Guid workspaceId,

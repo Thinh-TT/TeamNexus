@@ -16,7 +16,9 @@ public sealed record ReportThresholds(
     int MaxActionsPerReport,
     int MaxRangeDays,
     int DefaultRangeDays,
-    bool ExcludeDoneOverdue)
+    bool ExcludeDoneOverdue,
+    int MaxSeriesBuckets,
+    int SeriesWeeklyThresholdDays)
 {
     /// <summary>Cửa sổ mặc định khi request không truyền <c>from</c>/<c>to</c>.</summary>
     public static ReportThresholds Default { get; } = new(
@@ -24,7 +26,9 @@ public sealed record ReportThresholds(
         MaxActionsPerReport: 200,
         MaxRangeDays: 365,
         DefaultRangeDays: 30,
-        ExcludeDoneOverdue: true);
+        ExcludeDoneOverdue: true,
+        MaxSeriesBuckets: 90,
+        SeriesWeeklyThresholdDays: 60);
 
     /// <summary>
     /// Dựng cửa sổ báo cáo từ tham số request (Phase 6 §1.4) — **hàm thuần**, là nơi DUY NHẤT tính cửa sổ

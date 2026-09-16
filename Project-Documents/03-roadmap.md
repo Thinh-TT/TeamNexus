@@ -2,7 +2,7 @@
 
 > Roadmap ở mức giai đoạn lớn (chưa chia task chi tiết). Mỗi giai đoạn kèm các yêu cầu hoàn thiện để coi là "xong" trước khi chuyển sang giai đoạn kế tiếp.
 
-> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (✅)** → **8 (✅)** → **9 (✅)** → **10 (✅)** → **11 (✅)** → **12 (✅)** → 13 → 14 → 15 → 16.
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (✅)** → **8 (✅)** → **9 (✅)** → **10 (✅)** → **11 (✅)** → **12 (✅)** → **13 (✅)** → 14 → 15 → 16.
 >
 > Số giai đoạn đã được **đánh lại** (lần 2 — sau Giai đoạn 12): **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Đơn giản hóa Role**, **10 = Nâng cao Task & Workspace UX**, **11 = Quản lý Member & Profile**, **12 = Dashboard & Tìm kiếm**, **13 = Trực quan hóa & Thông báo**, **14 = Nâng cao AI**, **15 = Tích hợp bên ngoài**, **16 = Mobile (Flutter)**. `01-system-specification.md` và `02-tech-stack-decisions.md` sẽ cập nhật khi mỗi giai đoạn bắt đầu.
 >
@@ -241,19 +241,39 @@ Xây luồng mời thành viên vào workspace qua email, quản lý danh sách 
 > và trang chủ workspace phải là **route riêng** `/workspaces/:workspaceId/dashboard` (giữ nguyên `/` = danh sách workspace,
 > vì `DashboardPage` phụ thuộc side effect "tự tạo workspace mặc định" của `GET /api/workspaces`).
 
-## Giai đoạn 13: Trực quan hóa & Thông báo Chủ động
+## Giai đoạn 13: Trực quan hóa & Thông báo Chủ động — ✅ **ĐÃ HOÀN THÀNH & VERIFY ĐẦY ĐỦ**
 
-> **Chưa bắt đầu — dự kiến sau Giai đoạn 12.**
-> **Độ phức tạp kỹ thuật: 🟢 Thấp** — tận dụng tối đa code sẵn có, không cần migration mới.
-> Không cần API mới ngoại trừ `GET /api/workspaces/{id}/tasks/search` (đã có từ Phase 12) và `EmailGateway` (đã có từ Phase 11).
+> **Kế hoạch chi tiết đã chia task (D1–D14, ca biên, bằng chứng):** `tasks/phase-13-visualization-proactive-notifications.md`.
+> **📤 Note bàn giao Frontend** (giữ lại làm hồ sơ hợp đồng API + các bẫy đã biết): `tasks/phase-13-remaining-frontend-handover.md`.
+> **Báo cáo nghiệm thu chi tiết:** `report/phase-13-visualization-proactive-notifications-test-report.md`.
+>
+> **⚠️ Khác bản roadmap đầu — HAI lệch có chủ ý & bắt buộc (chi tiết ở §D2 và §D5 của tài liệu chia task):**
+> 1. **CÓ 1 migration additive:** thêm **1 cột** `users.digest_enabled` (`bool NOT NULL DEFAULT true`) ⇒ tổng **10**
+>    migration (mới nhất `20260916045955_Phase13DailyDigest`). Lý do: yêu cầu *"người dùng có thể bật/tắt trong
+>    Profile Settings"* **không thể** thoả mãn bằng cờ ở client — `BackgroundService` chạy phía **server** phải
+>    **đọc** được lựa chọn đó, và `users` không có cột nào tái dùng được. `DEFAULT true` ⇒ không cần backfill.
+> 2. **CÓ 1 endpoint read-only mới:** `GET /api/workspaces/{id}/reports/progress-series?from=&to=&boardId=&tzOffsetMinutes=`
+>    (**Manager+**, cùng quyền `/summary`). Lý do: `ReportSummary` chỉ là ảnh chụp **một thời điểm**, và
+>    `activity_logs` **không** lưu trạng thái cột ⇒ **không thể** tái dựng lịch sử open/closed ở client.
+>    Burndown vì vậy **không thể** tính thuần frontend.
+>
+> **Kết quả ĐO THẬT (số đo thắng tài liệu):**
+> - **Backend:** `dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental` = **0 warning / 0 error** ·
+>   `dotnet test` (PostgreSQL thật) = **Failed 0 / Passed 480 / Skipped 0** (baseline 423 ⇒ **+57**) ·
+>   `dotnet ef migrations list` = **10** · `has-pending-model-changes` = **sạch**.
+>   Phân bổ 57 test mới: `ReportProgressSeriesTests` **17** · `ReportProgressSeriesApiTests` **10** ·
+>   `DigestTemplateTests` **13** · `DailyDigestTests` **14** · `ProfileApiTests` **+3**.
+> - **Frontend:** `npm test` = **Failed 0 / Passed 508 / Total 508 (86 file)** (baseline 407/77 file ⇒ **+101 / +9 file**) ·
+>   `npm run lint` = **0 warning / 0 error** (212 file) · `npx tsc -b` = **exit 0** · `npm run build` = **thành công**.
+> - **CI:** `ci-backend.yml` nâng `423` → **`480`**; `ci-web.yml` nâng `406` → **`508`**.
 
 Bổ sung khả năng xem task theo chiều thời gian (Calendar), biểu đồ tiến độ trực quan trong app, và email digest tóm tắt hàng ngày/tuần cho từng thành viên — tất cả tận dụng dữ liệu đã có (`due_date`, `completed_at`, `activity_logs`, Resend API).
 
 **Yêu cầu hoàn thiện:**
-- [ ] **Calendar View**: tab "Lịch" trong `BoardView` hiển thị task theo ngày bằng antd `Calendar`; click ngày mở `/search?dueFrom=&dueTo=` — **không cần API mới**
-- [ ] **Burndown Chart & Velocity**: biểu đồ open/done theo tuần trong `ReportsPage` (tính từ `completed_at` + `activity_logs`); không thêm thư viện npm ngoài (antd `Statistic`/`Progress` đủ dùng)
-- [ ] **Email Digest hàng ngày**: `BackgroundService` mới chạy mỗi sáng, gọi `DashboardService` lấy "task của tôi", gửi qua `EmailGateway` (Resend) — tận dụng template Phase 11; người dùng có thể bật/tắt trong Profile Settings
-- [ ] Toàn bộ test vẫn xanh (`dotnet test`, `npm test`); không migration mới
+- [x] **Calendar View**: tab "Lịch" trong `BoardView` (antd `Calendar`) — thẻ xếp theo **hạn chót địa phương**, tràn gộp `+N`, ô có thẻ trễ hạn báo đỏ; click ngày mở `/search?boardId=&dueFrom=&dueTo=`; click thẻ mở `TaskDetailModal` hiện có; `Segmented` chuyển view với **Kanban là mặc định**. **Thuần client, không API mới** — tôn trọng ô tìm kiếm/bộ lọc ưu tiên đang bật.
+- [x] **Burndown Chart & Velocity**: `GET /api/workspaces/{id}/reports/progress-series` (Manager+) trả chuỗi `openTasks`/`completions`/`creations` theo **ngày** (≤ 60 ngày) hoặc theo **tuần** (> 60, mốc Thứ Hai), `tzOffsetMinutes` clamp `±840` + echo giá trị thực dùng, cap 90 bucket + cờ `truncated`; tính bằng **hàm thuần** `ReportAggregator.BuildProgressSeries`. UI vẽ biểu đồ cột bằng **CSS** + `Statistic`/`Tooltip` (**không** thêm thư viện npm); lỗi chuỗi thời gian chỉ hiện `Alert` cục bộ, **không** làm hỏng khối báo cáo.
+- [x] **Email Digest hàng ngày**: `DigestOptions` (mặc định **`Enabled = false`**) + `DailyDigestRunner` (scoped ⇒ gọi trực tiếp được từ test) + `DailyDigestBackgroundService` (bọc try/catch **mọi** tick) + `EmailTemplates.DailyDigest` (hàm thuần, HTML-escape mọi giá trị, giữ dấu tiếng Việt) + port `IDailyDigestService`/`NullDailyDigestService` ở Board (tái dùng `IDashboardService`). **Chống trùng ở tầng DB** ⇒ host free-tier ngủ/thức vẫn **tối đa 1 email/người/ngày**; digest **không** tạo notification, **không** ghi `activity_logs`. UI: tab "Thông báo" trong `ProfilePage`, mở thẳng tab khi URL có `#notifications`, **rollback** công tắc khi API lỗi.
+- [x] Toàn bộ test xanh: **backend 480/0/0** · **frontend 508/0/0**; migration **9 → 10** (lệch #1 ở trên) và `has-pending-model-changes` sạch.
 
 ---
 

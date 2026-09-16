@@ -131,6 +131,7 @@ Entity `ApplicationUser` kế thừa `IdentityUser<Guid>`, thêm các field nghi
 | `access_failed_count` | int | — | | Identity chuẩn |
 | `display_name` | text | — | | Field mở rộng (theo phase-1 §2.1) |
 | `avatar_url` | text | null | | Field mở rộng (ảnh từ OAuth provider) |
+| `digest_enabled` | boolean | — | default `true` | **Giai đoạn 13.** Bật/tắt email tóm tắt công việc hằng ngày. Nằm ở DB (không phải `localStorage`) vì `DailyDigestRunner` chạy phía server phải **đọc** được lựa chọn. `DEFAULT true` ⇒ mọi row cũ nhận `true`, **không** cần backfill |
 | `created_at` | timestamptz | — | | Field mở rộng |
 
 #### `roles`
@@ -656,13 +657,18 @@ Fan-out giữ nguyên "1 row / 1 người nhận".
 | 7 | `Phase9RoleSimplification` | 9/10 | Tinh giản và chuẩn hoá cấu hình vai trò Identity |
 | 8 | `Phase9ModelSync` | 9/10 | Đồng bộ hoá model snapshot và quan hệ |
 | 9 | `Phase11MemberProfile` | 11 | Bổ sung `workspace_invitations`, `email_messages`, partial UQ pending invite |
+| 10 | `Phase13DailyDigest` | 13 | **Thêm 1 cột** `users.digest_enabled` (`boolean NOT NULL DEFAULT true`) — bật/tắt email tóm tắt hằng ngày |
 
-> Dùng `dotnet ef migrations list` để đối chiếu — hiện tại phải là **9**.
+> Dùng `dotnet ef migrations list` để đối chiếu — hiện tại phải là **10**.
 
 ---
 
 ## 7. Toàn vẹn dữ liệu, edge cases & failure modes
 
+- **Giai đoạn 13 — Migration additive DUY NHẤT: `users.digest_enabled`.** Một cột `boolean NOT NULL DEFAULT true`; **không** bảng mới, **không** cột nào khác bị sửa/xoá, **không** index mới. Lý do buộc phải có cột: digest do `BackgroundService` chạy **phía server** gửi, nên lựa chọn bật/tắt phải **đọc được từ DB** — cờ ở client (`localStorage`/Zustand) không thoả mãn, và `users` không có cột nào tái dùng được. `DEFAULT true` khiến migration **không cần backfill** và **không** đổi hành vi của bất kỳ row cũ nào.
+- **Giai đoạn 13 — Chống trùng digest dựa vào `email_messages`, KHÔNG thêm cột.** Idempotency key là `(kind = 'DailyDigest', to_email, ngày UTC của người nhận)`. Trên host free-tier tiến trình ngủ/thức nhiều lần trong ngày, nên mọi cờ in-memory sẽ bị reset bởi cold start và cùng một người nhận nhiều email. Dùng lại bảng audit sẵn có vừa bền vững vừa đúng nguyên tắc "chỉ thêm cột khi không còn đường nào khác". `email_messages` **không** có cột `recipient_user_id` ⇒ khoá theo `to_email`, hợp lệ vì `users.normalized_email` là **UQ** (1 email = 1 user).
+- **Giai đoạn 13 — Digest KHÔNG ghi `notifications` và KHÔNG ghi `activity_logs`.** Digest là một lần **đọc lại** dữ liệu người dùng đã thấy được; nếu nó bắt đầu sinh notification/activity thì mọi dashboard và trang hoạt động sẽ báo digest như một sự kiện nghiệp vụ. Có test tích hợp khẳng định **cả hai bảng đều không tăng** sau khi gửi digest.
+- **Giai đoạn 13 — Row `Failed` được coi là "đã xử lý hôm nay" (cố ý).** Nếu Resend lỗi, lượt gửi sau trong cùng ngày **không** thử lại, để một provider outage không bị hammer và không ăn vào hạn mức free-tier. Phương án tốt hơn (retry có backoff + đếm riêng) là nợ kỹ thuật có chủ ý.
 - **Giai đoạn 12 — Không migration mới (đóng băng 9 migrations):** Toàn bộ tính năng Dashboard, Tìm kiếm xuyên board và @mention không tạo thêm bảng, cột hay index vật lý mới (`has-pending-model-changes` sạch). Thông báo mention dùng type `CommentMention` ghi vào cột `notifications.type` và metadata (taskId, commentId, taskTitle, boardId, mentionedByUserId, mentionedByName) lưu trong `notifications.payload` (jsonb).
 - **Giai đoạn 12 — Quyền riêng tư & An toàn Mention:** Danh sách `mentionUserIds` được gửi tường minh từ client (server không tự parse regex từ text để tránh mạo danh/lệch ngữ cảnh). Server kiểm tra chặt chẽ: mọi mentioned user phải là thành viên người (`member_type = 'human'`) thuộc workspace; tự động deduplicate, loại bỏ tác giả bình luận và assignee (vì assignee đã nhận `CommentOnTask`), không gửi thông báo cho bot/AI.
 - **Giai đoạn 12 — Tìm kiếm phân trang Keyset:** `GET /api/workspaces/{id}/tasks/search` phân trang keyset trên `(updated_at DESC, id DESC)` với cursor mã hoá an toàn, tránh hiện tượng lệch trang khi dữ liệu thay đổi giữa các lần tải thêm.

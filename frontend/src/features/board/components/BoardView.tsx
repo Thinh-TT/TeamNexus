@@ -31,6 +31,7 @@ import {
   Button,
   Flex,
   Input,
+  Segmented,
   Select,
   Space,
   Spin,
@@ -56,6 +57,7 @@ import { notificationApi } from '../../ai/services/notificationApi'
 import { BoardModal } from './BoardModal'
 import { ColumnModal } from './ColumnModal'
 import { KanbanColumn } from './KanbanColumn'
+import { TaskCalendar } from './TaskCalendar'
 import { TaskCard } from './TaskCard'
 import { TaskDetailModal } from './TaskDetailModal'
 import { useWorkspaceMembers } from '../hooks/useWorkspaceMembers'
@@ -65,6 +67,16 @@ interface BoardViewProps {
   workspaceId: string
   boardId: string
 }
+
+/**
+ * Hai chế độ xem của một board (Giai đoạn 13 §1).
+ *
+ * `kanban` là **mặc định** và phải giữ nguyên như vậy: `BoardView.test.tsx` có 11 test khẳng định nội
+ * dung Kanban ngay khi mount, nên đổi mặc định (hoặc dùng `Tabs` — vốn không render children của tab
+ * không hoạt động) sẽ làm đỏ cả loạt test đang xanh mà không đem lại lợi ích gì.
+ */
+type BoardViewMode = 'kanban' | 'calendar'
+
 
 const renderConnectionStatus = (
   status: HubConnectionStatus,
@@ -155,6 +167,13 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
   } = useBoard(workspaceId, boardId)
 
   const [isColdStarting, setIsColdStarting] = useState(false)
+
+  /**
+   * Chế độ xem (Giai đoạn 13 §1). Mặc định `kanban` ⇒ hành vi và test hiện tại không đổi.
+   * Cố ý dùng `useState` + render có điều kiện thay vì antd `Tabs`: đổi view **không** được unmount
+   * `useBoard`, nếu không kết nối SignalR realtime sẽ bị ngắt mỗi lần người dùng xem lịch.
+   */
+  const [viewMode, setViewMode] = useState<BoardViewMode>('kanban')
 
   useEffect(() => {
     if (connectionStatus !== 'reconnecting') {
@@ -271,6 +290,17 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
   const filteredTaskCount = useMemo(() => {
     return Object.values(filteredTasksByColumn).reduce((acc, tasks) => acc + tasks.length, 0)
   }, [filteredTasksByColumn])
+
+  /**
+   * Cùng tập thẻ mà Kanban đang hiển thị, nhưng ở dạng mảng phẳng — đầu vào của lịch (Giai đoạn 13 §1).
+   *
+   * Cố ý lấy từ `filteredTasksByColumn` (chứ không phải `tasksByColumn`) để lịch **tôn trọng** ô tìm
+   * kiếm và bộ lọc ưu tiên đang bật. Hai màn hình cùng một board phải nói cùng một chuyện.
+   */
+  const allFilteredTasks = useMemo(
+    () => Object.values(filteredTasksByColumn).flat(),
+    [filteredTasksByColumn]
+  )
 
   // ---- Drag & Drop Event Handlers ----
   const handleDragStart = (event: DragStartEvent) => {
@@ -503,6 +533,18 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
               AI Smart Setup
             </Button>
 
+            {/* View switch (Giai đoạn 13 §1): "Bảng Kanban" (mặc định) ⇄ "Lịch theo hạn chót". */}
+            <Segmented
+              value={viewMode}
+              onChange={(value) => setViewMode(value as BoardViewMode)}
+              data-testid="board-view-switch"
+              options={[
+                { label: 'Bảng Kanban', value: 'kanban' },
+                { label: 'Lịch', value: 'calendar' },
+              ]}
+              style={{ borderRadius: 8 }}
+            />
+
             {/* Primary Action Button */}
             <Button
               type="primary"
@@ -593,7 +635,16 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
         </Flex>
       </div>
 
-      {/* Main Kanban Canvas with DndContext */}
+      {viewMode === 'calendar' ? (
+        <TaskCalendar
+          workspaceId={workspaceId}
+          boardId={boardId}
+          tasks={allFilteredTasks}
+          columns={columns}
+          onTaskClick={(task) => setActiveTask(task)}
+        />
+      ) : (
+      /* Main Kanban Canvas with DndContext */
       <div
         style={{
           flex: 1,
@@ -676,6 +727,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
           </DragOverlay>
         </DndContext>
       </div>
+      )}
 
       {/* Modals & Drawers */}
       <TaskDetailModal
