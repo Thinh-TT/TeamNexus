@@ -24,7 +24,24 @@ globalThis.ResizeObserver = class ResizeObserver {
 
 // Defensive fallback: prevent ReferenceError when dangling microtasks/timers
 // from third-party libraries (e.g. rc-component useDelayState) run after jsdom teardown.
-if (typeof globalThis.window !== 'undefined' && typeof global !== 'undefined') {
-  // @ts-expect-error polyfill global fallback
-  global.window = globalThis.window
+if (typeof globalThis !== 'undefined') {
+  let activeWindow = globalThis.window
+  try {
+    Object.defineProperty(globalThis, 'window', {
+      get() {
+        return activeWindow ?? globalThis
+      },
+      set(val) {
+        activeWindow = val
+      },
+      configurable: true,
+    })
+  } catch {
+    // Fallback for environments where defineProperty on globalThis is restricted
+    if (typeof globalThis.window === 'undefined') {
+      // @ts-expect-error fallback
+      globalThis.window = globalThis
+    }
+  }
 }
+
