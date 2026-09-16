@@ -56,6 +56,18 @@ describe('ProfilePage', () => {
       isAuthenticated: true,
       checkAuth: vi.fn().mockResolvedValue(undefined),
     })
+    // Cần mock mặc định cho getProfile: ProfilePage luôn gọi fetchProfile() khi mount.
+    // Không mock ⇒ promise resolve muộn, sau khi jsdom teardown ⇒ React scheduler setImmediate
+    // cố gọi setState với window=undefined ⇒ unhandled ReferenceError làm CI đỏ dù mọi test pass.
+    // Các test PF-* ghi đè mock này theo từng trường hợp riêng của mình.
+    vi.mocked(profileApi.getProfile).mockResolvedValue({
+      id: 'u-1',
+      email: 'user@example.com',
+      displayName: 'Thinh Tran',
+      avatarUrl: 'https://example.com/avatar.png',
+      createdAt: '2026-01-01T00:00:00Z',
+      digestEnabled: true,
+    } as any)
     vi.mocked(profileApi.listMyWorkspaces).mockResolvedValue(mockWorkspaces as any)
   })
 
