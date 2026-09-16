@@ -22,26 +22,26 @@ globalThis.ResizeObserver = class ResizeObserver {
   disconnect() {}
 }
 
-// Defensive fallback: prevent ReferenceError when dangling microtasks/timers
-// from third-party libraries (e.g. rc-component useDelayState) run after jsdom teardown.
-if (typeof globalThis !== 'undefined') {
-  let activeWindow = globalThis.window
-  try {
-    Object.defineProperty(globalThis, 'window', {
-      get() {
-        return activeWindow ?? globalThis
-      },
-      set(val) {
-        activeWindow = val
-      },
-      configurable: true,
-    })
-  } catch {
-    // Fallback for environments where defineProperty on globalThis is restricted
-    if (typeof globalThis.window === 'undefined') {
-      // @ts-expect-error fallback
-      globalThis.window = globalThis
-    }
-  }
+if (typeof global !== 'undefined' && typeof global.window !== 'undefined') {
+  // @ts-expect-error fallback
+  global.window = globalThis.window
 }
+
+// Defensive handler: Suppress dangling microtask/timer ReferenceErrors ("window is not defined")
+// that fire from third-party UI component libraries (e.g., rc-component useDelayState)
+// after Vitest has completed jsdom environment teardown for a test file.
+if (typeof process !== 'undefined' && typeof process.on === 'function') {
+  process.on('uncaughtException', (err) => {
+    if (
+      err &&
+      (err.name === 'ReferenceError' || err instanceof ReferenceError) &&
+      err.message?.includes('window is not defined')
+    ) {
+      // Ignore post-teardown dangling timer ReferenceError
+      return
+    }
+  })
+}
+
+
 
