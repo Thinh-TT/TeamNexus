@@ -65,7 +65,7 @@ export const WorkspaceDashboardPage: React.FC = () => {
       <AppHeader workspaceId={workspaceId}>
         <Button
           icon={<ProjectOutlined />}
-          style={{ borderRadius: 8, borderColor: '#475569', color: '#fff', background: 'transparent' }}
+          style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569', background: '#f8fafc' }}
           onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
           data-testid="nav-boards-header-btn"
         >
@@ -73,7 +73,7 @@ export const WorkspaceDashboardPage: React.FC = () => {
         </Button>
         <Button
           icon={<TeamOutlined />}
-          style={{ borderRadius: 8, borderColor: '#475569', color: '#fff', background: 'transparent' }}
+          style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569', background: '#f8fafc' }}
           onClick={() => navigate(`/workspaces/${workspaceId}/members`)}
           data-testid="nav-members-header-btn"
         >
