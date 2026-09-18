@@ -23,7 +23,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ workspaceId 
         <Button
           type="text"
           shape="circle"
-          icon={<BellOutlined style={{ color: '#fff', fontSize: 18 }} />}
+          icon={<BellOutlined style={{ color: '#475569', fontSize: 18 }} />}
           onClick={() => setDrawerOpen(true)}
           data-testid="notification-bell"
           aria-label="Thông báo"

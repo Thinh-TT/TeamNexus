@@ -1,0 +1,69 @@
+import React, { useId } from 'react'
+
+export interface NexusLogoProps {
+  size?: number | string
+  className?: string
+  style?: React.CSSProperties
+  idSuffix?: string
+}
+
+export const NexusLogo: React.FC<NexusLogoProps> = ({
+  size = 32,
+  className,
+  style,
+  idSuffix,
+}) => {
+  const reactId = useId()
+  const suffix = idSuffix ?? reactId.replace(/:/g, '')
+  const purpleGradId = `v3PurpleRibbon_${suffix}`
+  const blueGradId = `v3BlueRibbon_${suffix}`
+  const shadowId = `v3Shadow_${suffix}`
+
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 500 500"
+      width={size}
+      height={size}
+      className={className}
+      style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+      data-testid="nexus-logo"
+    >
+      <defs>
+        {/* Ribbon Left: Pure Neon Purple */}
+        <linearGradient id={purpleGradId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#C084FC" />
+          <stop offset="50%" stopColor="#8B5CF6" />
+          <stop offset="100%" stopColor="#6D28D9" />
+        </linearGradient>
+
+        {/* Ribbon Right: Pure Tech Blue */}
+        <linearGradient id={blueGradId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#60A5FA" />
+          <stop offset="50%" stopColor="#3B82F6" />
+          <stop offset="100%" stopColor="#1D4ED8" />
+        </linearGradient>
+
+        <filter id={shadowId} x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="2" dy="8" stdDeviation="10" floodColor="#05070E" floodOpacity="0.3" />
+        </filter>
+      </defs>
+
+      {/* RIBBON A (PURPLE): Curves from left and forms the sharp left vertical & descending diagonal of N */}
+      <path
+        d="M 160,360 C 90,360 50,305 50,250 C 50,195 90,140 160,140 C 195,140 225,160 250,195 L 330,310 C 350,340 375,350 405,335 L 420,365 C 380,390 335,375 300,325 L 225,220 C 205,190 185,175 160,175 C 110,175 85,210 85,250 C 85,290 110,325 160,325 C 185,325 210,310 230,285 L 255,310 C 230,340 195,360 160,360 Z"
+        fill={`url(#${purpleGradId})`}
+      />
+
+      {/* RIBBON B (BLUE): Interlocks through center, forming the right vertical & climbing loop */}
+      <path
+        filter={`url(#${shadowId})`}
+        d="M 340,140 C 410,140 450,195 450,250 C 450,305 410,360 340,360 C 305,360 275,340 250,305 L 170,190 C 150,160 125,150 95,165 L 80,135 C 120,110 165,125 200,175 L 275,280 C 295,310 315,325 340,325 C 390,325 415,290 415,250 C 415,210 390,175 340,175 C 315,175 290,190 270,215 L 245,190 C 270,160 305,140 340,140 Z"
+        fill={`url(#${blueGradId})`}
+      />
+
+      {/* Dynamic Crossing Nexus Spark at the 'N' Diagonal */}
+      <polygon points="250,230 262,250 250,270 238,250" fill="#FFFFFF" opacity="0.95" />
+    </svg>
+  )
+}

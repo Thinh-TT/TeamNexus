@@ -7,7 +7,6 @@ import {
   ClockCircleOutlined,
   CodeOutlined,
   DashboardOutlined,
-  DeploymentUnitOutlined,
   FireOutlined,
   HistoryOutlined,
   LockOutlined,
@@ -18,6 +17,7 @@ import {
 } from '@ant-design/icons'
 import { Badge, Button, Card, Col, Flex, Layout, Row, Space, Tag, Typography } from 'antd'
 import { useAuth } from '../../auth/hooks/useAuth'
+import { NexusLogo } from '../../../shared/components/NexusLogo'
 
 const { Header, Content, Footer } = Layout
 const { Title, Paragraph, Text } = Typography
@@ -87,20 +87,7 @@ export const LandingPage: React.FC = () => {
         }}
       >
         <Flex align="center" gap={12}>
-          <div
-            style={{
-              width: 38,
-              height: 38,
-              borderRadius: 10,
-              background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)',
-            }}
-          >
-            <DeploymentUnitOutlined style={{ fontSize: 22, color: '#fff' }} />
-          </div>
+          <NexusLogo size={36} />
           <Title
             level={3}
             style={{

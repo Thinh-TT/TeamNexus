@@ -1,6 +1,6 @@
 import React from 'react'
 import { Flex, Spin, Typography } from 'antd'
-import { DeploymentUnitOutlined } from '@ant-design/icons'
+import { NexusLogo } from '../../../shared/components/NexusLogo'
 import { useAuth } from '../../auth/hooks/useAuth'
 import { DashboardPage } from '../../auth/pages/DashboardPage'
 import { LandingPage } from './LandingPage'
@@ -21,21 +21,7 @@ export const RootHomePage: React.FC = () => {
           color: '#0f172a',
         }}
       >
-        <div
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 12,
-            background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 16px rgba(79, 70, 229, 0.3)',
-            marginBottom: 8,
-          }}
-        >
-          <DeploymentUnitOutlined style={{ fontSize: 26, color: '#fff' }} />
-        </div>
+        <NexusLogo size={56} style={{ marginBottom: 8 }} />
         <Spin size="large" />
         <Typography.Text style={{ color: '#64748b', fontSize: 14 }}>
           Đang khởi động TeamNexus...

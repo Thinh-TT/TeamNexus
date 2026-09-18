@@ -6,6 +6,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../features/auth/store/useAuthStore'
 import { NotificationBell } from './NotificationBell'
 
+import { NexusLogo } from './NexusLogo'
+
 const { Header } = Layout
 
 export interface AppHeaderProps {
@@ -46,20 +48,23 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   return (
     <Header
       style={{
-        background: '#0f172a',
+        background: '#ffffff',
+        borderBottom: '1px solid #e2e8f0',
         padding: '0 24px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
+        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
       }}
       data-testid="app-header"
     >
-      <Flex align="center" gap={16}>
+      <Flex align="center" gap={12}>
+        <NexusLogo size={32} style={{ cursor: 'pointer' }} />
         {title ? (
           typeof title === 'string' ? (
             <Typography.Title
               level={3}
-              style={{ color: '#fff', margin: 0, cursor: 'pointer' }}
+              style={{ color: '#0f172a', margin: 0, cursor: 'pointer', fontWeight: 700, letterSpacing: '-0.5px' }}
               onClick={() => navigate('/')}
             >
               {title}
@@ -70,7 +75,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         ) : (
           <Typography.Title
             level={3}
-            style={{ color: '#fff', margin: 0, cursor: 'pointer' }}
+            style={{ color: '#0f172a', margin: 0, cursor: 'pointer', fontWeight: 700, letterSpacing: '-0.5px' }}
             onClick={() => navigate('/')}
           >
             TeamNexus
@@ -86,18 +91,18 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
         )}
 
         <Dropdown menu={{ items: menuItems }} placement="bottomRight" arrow trigger={['click']}>
-          <Space size="small" style={{ cursor: 'pointer', color: '#fff' }} data-testid="user-dropdown-trigger">
+          <Space size="small" style={{ cursor: 'pointer', color: '#0f172a' }} data-testid="user-dropdown-trigger">
             <Avatar src={user?.avatarUrl} style={{ backgroundColor: '#6366f1' }}>
               {user?.displayName?.[0]?.toUpperCase() ?? 'U'}
             </Avatar>
-            <Typography.Text style={{ color: '#fff', fontWeight: 500 }}>
+            <Typography.Text style={{ color: '#0f172a', fontWeight: 500 }}>
               {user?.displayName ?? user?.email}
             </Typography.Text>
-            <DownOutlined style={{ fontSize: 10, color: '#94a3b8' }} />
+            <DownOutlined style={{ fontSize: 10, color: '#64748b' }} />
           </Space>
         </Dropdown>
 
-        <Button type="primary" danger onClick={() => logout()}>
+        <Button danger onClick={() => logout()}>
           Đăng xuất
         </Button>
       </Flex>

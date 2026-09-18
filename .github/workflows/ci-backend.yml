@@ -26,7 +26,7 @@ on:
 # `head_ref` (chứ không phải `ref_name`) để tên group không đổi khi nhánh bị rebase;
 # `run_id` làm phương án dự phòng cho push trực tiếp.
 concurrency:
-  group: ci-backend-${{ github.head_ref || github.run_id }}
+  group: ci-backend-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -63,10 +63,10 @@ jobs:
       TEAMNEXUS_TEST_DB: Host=localhost;Port=5432;Database=TeamNexus_Test;Username=postgres;Password=postgres
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v6
+        uses: actions/setup-dotnet@v4
         with:
           # .NET 10 đã GA ⇒ không cần `dotnet-quality: preview`. Ghim major.minor, KHÔNG dùng 'latest'.
           dotnet-version: '10.0.x'
@@ -74,7 +74,7 @@ jobs:
       # Repo không có packages.lock.json ⇒ `setup-dotnet` với `cache: true` sẽ không tìm thấy lock
       # file và bỏ qua cache. Cache thẳng thư mục NuGet với key băm các .csproj là cách đúng ở đây.
       - name: Cache NuGet packages
-        uses: actions/cache@v6
+        uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
@@ -126,7 +126,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: backend-test-results
           path: TestResults/**

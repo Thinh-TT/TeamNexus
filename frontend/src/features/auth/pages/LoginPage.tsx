@@ -2,6 +2,7 @@ import React, { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Alert, Button, Card, Flex, Typography } from 'antd'
 import { useAuth } from '../hooks/useAuth'
+import { NexusLogo } from '../../../shared/components/NexusLogo'
 
 const GoogleIcon: React.FC = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" style={{ marginRight: 8 }}>
@@ -79,21 +80,7 @@ export const LoginPage: React.FC = () => {
         </div>
 
         <Flex vertical align="center" gap="small" style={{ marginBottom: 24 }}>
-          <div
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 12,
-              background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
-              marginBottom: 4,
-            }}
-          >
-            <span style={{ fontSize: 22, color: '#fff', fontWeight: 'bold' }}>✦</span>
-          </div>
+          <NexusLogo size={48} style={{ marginBottom: 4 }} />
           <Typography.Title level={2} style={{ margin: 0, color: '#0f172a' }}>
             TeamNexus
           </Typography.Title>
