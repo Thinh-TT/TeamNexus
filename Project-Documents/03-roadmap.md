@@ -277,18 +277,35 @@ Bổ sung khả năng xem task theo chiều thời gian (Calendar), biểu đồ
 
 ---
 
-## Giai đoạn 14: Nâng cao AI
+## Giai đoạn 14: Nâng cao AI — ✅ **HOÀN THÀNH (BACKEND & FRONTEND)**
 
-> **Chưa bắt đầu — dự kiến sau Giai đoạn 13.**
-> **Độ phức tạp kỹ thuật: 🟡 Trung bình** — mở rộng `IAiProvider`, `ObserverService`, `SmartSetupService` đã có; cần endpoint mới và có thể thêm 1 migration nhỏ.
+> **Kế hoạch chi tiết đã chia task:** `tasks/phase-14-ai-advanced.md`.
+> **Frontend hoàn thiện bởi:** antigravity (570 test frontend / 96 test files / 0 warning 0 error / CI gate -lt 570).
+> **Báo cáo nghiệm thu chi tiết:** `report/phase-14-ai-advanced-test-report.md`.
+>
+> **⚠️ LỆCH DoD có chủ ý & bắt buộc (chi tiết ở §1 D6 và §10 R1 của tài liệu chia task):**
+> **`ProjectHealthScore` KHÔNG đặt trong `ObserverSignalDetector`** như dòng yêu cầu dưới đây viết, mà ở
+> `Board/Services/ProjectHealth.cs` (**hàm thuần**) và được **append cuối** `DashboardResponse`. Lý do:
+> gauge nằm trên `WorkspaceDashboardPage` vốn là **Member+**, còn `ObserverSignalDetector` là nội bộ của
+> pipeline **Manager+**; thêm nữa `Board → Ai` **bị cấm** (bất biến `Ai → Board` một chiều, Giai đoạn 13 §9)
+> nên Board **không thể** nhúng một giá trị do Ai sở hữu. Tín hiệu `AtRiskDeadline` **vẫn** nằm trong
+> `ObserverSignalDetector` (đúng yêu cầu). Quy tắc "at risk" thì **dùng chung** một định nghĩa duy nhất ở
+> `TeamNexus.Shared.Risk.DeadlineRiskRules` ⇒ gauge và cảnh báo **không thể** nói hai số khác nhau.
+>
+> **Schedule/schema:** ⛔ **KHÔNG migration nào — `dotnet ef migrations list` vẫn là 10** (khác Giai đoạn 13).
+> Cả 3 tính năng đều không cần schema mới: chat dùng `ai_action_logs` (**bảng đã có**, cột `action`/
+> `entity_type` là free text) + transcript ở **client**; health **tính lại** mỗi request; board template dùng
+> `boards`/`board_columns`/`tasks` sẵn có. `entity_type = 'Workspace'` **dùng lại** index
+> `(entity_type, entity_id, created_at)` ⇒ không index mới.
 
-Nâng AI từ vai trò quan sát/đề xuất lên tương tác trực tiếp trong ngữ cảnh task, đồng thời cải thiện Observer thành công cụ dự báo rủi ro chủ động thay vì chỉ phát hiện sau khi xảy ra.
+Bổ sung khả năng tương tác trực tiếp với AI trong ngữ cảnh task, biến Observer thành công cụ **dự báo** rủi ro,
+và mở rộng Smart Setup thành **AI Board Template**.
 
 **Yêu cầu hoàn thiện:**
-- [ ] **AI Task Chat**: nút "Hỏi AI" trong `TaskDetailModal` — người dùng chat với AI trong ngữ cảnh task (title, description, comment); backend dùng `IAiProvider` + streaming SSE; kết quả đi qua Accountability Layer (Pending → Approve/Reject)
-- [ ] **Observer Dự báo Rủi ro**: thêm signal `AtRiskDeadline` (task chưa done, còn < 20% thời gian nhưng 0 update trong 48h) và `ProjectHealthScore` (0–100 tổng hợp) vào `ObserverSignalDetector`; hiển thị gauge "Sức khỏe dự án" trên `WorkspaceDashboardPage`
-- [ ] **AI Board Template**: mở rộng Smart Setup (Phase 3) — AI đề xuất luôn cấu trúc board (column) và 5–10 task khởi đầu dựa trên mô tả dự án; UI preview trước khi confirm qua Accountability Layer
-- [ ] Guardrail và giới hạn token áp dụng cho mọi tính năng mới; test coverage ≥ baseline
+- [x] **AI Task Chat**: `POST /api/tasks/{id}/ai-chat/stream` (**SSE**, Member+) — `IAiStreamingProvider` (port **thứ ba**, không sửa `IAiProvider`), khung `meta` → `delta`* → `done` | `error` dựng bằng **hàm thuần** `AiChatSseWriter`, guard `AiChat:MaxHistoryMessages(12)`/`MaxHistoryChars(8000)` ⇒ **400 trước khi gọi provider**; + `POST .../ai-chat/message` lưu câu trả lời thành bình luận ⇒ `Pending` `PostComment` ⇒ Manager duyệt. **Transcript ở client** (không bảng mới); lỗi giữa luồng trả khung `error` thay vì 500.
+- [x] **Observer Dự báo Rủi ro**: tín hiệu **`AtRiskDeadline`** (task chưa done, còn < 20% cửa sổ, 0 update trong 48 h, **sàn cửa sổ ≥ 2 ngày**) + severity `Critical ≤24h` / `High ≤72h` / `Medium`; `NotificationTypes.All` **4 → 5**; prompt liệt kê 5 type; `ObserverSummarizer` **pin thứ tự ưu tiên khi cắt** + đếm `signalsPreserved`/`signalsDroppedBeforePrompt`. **Gauge "Sức khỏe dự án"** = `ProjectHealth.Compute` (0–100, 4 band, 5 thành phần điểm trừ cộng lại **đúng 100**) **append cuối** `DashboardResponse`.
+- [x] **AI Board Template**: `POST /api/workspaces/{id}/smart-setup/template` (Manager+, **không ghi gì**) + `/confirm` ⇒ `Pending` `CreateBoardFromTemplate` (`entity_type = 'Workspace'`) ⇒ Approve tạo **đúng 1 board + 2–6 cột (pin đúng 1 cột `is_done`) + 5–10 task**; Undo = **soft-delete board**.
+- [x] Guardrail và giới hạn token áp dụng cho mọi tính năng mới (`AiChatOptions` + `ObserverOptions.AtRiskDeadline*` + `BoardTemplatePrompts` bounds, tất cả **clamp**); test coverage **≥ baseline** (xem số thật trong `phase-14-ai-advanced.md` §6.1 + báo cáo).
 
 ---
 

@@ -58,7 +58,7 @@ public sealed class CreateSubtasksApplier : IAiActionApplier
     {
         var request = ParseRequest(log);
 
-        var columns = await _columns.GetColumnsAsync(ctx.BoardId, ctx.ActingUserId, ct);
+        var columns = await _columns.GetColumnsAsync(ctx.RequireBoardId(), ctx.ActingUserId, ct);
         var targetColumn = ResolveTargetColumn(request, columns);
 
         var memberIds = (await _members.GetMembersAsync(ctx.WorkspaceId, ctx.ActingUserId, ct))
@@ -83,7 +83,7 @@ public sealed class CreateSubtasksApplier : IAiActionApplier
             }
 
             var created = await _tasks.CreateTaskAsync(
-                ctx.BoardId,
+                ctx.RequireBoardId(),
                 new CreateTaskRequest(
                     targetColumn.Id, task.Title, task.Description, assigneeId, null, task.Priority),
                 ctx.ActingUserId,
@@ -106,10 +106,10 @@ public sealed class CreateSubtasksApplier : IAiActionApplier
 
         _logger.LogInformation(
             "CreateSubtasks applied (log {LogId}, board {BoardId}): {TaskCount} task(s), {LabelCount} new label(s).",
-            log.Id, ctx.BoardId, createdTaskIds.Count, createdLabelIds.Count);
+            log.Id, ctx.RequireBoardId(), createdTaskIds.Count, createdLabelIds.Count);
 
         return new AiActionAppliedResult(
-            AiEntityTypes.Board, ctx.BoardId, createdTaskIds, createdLabelIds, warnings);
+            AiEntityTypes.Board, ctx.RequireBoardId(), createdTaskIds, createdLabelIds, warnings);
     }
 
     public async Task<IReadOnlyList<string>> UndoAsync(
@@ -179,7 +179,7 @@ public sealed class CreateSubtasksApplier : IAiActionApplier
         _logger.LogInformation(
             "CreateSubtasks undone (log {LogId}, board {BoardId}): {TaskCount} task(s) soft-deleted, "
             + "{LabelCount} label(s) evaluated, {WarningCount} warning(s).",
-            log.Id, ctx.BoardId, taskIds.Count, labelIds.Count, warnings.Count);
+            log.Id, ctx.RequireBoardId(), taskIds.Count, labelIds.Count, warnings.Count);
 
         return warnings;
     }

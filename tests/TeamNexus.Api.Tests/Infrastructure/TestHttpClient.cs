@@ -66,6 +66,25 @@ public sealed class TestHttpClient : IDisposable
         return Http.SendAsync(request);
     }
 
+    /// <summary>
+    /// Sends a mutating request and returns as soon as the <b>response headers</b> arrive (Phase 14 §2).
+    /// <para>
+    /// Needed by the SSE suites: the default <see cref="HttpClient.SendAsync(HttpRequestMessage)"/>
+    /// buffers the whole body before returning, so a streaming endpoint and a buffered one are
+    /// indistinguishable — and the assertion that matters ("a meta frame arrives before any text") could
+    /// never be made. The antiforgery header is applied exactly as in <see cref="SendAsync"/>.
+    /// </para>
+    /// </summary>
+    public Task<HttpResponseMessage> SendStreamingAsync(HttpRequestMessage request)
+    {
+        if (MutatingMethods.Contains(request.Method))
+        {
+            _scenario.ApplyAntiforgeryHeader(request);
+        }
+
+        return Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+    }
+
     /// <summary>Removes the antiforgery header — used by the tests that assert on the 403 path.</summary>
     public void RemoveAntiforgeryHeader()
         => Http.DefaultRequestHeaders.Remove(AuthConstants.XsrfRequestHeader);

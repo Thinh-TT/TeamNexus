@@ -67,4 +67,19 @@ export interface DashboardResponse {
   boardsTruncated: boolean
   recentActivities: DashboardActivityItem[]
   summary: DashboardSummary
+  health?: DashboardProjectHealth | null
+}
+
+export interface DashboardProjectHealth {
+  score: number
+  band: 'Tốt' | 'Cần chú ý' | 'Rủi ro' | 'Nghiêm trọng' | string
+  components: {
+    overdue?: number
+    atRisk?: number
+    stalled?: number
+    aging?: number
+    load?: number
+    [key: string]: number | undefined
+  }
+  reasons: string[]
 }

@@ -91,4 +91,51 @@ describe('WorkspaceDashboardPage', () => {
       screen.getByText(/Không tìm thấy workspace hoặc bạn không phải là thành viên/i)
     ).toBeInTheDocument()
   })
+
+  it('renders project health gauge when health data is present', async () => {
+    const dashboardWithHealth: DashboardResponse = {
+      ...mockDashboard,
+      health: {
+        score: 82,
+        band: 'Tốt',
+        components: { overdue: 5, atRisk: 5 },
+        reasons: [],
+      },
+    }
+    vi.mocked(dashboardApi.get).mockResolvedValueOnce(dashboardWithHealth)
+
+    render(
+      <MemoryRouter initialEntries={[`/workspaces/${wsId}/dashboard`]}>
+        <Routes>
+          <Route path="/workspaces/:workspaceId/dashboard" element={<WorkspaceDashboardPage />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByTestId('project-health-gauge')).toBeInTheDocument()
+    expect(screen.getByText('Tốt')).toBeInTheDocument()
+    expect(screen.getByText('82')).toBeInTheDocument()
+    // Verify 5 KPI stats are still intact
+    expect(screen.getByText('20')).toBeInTheDocument()
+    expect(screen.getByText('Tổng số thẻ')).toBeInTheDocument()
+  })
+
+  it('renders empty health state when health is null', async () => {
+    const dashboardWithoutHealth: DashboardResponse = {
+      ...mockDashboard,
+      health: null,
+    }
+    vi.mocked(dashboardApi.get).mockResolvedValueOnce(dashboardWithoutHealth)
+
+    render(
+      <MemoryRouter initialEntries={[`/workspaces/${wsId}/dashboard`]}>
+        <Routes>
+          <Route path="/workspaces/:workspaceId/dashboard" element={<WorkspaceDashboardPage />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByTestId('project-health-gauge')).toBeInTheDocument()
+    expect(screen.getByText('Chưa đủ dữ liệu để tính sức khỏe dự án')).toBeInTheDocument()
+  })
 })

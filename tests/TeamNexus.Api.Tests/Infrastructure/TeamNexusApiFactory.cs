@@ -92,6 +92,20 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
     public bool ReportsEnabled { get; init; } = true;
 
     /// <summary>
+    /// Overrides <c>AiChat:Enabled</c> (Phase 14 §2.1). Defaults to <c>true</c>: the chat is the
+    /// feature under test in its own suite, and it cannot reach the outside world. The suite that proves
+    /// the off switch answers 503 builds its own host with <c>false</c>.
+    /// </summary>
+    public bool AiChatEnabled { get; init; } = true;
+
+    /// <summary>
+    /// Overrides <c>Observer:AtRiskDeadlineEnabled</c> (Phase 14 §3.1). Defaults to <c>true</c> — it is
+    /// the new detector's own switch and its rules are asserted directly by the pure suite. Suites that
+    /// count signals must set it explicitly rather than inherit whatever the host happens to carry.
+    /// </summary>
+    public bool ObserverAtRiskDeadlineEnabled { get; init; } = true;
+
+    /// <summary>
     /// Overrides <c>Digest:Enabled</c> (Phase 13 §3.3). Defaults to <c>false</c> so no suite can send a
     /// real digest by accident; the digest suites opt in.
     /// </summary>
@@ -199,11 +213,28 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
 
         if (ScriptedAi is not null)
         {
-            // ConfigureTestServices runs AFTER the app's own registrations, so this replacement is
-            // the one the container resolves (unlike a plain ConfigureServices call).
+            // ConfigureTestServices runs AFTER the app's own registrations, so these replacements are
+            // the ones the container resolves (unlike a plain ConfigureServices call).
+            //
+            // All THREE ports are overridden with the SAME instance (Phase 14 §2.1, P7): the production
+            // registration creates a separate stateless transport per port, but a suite that scripts an
+            // answer needs every path to see that script — otherwise `IAiStreamingProvider` would keep
+            // resolving the offline FakeAiProvider and a chat assertion would silently test the wrong
+            // provider.
             builder.ConfigureTestServices(services =>
-                services.AddSingleton<IAiProvider>(ScriptedAi));
+            {
+                services.AddSingleton<IAiProvider>(ScriptedAi);
+                services.AddSingleton<IAiToolCallingProvider>(ScriptedAi);
+                services.AddSingleton<IAiStreamingProvider>(ScriptedAi);
+            });
         }
+
+        // Phase 14 §2: the chat is ON by default (it is user-initiated and cannot mail anyone), but the
+        // value is stated explicitly here for the same reason `Digest:Enabled` and `Email:ApiKey` are —
+        // a developer's own User Secrets must never decide whether an integration suite behaves one way
+        // or another. Suites that test the off switch build their own host.
+        builder.UseSetting("AiChat:Enabled", AiChatEnabled ? "true" : "false");
+        builder.UseSetting("Observer:AtRiskDeadlineEnabled", ObserverAtRiskDeadlineEnabled ? "true" : "false");
 
         if (Clock is not null)
         {

@@ -13,6 +13,7 @@ import {
   SearchOutlined,
   SettingOutlined,
   TeamOutlined,
+  RobotOutlined,
 } from '@ant-design/icons'
 import {
   Button,
@@ -34,6 +35,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useWorkspaceRole } from '../../../shared/hooks/useWorkspaceRole'
 import { AppHeader } from '../../../shared/components/AppHeader'
 import { BoardModal } from '../components/BoardModal'
+import { BoardTemplateModal } from '../../ai'
 import { boardApi } from '../services/boardApi'
 import type { BoardResponse, CreateBoardRequest, UpdateBoardRequest } from '../types/board.types'
 
@@ -48,6 +50,7 @@ export const BoardListPage: React.FC = () => {
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingBoard, setEditingBoard] = useState<BoardResponse | null>(null)
+  const [aiTemplateModalOpen, setAiTemplateModalOpen] = useState(false)
 
   const fetchBoards = useCallback(async () => {
     if (!workspaceId) return
@@ -208,6 +211,14 @@ export const BoardListPage: React.FC = () => {
                   >
                     Cài đặt
                   </Button>
+                  <Button
+                    icon={<RobotOutlined />}
+                    data-testid="board-template-btn"
+                    style={{ borderRadius: 8, borderColor: '#8b5cf6', color: '#7c3aed' }}
+                    onClick={() => setAiTemplateModalOpen(true)}
+                  >
+                    Tạo board bằng AI
+                  </Button>
                 </>
               )}
               <Button
@@ -354,6 +365,13 @@ export const BoardListPage: React.FC = () => {
           setEditingBoard(null)
         }}
         onSubmit={handleCreateOrUpdateBoard}
+      />
+
+      <BoardTemplateModal
+        open={aiTemplateModalOpen}
+        onClose={() => setAiTemplateModalOpen(false)}
+        workspaceId={workspaceId ?? ''}
+        onCreated={fetchBoards}
       />
     </Layout>
   )

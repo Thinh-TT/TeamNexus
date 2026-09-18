@@ -90,8 +90,20 @@ public static class NotificationTypes
 
     public const string Bottleneck = ObserverSignalDetector.Bottleneck;
 
-    /// <summary>All known types, in detector order.</summary>
-    public static IReadOnlyList<string> All { get; } = [OverdueTask, StalledTask, Overload, Bottleneck];
+    /// <summary>
+    /// Phase 14 §3.1 — "task chưa done, còn rất ít thời gian nhưng không ai động tới". Placed before
+    /// <see cref="Overload"/>/<see cref="Bottleneck"/> in <see cref="All"/> purely for readability; the
+    /// order in this list has no behavioural effect (severity, not list position, drives ordering).
+    /// </summary>
+    public const string AtRiskDeadline = ObserverSignalDetector.AtRiskDeadline;
+
+    /// <summary>
+    /// All known types, in detector order. Phase 14 grew this from four to five: it is the
+    /// <b>anti-hallucination whitelist</b> for the Observer prompt, so a type missing here is a type the
+    /// model can never legitimately report.
+    /// </summary>
+    public static IReadOnlyList<string> All { get; } =
+        [OverdueTask, StalledTask, AtRiskDeadline, Overload, Bottleneck];
 
     /// <summary>Case-insensitive membership test (AI output is untrusted).</summary>
     public static bool IsKnown(string? type)
