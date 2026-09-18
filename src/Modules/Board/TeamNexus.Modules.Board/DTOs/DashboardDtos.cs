@@ -85,11 +85,46 @@ public sealed record DashboardMyTasks(
     DashboardTaskBucket RecentlyAssigned);
 
 /// <summary>
+/// "Sức khỏe dự án" of one workspace (Phase 14 §3.2), as the dashboard renders it.
+/// <para>
+/// <see cref="Components"/> holds the <b>points deducted</b> per risk factor
+/// (<c>overdue</c>/<c>atRisk</c>/<c>stalled</c>/<c>aging</c>/<c>load</c>), which is what makes the
+/// gauge's tooltip explain itself: the components plus <see cref="Score"/> add up to 100.
+/// </para>
+/// <para>
+/// <see cref="Band"/> is the band, computed server-side (<c>Tốt</c>/<c>Cần chú ý</c>/<c>Rủi ro</c>/
+/// <c>Nghiêm trọng</c>), so the UI only has to colour by band and can never disagree with the number.
+/// <see cref="Reasons"/> is a short Vietnamese explanation list, empty for a healthy workspace.
+/// </para>
+/// </summary>
+public sealed record DashboardProjectHealth(
+    int Score,
+    string Band,
+    IReadOnlyDictionary<string, double> Components,
+    IReadOnlyList<string> Reasons)
+{
+    /// <summary>
+    /// One-way projection from the domain verdict, in the style of
+    /// <c>ReportSummaryResponse.From</c>: the HTTP contract can evolve without touching the formula,
+    /// and <c>DashboardService</c> never has to know the wire shape.
+    /// </summary>
+    public static DashboardProjectHealth From(Services.ProjectHealthResult result)
+        => new(result.Score, result.Band, result.Components, result.Reasons);
+}
+
+/// <summary>
 /// Payload of <c>GET /api/workspaces/{workspaceId}/dashboard</c> (Phase 12 §1, decision D5).
 /// </summary>
 /// <param name="UtcNow">The instant the server computed the buckets from — lets the UI label the data without guessing.</param>
 /// <param name="DueSoonDays">The active "sắp đến hạn" window in days (echoes the clamped <c>?days=</c>).</param>
 /// <param name="BoardsTruncated">True when the workspace has more boards than the response includes.</param>
+/// <param name="Health">
+/// Phase 14 §3.2 — a <b>property appended last</b> (not a new positional parameter) on purpose
+/// (decision D15): every existing construction site and every existing client keeps compiling and
+/// deserializing the nine fields it already knew, and a client that predates the field simply ignores
+/// it. Non-null for every workspace (an empty workspace is a healthy one, score 100) — nullable so a
+/// future "not computed" state does not require a breaking change.
+/// </param>
 public sealed record DashboardResponse(
     Guid WorkspaceId,
     string WorkspaceName,
@@ -99,4 +134,8 @@ public sealed record DashboardResponse(
     IReadOnlyList<DashboardBoardSummary> Boards,
     bool BoardsTruncated,
     IReadOnlyList<DashboardActivityItem> RecentActivities,
-    DashboardSummary Summary);
+    DashboardSummary Summary)
+{
+    /// <summary>"Sức khỏe dự án" (Phase 14 §3.2). <c>null</c> ⇒ not computed.</summary>
+    public DashboardProjectHealth? Health { get; init; }
+}

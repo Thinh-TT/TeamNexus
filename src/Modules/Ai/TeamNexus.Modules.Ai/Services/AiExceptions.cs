@@ -29,3 +29,19 @@ public sealed class AgentDisabledException : BoardModuleException
     {
     }
 }
+
+/// <summary>
+/// AI Task Chat đang tắt (<c>AiChat:Enabled = false</c>) → <b>503 Service Unavailable</b>
+/// (Phase 14 §2.2, decision D9), cùng khuôn mẫu <see cref="AgentDisabledException"/>.
+/// <para>
+/// Ném <b>trước</b> mọi truy vấn: một tính năng đang tắt không được tiết lộ task nào tồn tại, và
+/// cũng không được tiêu token nào.
+/// </para>
+/// </summary>
+public sealed class AiChatDisabledException : BoardModuleException
+{
+    public AiChatDisabledException()
+        : base(StatusCodes.Status503ServiceUnavailable, "AI Task Chat is disabled.")
+    {
+    }
+}

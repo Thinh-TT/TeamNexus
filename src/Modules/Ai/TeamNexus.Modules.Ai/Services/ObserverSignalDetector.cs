@@ -1,5 +1,6 @@
 using System.Globalization;
 using TeamNexus.Modules.Ai.Options;
+using TeamNexus.Shared.Risk;
 
 namespace TeamNexus.Modules.Ai.Services;
 
@@ -61,6 +62,11 @@ public sealed record ObserverSignalSet(
 /// <summary>
 /// Detection thresholds — already clamped to sane ranges by <see cref="ObserverOptions.ToThresholds"/>.
 /// A plain record so verification and Phase 8 unit tests can build one inline without DI/config.
+/// <para>
+/// The four <c>AtRiskDeadline</c> members were added in Phase 14 §3.1. They are part of this record
+/// rather than a second parameter so that <see cref="ObserverSignalDetector.Analyze"/> keeps taking
+/// exactly one thresholds object — a second knob bag would let the two drift apart.
+/// </para>
 /// </summary>
 public sealed record ObserverThresholds(
     int CriticalOverdueDays,
@@ -71,7 +77,11 @@ public sealed record ObserverThresholds(
     int BottleneckMinTasks,
     int BottleneckStalledMinTasks,
     int MaxSignalsPerWorkspace,
-    int MaxEvidenceIdsPerSignal);
+    int MaxEvidenceIdsPerSignal,
+    bool AtRiskDeadlineEnabled = true,
+    double AtRiskDeadlineRemainingRatio = DeadlineRiskRules.DefaultRemainingRatio,
+    int AtRiskDeadlineMinWindowDays = DeadlineRiskRules.DefaultMinWindowDays,
+    int AtRiskDeadlineStaleHours = DeadlineRiskRules.DefaultStaleHours);
 
 /// <summary>
 /// Pure, deterministic bottleneck/overload/staleness detection for the AI Observer (Phase 5 §3).
@@ -94,6 +104,13 @@ public static class ObserverSignalDetector
     public const string Bottleneck = "Bottleneck";
 
     /// <summary>
+    /// Phase 14 §3.1 — an open task that is running out of time while nobody touches it. The rule
+    /// itself lives in the shared <see cref="DeadlineRiskRules"/> (it also feeds the dashboard's
+    /// health score); this name is the Observer's own vocabulary entry for it.
+    /// </summary>
+    public const string AtRiskDeadline = "AtRiskDeadline";
+
+    /// <summary>
     /// Runs every detector over one workspace snapshot and returns the signals ordered by
     /// severity (desc), then weight (desc), then discovery order — truncated to
     /// <see cref="ObserverThresholds.MaxSignalsPerWorkspace"/>.
@@ -109,6 +126,18 @@ public static class ObserverSignalDetector
         var ordered = new List<ObserverSignal>();
         ordered.AddRange(AnalyzeOverdue(open, snapshot.Now, thresholds));
         ordered.AddRange(AnalyzeStalled(open, snapshot.Now, thresholds));
+
+        // Phase 14 §3.1. Deliberately AFTER overdue: a task that is already past due is OverdueTask's
+        // business and ObserverRisk excludes it, so the two detectors can never describe one task
+        // twice. Placing the deadline detector here also keeps the discovery order of the four
+        // original signals byte-identical.
+        if (ObserverRisk.BuildSignal(
+                ObserverRisk.Detect(open, snapshot.Now, thresholds),
+                thresholds.MaxEvidenceIdsPerSignal) is { } atRisk)
+        {
+            ordered.Add(atRisk);
+        }
+
         ordered.AddRange(AnalyzeOverload(open, snapshot.Now, thresholds));
         ordered.AddRange(AnalyzeBottleneck(open, snapshot.Now, thresholds));
 

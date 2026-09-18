@@ -383,6 +383,153 @@ public sealed class DashboardApiTests : IClassFixture<DatabaseFixture>
             dashboard.RecentActivities.Select(a => a.Id));
     }
 
+    // ---- Phase 14 §3.2: project health ------------------------------------
+
+    [Fact]
+    public async Task HEALTH_DASH_1_WorkspaceWithOverdueWork_ScoresBelowFullMarksAndSaysWhy()
+    {
+        await using var scenario = await _database.CreateClockScenarioAsync(new FixedTimeProvider(Now));
+        var (me, workspace, board, todo, _) = await SeedUserWithBoardAsync(scenario, "Sức khỏe có vấn đề");
+
+        // Ba người khác nhau giữ ba thẻ ⇒ khoản `load` = 0, và mọi thẻ tạo ở `Now` ⇒ khoản `aging` = 0.
+        // Nhờ vậy con số khẳng định dưới đây chỉ nói về ĐÚNG khoản `overdue`, không bị pha tạp.
+        var second = await scenario.CreateUserAsync("Người thứ hai");
+        var third = await scenario.CreateUserAsync("Người thứ ba");
+        await AddMemberAsync(scenario, workspace.Id, second, WorkspaceRole.Member);
+        await AddMemberAsync(scenario, workspace.Id, third, WorkspaceRole.Member);
+
+        await SeedTaskAsync(scenario, board, todo, me, "Trễ 3 ngày", dueDate: Now.AddDays(-3), createdAt: Now);
+        await SeedTaskAsync(scenario, board, todo, second, "Trễ 1 ngày", dueDate: Now.AddDays(-1), createdAt: Now);
+        await SeedTaskAsync(scenario, board, todo, third, "Còn hạn", dueDate: Now.AddDays(10), createdAt: Now);
+
+        using var client = await scenario.AsUserAsync(me);
+        var dashboard = await client.GetJsonAsync<DashboardDto>($"/api/workspaces/{workspace.Id}/dashboard");
+
+        Assert.NotNull(dashboard);
+        var health = dashboard!.Health;
+
+        Assert.NotNull(health);
+        Assert.True(health!.Score < 100, $"Điểm phải dưới 100 khi có 2/3 thẻ quá hạn (nhận {health.Score}).");
+        Assert.True(health.Components["overdue"] > 0);
+
+        // 2/3 quá hạn ⇒ 40 × 2/3 ≈ 26.67 ⇒ điểm 73. Bốn khoản còn lại phải là 0 (xem lý do ở trên).
+        Assert.Equal(26.67, health.Components["overdue"]);
+        Assert.Equal(0, health.Components["atRisk"]);
+        Assert.Equal(0, health.Components["stalled"]);
+        Assert.Equal(0, health.Components["aging"]);
+        Assert.Equal(0, health.Components["load"]);
+        Assert.Equal(73, health.Score);
+        Assert.Equal("Cần chú ý", health.Band);
+
+        // Lý do phải nêu CON SỐ thật để người đọc hiểu ngay, không phải câu chung chung.
+        Assert.Contains(health.Reasons, r => r.Contains("2 thẻ quá hạn", StringComparison.Ordinal));
+        Assert.Single(health.Reasons);
+    }
+
+    [Fact]
+    public async Task HEALTH_DASH_2_EmptyWorkspace_ScoresFullMarks()
+    {
+        await using var scenario = await _database.CreateClockScenarioAsync(new FixedTimeProvider(Now));
+        var (me, workspace, _, _, _) = await SeedUserWithBoardAsync(scenario, "Sức khỏe rỗng");
+
+        // Board rỗng (không thẻ nào): "không có việc đang mở ⇒ không có gì để chậm".
+        using var client = await scenario.AsUserAsync(me);
+        var dashboard = await client.GetJsonAsync<DashboardDto>($"/api/workspaces/{workspace.Id}/dashboard");
+
+        Assert.NotNull(dashboard);
+        Assert.NotNull(dashboard!.Health);
+        Assert.Equal(100, dashboard.Health!.Score);
+        Assert.Equal("Tốt", dashboard.Health.Band);
+        Assert.All(dashboard.Health.Components.Values, value => Assert.Equal(0, value));
+        Assert.Empty(dashboard.Health.Reasons);
+    }
+
+    [Fact]
+    public async Task HEALTH_DASH_3_Regression_TheNineOriginalFieldsKeepTheirNamesAndTypes()
+    {
+        await using var scenario = await _database.CreateClockScenarioAsync(new FixedTimeProvider(Now));
+        var (me, workspace, board, todo, _) = await SeedUserWithBoardAsync(scenario, "Hồi quy hình dạng");
+
+        await SeedTaskAsync(scenario, board, todo, me, "Thẻ bình thường", dueDate: Now.AddDays(2));
+
+        using var client = await scenario.AsUserAsync(me);
+        var json = await client.Http.GetStringAsync($"/api/workspaces/{workspace.Id}/dashboard");
+
+        // (a) Shape của 9 field CŨ không đổi: một client viết TRƯỚC Giai đoạn 14 vẫn đọc được nguyên vẹn.
+        //     Đây chính là bằng chứng cho quyết định D15 ("append, không sửa").
+        var legacy = System.Text.Json.JsonSerializer.Deserialize<LegacyDashboardDto>(
+            json,
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+
+        Assert.NotNull(legacy);
+        Assert.Equal(workspace.Id, legacy!.WorkspaceId);
+        Assert.Equal("Hồi quy hình dạng", legacy.WorkspaceName);
+        Assert.Equal(3, legacy.DueSoonDays);
+        Assert.NotNull(legacy.MyTasks);
+        Assert.Single(legacy.Boards);
+        Assert.False(legacy.BoardsTruncated);
+        Assert.NotNull(legacy.RecentActivities);
+        Assert.Equal(1, legacy.Summary.OpenTasks);
+
+        // (b) `health` là field MỚI, có mặt trong payload thật, và là field CUỐI của object.
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        var root = document.RootElement;
+        Assert.True(root.TryGetProperty("health", out var healthElement));
+        Assert.Equal(System.Text.Json.JsonValueKind.Object, healthElement.ValueKind);
+        Assert.Equal("health", root.EnumerateObject().Last().Name);
+    }
+
+    [Fact]
+    public async Task HEALTH_DASH_4_HealthAgreesWithTheSummaryOnTheSameResponse()
+    {
+        await using var scenario = await _database.CreateClockScenarioAsync(new FixedTimeProvider(Now));
+        var (me, workspace, board, todo, _) = await SeedUserWithBoardAsync(scenario, "Đối chiếu KPI");
+
+        // Ba người giữ ba thẻ ⇒ `load` = 0 (không ai giữ từ 2 thẻ trở lên).
+        var second = await scenario.CreateUserAsync("Người thứ hai");
+        var third = await scenario.CreateUserAsync("Người thứ ba");
+        await AddMemberAsync(scenario, workspace.Id, second, WorkspaceRole.Member);
+        await AddMemberAsync(scenario, workspace.Id, third, WorkspaceRole.Member);
+
+        await SeedTaskAsync(scenario, board, todo, me, "Quá hạn", dueDate: Now.AddDays(-1), createdAt: Now);
+        await SeedTaskAsync(scenario, board, todo, second, "Sắp tới hạn", dueDate: Now.AddDays(1), createdAt: Now);
+        await SeedTaskAsync(scenario, board, todo, third, "Không hạn", dueDate: null, createdAt: Now);
+
+        using var client = await scenario.AsUserAsync(me);
+        var dashboard = await client.GetJsonAsync<DashboardDto>($"/api/workspaces/{workspace.Id}/dashboard");
+
+        Assert.NotNull(dashboard);
+        var summary = dashboard!.Summary;
+        var health = dashboard.Health;
+
+        Assert.NotNull(health);
+
+        // 1/3 thẻ mở quá hạn ⇒ khoản trừ quá hạn phải là 40 × 1/3 ≈ 13.33, tức là **cùng một đại lượng**
+        // mà thẻ KPI "Thẻ quá hạn" đang hiển thị. Gauge và 5 KPI cùng đọc một nguồn ⇒ không thể lệch.
+        Assert.Equal(3, summary.OpenTasks);
+        Assert.Equal(1, summary.OverdueTasks);
+        Assert.Equal(13.33, health!.Components["overdue"]);
+        Assert.Equal(0, health.Components["aging"]);
+        Assert.Equal(0, health.Components["load"]);
+        Assert.Equal(87, health.Score);
+        Assert.Equal("Tốt", health.Band);
+
+        // 5 khoá components luôn hiện diện, kể cả khi phần lớn bằng 0.
+        Assert.Equal(5, health.Components.Count);
+        Assert.Contains("overdue", health.Components.Keys);
+        Assert.Contains("atRisk", health.Components.Keys);
+        Assert.Contains("stalled", health.Components.Keys);
+        Assert.Contains("aging", health.Components.Keys);
+        Assert.Contains("load", health.Components.Keys);
+
+        // Thẻ không có hạn KHÔNG được tính là "sắp hết hạn" (không bịa hạn cho thẻ không có hạn).
+        Assert.Equal(0, health.Components["atRisk"]);
+
+        // Và lý do chỉ nêu đúng khoản đang bị trừ.
+        Assert.Single(health.Reasons);
+        Assert.Contains(health.Reasons, r => r.Contains("1 thẻ quá hạn", StringComparison.Ordinal));
+    }
+
     // ---- seeding helpers ---------------------------------------------------
 
     /// <summary>
@@ -504,7 +651,13 @@ public sealed class DashboardApiTests : IClassFixture<DatabaseFixture>
 
     // ---- response shapes ---------------------------------------------------
 
-    private sealed record DashboardDto(
+    /// <summary>
+    /// The payload as it looked <b>before</b> Phase 14 — nine positional fields and <b>no</b> reference
+    /// to <c>health</c> at all. Used by <c>HEALTH_DASH_3</c> to prove the additive change really is
+    /// additive: an older client keeps deserializing the same nine names and types, and simply never
+    /// sees the new one.
+    /// </summary>
+    private sealed record LegacyDashboardDto(
         Guid WorkspaceId,
         string WorkspaceName,
         DateTimeOffset UtcNow,
@@ -514,6 +667,30 @@ public sealed class DashboardApiTests : IClassFixture<DatabaseFixture>
         bool BoardsTruncated,
         IReadOnlyList<ActivityItemDto> RecentActivities,
         SummaryDto Summary);
+
+    private sealed record DashboardDto(
+        Guid WorkspaceId,
+        string WorkspaceName,
+        DateTimeOffset UtcNow,
+        int DueSoonDays,
+        MyTasksDto MyTasks,
+        IReadOnlyList<BoardSummaryDto> Boards,
+        bool BoardsTruncated,
+        IReadOnlyList<ActivityItemDto> RecentActivities,
+        SummaryDto Summary)
+    {
+        /// <summary>
+        /// Phase 14 §3.2 — appended as a property rather than a positional parameter, exactly like the
+        /// production record, so every pre-Phase-14 construction of this test DTO keeps compiling.
+        /// </summary>
+        public ProjectHealthDto? Health { get; init; }
+    }
+
+    private sealed record ProjectHealthDto(
+        int Score,
+        string Band,
+        Dictionary<string, double> Components,
+        List<string> Reasons);
 
     private sealed record MyTasksDto(BucketDto Overdue, BucketDto DueSoon, BucketDto RecentlyAssigned);
 

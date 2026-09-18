@@ -98,3 +98,50 @@ public sealed record AiChatResult(
     int? PromptTokens,
     int? CompletionTokens,
     string FinishReason);
+
+/// <summary>
+/// Provider capable of <b>streaming</b> a single assistant answer as it is generated (Phase 14 §2.1,
+/// decision D10).
+/// <para>
+/// Deliberately a <b>third</b> port rather than a method on <see cref="IAiProvider"/>: the Smart
+/// Setup / Observer / Agent flows must keep compiling and behaving byte-identically, and a streaming
+/// member would force every implementation (and every test double) to change at once. The same
+/// reasoning already produced <see cref="IAiToolCallingProvider"/> in Phase 7.
+/// </para>
+/// <para>
+/// <b>No tools, no JSON mode:</b> this port exists for the AI Task Chat, whose answer is free-form
+/// prose shown to the user character by character. The Observer and the Agent keep using
+/// <see cref="IAiProvider"/> / <see cref="IAiToolCallingProvider"/>.
+/// </para>
+/// </summary>
+public interface IAiStreamingProvider
+{
+    /// <summary>
+    /// Streams one answer. The sequence ends with exactly one chunk having <c>Done = true</c>; a
+    /// transport or parse failure surfaces as <see cref="AiProviderException"/> (502) <b>from this
+    /// enumerable</b>, which the caller must handle because the HTTP response headers are already on
+    /// the wire by then. The API key never reaches a log or an exception message.
+    /// </summary>
+    IAsyncEnumerable<AiStreamChunk> StreamAsync(AiStreamRequest request, CancellationToken ct = default);
+}
+
+/// <summary>
+/// One streaming request. Messages follow the same shape as <see cref="AiChatRequest"/> so the context
+/// builder is shared; there is no <c>Tools</c> list and no <c>JsonMode</c>, on purpose (see the port).
+/// </summary>
+public sealed record AiStreamRequest(
+    string SystemPrompt,
+    IReadOnlyList<AiChatMessage> Messages,
+    double Temperature,
+    int MaxTokens);
+
+/// <summary>
+/// One streamed piece. <paramref name="Delta"/> is the newly generated text (<c>null</c> on a chunk
+/// that only carries usage or the terminator); <paramref name="Done"/> marks the final chunk, which is
+/// the only one guaranteed to have both token counts when the provider reports them.
+/// </summary>
+public sealed record AiStreamChunk(
+    string? Delta,
+    int? PromptTokens,
+    int? CompletionTokens,
+    bool Done);

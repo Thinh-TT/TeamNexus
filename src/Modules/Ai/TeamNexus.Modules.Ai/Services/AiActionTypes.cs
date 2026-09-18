@@ -21,6 +21,14 @@ public static class AiActionTypes
     /// <b>hard delete</b> — the only non-soft-deleted table of the schema (D5).
     /// </summary>
     public const string PostAttachment = "PostAttachment";
+
+    /// <summary>
+    /// AI Board Template (Phase 14 §4, decision D12): create <b>one</b> board with its columns and its
+    /// first tasks, from a proposal the team lead reviewed and confirmed. Scope is
+    /// <c>entity_type = 'Workspace'</c>; Apply delegates to <c>IBoardService</c>/<c>IColumnService</c>/
+    /// <c>ITaskService</c>, Undo <b>soft-deletes</b> the board (D14).
+    /// </summary>
+    public const string CreateBoardFromTemplate = "CreateBoardFromTemplate";
 }
 
 /// <summary>Entity types stored in <c>ai_action_logs.entity_type</c>.</summary>
@@ -35,4 +43,11 @@ public static class AiEntityTypes
     /// <c>(entity_type, entity_id, created_at)</c> index — no new index is needed.
     /// </summary>
     public const string Task = "Task";
+
+    /// <summary>
+    /// Action that <b>creates</b> a board and therefore has no board to be scoped to (Phase 14 §4):
+    /// <c>entity_id</c> = workspaceId. Reuses the same
+    /// <c>(entity_type, entity_id, created_at)</c> index, so this needed no migration either (D1).
+    /// </summary>
+    public const string Workspace = "Workspace";
 }

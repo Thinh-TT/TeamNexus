@@ -542,3 +542,90 @@ Hai applier mới đi qua **nguyên** vòng đời `Pending → Approved/Rejecte
 > thật), 11 sự thật backend mà UI phải tôn trọng (ví dụ `status=Completed` không bao giờ được set ⇒ phán quyết nằm ở
 > `ai_action_logs`; `activeAgentRunId` gồm cả run đang chờ), danh sách file cần sửa kèm số dòng, và cách verify offline
 > **không tốn token**.
+
+---
+
+## Phase 14 — Nâng cao AI (✅ backend xong · 📤 frontend bàn giao)
+
+Kế hoạch: `Project-Documents/tasks/phase-14-ai-advanced.md` · Note bàn giao FE:
+`Project-Documents/tasks/phase-14-remaining-frontend-handover.md` · Báo cáo:
+`Project-Documents/report/phase-14-ai-advanced-test-report.md`.
+
+**Schema:** ⛔ **không migration nào** — `dotnet ef migrations list` vẫn **10**. Chat dùng `ai_action_logs`
+(bảng đã có; `action`/`entity_type` là text tự do) + transcript ở **client**; sức khỏe dự án tính lại mỗi request;
+board template dùng `boards`/`board_columns`/`tasks` sẵn có; `entity_type = 'Workspace'` **dùng lại** index
+`(entity_type, entity_id, created_at)`.
+
+### §1 — AI Task Chat: port thứ ba + SSE
+
+| Thành phần | File | Ghi chú |
+|---|---|---|
+| Port streaming | `Services/AiProvider.cs` | `IAiStreamingProvider` + `AiStreamRequest`/`AiStreamChunk`. **Không** sửa `IAiProvider`/`IAiToolCallingProvider` |
+| DeepSeek | `Services/DeepSeekAiProvider.cs` | `"stream": true` + `ResponseHeadersRead`, đọc `data:` đến `[DONE]`. `ChatRequest` += `bool? Stream` (**null** ⇒ payload 3 luồng cũ **byte-identical**) |
+| Offline | `Services/FakeAiProvider.cs` | chia câu trả lời mẫu thành khung 24 ký tự, `Task.Yield()` giữa các khung ⇒ chunked thật, 0 token |
+| Khung SSE (hàm **thuần**) | `Services/AiChatSseWriter.cs` | `meta` / `delta` / `done` / `error`; JSON camelCase trên 1 dòng |
+| Ghi response | `Services/SseStreamResult.cs` | `IResult` tự viết: `text/event-stream`, `no-cache`, `X-Accel-Buffering: no`, **`FlushAsync` sau mỗi khung**, và biến exception (header đã gửi) thành khung `error` |
+| Service | `Services/AiChatService.cs` | `PrepareAsync` (**eager**, mọi guard) tách khỏi `StreamPreparedAsync` (**lazy**, chỉ còn provider) ⇒ 503/404/403/400 vẫn là **status thật** |
+| Options | `Options/AiChatOptions.cs` | section `"AiChat"`; mọi giá trị **clamp** trong `Effective` |
+| Endpoints | `Endpoints/AiChatEndpoints.cs` | `POST /api/tasks/{id}/ai-chat/stream` · `POST /api/tasks/{id}/ai-chat/message` |
+
+**Hợp đồng:** `meta` → `delta`* → `done` \| `error`. `done.answer` == nối toàn bộ `delta.text`.
+`MaxHistoryMessages=12` / `MaxHistoryChars=8000` ⇒ **400 trước khi gọi provider** (0 token). `Enabled=false` ⇒
+**503** trước khi chạm DB. Người ngoài workspace ⇒ **404** (không phải 403). Thiếu `X-XSRF-TOKEN` ⇒ **403**.
+**Client dùng `fetch`, KHÔNG `EventSource`** (EventSource không POST được, không gửi được header CSRF).
+
+**Đường ghi:** `POST .../ai-chat/message` ⇒ `ai_action_logs` **`Pending`** `PostComment` (`entity_type='Task'`)
+⇒ Manager Approve mới ghi `task_comments` (**tác giả = người bấm lưu**), Undo soft-delete. Lượt chat thường
+**không ghi gì**. Đường này đi qua `IAiActionService.RequestChatCommentAsync` (**mới**) — **KHÔNG** dùng
+`RequestAgentOutputAsync` (nó assert task phải gán cho AI Agent ⇒ sẽ 403 mọi lượt lưu của người).
+
+### §2 — Observer dự báo rủi ro + Sức khỏe dự án
+
+| Thành phần | File | Ghi chú |
+|---|---|---|
+| Luật dùng chung | `TeamNexus.Shared/Risk/ProjectWorkItem.cs` | `DeadlineRiskRules` + `ProjectWorkItem` + `DeadlineRisk` — **một** định nghĩa cho cả Observer **và** dashboard (Board không được tham chiếu Ai, và ngược lại) |
+| Adapter Ai | `Services/ObserverRisk.cs` | `AiRiskCandidate` (thuần) + `BuildSignal` (**1** signal cho N task rủi ro) |
+| Detector | `Services/ObserverSignalDetector.cs` | += `AtRiskDeadline`; `ObserverThresholds` += 4 field |
+| Vocabulary | `Services/ObserverSeverity.cs` | `NotificationTypes.All` **4 → 5** (whitelist chống hallucination) |
+| Prompt | `Services/ObserverPrompts.cs` | liệt kê **5** type + 1 dòng giải thích `AtRiskDeadline` |
+| Ưu tiên khi cắt | `Services/ObserverSummarizer.cs` | pin `(severity desc → weight desc)`, chỉ bỏ từ **cuối**; `CountSignalsInPayload` (public) |
+| Đếm | `Services/ObserverService.cs` | run summary += `signalsPreserved` / `signalsDroppedBeforePrompt` |
+| Sức khỏe | `Board/Services/ProjectHealth.cs` | **hàm thuần**: 40/20/10/15/15 = **100**, band `Tốt≥80`/`Cần chú ý 60–79`/`Rủi ro 40–59`/`Nghiêm trọng <40` |
+
+**Luật `AtRiskDeadline`** (`window = dueDate − createdAt`): cần `window ≥ 2 ngày`, `remaining < 20% × window`
+(biên **strict `<`**), `0 update/comment trong 48 h`; đã quá hạn ⇒ **chỉ** `OverdueTask`. Severity
+`Critical ≤24h` / `High ≤72h` / `Medium`. `Weight` = ngày còn lại, kẹp `[0,30]`.
+
+**`ProjectHealthScore` KHÔNG ở `ObserverSignalDetector` (lệch DoD có chủ ý, D6):** gauge nằm trên dashboard
+**Member+**, còn Observer là **Manager+**, và `Board → Ai` **bị cấm** ⇒ nếu ở Ai thì Board không thể nhúng.
+Đổi lại, **quy tắc at-risk thì dùng chung** ở `Shared.Risk` nên hai nơi không thể lệch.
+
+### §3 — AI Board Template
+
+| Thành phần | File | Ghi chú |
+|---|---|---|
+| DTO/contract | `DTOs/BoardTemplateDtos.cs` · `Contracts/BoardTemplateAiModels.cs` | proposal dùng **chung** cho generate (trả về) và confirm (nhận vào) |
+| Prompt | `Services/BoardTemplatePrompts.cs` | 2–6 cột, 5–10 task, pin `isDone`; hằng số bounds ở **một** chỗ |
+| Validator (hàm **thuần**) | `Services/BoardTemplateValidator.cs` | dedupe tên cột (bỏ, **không** đổi tên), **pin đúng 1** cột done, task rơi vào cột không-done đầu tiên, tái dùng `SmartSetupService.NormalizePriority/ResolveLabels/ResolveAssignee` |
+| JSON retry | `Services/BoardTemplateValidator.cs` (`AiJsonCompletion`) | trích từ `SmartSetupService` (**không** copy-paste) |
+| Service | `Services/BoardTemplateService.cs` | generate **không ghi gì**; confirm **re-validate toàn bộ** proposal client gửi lên |
+| Applier | `Services/Appliers/CreateBoardFromTemplateApplier.cs` | approve ⇒ `IBoardService`+`IColumnService`+`ITaskService`; undo ⇒ **soft-delete** board |
+
+**Route mới:** `POST /api/workspaces/{id}/smart-setup/template` (Manager+) · `POST .../template/confirm` ⇒ **201**
+`Pending` `CreateBoardFromTemplate` (`entity_type='Workspace'`, `entity_id=workspaceId`).
+
+### Hạn chế đã biết của Phase 14 (ghi trước để không ai tưởng là bug)
+
+1. **`TestServer` có thể đệm body ⇒ "streaming thật" không chứng minh được ở tầng byte.** Suite khoá **hợp đồng**
+   (content type, `meta` trước mọi `delta`, đúng 1 `done`, `done.answer == Σ delta`) + dùng
+   `TestHttpClient.SendStreamingAsync`. **Nếu bỏ `FlushAsync` trong `SseStreamResult`, KHÔNG test nào đỏ** ⇒
+   điểm cần review bằng mắt.
+2. **Chat không lưu transcript ở DB (D2, cố ý)** ⇒ đóng tab là mất hội thoại; giữ lâu dài = bấm "Lưu thành bình luận".
+3. **Board template Undo soft-delete cả board** ⇒ việc đã thêm vào board đó cũng bị ẩn (khôi phục được bằng DB).
+   FE **phải** có `Popconfirm` cảnh báo.
+4. `SearchSystemDataTool` (**`AgentToolContext`**) **giữ** `BoardId` non-nullable — đó là context khác với
+   `AiActionContext`; đừng "sửa cho đồng bộ".
+5. `AiRiskCandidate.MinutesRemaining` **làm tròn lên**; `Weight` **làm tròn xuống** — cùng một task có thể có
+   `Weight = 0` (dưới 1 ngày) mà severity vẫn `Critical`. Đó là chủ ý (weight chỉ dùng để **sắp xếp**).
+6. `MaxSignalsPerWorkspace` (20) **không** được nâng cho Phase 14; nếu `AtRiskDeadline` làm vượt trần ở workspace
+   lớn thì việc cắt diễn ra **có đếm** (`signalsDroppedBeforePrompt`) chứ không im lặng.

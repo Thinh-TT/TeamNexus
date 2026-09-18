@@ -211,6 +211,35 @@ public static class AiModule
                 : ActivatorUtilities.CreateInstance<FakeWebSearchProvider>(provider);
         });
 
+        // ---- AI Task Chat (Phase 14 §2.1) ---------------------------------------
+        // The chat is the only feature in this module that spends tokens on a user's free-form question,
+        // so its budget lives in its own section (`AiChat`) instead of borrowing `DeepSeek:MaxTokens`
+        // from Smart Setup. `Enabled` defaults to true (unlike the digest): the feature is user-initiated
+        // and cannot mail anyone, so "off by default" would only make it look broken.
+        services.AddOptions<AiChatOptions>()
+            .Bind(configuration.GetSection(AiChatOptions.SectionName));
+
+        // Third port over the same switch as IAiProvider/IAiToolCallingProvider. Registered separately
+        // for the same reason those two are: the three shapes genuinely differ, and adding a member to
+        // IAiProvider would force every implementation and test double to change at once.
+        services.AddSingleton<IAiStreamingProvider>(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<DeepSeekOptions>>().Value;
+
+            return options.HasApiKey
+                ? ActivatorUtilities.CreateInstance<DeepSeekAiProvider>(provider)
+                : ActivatorUtilities.CreateInstance<FakeAiProvider>(provider);
+        });
+
+        services.AddScoped<IAiChatService, AiChatService>();
+
+        // ---- AI Board Template (Phase 14 §4, decision D12) ----------------------
+        // A third shape of "AI proposes, a human approves": one board + its columns + its starter tasks.
+        // The applier is registered next to the others so AiActionService stays the single gateway (one
+        // class + one line is the whole cost of a new AI write action).
+        services.AddScoped<IBoardTemplateService, BoardTemplateService>();
+        services.AddScoped<IAiActionApplier, CreateBoardFromTemplateApplier>();
+
         // Agent identity port (Phase 7 D7): Board declares it + registers NullAiAgentResolver, and this
         // line — which MUST stay after AddBoardModule in Program.cs — overrides it, exactly like
         // IActivityLogWriter above.
@@ -265,6 +294,10 @@ public static class AiModule
         endpoints.MapNotificationEndpoints();
         endpoints.MapAgentRunEndpoints();
         endpoints.MapAttachmentEndpoints();
+        // Phase 14 §2.2: the AI Task Chat (streaming SSE + "save answer" through the Phase 4 layer).
+        endpoints.MapAiChatEndpoints();
+        // Phase 14 §4: the AI Board Template (workspace-scoped proposal + confirmation).
+        endpoints.MapBoardTemplateEndpoints();
 
         return endpoints;
     }
@@ -365,5 +398,23 @@ public static class AiModule
             digest.PollInterval,
             digest.EffectiveMaxUsersPerRun,
             digest.EffectiveMaxDailyEmails);
+
+        // AI Task Chat (Phase 14 §2): exactly ONE line, so the guardrails that bound prompt cost are
+        // visible at startup without reading the code. Contains no secret.
+        var chat = configuration.GetSection(AiChatOptions.SectionName).Get<AiChatOptions>()
+                   ?? new AiChatOptions();
+        var effectiveChat = chat.Effective;
+
+        logger.LogInformation(
+            "Ai module: AiChat enabled={Enabled}, maxHistoryMessages={MaxMessages}, "
+            + "maxHistoryChars={MaxChars}, maxOutputTokens={MaxOutputTokens}, temperature={Temperature}, "
+            + "maxCommentsInContext={MaxComments}, maxAnswerChars={MaxAnswerChars}.",
+            chat.Enabled,
+            effectiveChat.MaxHistoryMessages,
+            effectiveChat.MaxHistoryChars,
+            effectiveChat.MaxOutputTokens,
+            effectiveChat.Temperature,
+            effectiveChat.MaxCommentsInContext,
+            effectiveChat.MaxAnswerChars);
     }
 }

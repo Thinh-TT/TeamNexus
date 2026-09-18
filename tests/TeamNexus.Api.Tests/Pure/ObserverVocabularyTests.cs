@@ -74,11 +74,18 @@ public sealed class ObserverVocabularyTests
     }
 
     [Fact]
-    public void NotificationTypes_ExposeExactlyTheFourDetectorSignals()
+    public void NotificationTypes_ExposeExactlyTheFiveDetectorSignals()
     {
+        // SỬA Ở GIAI ĐOẠN 14 (§3.1): danh sách này lớn lên từ 4 → 5 type vì `AtRiskDeadline` được thêm
+        // vào cùng `ObserverSignalDetector`. Đây là thay đổi **có chủ ý** đối với một test cũ đang xanh
+        // — điều duy nhất được phép trong giai đoạn này (xem §8 của kế hoạch). Danh sách này là
+        // **whitelist chống hallucination** của Observer, nên một type thiếu ở đây là type mà model
+        // KHÔNG BAO GIỜ được phép báo — thêm tín hiệu mới mà quên chỗ này sẽ làm tính năng im lặng.
         Assert.Equal(
-            ["OverdueTask", "StalledTask", "Overload", "Bottleneck"],
+            ["OverdueTask", "StalledTask", "AtRiskDeadline", "Overload", "Bottleneck"],
             NotificationTypes.All);
+
+        Assert.Contains(NotificationTypes.AtRiskDeadline, NotificationTypes.All);
     }
 
     [Theory]
@@ -86,6 +93,8 @@ public sealed class ObserverVocabularyTests
     [InlineData(" STALLEDTASK ", "StalledTask")]
     [InlineData("bOtTlEnEcK", "Bottleneck")]
     [InlineData("Bottleneck", "Bottleneck")] // already canonical → returned unchanged
+    [InlineData("atriskdeadline", "AtRiskDeadline")] // Phase 14 §3.1
+    [InlineData("ATRISKDEADLINE", "AtRiskDeadline")]
     public void Canonical_NormalizesCasingForKnownTypes(string input, string expected)
     {
         var canonical = NotificationTypes.Canonical(input);

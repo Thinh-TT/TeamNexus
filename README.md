@@ -273,16 +273,32 @@ nên User Secrets sẽ thắng trở lại).
   - `.github/workflows/ci-web.yml`: nâng baseline `406` → **`508`** (baseline Giai đoạn 13).
   - Kiểm thử chất lượng: `npm run lint` = **0/0** (212 files), `npx tsc -b` = **exit 0**, `npm run build` = **OK**. Backend: `dotnet build` **0/0**, `dotnet test` **480** trên PostgreSQL thật.
 
+## Trạng thái (Giai đoạn 14 – Nâng cao AI) — 🔄 Backend ✅ XONG · Frontend 📤 bàn giao
+
+- [x] **Backend — ĐÃ XONG & VERIFY** — **584 tests** (0 failed, 0 skipped, đo trên PostgreSQL thật; baseline 480 ⇒ **+104**). ⚠️ Test `AgentRun_CancelStopsTheRunAndRecordsCancelled` có **flake tồn tại trước** Giai đoạn 14 (race `FAKE:SLOW` 3 s vs `POST /cancel`): tái hiện **1/3** lượt chạy đầy đủ, **chạy riêng luôn PASS**, và **không** sửa test của Giai đoạn 7.
+  - **⛔ KHÔNG migration nào:** `dotnet ef migrations list` = **10** (không đổi so với Giai đoạn 13), `has-pending-model-changes` **sạch**. Không bảng mới, không cột mới, không index mới — lý do ghi ở `04-database-design.md` §6/§7.
+  - **AI Task Chat (SSE):** `POST /api/tasks/{id}/ai-chat/stream` (**Member+**) trả `text/event-stream` với khung `meta` → `delta`* → `done` \| `error`, dựng bằng **hàm thuần** `AiChatSseWriter`; port **thứ ba** `IAiStreamingProvider` (**không** sửa `IAiProvider`). Guard `AiChat:MaxHistoryMessages=12` / `MaxHistoryChars=8000` ⇒ **400 trước khi gọi provider** (0 token); `AiChat:Enabled=false` ⇒ **503**. Transcript ở **client** (server không có bảng chat). `POST .../ai-chat/message` lưu câu trả lời thành bình luận ⇒ `Pending` `PostComment` ⇒ Manager duyệt (tác giả = người bấm lưu).
+  - **Observer dự báo rủi ro:** tín hiệu **`AtRiskDeadline`** (còn < 20% cửa sổ + 0 update 48 h + sàn cửa sổ 2 ngày; severity `Critical ≤24h`/`High ≤72h`) ⇒ `NotificationTypes.All` **4 → 5**; prompt liệt kê 5 type; `ObserverSummarizer` **pin thứ tự ưu tiên khi cắt** + run summary ghi `signalsPreserved`/`signalsDroppedBeforePrompt`.
+  - **Gauge "Sức khỏe dự án":** `ProjectHealth.Compute` (hàm thuần ở module **Board**) + **append cuối** `DashboardResponse.health` — 0–100, 4 band, 5 thành phần điểm trừ **cộng lại đúng 100**. Lý do **không** đặt trong `ObserverSignalDetector` (lệch DoD có chủ ý): ghi ở `03-roadmap.md` §Giai đoạn 14 + báo cáo.
+  - **AI Board Template:** `POST /api/workspaces/{id}/smart-setup/template` (Manager+, **không ghi gì**) + `/confirm` ⇒ `Pending` `CreateBoardFromTemplate` (`entity_type='Workspace'`) ⇒ Approve tạo **đúng 1 board + 2–6 cột (pin đúng 1 cột `is_done`) + 5–10 task**; Undo = **soft-delete board**.
+  - Phân bổ **+104** test: `ObserverRiskTests` 21 · `ProjectHealthTests` 23 · `AiGuardrailTests` 18 · `AiTaskChatApiTests` 18 · `BoardTemplateApiTests` 18 · `DashboardApiTests` +4 · `ObserverVocabularyTests` +1 (sửa 1 test cũ 4→5 type). Chi tiết: `Project-Documents/tasks/phase-14-ai-advanced.md`.
+- [ ] **Frontend — 📤 BÀN GIAO cho antigravity** — note hợp đồng API + 13 bẫy đã biết: `Project-Documents/tasks/phase-14-remaining-frontend-handover.md`.
+  - Ba việc: tab **"Hỏi AI"** trong `TaskDetailModal` (chat SSE + "Lưu thành bình luận"), **gauge sức khỏe** trên `WorkspaceDashboardPage`, modal **"Tạo board bằng AI"** ở `BoardListPage`.
+- [x] **CI & Tài liệu**
+  - `.github/workflows/ci-backend.yml`: assert **584** tests backend (0 skipped); comment chuỗi `… 480 (Giai đoạn 13) → 584 (Giai đoạn 14)`.
+  - `.github/workflows/ci-web.yml`: **giữ `-lt 508`** — frontend Giai đoạn 14 **chưa** làm, nâng cổng lúc này sẽ đỏ vô cớ; **antigravity** nâng bằng số thật sau khi xong.
+  - Đã cập nhật `03-roadmap.md`, `01-system-specification.md` (§13), `04-database-design.md` (§6/§7), `README.md`, `src/Modules/Ai/TeamNexus.Modules.Ai/README.md`; báo cáo: `Project-Documents/report/phase-14-ai-advanced-test-report.md`.
+
 ### CI (GitHub Actions)
 
 Hai workflow chạy trên `ubuntu-latest` cho mọi push lên `main`/`develop`/`feat/**` và mọi PR vào `main`/`develop`:
 
 | Workflow | Làm gì | Artifact |
 |---|---|---|
-| `ci-backend.yml` | `restore` → `build -c Release` (**0 warning / 0 error**) → `dotnet test` trên **PostgreSQL 18** (service container) → **assert tổng test = 480 và không skip** | `backend-test-results` (TRX) |
-| `ci-web.yml` | `npm ci` → `lint` → `tsc -b` → `vitest` → **assert số test ≥ 508 (baseline Giai đoạn 13)** → `vite build` | `web-build-output` (`dist/` + báo cáo JSON) |
+| `ci-backend.yml` | `restore` → `build -c Release` (**0 warning / 0 error**) → `dotnet test` trên **PostgreSQL 18** (service container) → **assert tổng test = 584 và không skip** | `backend-test-results` (TRX) |
+| `ci-web.yml` | `npm ci` → `lint` → `tsc -b` → `vitest` → **assert số test ≥ 508 (baseline Giai đoạn 13 — cổng của Giai đoạn 14 CHƯA nâng vì frontend chưa làm)** → `vite build` | `web-build-output` (`dist/` + báo cáo JSON) |
 
-**Trạng thái:** đo trên máy dev — backend `Passed: 480, Skipped: 0` (PostgreSQL thật), frontend `508 passed / 0 failed`, lint 0/0, `tsc -b` exit 0, build OK. ⬜ Chưa chạy lại trên GitHub Actions sau Giai đoạn 13.
+**Trạng thái:** đo trên máy dev — backend `Passed: 584, Skipped: 0` (PostgreSQL thật), frontend `508 passed / 0 failed`, lint 0/0, `tsc -b` exit 0, build OK. ⬜ Chưa chạy lại trên GitHub Actions sau Giai đoạn 14.
 
 - **Vì sao không có workflow deploy:** Render và Vercel tự deploy từ GitHub (quyết định **D11**). Nhờ vậy CI **không giữ một secret nào** —
   toàn bộ cấu hình cho test do `TeamNexusApiFactory` cấp bằng code (`Jwt:SigningKey` test, `DeepSeek:ApiKey` rỗng ⇒ dùng fake provider).
@@ -322,6 +338,6 @@ npm run lint && npx tsc -b && npm test && npm run build
 npm test -- --reporter=json --outputFile=test-results.json
 ```
 
-> Kết quả hiện tại: **86 file / 508 test PASS** (baseline cuối Giai đoạn 8 là 206; Giai đoạn 10 là 279; Giai đoạn 11 là 360; Giai đoạn 12 ghi 406 nhưng **đo thật là 407**; Giai đoạn 13 bổ sung 9 file test mới ⇒ **508** — số đo thắng tài liệu).
+> Kết quả hiện tại: **86 file / 508 test PASS** (baseline cuối Giai đoạn 8 là 206; Giai đoạn 10 là 279; Giai đoạn 11 là 360; Giai đoạn 12 ghi 406 nhưng **đo thật là 407**; Giai đoạn 13 bổ sung 9 file test mới ⇒ **508** — số đo thắng tài liệu). **Giai đoạn 14 chỉ làm backend ⇒ frontend vẫn 508; note bàn giao cho antigravity ở `Project-Documents/tasks/phase-14-remaining-frontend-handover.md`.**
 
 

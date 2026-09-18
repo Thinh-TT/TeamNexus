@@ -59,6 +59,38 @@ public interface IAiActionService
         string afterSnapshotJson,
         string basisJson,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Records a <b>human-initiated</b> comment on a task as a <c>Pending</c> <c>PostComment</c> action
+    /// (Phase 14 §2.2). The AI Task Chat's "lưu thành bình luận" uses this: the answer is prose the user
+    /// read and chose to keep, and the author of the resulting comment is that user.
+    /// <para>
+    /// <b>Why not <see cref="RequestAgentOutputAsync"/>:</b> that one is the AI executor's internal
+    /// channel and asserts the task is assigned to the workspace's agent. A chat user is a different
+    /// actor entirely, so reusing it would reject every legitimate save with a 403 that talks about an
+    /// AI Agent the user never mentioned. The validations here are the human ones — Member+ and a
+    /// visible task — and the resulting log still needs a Manager to approve it, which is what keeps the
+    /// Accountability Layer's "no business write without a decision" invariant intact.
+    /// </para>
+    /// </summary>
+    Task<AiActionLogResponse> RequestChatCommentAsync(
+        Guid taskId,
+        Guid userId,
+        string afterSnapshotJson,
+        string basisJson,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Records a reviewed AI Board Template proposal as a <c>Pending</c>
+    /// <c>CreateBoardFromTemplate</c> action scoped to the workspace (Phase 14 §4, decision D12).
+    /// Requires Manager/Admin (403), 404 for an unknown workspace. Never writes a board — only the log.
+    /// </summary>
+    Task<AiActionLogResponse> RequestCreateBoardFromTemplateAsync(
+        Guid workspaceId,
+        Guid userId,
+        string afterSnapshotJson,
+        string basisJson,
+        CancellationToken ct = default);
 }
 
 public sealed class AiActionService : IAiActionService
@@ -75,7 +107,14 @@ public sealed class AiActionService : IAiActionService
     public const int MaxListTake = 100;
 
     /// <summary>camelCase JSON; also used for the jsonb snapshots (Phase 3 Â§4.1 pattern).</summary>
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    {
+        // Phase 14 (§6, P3): the board template added two OPTIONAL snapshot fields
+        // (createdBoardId/createdColumnIds). Skipping nulls keeps every pre-Phase-14 snapshot at its
+        // exact previous shape instead of growing two `null` keys, and keeps "absent" == "null", which
+        // is how the older appliers read them.
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+    };
 
     private readonly TeamNexusDbContext _db;
     private readonly IWorkspaceAccess _access;
@@ -219,6 +258,109 @@ public sealed class AiActionService : IAiActionService
 
         var names = await LoadUserNamesAsync([agentUserId], ct);
         return BuildResponse(log, names.GetValueOrDefault(agentUserId));
+    }
+
+    // ---- request (human-initiated chat comment, Phase 14 §2.2) --------------
+
+    public async Task<AiActionLogResponse> RequestChatCommentAsync(
+        Guid taskId,
+        Guid userId,
+        string afterSnapshotJson,
+        string basisJson,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(afterSnapshotJson))
+        {
+            throw new BadRequestException("Bình luận không có nội dung.");
+        }
+
+        // The Tasks query filter makes a soft-deleted task a 404: there is nothing to comment on.
+        var task = await _db.Tasks
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == taskId, ct)
+            ?? throw new NotFoundException("Task not found.");
+
+        var board = await _db.Boards
+            .AsNoTracking()
+            .FirstOrDefaultAsync(b => b.Id == task.BoardId, ct)
+            ?? throw new NotFoundException("Board not found.");
+
+        // Member+ — deliberately NOT the agent assertions of RequestAgentOutputAsync: the person saving
+        // a chat answer is an ordinary workspace member, and the approval step (Manager+) is what makes
+        // the write accountable, not the request step.
+        await _access.RequireMemberAsync(board.WorkspaceId, userId, ct);
+
+        var log = new AiActionLog
+        {
+            Action = AiActionTypes.PostComment,
+            EntityType = AiEntityTypes.Task,
+            EntityId = taskId,
+            Basis = string.IsNullOrWhiteSpace(basisJson) ? "{}" : basisJson,
+            AfterSnapshot = afterSnapshotJson,
+            Status = AiActionStatus.Pending,
+            RequestedByUserId = userId,
+        };
+
+        // ONLY the log row. The comment itself is written when a Manager approves it, through the same
+        // PostCommentApplier the AI Agent's output uses (author = this user, undo = soft delete).
+        _db.AiActionLogs.Add(log);
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "AI chat comment for task {TaskId} requested as Pending by user {UserId} (log {LogId}).",
+            taskId, userId, log.Id);
+
+        var names = await LoadUserNamesAsync([userId], ct);
+        return BuildResponse(log, names.GetValueOrDefault(userId));
+    }
+
+    // ---- request (board template, Phase 14 §4) -----------------------------
+
+    public async Task<AiActionLogResponse> RequestCreateBoardFromTemplateAsync(
+        Guid workspaceId,
+        Guid userId,
+        string afterSnapshotJson,
+        string basisJson,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(afterSnapshotJson))
+        {
+            throw new BadRequestException("Đề xuất bảng không có nội dung.");
+        }
+
+        var workspaceExists = await _db.Workspaces
+            .AsNoTracking()
+            .AnyAsync(w => w.Id == workspaceId, ct);
+
+        if (!workspaceExists)
+        {
+            throw new NotFoundException("Workspace not found.");
+        }
+
+        await _access.RequireManagerAsync(workspaceId, userId, ct);
+
+        var log = new AiActionLog
+        {
+            Action = AiActionTypes.CreateBoardFromTemplate,
+            EntityType = AiEntityTypes.Workspace,
+            EntityId = workspaceId,
+            Basis = string.IsNullOrWhiteSpace(basisJson) ? "{}" : basisJson,
+            AfterSnapshot = afterSnapshotJson,
+            Status = AiActionStatus.Pending,
+            RequestedByUserId = userId,
+        };
+
+        // ONLY the log row: approving it (not requesting it) is what creates the board, its columns and
+        // its starter tasks.
+        _db.AiActionLogs.Add(log);
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "Board template requested as Pending (log {LogId}, workspace {WorkspaceId}, {Tasks} task(s)).",
+            log.Id, workspaceId, CountTasks(afterSnapshotJson));
+
+        var names = await LoadUserNamesAsync([userId], ct);
+        return BuildResponse(log, names.GetValueOrDefault(userId));
     }
 
     // ---- read --------------------------------------------------------------
@@ -442,6 +584,33 @@ public sealed class AiActionService : IAiActionService
             return new AiActionContext(taskBoard.Id, taskBoard.WorkspaceId, userId, task.Id);
         }
 
+        if (string.Equals(log.EntityType, AiEntityTypes.Workspace, StringComparison.OrdinalIgnoreCase))
+        {
+            if (log.EntityId is null)
+            {
+                throw new BadRequestException($"AI action {log.Id} is not scoped to a workspace.");
+            }
+
+            var scopedWorkspaceId = log.EntityId.Value;
+
+            // 404 when the workspace is gone/not visible, 403 for a plain Member — the same order as every
+            // other workspace-scoped gate in the codebase.
+            var workspaceExists = await _db.Workspaces
+                .AsNoTracking()
+                .AnyAsync(w => w.Id == scopedWorkspaceId, ct);
+
+            if (!workspaceExists)
+            {
+                throw new NotFoundException("Workspace not found.");
+            }
+
+            await _access.RequireManagerAsync(scopedWorkspaceId, userId, ct);
+
+            // BoardId stays NULL on purpose: this action is the one that CREATES the board
+            // (Phase 14 §6, decisions D12/P1/P2).
+            return new AiActionContext(null, scopedWorkspaceId, userId);
+        }
+
         if (!string.Equals(log.EntityType, AiEntityTypes.Board, StringComparison.OrdinalIgnoreCase)
             || log.EntityId is null)
         {
@@ -457,7 +626,6 @@ public sealed class AiActionService : IAiActionService
 
         return new AiActionContext(board.Id, board.WorkspaceId, userId);
     }
-
     private IAiActionApplier ResolveApplier(string action)
         => _appliers.FirstOrDefault(
                a => string.Equals(a.ActionType, action, StringComparison.OrdinalIgnoreCase))
@@ -642,6 +810,11 @@ public sealed class AiActionService : IAiActionService
             createdLabelIds = result.CreatedLabelIds,
             createdCommentId = result.CreatedCommentId,
             createdAttachmentId = result.CreatedAttachmentId,
+            // Phase 14 §6 (P3): the board template creates a BOARD plus its COLUMNS and Undo needs both
+            // ids. Nulls are omitted (see the `Json` options), so every pre-Phase-14 snapshot keeps its
+            // exact previous key set — the additions are purely additive.
+            createdBoardId = result.CreatedBoardId,
+            createdColumnIds = result.CreatedColumnIds,
             warnings = result.Warnings,
             appliedAt = DateTimeOffset.UtcNow,
         }, Json);
