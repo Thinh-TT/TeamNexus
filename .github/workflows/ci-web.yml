@@ -59,6 +59,7 @@ jobs:
       # Baseline: Giai đoạn 8 = 206 (37 file); Giai đoạn 10 = 279 (47 file); Giai đoạn 11 = 360 (60 file);
       # Giai đoạn 12 ghi 406 nhưng máy dev ĐO ĐƯỢC 407 (77 file) — "số đo thắng tài liệu";
       # Giai đoạn 13 = 508 (86 file): Calendar (GĐ13 §1) + Burndown/Velocity (§4) + digest toggle (§5).
+      # Giai đoạn 14 = 570 (96 file): Hỏi AI (GĐ14 §1) + Sức khỏe dự án (§2) + AI Board Template (§3).
       - name: Assert test count did not regress
         shell: pwsh
         run: |
@@ -67,7 +68,7 @@ jobs:
           $failed = [int]$report.numFailedTests
           Write-Host "vitest: total=$total failed=$failed"
           if ($failed -ne 0) { throw "vitest reported $failed failing tests" }
-          if ($total -lt 508) { throw "Số test đã tụt: $total (baseline Giai đoạn 13 là 508)" }
+          if ($total -lt 570) { throw "Số test đã tụt: $total (baseline Giai đoạn 14 là 570)" }
 
       - name: Build (vite)
         run: npm run build

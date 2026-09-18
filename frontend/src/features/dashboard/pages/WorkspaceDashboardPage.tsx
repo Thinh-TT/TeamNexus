@@ -30,6 +30,7 @@ import { MyTasksPanel } from '../components/MyTasksPanel'
 import { ObserverAlertsPanel } from '../components/ObserverAlertsPanel'
 import { BoardSummaryPanel } from '../components/BoardSummaryPanel'
 import { RecentActivityPanel } from '../components/RecentActivityPanel'
+import { ProjectHealthGauge } from '../components/ProjectHealthGauge'
 
 const { Content } = Layout
 
@@ -144,10 +145,10 @@ export const WorkspaceDashboardPage: React.FC = () => {
               </Space>
             </Flex>
 
-            {/* Quick Summary KPI Cards */}
-            <Row gutter={[16, 16]}>
+            {/* Quick Summary KPI Cards & Project Health */}
+            <Row gutter={[16, 16]} align="stretch">
               <Col xs={12} sm={8} lg={4}>
-                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0', height: '100%' }}>
                   <Statistic
                     title="Tổng số thẻ"
                     value={dashboard.summary.totalTasks}
@@ -155,8 +156,8 @@ export const WorkspaceDashboardPage: React.FC = () => {
                   />
                 </Card>
               </Col>
-              <Col xs={12} sm={8} lg={5}>
-                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0' }}>
+              <Col xs={12} sm={8} lg={4}>
+                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0', height: '100%' }}>
                   <Statistic
                     title="Thẻ đã hoàn thành"
                     value={dashboard.summary.doneTasks}
@@ -165,8 +166,8 @@ export const WorkspaceDashboardPage: React.FC = () => {
                   />
                 </Card>
               </Col>
-              <Col xs={12} sm={8} lg={5}>
-                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0' }}>
+              <Col xs={12} sm={8} lg={4}>
+                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0', height: '100%' }}>
                   <Statistic
                     title="Thẻ đang mở"
                     value={dashboard.summary.openTasks}
@@ -175,8 +176,8 @@ export const WorkspaceDashboardPage: React.FC = () => {
                   />
                 </Card>
               </Col>
-              <Col xs={12} sm={8} lg={5}>
-                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0' }}>
+              <Col xs={12} sm={8} lg={4}>
+                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0', height: '100%' }}>
                   <Statistic
                     title="Thẻ quá hạn"
                     value={dashboard.summary.overdueTasks}
@@ -185,8 +186,8 @@ export const WorkspaceDashboardPage: React.FC = () => {
                   />
                 </Card>
               </Col>
-              <Col xs={12} sm={8} lg={5}>
-                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0' }}>
+              <Col xs={12} sm={8} lg={4}>
+                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0', height: '100%' }}>
                   <Statistic
                     title="Thẻ mở của tôi"
                     value={dashboard.summary.myOpenTasks}
@@ -194,6 +195,9 @@ export const WorkspaceDashboardPage: React.FC = () => {
                     valueStyle={{ color: '#8b5cf6' }}
                   />
                 </Card>
+              </Col>
+              <Col xs={24} sm={8} lg={4}>
+                <ProjectHealthGauge health={dashboard.health} />
               </Col>
             </Row>
 

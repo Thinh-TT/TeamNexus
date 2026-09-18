@@ -67,6 +67,13 @@ public static class ObserverSummarizer
     /// would exceed <c>MaxPromptCharacters</c> the per-signal task lists are trimmed first and then
     /// the weakest signals are dropped. The result is always valid JSON — a prompt is never cut
     /// mid-structure (token/cost control, tech docs §2.3).
+    /// <para>
+    /// <b>Truncation order is pinned here, not inherited from the caller</b> (Phase 14 §3.1): the list
+    /// is re-sorted by severity then weight before anything is dropped, and only ever from the
+    /// <b>end</b>. Without the pin, adding a fifth detector in Phase 14 could have silently starved
+    /// <c>AtRiskDeadline</c> out of every large workspace simply because of the order the caller
+    /// happened to hand the signals over in.
+    /// </para>
     /// </summary>
     public static string BuildPayload(
         ObserverWorkspaceSnapshot snapshot,
@@ -76,7 +83,10 @@ public static class ObserverSummarizer
     {
         var maxCharacters = Math.Max(1000, options.MaxPromptCharacters);
 
-        var included = signals.Signals.ToList();
+        var included = signals.Signals
+            .OrderByDescending(s => NotificationSeverities.Rank(s.Severity))
+            .ThenByDescending(s => s.Weight)
+            .ToList();
 
         // Progressive task limits per signal; the last entry drops task details entirely.
         int[] taskLimits = [40, 10, 3, 0];
@@ -127,6 +137,42 @@ public static class ObserverSummarizer
             options.Temperature,
             Math.Max(1, options.MaxOutputTokens),
             JsonMode: true);
+    }
+
+    /// <summary>
+    /// How many signals actually made it into a rendered prompt (Phase 14 §3.1, P4). The run summary
+    /// records it next to the number of signals <i>detected</i>: the two only differ when truncation
+    /// kicked in, and without this counter a newly added detector could be starved out of every large
+    /// workspace without a single visible symptom.
+    /// <para>
+    /// Defensive by design — an unparsable prompt returns 0 rather than throwing, because a scan must
+    /// never fail over a diagnostic counter.
+    /// </para>
+    /// </summary>
+    public static int CountSignalsInPayload(string userPrompt)
+    {
+        if (string.IsNullOrWhiteSpace(userPrompt))
+        {
+            return 0;
+        }
+
+        var markerIndex = userPrompt.IndexOf(ObserverPrompts.AgentMarker, StringComparison.Ordinal);
+        var json = markerIndex < 0
+            ? userPrompt
+            : userPrompt[(markerIndex + ObserverPrompts.AgentMarker.Length)..];
+
+        try
+        {
+            using var document = JsonDocument.Parse(json.TrimStart());
+            return document.RootElement.TryGetProperty("signals", out var signals)
+                   && signals.ValueKind == JsonValueKind.Array
+                ? signals.GetArrayLength()
+                : 0;
+        }
+        catch (JsonException)
+        {
+            return 0;
+        }
     }
 
     // ---- internals ---------------------------------------------------------

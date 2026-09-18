@@ -178,8 +178,18 @@ public sealed class DatabaseFixture : IAsyncLifetime
         }
     }
 
-    /// <summary>Wipes every data table and returns a scenario bound to a clean database.</summary>
-    public async Task<TestScenario> CreateScenarioAsync(ScriptedAiProvider? scriptedAi = null, TimeProvider? clock = null)
+    /// <summary>
+    /// Wipes every data table and returns a scenario bound to a clean database.
+    /// <para>
+    /// <paramref name="aiChatEnabled"/> (Phase 14 §2) only needs its own host when it is turned
+    /// <b>off</b>; leaving it at the production default reuses the shared host, so no existing suite pays
+    /// for the parameter.
+    /// </para>
+    /// </summary>
+    public async Task<TestScenario> CreateScenarioAsync(
+        ScriptedAiProvider? scriptedAi = null,
+        TimeProvider? clock = null,
+        bool? aiChatEnabled = null)
     {
         Require();
 
@@ -189,9 +199,10 @@ public sealed class DatabaseFixture : IAsyncLifetime
         try
         {
             // The shared host is reused for every ordinary scenario. A DI override (scripted AI, a
-            // fixed clock) cannot be applied to it, so those cases build their own host — the cost is
-            // a real ASP.NET Core host build, which is why it is opt-in rather than the default.
-            var needsOwnHost = scriptedAi is not null || clock is not null;
+            // fixed clock, the chat's off switch) cannot be applied to it, so those cases build their
+            // own host — the cost is a real ASP.NET Core host build, which is why it is opt-in rather
+            // than the default.
+            var needsOwnHost = scriptedAi is not null || clock is not null || aiChatEnabled.HasValue;
 
             var factory = needsOwnHost
                 ? new TeamNexusApiFactory
@@ -199,6 +210,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
                     ConnectionString = ConnectionString,
                     ScriptedAi = scriptedAi,
                     Clock = clock,
+                    AiChatEnabled = aiChatEnabled ?? true,
                 }
                 : Factory;
 

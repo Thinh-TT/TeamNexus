@@ -189,7 +189,9 @@ public sealed class ObserverService : IObserverService
             {
                 // 6–7) Summarize, then one non-retrying completion call.
                 var request = ObserverSummarizer.BuildRequest(snapshot, signals, _options);
-                truncatedByPrompt = Math.Max(0, signals.Signals.Count - CountSignalsInPayload(request.UserPrompt));
+                truncatedByPrompt = Math.Max(
+                    0,
+                    signals.Signals.Count - ObserverSummarizer.CountSignalsInPayload(request.UserPrompt));
 
                 _logger.LogDebug(
                     "Observer prompt for workspace {WorkspaceId}: {Length} ký tự, {Signals} tín hiệu.",
@@ -451,6 +453,11 @@ public sealed class ObserverService : IObserverService
             signalsByType,
             truncatedSignals = signals.TruncatedSignals,
             truncatedByPrompt,
+            // Phase 14 §3.1 (P4): `signalsPreserved` is what the model actually received, so
+            // `signalsDetected − signalsPreserved` is visible per run instead of being inferred. Without
+            // it, adding a detector could silently starve that detector in large workspaces.
+            signalsPreserved = Math.Max(0, signals.Signals.Count - truncatedByPrompt),
+            signalsDroppedBeforePrompt = truncatedByPrompt,
             findingsWritten = findings.Count,
             notificationsCreated,
             aiCalled,
@@ -601,26 +608,6 @@ public sealed class ObserverService : IObserverService
         => element is { ValueKind: JsonValueKind.Object } root
            && root.TryGetProperty(propertyName, out var value)
            && value.ValueKind == JsonValueKind.True;
-
-    /// <summary>How many signals survived prompt truncation (for the run summary).</summary>
-    private static int CountSignalsInPayload(string userPrompt)
-    {
-        var markerIndex = userPrompt.IndexOf(ObserverPrompts.AgentMarker, StringComparison.Ordinal);
-        var json = markerIndex < 0 ? userPrompt : userPrompt[(markerIndex + ObserverPrompts.AgentMarker.Length)..];
-
-        try
-        {
-            using var document = JsonDocument.Parse(json);
-            return document.RootElement.TryGetProperty("signals", out var signals)
-                   && signals.ValueKind == JsonValueKind.Array
-                ? signals.GetArrayLength()
-                : 0;
-        }
-        catch (JsonException)
-        {
-            return 0;
-        }
-    }
 
     private static string Cap(string value, int maxLength)
         => value.Length <= maxLength ? value : value[..maxLength];

@@ -26,7 +26,7 @@ namespace TeamNexus.Modules.Ai.Services;
 ///   <c>FAKE:*</c> sentinel in the prompt (see <see cref="AgentMarkers"/>).</item>
 /// </list>
 /// </summary>
-public sealed class FakeAiProvider : IAiProvider, IAiToolCallingProvider
+public sealed class FakeAiProvider : IAiProvider, IAiToolCallingProvider, IAiStreamingProvider
 {
     /// <summary>Number of sample tasks; <see cref="DeepSeekOptions.MaxTaskCount"/> can trim it further.</summary>
     private const int SampleTaskCount = 3;
@@ -313,6 +313,123 @@ public sealed class FakeAiProvider : IAiProvider, IAiToolCallingProvider
 
         return false;
     }
+
+    // ---- AI Task Chat branch (Phase 14 §2.1) --------------------------------
+
+    /// <summary>
+    /// Offline streaming answer for the AI Task Chat (Phase 14). Yields the sample answer in several
+    /// chunks with a real <see cref="Task.Yield"/> between them, so the SSE pipeline, the client's
+    /// incremental rendering and the "answer = concatenation of deltas" contract are all exercised
+    /// end-to-end with no network and no cost.
+    /// <para>
+    /// The text echoes the task's title when the caller included it in the prompt, which makes a manual
+    /// smoke test obviously about the task in front of you rather than boilerplate.
+    /// </para>
+    /// </summary>
+    public async IAsyncEnumerable<AiStreamChunk> StreamAsync(
+        AiStreamRequest request,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (!request.SystemPrompt.Contains(AiChatPrompts.Marker, StringComparison.Ordinal))
+        {
+            throw new AiProviderException(
+                "FakeAiProvider: prompt không phải của AI Task Chat (thiếu marker ở system prompt).");
+        }
+
+        var answer = BuildChatAnswer(request.SystemPrompt);
+        var chunks = SplitIntoChunks(answer, ChunkSizeCharacters);
+
+        for (var i = 0; i < chunks.Count; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            // A real await between chunks: without it the whole answer would reach the client in one
+            // TCP segment and every "incremental rendering" assertion would pass vacuously.
+            await Task.Yield();
+
+            var isLast = i == chunks.Count - 1;
+
+            yield return new AiStreamChunk(
+                chunks[i],
+                isLast ? EstimateTokens(request) : null,
+                isLast ? Math.Max(1, answer.Length / 4) : null,
+                Done: isLast);
+        }
+
+        if (chunks.Count == 0)
+        {
+            yield return new AiStreamChunk(null, EstimateTokens(request), 0, Done: true);
+        }
+    }
+
+    /// <summary>Characters per streamed chunk. Small on purpose: more frames = a better pipeline test.</summary>
+    private const int ChunkSizeCharacters = 24;
+
+    /// <summary>Vietnamese sample answer, mentioning the task title when the prompt carried one.</summary>
+    private static string BuildChatAnswer(string systemPrompt)
+    {
+        var title = ExtractTaskTitle(systemPrompt);
+
+        return $"Đây là câu trả lời mẫu (FakeAiProvider) cho {title}. "
+               + "Nội dung này được chia thành nhiều khung nhỏ để kiểm tra luồng SSE, "
+               + "và KHÔNG gọi mạng nên không tốn token. "
+               + "Khi đã cấu hình DeepSeek:ApiKey, câu trả lời thật sẽ thay thế nội dung này.";
+    }
+
+    /// <summary>
+    /// Pulls the task title out of the composed system prompt. The marker is written on its own line as
+    /// <c>marker: value</c>, and the value is what comes after the first colon — a task title may
+    /// legitimately contain a newline-free colon ("Báo cáo: tuần 12"), so splitting at the FIRST colon
+    /// after the marker is what keeps the echo honest.
+    /// </summary>
+    private static string ExtractTaskTitle(string systemPrompt)
+    {
+        var start = systemPrompt.IndexOf(AiChatPrompts.TaskTitleMarker, StringComparison.Ordinal);
+        if (start < 0)
+        {
+            return "task này";
+        }
+
+        start += AiChatPrompts.TaskTitleMarker.Length;
+        var end = systemPrompt.IndexOf('\n', start);
+        var line = (end < 0 ? systemPrompt[start..] : systemPrompt[start..end]).Trim();
+
+        var colon = line.IndexOf(':', StringComparison.Ordinal);
+        var title = colon >= 0 ? line[(colon + 1)..].Trim() : line;
+
+        return title.Length == 0 ? "task này" : title;
+    }
+
+    /// <summary>Splits text into fixed-size pieces without breaking surrogate pairs.</summary>
+    private static List<string> SplitIntoChunks(string value, int size)
+    {
+        var chunks = new List<string>();
+
+        for (var index = 0; index < value.Length; index += size)
+        {
+            var length = Math.Min(size, value.Length - index);
+
+            // Never split a surrogate pair (an emoji in a task title would otherwise arrive as two
+            // lone halves and render as garbage on the client).
+            if (index + length < value.Length && char.IsHighSurrogate(value[index + length - 1]))
+            {
+                length--;
+            }
+
+            if (length > 0)
+            {
+                chunks.Add(value.Substring(index, length));
+            }
+        }
+
+        return chunks;
+    }
+
+    /// <summary>Synthetic-but-deterministic prompt tokens (this branch never touches the network).</summary>
+    private static int EstimateTokens(AiStreamRequest request)
+        => Math.Max(1, (request.SystemPrompt.Length + request.Messages.Sum(m => m.Content?.Length ?? 0)) / 4);
 
     // ---- Observer branch (Phase 5 §4.3) ------------------------------------
 

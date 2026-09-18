@@ -1,4 +1,5 @@
 using TeamNexus.Modules.Ai.Services;
+using TeamNexus.Shared.Risk;
 
 namespace TeamNexus.Modules.Ai.Options;
 
@@ -67,6 +68,35 @@ public sealed class ObserverOptions
     /// <summary>Cap on evidence ids (tasks/users) carried by one signal.</summary>
     public int MaxEvidenceIdsPerSignal { get; set; } = 10;
 
+    // ---- deadline-risk signal (Phase 14 §3.1 — consumed by ObserverRisk) ----------
+
+    /// <summary>
+    /// Turns the Phase 14 <c>AtRiskDeadline</c> detector on/off, exactly like
+    /// <see cref="BottleneckDetectionEnabled"/>. A workspace whose team genuinely works in
+    /// <i>very</i> short bursts can switch this off without losing the four original signals.
+    /// </summary>
+    public bool AtRiskDeadlineEnabled { get; set; } = true;
+
+    /// <summary>
+    /// A task is "running out of time" once less than this share of its window
+    /// (<c>due_date − created_at</c>) is left. The roadmap's "&lt; 20%" ⇒ <b>0.20</b>.
+    /// Clamped to <c>[0.05, 0.95]</c>: 0 would flag every task, 1 would flag none.
+    /// </summary>
+    public double AtRiskDeadlineRemainingRatio { get; set; } = DeadlineRiskRules.DefaultRemainingRatio;
+
+    /// <summary>
+    /// Minimum window for a task to be eligible, in days. Guards against false alarms on short-lived
+    /// tasks — see the class remarks on <see cref="Services.ObserverRisk"/> (or
+    /// <c>DeadlineRiskRules</c> in Shared).
+    /// </summary>
+    public int AtRiskDeadlineMinWindowDays { get; set; } = DeadlineRiskRules.DefaultMinWindowDays;
+
+    /// <summary>
+    /// No update/comment within this many hours makes the situation "nobody is on it".
+    /// The roadmap's "48h".
+    /// </summary>
+    public int AtRiskDeadlineStaleHours { get; set; } = DeadlineRiskRules.DefaultStaleHours;
+
     // ---- AI cost control (consumed by ObserverService, §4.5) ---------------------
 
     /// <summary>Hard cap on the summarized prompt size — "summarize before sending" (tech docs §2.3).</summary>
@@ -132,5 +162,13 @@ public sealed class ObserverOptions
         BottleneckMinTasks: Math.Max(1, BottleneckMinTasks),
         BottleneckStalledMinTasks: Math.Max(1, BottleneckStalledMinTasks),
         MaxSignalsPerWorkspace: Math.Max(1, MaxSignalsPerWorkspace),
-        MaxEvidenceIdsPerSignal: Math.Max(1, MaxEvidenceIdsPerSignal));
+        MaxEvidenceIdsPerSignal: Math.Max(1, MaxEvidenceIdsPerSignal),
+        // Phase 14 §3.1. The ratio is clamped away from both extremes: 0 would make every open task
+        // "at risk" and 1 would make none, so a misconfigured 0/1 could silently disable the feature
+        // (or flood it) without anybody noticing.
+        AtRiskDeadlineEnabled: AtRiskDeadlineEnabled,
+        AtRiskDeadlineRemainingRatio: Math.Clamp(
+            AtRiskDeadlineRemainingRatio, 0.05, 0.95),
+        AtRiskDeadlineMinWindowDays: Math.Max(1, AtRiskDeadlineMinWindowDays),
+        AtRiskDeadlineStaleHours: Math.Max(1, AtRiskDeadlineStaleHours));
 }

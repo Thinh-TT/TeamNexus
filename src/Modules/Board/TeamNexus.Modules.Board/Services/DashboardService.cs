@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using TeamNexus.Modules.Board.DTOs;
 using TeamNexus.Persistence.Data;
 using TeamNexus.Persistence.Data.Entities;
+using TeamNexus.Shared.Risk;
 using BoardEntity = TeamNexus.Persistence.Data.Entities.Board;
 
 namespace TeamNexus.Modules.Board.Services;
@@ -108,6 +109,7 @@ public sealed class DashboardService : IDashboardService
                     t.DueDate,
                     t.Priority,
                     t.CreatedAt,
+                    t.UpdatedAt,
                     t.AssigneeId,
                     t.CompletedAt))
                 .ToListAsync(ct);
@@ -139,6 +141,11 @@ public sealed class DashboardService : IDashboardService
             OverdueTasks: tasks?.Count(t => IsOverdue(t, isDoneColumn, now)) ?? 0,
             MyOpenTasks: tasks?.Count(t => t.AssigneeId == userId && !IsDone(t, isDoneColumn)) ?? 0);
 
+        // Phase 14 §3.2: the health verdict is computed from the SAME rows the summary above was
+        // computed from, so the gauge can never contradict the KPI cards next to it. No extra query.
+        var health = DashboardProjectHealth.From(
+            ProjectHealth.Compute(BuildHealthInput(tasks ?? [], isDoneColumn, now)));
+
         return new DashboardResponse(
             workspaceId,
             workspaceName,
@@ -148,8 +155,65 @@ public sealed class DashboardService : IDashboardService
             summaries,
             boards.Count > MaxBoards,
             activities,
-            summary);
+            summary)
+        {
+            Health = health,
+        };
     }
+
+    // ---- project health (Phase 14 §3.2) -------------------------------------
+
+    /// <summary>
+    /// Turns the already-loaded rows into the counts <see cref="ProjectHealth"/> needs.
+    /// <para>
+    /// <c>AtRiskTasks</c> goes through <c>DeadlineRiskRules</c> — the <b>same</b> shared rule the AI
+    /// Observer uses for its <c>AtRiskDeadline</c> alert — so "2 thẻ sắp hết hạn" on the gauge and the
+    /// Observer's alert can never describe different tasks. <c>LastActivityAt</c> mirrors
+    /// <c>ObserverSignalDetector.ActivityAt</c>: a comment newer than the last edit counts as movement.
+    /// </para>
+    /// </summary>
+    private static ProjectHealthInput BuildHealthInput(
+        IReadOnlyList<TaskRow> tasks,
+        IReadOnlySet<Guid> isDoneColumn,
+        DateTimeOffset now)
+    {
+        var open = tasks.Where(t => !IsDone(t, isDoneColumn)).ToList();
+        var stalledThreshold = TimeSpan.FromDays(ProjectHealth.DefaultStalledDays);
+
+        var stalled = open.Count(t => now - LastActivityAt(t) > stalledThreshold);
+
+        var oldestAgeDays = open.Count == 0
+            ? 0
+            : (int)Math.Max(0, Math.Floor(open.Max(t => (now - t.CreatedAt).TotalDays)));
+
+        var byAssignee = open
+            .Where(t => t.AssigneeId.HasValue)
+            .GroupBy(t => t.AssigneeId!.Value)
+            .Select(g => g.Count())
+            .ToList();
+
+        return new ProjectHealthInput(
+            TotalTasks: tasks.Count,
+            OpenTasks: open.Count,
+            OverdueTasks: open.Count(t => IsOverdue(t, isDoneColumn, now)),
+            AtRiskTasks: open.Count(t => DeadlineRiskRules.IsAtRiskDeadline(ToWorkItem(t, now), now)),
+            StalledTasks: stalled,
+            OldestOpenTaskAgeDays: oldestAgeDays,
+            MaxOpenTasksPerAssignee: byAssignee.Count == 0 ? 0 : byAssignee.Max(),
+            AssigneeCount: byAssignee.Count);
+    }
+
+    /// <summary>
+    /// Projection for the shared risk rule. The dashboard carries no comment timestamps, so
+    /// <c>updated_at</c> alone is the movement signal here — a narrower window than the Observer's
+    /// (which also sees comments), never a wider one. See §R6 of the phase report.
+    /// </summary>
+    private static ProjectWorkItem ToWorkItem(TaskRow task, DateTimeOffset now)
+        => new(task.Id, task.CreatedAt, task.DueDate, LastActivityAt(task));
+
+    /// <summary>Last movement: the later of creation and the last edit (never a future instant).</summary>
+    private static DateTimeOffset LastActivityAt(TaskRow task)
+        => task.UpdatedAt > task.CreatedAt ? task.UpdatedAt : task.CreatedAt;
 
     // ---- "Task của tôi" -----------------------------------------------------
 
@@ -399,6 +463,7 @@ public sealed class DashboardService : IDashboardService
         DateTimeOffset? DueDate,
         TaskPriority? Priority,
         DateTimeOffset CreatedAt,
+        DateTimeOffset UpdatedAt,
         Guid? AssigneeId,
         DateTimeOffset? CompletedAt);
 }
