@@ -23,6 +23,7 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { NexusLogo } from '../../../shared/components/NexusLogo'
 import { useAuthStore } from '../../auth/store/useAuthStore'
 import { getRoleLabel, getRoleTagColor } from '../../members/utils/memberRoleLabels'
 import type { InvitationPreviewResponse } from '../../members/types/member.types'
@@ -202,10 +203,13 @@ export const AcceptInvitationPage: React.FC = () => {
   if (!isAuthenticated) {
     return (
       <Layout style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
-        <Header style={{ background: '#0f172a', padding: '0 24px', display: 'flex', alignItems: 'center' }}>
-          <Typography.Title level={3} style={{ color: '#fff', margin: 0 }}>
-            TeamNexus
-          </Typography.Title>
+        <Header style={{ background: '#ffffff', borderBottom: '1px solid #e2e8f0', padding: '0 24px', display: 'flex', alignItems: 'center' }}>
+          <Flex align="center" gap={10} style={{ cursor: 'pointer' }} onClick={() => navigate('/')}>
+            <NexusLogo size={32} />
+            <Typography.Title level={3} style={{ color: '#0f172a', margin: 0, fontWeight: 700, letterSpacing: '-0.5px' }}>
+              TeamNexus
+            </Typography.Title>
+          </Flex>
         </Header>
 
         <Content style={{ padding: '60px 24px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -259,10 +263,13 @@ export const AcceptInvitationPage: React.FC = () => {
   // 4. Đã đăng nhập và đang tải thông tin preview
   return (
     <Layout style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
-      <Header style={{ background: '#0f172a', padding: '0 24px', display: 'flex', alignItems: 'center' }}>
-        <Typography.Title level={3} style={{ color: '#fff', margin: 0, cursor: 'pointer' }} onClick={() => navigate('/')}>
-          TeamNexus
-        </Typography.Title>
+      <Header style={{ background: '#ffffff', borderBottom: '1px solid #e2e8f0', padding: '0 24px', display: 'flex', alignItems: 'center' }}>
+        <Flex align="center" gap={10} style={{ cursor: 'pointer' }} onClick={() => navigate('/')}>
+          <NexusLogo size={32} />
+          <Typography.Title level={3} style={{ color: '#0f172a', margin: 0, fontWeight: 700, letterSpacing: '-0.5px' }}>
+            TeamNexus
+          </Typography.Title>
+        </Flex>
       </Header>
 
       <Content style={{ padding: '60px 24px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>

@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-web-${{ github.head_ref || github.run_id }}
+  group: ci-web-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -31,10 +31,10 @@ jobs:
         working-directory: frontend
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Setup Node
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
           # KHÔNG dùng '22': vitest khai báo engines `^22.12.0 || ^24.0.0 || >=26`, nên Node 22.0–22.11
           # sẽ hỏng. Node 24 khớp máy dev (24.15) và khớp @types/node ^24.
@@ -60,7 +60,7 @@ jobs:
       # Giai đoạn 12 ghi 406 nhưng máy dev ĐO ĐƯỢC 407 (77 file) — "số đo thắng tài liệu";
       # Giai đoạn 13 = 508 (86 file): Calendar (GĐ13 §1) + Burndown/Velocity (§4) + digest toggle (§5).
       # Giai đoạn 14 = 570 (96 file): Hỏi AI (GĐ14 §1) + Sức khỏe dự án (§2) + AI Board Template (§3).
-      # Trang chủ Redesign = 577 (98 file): LandingPage (chưa đăng nhập) + RootHomePage router + Command Center.
+      # Trang chủ Redesign = 578 (99 file): LandingPage + RootHomePage router + Command Center + NexusLogo.
       - name: Assert test count did not regress
         shell: pwsh
         run: |
@@ -69,14 +69,14 @@ jobs:
           $failed = [int]$report.numFailedTests
           Write-Host "vitest: total=$total failed=$failed"
           if ($failed -ne 0) { throw "vitest reported $failed failing tests" }
-          if ($total -lt 577) { throw "Số test đã tụt: $total (baseline hiện tại là 577)" }
+          if ($total -lt 578) { throw "Số test đã tụt: $total (baseline hiện tại là 578)" }
 
       - name: Build (vite)
         run: npm run build
 
       - name: Upload build output
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: web-build-output
           path: |
