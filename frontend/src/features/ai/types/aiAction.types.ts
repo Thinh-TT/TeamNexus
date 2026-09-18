@@ -1,7 +1,7 @@
 import type { SmartSetupTaskProposal } from './smartSetup.types'
 
 export type AiActionStatus = 'Pending' | 'Approved' | 'Rejected' | 'Undone'
-export type AiActionType = 'CreateSubtasks'
+export type AiActionType = 'CreateSubtasks' | 'CreateBoardFromTemplate'
 
 export interface ConfirmSmartSetupRequest {
   description: string
@@ -32,6 +32,8 @@ export interface AiActionAppliedSnapshot {
   entityId: string | null
   createdTaskIds: string[]
   createdLabelIds: string[]
+  createdColumnIds?: string[]
+  createdBoardId?: string
   warnings: string[]
   appliedAt: string
   undoWarnings?: string[]

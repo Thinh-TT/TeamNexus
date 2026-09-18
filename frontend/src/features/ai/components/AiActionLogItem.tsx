@@ -142,6 +142,8 @@ export const AiActionLogItem: React.FC<AiActionLogItemProps> = ({
             <Text strong style={{ fontSize: 13.5 }}>
               {log.action === 'CreateSubtasks'
                 ? 'Tạo sub-tasks đề xuất'
+                : log.action === 'CreateBoardFromTemplate'
+                ? 'Tạo board từ mẫu AI'
                 : log.action}
             </Text>
             <Tag color="blue" style={{ borderRadius: 10 }}>
@@ -373,7 +375,11 @@ export const AiActionLogItem: React.FC<AiActionLogItemProps> = ({
           <Flex justify="flex-end" style={{ marginTop: 4 }}>
             <Popconfirm
               title="Xác nhận hoàn tác"
-              description="Các thẻ công việc do hành động này tạo sẽ bị xóa mềm khỏi bảng. Bạn có chắc chắn muốn hoàn tác?"
+              description={
+                log.action === 'CreateBoardFromTemplate'
+                  ? 'Board và mọi thẻ trong đó sẽ bị ẩn khỏi không gian làm việc. Bạn có chắc chắn muốn hoàn tác?'
+                  : 'Các thẻ công việc do hành động này tạo sẽ bị xóa mềm khỏi bảng. Bạn có chắc chắn muốn hoàn tác?'
+              }
               onConfirm={handleUndo}
               okText="Hoàn tác"
               cancelText="Hủy"

@@ -282,11 +282,13 @@ nên User Secrets sẽ thắng trở lại).
   - **Gauge "Sức khỏe dự án":** `ProjectHealth.Compute` (hàm thuần ở module **Board**) + **append cuối** `DashboardResponse.health` — 0–100, 4 band, 5 thành phần điểm trừ **cộng lại đúng 100**. Lý do **không** đặt trong `ObserverSignalDetector` (lệch DoD có chủ ý): ghi ở `03-roadmap.md` §Giai đoạn 14 + báo cáo.
   - **AI Board Template:** `POST /api/workspaces/{id}/smart-setup/template` (Manager+, **không ghi gì**) + `/confirm` ⇒ `Pending` `CreateBoardFromTemplate` (`entity_type='Workspace'`) ⇒ Approve tạo **đúng 1 board + 2–6 cột (pin đúng 1 cột `is_done`) + 5–10 task**; Undo = **soft-delete board**.
   - Phân bổ **+104** test: `ObserverRiskTests` 21 · `ProjectHealthTests` 23 · `AiGuardrailTests` 18 · `AiTaskChatApiTests` 18 · `BoardTemplateApiTests` 18 · `DashboardApiTests` +4 · `ObserverVocabularyTests` +1 (sửa 1 test cũ 4→5 type). Chi tiết: `Project-Documents/tasks/phase-14-ai-advanced.md`.
-- [ ] **Frontend — 📤 BÀN GIAO cho antigravity** — note hợp đồng API + 13 bẫy đã biết: `Project-Documents/tasks/phase-14-remaining-frontend-handover.md`.
-  - Ba việc: tab **"Hỏi AI"** trong `TaskDetailModal` (chat SSE + "Lưu thành bình luận"), **gauge sức khỏe** trên `WorkspaceDashboardPage`, modal **"Tạo board bằng AI"** ở `BoardListPage`.
+- [x] **Frontend — ✅ HOÀN THÀNH bởi antigravity** (Phase 14 Frontend)
+  - Ba tính năng frontend hoàn thiện: tab **"Hỏi AI"** trong `TaskDetailModal` (chat streaming SSE + "Lưu thành bình luận"), **gauge "Sức khỏe dự án"** trên `WorkspaceDashboardPage` (AntD Progress dashboard + Tooltip 5 thành phần điểm trừ + lý do), modal **"Tạo board bằng AI"** ở `BoardListPage` (2 bước: mô tả → preview chỉnh sửa được 1 cột isDone và task → confirm Pending → Manager duyệt).
+  - Cập nhật `AiActionLogItem` và `aiAction.types` cho action `CreateBoardFromTemplate` với Popconfirm Undo cảnh báo ẩn board.
+  - Phân bổ: **+10 file test / +62 test mới** (tổng **96 file test / 570 test passed**, 0 failed).
 - [x] **CI & Tài liệu**
   - `.github/workflows/ci-backend.yml`: assert **584** tests backend (0 skipped); comment chuỗi `… 480 (Giai đoạn 13) → 584 (Giai đoạn 14)`.
-  - `.github/workflows/ci-web.yml`: **giữ `-lt 508`** — frontend Giai đoạn 14 **chưa** làm, nâng cổng lúc này sẽ đỏ vô cớ; **antigravity** nâng bằng số thật sau khi xong.
+  - `.github/workflows/ci-web.yml`: nâng `-lt 508` lên **`-lt 570`** (baseline Giai đoạn 14: 96 file / 570 tests).
   - Đã cập nhật `03-roadmap.md`, `01-system-specification.md` (§13), `04-database-design.md` (§6/§7), `README.md`, `src/Modules/Ai/TeamNexus.Modules.Ai/README.md`; báo cáo: `Project-Documents/report/phase-14-ai-advanced-test-report.md`.
 
 ### CI (GitHub Actions)
@@ -296,9 +298,9 @@ Hai workflow chạy trên `ubuntu-latest` cho mọi push lên `main`/`develop`/`
 | Workflow | Làm gì | Artifact |
 |---|---|---|
 | `ci-backend.yml` | `restore` → `build -c Release` (**0 warning / 0 error**) → `dotnet test` trên **PostgreSQL 18** (service container) → **assert tổng test = 584 và không skip** | `backend-test-results` (TRX) |
-| `ci-web.yml` | `npm ci` → `lint` → `tsc -b` → `vitest` → **assert số test ≥ 508 (baseline Giai đoạn 13 — cổng của Giai đoạn 14 CHƯA nâng vì frontend chưa làm)** → `vite build` | `web-build-output` (`dist/` + báo cáo JSON) |
+| `ci-web.yml` | `npm ci` → `lint` → `tsc -b` → `vitest` → **assert số test ≥ 570 (baseline Giai đoạn 14)** → `vite build` | `web-build-output` (`dist/` + báo cáo JSON) |
 
-**Trạng thái:** đo trên máy dev — backend `Passed: 584, Skipped: 0` (PostgreSQL thật), frontend `508 passed / 0 failed`, lint 0/0, `tsc -b` exit 0, build OK. ⬜ Chưa chạy lại trên GitHub Actions sau Giai đoạn 14.
+**Trạng thái:** đo trên máy dev — backend `Passed: 584, Skipped: 0` (PostgreSQL thật), frontend `570 passed / 0 failed`, lint 0/0, `tsc -b` exit 0, build OK. ⬜ Chưa chạy lại trên GitHub Actions sau Giai đoạn 14.
 
 - **Vì sao không có workflow deploy:** Render và Vercel tự deploy từ GitHub (quyết định **D11**). Nhờ vậy CI **không giữ một secret nào** —
   toàn bộ cấu hình cho test do `TeamNexusApiFactory` cấp bằng code (`Jwt:SigningKey` test, `DeepSeek:ApiKey` rỗng ⇒ dùng fake provider).
@@ -338,6 +340,6 @@ npm run lint && npx tsc -b && npm test && npm run build
 npm test -- --reporter=json --outputFile=test-results.json
 ```
 
-> Kết quả hiện tại: **86 file / 508 test PASS** (baseline cuối Giai đoạn 8 là 206; Giai đoạn 10 là 279; Giai đoạn 11 là 360; Giai đoạn 12 ghi 406 nhưng **đo thật là 407**; Giai đoạn 13 bổ sung 9 file test mới ⇒ **508** — số đo thắng tài liệu). **Giai đoạn 14 chỉ làm backend ⇒ frontend vẫn 508; note bàn giao cho antigravity ở `Project-Documents/tasks/phase-14-remaining-frontend-handover.md`.**
+> Kết quả hiện tại: **96 file / 570 test PASS** (baseline cuối Giai đoạn 8 là 206; Giai đoạn 10 là 279; Giai đoạn 11 là 360; Giai đoạn 12 ghi 406 nhưng **đo thật là 407**; Giai đoạn 13 bổ sung 9 file test mới ⇒ **508**; Giai đoạn 14 bổ sung 10 file test mới cho frontend ⇒ **570** — số đo thắng tài liệu). Frontend Giai đoạn 14 hoàn thành bởi **antigravity**.
 
 

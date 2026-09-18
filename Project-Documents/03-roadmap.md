@@ -277,10 +277,10 @@ Bổ sung khả năng xem task theo chiều thời gian (Calendar), biểu đồ
 
 ---
 
-## Giai đoạn 14: Nâng cao AI — 🔄 **BACKEND ✅ XONG · FRONTEND 📤 BÀN GIAO**
+## Giai đoạn 14: Nâng cao AI — ✅ **HOÀN THÀNH (BACKEND & FRONTEND)**
 
 > **Kế hoạch chi tiết đã chia task:** `tasks/phase-14-ai-advanced.md`.
-> **📤 Note bàn giao Frontend cho antigravity:** `tasks/phase-14-remaining-frontend-handover.md`.
+> **Frontend hoàn thiện bởi:** antigravity (570 test frontend / 96 test files / 0 warning 0 error / CI gate -lt 570).
 > **Báo cáo nghiệm thu chi tiết:** `report/phase-14-ai-advanced-test-report.md`.
 >
 > **⚠️ LỆCH DoD có chủ ý & bắt buộc (chi tiết ở §1 D6 và §10 R1 của tài liệu chia task):**

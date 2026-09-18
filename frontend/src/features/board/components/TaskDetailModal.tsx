@@ -55,6 +55,7 @@ import type {
 } from '../types/board.types'
 import { useWorkspaceMembers } from '../hooks/useWorkspaceMembers'
 import { AgentRunPanel, AttachmentList, useAgentRuns } from '../../ai'
+import { AiChatPanel } from '../../ai/components/AiChatPanel'
 
 interface TaskDetailModalProps {
   task: TaskResponse | null
@@ -699,6 +700,18 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                   key: 'attachments',
                   label: 'Tệp đính kèm',
                   children: <AttachmentList taskId={task.id} />,
+                },
+                {
+                  key: 'ai',
+                  label: (
+                    <span data-testid="ai-chat-tab">
+                      <Space size={4}>
+                        <RobotOutlined style={{ color: '#6366f1' }} />
+                        <span>Hỏi AI</span>
+                      </Space>
+                    </span>
+                  ),
+                  children: <AiChatPanel taskId={task.id} />,
                 },
               ]}
             />

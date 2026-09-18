@@ -174,4 +174,49 @@ describe('AiActionLogItem', () => {
       expect(screen.getByText('Tạo REST API')).toBeInTheDocument()
     })
   })
+
+  it('renders "Tạo board từ mẫu AI" label for action CreateBoardFromTemplate', () => {
+    const templateLog: AiActionLog = {
+      ...mockPendingLog,
+      action: 'CreateBoardFromTemplate',
+      entityType: 'Workspace',
+    }
+
+    render(
+      <AiActionLogItem
+        log={templateLog}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+        onUndo={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('Tạo board từ mẫu AI')).toBeInTheDocument()
+  })
+
+  it('displays custom Popconfirm description for CreateBoardFromTemplate when Undo is clicked', async () => {
+    const approvedTemplateLog: AiActionLog = {
+      ...mockApprovedLog,
+      action: 'CreateBoardFromTemplate',
+      entityType: 'Workspace',
+    }
+
+    render(
+      <AiActionLogItem
+        log={approvedTemplateLog}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+        onUndo={vi.fn()}
+      />
+    )
+
+    const undoBtn = screen.getByRole('button', { name: /Hoàn tác hành động/i })
+    fireEvent.click(undoBtn)
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Board và mọi thẻ trong đó sẽ bị ẩn khỏi không gian làm việc/i)
+      ).toBeInTheDocument()
+    })
+  })
 })

@@ -27,6 +27,14 @@ vi.mock('../../ai', () => ({
   AttachmentList: () => <div data-testid="attachment-list" />,
 }))
 
+vi.mock('../../ai/components/AiChatPanel', () => ({
+  AiChatPanel: ({ taskId }: { taskId: string }) => (
+    <div data-testid="ai-chat-panel" data-task-id={taskId}>
+      AiChatPanel Mock
+    </div>
+  ),
+}))
+
 // Mock boardApi
 vi.mock('../services/boardApi', () => ({
   boardApi: {
@@ -239,5 +247,22 @@ describe('TaskDetailModal', () => {
   it('renders assignee select with data-testid="assignee-select"', () => {
     renderModal()
     expect(screen.getByTestId('assignee-select')).toBeInTheDocument()
+  })
+
+  it('renders "Hỏi AI" tab with data-testid="ai-chat-tab"', () => {
+    renderModal()
+    expect(screen.getByTestId('ai-chat-tab')).toBeInTheDocument()
+    expect(screen.getByText('Hỏi AI')).toBeInTheDocument()
+  })
+
+  it('switches to "Hỏi AI" tab and renders AiChatPanel while keeping modal open', async () => {
+    renderModal()
+    const aiTab = screen.getByTestId('ai-chat-tab')
+    fireEvent.click(aiTab)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('ai-chat-panel')).toBeInTheDocument()
+      expect(screen.getByTestId('ai-chat-panel')).toHaveAttribute('data-task-id', mockTask.id)
+    })
   })
 })
