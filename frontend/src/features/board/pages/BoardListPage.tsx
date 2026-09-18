@@ -133,16 +133,7 @@ export const BoardListPage: React.FC = () => {
   return (
     <Layout style={{ minHeight: '100vh', background: '#f8fafc' }}>
       {/* Top Header */}
-      <AppHeader workspaceId={workspaceId}>
-        <Button
-          icon={<TeamOutlined />}
-          style={{ borderRadius: 8, borderColor: '#475569', color: '#fff', background: 'transparent' }}
-          onClick={() => navigate(`/workspaces/${workspaceId}/members`)}
-          data-testid="nav-members-header-btn"
-        >
-          Thành viên
-        </Button>
-      </AppHeader>
+      <AppHeader workspaceId={workspaceId} />
 
       <Content style={{ padding: '32px 24px', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
         <Flex vertical gap="large">

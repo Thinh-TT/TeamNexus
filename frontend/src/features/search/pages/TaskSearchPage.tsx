@@ -105,21 +105,21 @@ export const TaskSearchPage: React.FC = () => {
       <AppHeader workspaceId={workspaceId}>
         <Button
           icon={<DashboardOutlined />}
-          style={{ borderRadius: 8, borderColor: '#475569', color: '#fff', background: 'transparent' }}
+          style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569', background: '#f8fafc' }}
           onClick={() => navigate(`/workspaces/${workspaceId}/dashboard`)}
         >
           Tổng quan
         </Button>
         <Button
           icon={<ProjectOutlined />}
-          style={{ borderRadius: 8, borderColor: '#475569', color: '#fff', background: 'transparent' }}
+          style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569', background: '#f8fafc' }}
           onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
         >
           Bảng Kanban
         </Button>
         <Button
           icon={<TeamOutlined />}
-          style={{ borderRadius: 8, borderColor: '#475569', color: '#fff', background: 'transparent' }}
+          style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569', background: '#f8fafc' }}
           onClick={() => navigate(`/workspaces/${workspaceId}/members`)}
         >
           Thành viên
