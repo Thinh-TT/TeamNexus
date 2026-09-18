@@ -53,7 +53,7 @@ export const LoginPage: React.FC = () => {
       justify="center"
       style={{
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #311042 100%)',
+        background: 'linear-gradient(135deg, #f8fafc 0%, #e0e7ff 50%, #fdf4ff 100%)',
         padding: 24,
       }}
     >
@@ -62,14 +62,39 @@ export const LoginPage: React.FC = () => {
           width: '100%',
           maxWidth: 420,
           borderRadius: 16,
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)',
-          background: 'rgba(255, 255, 255, 0.96)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
+          boxShadow: '0 20px 40px rgba(15, 23, 42, 0.08)',
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
         }}
       >
+        <div style={{ textAlign: 'left', marginBottom: 12 }}>
+          <Button
+            type="link"
+            size="small"
+            onClick={() => navigate('/')}
+            style={{ padding: 0, color: '#6366f1', fontSize: 13 }}
+          >
+            ← Quay lại trang chủ
+          </Button>
+        </div>
+
         <Flex vertical align="center" gap="small" style={{ marginBottom: 24 }}>
-          <Typography.Title level={2} style={{ margin: 0, color: '#1e293b' }}>
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
+              marginBottom: 4,
+            }}
+          >
+            <span style={{ fontSize: 22, color: '#fff', fontWeight: 'bold' }}>✦</span>
+          </div>
+          <Typography.Title level={2} style={{ margin: 0, color: '#0f172a' }}>
             TeamNexus
           </Typography.Title>
           <Typography.Text type="secondary" style={{ textAlign: 'center' }}>
