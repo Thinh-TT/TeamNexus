@@ -1,7 +1,6 @@
 import React from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from '../features/auth/components/ProtectedRoute'
-import { DashboardPage } from '../features/auth/pages/DashboardPage'
 import { LoginPage } from '../features/auth/pages/LoginPage'
 import { BoardListPage } from '../features/board/pages/BoardListPage'
 import { BoardPage } from '../features/board/pages/BoardPage'
@@ -14,20 +13,15 @@ import { AcceptInvitationPage } from '../features/invitations/pages/AcceptInvita
 import { WorkspaceDashboardPage } from '../features/dashboard/pages/WorkspaceDashboardPage'
 import { TaskSearchPage } from '../features/search/pages/TaskSearchPage'
 
+import { RootHomePage } from '../features/landing/pages/RootHomePage'
+
 export const AppRouter: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <DashboardPage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/" element={<RootHomePage />} />
         <Route
           path="/workspaces/:workspaceId/dashboard"
           element={
