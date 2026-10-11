@@ -38,6 +38,24 @@ export const aiActionApi = {
   },
 
   /**
+   * Calls GET /api/workspaces/{workspaceId}/ai-actions (Phase 14.5 A1.1).
+   *
+   * A separate call from the board-scoped list because the two cannot answer the same question: a log that
+   * CREATES a board is stored as `entity_type = 'Workspace'` and can never appear under a board. This is
+   * what makes a board-template proposal reviewable before (and without) opening the board it created.
+   */
+  listWorkspaceAiActions: async (
+    workspaceId: string,
+    params?: { status?: AiActionStatus; entityType?: string; action?: string; take?: number }
+  ): Promise<AiActionLog[]> => {
+    const res = await httpClient.get<AiActionLog[]>(
+      `/workspaces/${workspaceId}/ai-actions`,
+      { params }
+    )
+    return res.data
+  },
+
+  /**
    * Calls GET /api/ai-actions/{logId} to get detailed snapshots of an AI action.
    */
   getAiAction: async (logId: string): Promise<AiActionLogDetail> => {

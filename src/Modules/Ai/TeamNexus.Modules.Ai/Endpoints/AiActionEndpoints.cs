@@ -42,6 +42,14 @@ public static class AiActionEndpoints
 
         historyGroup.MapGet("/", ListAsync).RequireAuthorization();
 
+        // 2b) Workspace-scoped action history (Phase 14.5 A1.1). Needed because a log with
+        //     entity_type='Workspace' (the board template) can never appear under a board.
+        var workspaceHistoryGroup = endpoints.MapGroup("/api/workspaces/{workspaceId:guid}/ai-actions")
+            .WithTags("AiActions")
+            .AddEndpointFilter<DomainExceptionFilter>();
+
+        workspaceHistoryGroup.MapGet("/", ListForWorkspaceAsync).RequireAuthorization();
+
         // 3) One action + its decisions.
         var actionGroup = endpoints.MapGroup("/api/ai-actions/{logId:guid}")
             .WithTags("AiActions")
@@ -96,6 +104,32 @@ public static class AiActionEndpoints
         IAiActionService actions,
         CancellationToken ct)
         => Results.Ok(await actions.GetAsync(logId, http.RequireUserId(), ct));
+
+    /// <summary>
+    /// Workspace-wide history (Phase 14.5 A1.1). Filter/parse rules mirror the board-scoped list
+    /// (<see cref="ParseStatus"/> rejects a numeric enum value so a typo cannot silently match a status).
+    /// </summary>
+    private static async Task<IResult> ListForWorkspaceAsync(
+        Guid workspaceId,
+        string? status,
+        string? entityType,
+        string? action,
+        int? take,
+        HttpContext http,
+        IAiActionService actions,
+        CancellationToken ct)
+    {
+        var logs = await actions.ListForWorkspaceAsync(
+            workspaceId,
+            ParseStatus(status),
+            entityType,
+            action,
+            take ?? 0,
+            http.RequireUserId(),
+            ct);
+
+        return Results.Ok(logs);
+    }
 
     private static async Task<IResult> ApproveAsync(
         Guid logId,

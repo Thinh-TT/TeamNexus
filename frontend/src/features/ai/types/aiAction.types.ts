@@ -1,7 +1,17 @@
 import type { SmartSetupTaskProposal } from './smartSetup.types'
 
 export type AiActionStatus = 'Pending' | 'Approved' | 'Rejected' | 'Undone'
-export type AiActionType = 'CreateSubtasks' | 'CreateBoardFromTemplate'
+
+/**
+ * Every AI write action the UI can label. Phase 14.5 added the two field-level actions the board chat can
+ * propose; leaving them out would fall through to the raw action string in the history drawer and to a
+ * generic icon in the log item.
+ */
+export type AiActionType =
+  | 'CreateSubtasks'
+  | 'CreateBoardFromTemplate'
+  | 'UpdateTaskFields'
+  | 'MoveTaskToColumn'
 
 export interface ConfirmSmartSetupRequest {
   description: string

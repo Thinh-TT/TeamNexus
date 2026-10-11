@@ -1,10 +1,12 @@
-﻿# TeamNexus – Roadmap Phát triển
+# TeamNexus – Roadmap Phát triển
 
 > Roadmap ở mức giai đoạn lớn (chưa chia task chi tiết). Mỗi giai đoạn kèm các yêu cầu hoàn thiện để coi là "xong" trước khi chuyển sang giai đoạn kế tiếp.
 
-> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (✅)** → **8 (✅)** → **9 (✅)** → **10 (✅)** → **11 (✅)** → **12 (✅)** → **13 (✅)** → 14 → 15 → 16.
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (✅)** → **8 (✅)** → **9 (✅)** → **10 (✅)** → **11 (✅)** → **12 (✅)** → **13 (✅)** → **14 (✅)** → **14.5 (✅)** → 15 → 16.
 >
-> Số giai đoạn đã được **đánh lại** (lần 2 — sau Giai đoạn 12): **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Đơn giản hóa Role**, **10 = Nâng cao Task & Workspace UX**, **11 = Quản lý Member & Profile**, **12 = Dashboard & Tìm kiếm**, **13 = Trực quan hóa & Thông báo**, **14 = Nâng cao AI**, **15 = Tích hợp bên ngoài**, **16 = Mobile (Flutter)**. `01-system-specification.md` và `02-tech-stack-decisions.md` sẽ cập nhật khi mỗi giai đoạn bắt đầu.
+> Số giai đoạn đã được **đánh lại** (lần 2 — sau Giai đoạn 12): **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Đơn giản hóa Role**, **10 = Nâng cao Task & Workspace UX**, **11 = Quản lý Member & Profile**, **12 = Dashboard & Tìm kiếm**, **13 = Trực quan hóa & Thông báo**, **14 = Nâng cao AI**, **14.5 = Củng cố nền + AI Agent Chat cấp Board**, **15 = Tích hợp bên ngoài**, **16 = Mobile (Flutter)**. `01-system-specification.md` và `02-tech-stack-decisions.md` sẽ cập nhật khi mỗi giai đoạn bắt đầu.
+>
+> **Giai đoạn 14.5 là giai đoạn NỐI TIẾP của 14** (không nằm trong roadmap gốc): nó củng cố nền cho 15/16 và thực hiện yêu cầu gộp AI Agent + Hỏi AI thành một AI Agent Chat cấp board.
 >
 > **Lưu ý khi đọc tài liệu cũ:** các tài liệu đã đóng băng của giai đoạn 4/5/6 (`tasks/phase-4..6-*.md`, `report/phase-5-*`, `report/phase-6-*`) vẫn dùng cách đánh số cũ — Giai đoạn 9 (cũ) = Mobile, nay là **Giai đoạn 16**.
 
@@ -309,10 +311,77 @@ và mở rộng Smart Setup thành **AI Board Template**.
 
 ---
 
+## Giai đoạn 14.5: Củng cố nền tảng + AI Agent Chat cấp Board — ✅ **HOÀN THÀNH (BACKEND & FRONTEND)**
+
+> **Vì sao có giai đoạn này:** theo yêu cầu *"đọc lại tài liệu, rà các tính năng cần chỉnh sửa/nâng cấp/củng cố để làm nền chắc chắn cho giai đoạn 15 và 16"* + *"gộp AI Agent và Hỏi AI thành **AI Agent Chat** tổng của board"*.
+> **Kế hoạch chi tiết:** `tasks/phase-14-5-foundation-and-agent-chat.md`.
+> **Báo cáo nghiệm thu:** `report/phase-14-5-foundation-and-agent-chat-test-report.md`.
+>
+> **⚠️ LỆCH DoD có chủ ý so với Giai đoạn 14 (bắt buộc ghi rõ):** `tasks/phase-14-ai-advanced.md` §8 ghi
+> **"⛔ KHÔNG được làm"** — *lưu transcript chat ở DB* (D2) và *chat nhiều task cùng lúc*. Giai đoạn 14.5
+> **thay thế có chủ ý** hai dòng đó (người dùng chốt). Dòng thứ ba — *chat có tool/function-calling* —
+> **vẫn bị cấm**. Cơ chế không đổi: **chưa duyệt thì chưa ghi dữ liệu nghiệp vụ**.
+>
+> **Schedule/schema:** ⚠️ **CÓ 1 migration** — bảng `agent_chat_messages` (`Phase14_5AgentChat`) ⇒
+> `dotnet ef migrations list` **10 → 11**. Lệch có chủ ý so với Giai đoạn 14 (giai đoạn đó không migration).
+> Cột `task_id` (nullable, kèm CHECK `num_nonnulls(board_id, task_id) = 1`) là **chỗ chừa**: hợp nhất task
+> chat vào cùng bảng sau này sẽ **không cần migration nữa**.
+>
+> **Kết quả ĐO THẬT:** backend `dotnet build --no-incremental` **0 warning / 0 error** ·
+> `dotnet test` **Failed 0 / Passed 643 / Skipped 0** (baseline 584 ⇒ **+59**) ·
+> `migrations list` = **11** · `has-pending-model-changes` = **sạch** ·
+> frontend **Failed 0 / Passed 633 / 107 file** (baseline 578 / 99 ⇒ **+55 / +8**) ·
+> `oxlint` **0 warning / 0 error** (255 file) · `npx tsc -b` exit 0 · `npm run build` OK ·
+> cổng CI: `ci-backend.yml` `584 → 643`, `ci-web.yml` `578 → 633`.
+
+### Track A — củng cố nền (làm trước Phase 15/16)
+- **A1.1** — **`GET /api/workspaces/{id}/ai-actions`** (Manager+). Vì `ai_action_logs` **không có**
+  `workspace_id`, log tạo board (`entity_type='Workspace'`) **không bao giờ** hiện ở danh sách theo board:
+  trước đây chỉ duyệt/undo được board-template **từ bên trong chính board nó vừa tạo**. FE: nút *Lịch sử AI*
+  ở `BoardListPage` (+ re-fetch danh sách board sau khi duyệt). **Không** cột/index mới.
+- **A1.2** — seam **`IExternalAlertSink`** đặt ở `NotificationService` (nơi **cả 4** đường ghi notification
+  đi qua, không phải adapter `NotificationWriter` chỉ phủ 1 đường). Mặc định `NoOpExternalAlertSink`;
+  transport hỏng **không** làm request ghi dữ liệu thất bại. ⇒ Phase 15 thêm **1 dòng đăng ký**, sửa **0**
+  producer.
+- **A2.1** — `AgentRunReaper` đóng luôn run mà **task đã bị xoá mềm** (`Failed` + `TaskChanged`, không
+  notification). Tách `AgentRunReaperRunner` (scoped, test gọi trực tiếp được) khỏi hosted service.
+- **A2.3** — bỏ **fetch trùng** số hành động AI đang chờ ở `BoardView`; hai helper log lỗi thay vì
+  `.catch(() => {})` nuốt im lặng.
+- **A2.4** — `AgentChatRetentionRunner`: retention **90 ngày**, theo batch, cho transcript chat.
+- **A3** — nợ kỹ thuật ghi lại, **không** làm: attachment chỉ text ≤512 KB, chưa có webhook idempotency,
+  chưa có seam GitHub PR ↔ task, chưa có AI provider fallback.
+
+### Track B — AI Agent Chat cấp Board
+- **Bề mặt:** nút nổi góc phải-dưới board ⇒ **panel docked ~1/4 bề rộng** (kéo được) + **kéo thẻ từ cột vào
+  panel để đính kèm** (tối đa **8** thẻ/lượt) + action card cho đề xuất + stream câu trả lời.
+- **Transcript lưu DB** nên hội thoại **bền qua reload**; đọc lại bằng
+  `GET /api/boards/{id}/agent-chat/messages` (keyset).
+- **Ngân sách riêng `AgentChat`** (2–3× `AiChat`): `MaxHistoryMessages 24`, `MaxHistoryChars 24000`,
+  `MaxOutputTokens 2400`, `MaxAttachedTasks 8`, `MaxTotalContextChars 24000` — mọi giá trị **clamp**;
+  vượt trần ⇒ **400 trước khi gọi provider** (0 token). `Enabled=false` ⇒ **503**.
+- **3 dạng đề xuất**, tất cả đi **Chat → "Gửi đề xuất" → Pending → Manager duyệt → mới ghi**:
+  `CreateSubtasks` (dùng lại applier Phase 4) · `UpdateTaskFields` · `MoveTaskToColumn`; **Undo** khôi phục
+  đúng trạng thái trước (5 trường / cột cũ). Đề xuất **chỉ** chạm thẻ trong tập đính kèm và cột của board
+  này; **không** vào cột `is_clarification`.
+- **❗ 2 bug thật bắt được khi hiện thực:**
+  **(P1)** cả hai service chat kiểm `chunk.Done` **trước** khi nối `chunk.Delta` ⇒ **mất chữ ở khung cuối**,
+  mọi câu trả lời **ngắn đi đúng một chunk**, và bất biến `done.answer == Σ delta` (client dựa vào để khôi
+  phục khung bị mất) **sai âm thầm** — bộ test Phase 14 không bắt được vì chỉ khẳng định hai thứ *cùng tồn
+  tại*. **(P2)** `MoveTaskAsync` mở transaction riêng trong khi `ApproveAsync` đã mở ⇒ duyệt di chuyển thẻ
+  trả **500**; bỏ transaction thừa (mọi thay đổi đã nằm trong **một** `SaveChangesAsync` nên nguyên tử
+  không đổi, thứ tự "activity log sau commit" vẫn đúng).
+> **Nợ kỹ thuật có chủ ý:** task chat trong `TaskDetailModal` **vẫn** transcript ở client; chỉ nhãn đổi thành
+> **"Hỏi AI về thẻ này"** (1 assertion test được sửa — ngoại lệ duy nhất) và `data-testid` giữ nguyên.
+> `agent_chat_messages.task_id` là chỗ chừa để hợp nhất sau **không cần migration**.
+
+---
+
 ## Giai đoạn 15: Tích hợp bên ngoài
 
-> **Chưa bắt đầu — dự kiến sau Giai đoạn 14.**
+> **Chưa bắt đầu — dự kiến sau Giai đoạn 14.5.**
 > **Độ phức tạp kỹ thuật: 🔴 Cao** — webhook, OAuth của bên thứ ba, lưu trữ token bảo mật, xử lý eventual consistency.
+> **Đã có sẵn seam:** `IExternalAlertSink` (Giai đoạn 14.5 A1.2) là điểm cắm thông báo ra ngoài — Phase 15 đăng ký
+> implementation thật và **không** phải sửa Observer/Agent/member path.
 
 Kết nối TeamNexus với hệ sinh thái công cụ phát triển phổ biến: thông báo sang Slack/Discord, liên kết task với GitHub PR/Issue.
 

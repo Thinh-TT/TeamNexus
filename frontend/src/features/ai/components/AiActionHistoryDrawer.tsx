@@ -26,7 +26,17 @@ type FilterType = 'ALL' | AiActionStatus
 interface AiActionHistoryDrawerProps {
   open: boolean
   onClose: () => void
-  boardId: string
+  /**
+   * Exactly one of these scopes the list (Phase 14.5 A1.1):
+   * <list type="bullet">
+   *   <item>`boardId` — the board's own history.</item>
+   *   <item>`workspaceId` — every action of the workspace, including the workspace-scoped ones. A log that
+   *   CREATES a board is stored against the workspace and can never appear in a board-scoped list, so this
+   *   is the only way a board-template proposal is reviewable before (or without) opening the board.</item>
+   * </list>
+   */
+  boardId?: string
+  workspaceId?: string
   onBoardChanged?: () => void
 }
 
@@ -34,6 +44,7 @@ export const AiActionHistoryDrawer: React.FC<AiActionHistoryDrawerProps> = ({
   open,
   onClose,
   boardId,
+  workspaceId,
   onBoardChanged,
 }) => {
   const [filter, setFilter] = useState<FilterType>('ALL')
@@ -48,14 +59,17 @@ export const AiActionHistoryDrawer: React.FC<AiActionHistoryDrawerProps> = ({
     approve,
     reject,
     undo,
-  } = useAiActions({ boardId, onBoardChanged })
+  } = useAiActions({ boardId, workspaceId, onBoardChanged })
+
+  // Whichever scope was supplied. Used as the effect key so switching scope re-fetches.
+  const scopeKey = workspaceId ?? boardId ?? ''
 
   useEffect(() => {
-    if (open && boardId) {
+    if (open && scopeKey) {
       const statusParam = filter === 'ALL' ? undefined : filter
       reload(statusParam)
     }
-  }, [open, boardId, filter, reload])
+  }, [open, scopeKey, filter, reload])
 
   const handleFilterChange = (value: FilterType) => {
     setFilter(value)

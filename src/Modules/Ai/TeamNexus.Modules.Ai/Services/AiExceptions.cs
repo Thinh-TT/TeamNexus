@@ -45,3 +45,21 @@ public sealed class AiChatDisabledException : BoardModuleException
     {
     }
 }
+
+/// <summary>
+/// AI Agent Chat cấp board đang tắt (<c>AgentChat:Enabled = false</c>) → <b>503 Service Unavailable</b>
+/// (Phase 14.5 §B), cùng khuôn mẫu <see cref="AiChatDisabledException"/>.
+/// <para>
+/// Là công tắc <b>riêng</b>, không dùng chung với <see cref="AiChatDisabledException"/>: chat board mang
+/// ngân sách ngữ cảnh lớn hơn 2–3 lần, nên vận hành phải tắt được nó mà vẫn giữ tab "Hỏi AI" trong thẻ.
+/// Ném <b>trước</b> mọi truy vấn: tính năng đang tắt không được tiết lộ board nào tồn tại và không tiêu
+/// token nào.
+/// </para>
+/// </summary>
+public sealed class AgentChatDisabledException : BoardModuleException
+{
+    public AgentChatDisabledException()
+        : base(StatusCodes.Status503ServiceUnavailable, "AI Agent Chat is disabled.")
+    {
+    }
+}

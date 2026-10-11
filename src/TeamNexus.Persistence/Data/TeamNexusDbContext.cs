@@ -55,6 +55,11 @@ public class TeamNexusDbContext
 
     public DbSet<EmailMessage> EmailMessages => Set<EmailMessage>();
 
+    // AI Agent Chat (Phase 14.5 §B): append-only board-scoped chat transcript. `task_id` is the
+    // reserved half of the scope CHECK, so a later phase can move the task tab onto server storage
+    // without another migration.
+    public DbSet<AgentChatMessage> AgentChatMessages => Set<AgentChatMessage>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

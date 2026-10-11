@@ -262,6 +262,75 @@ namespace TeamNexus.Persistence.Migrations
                     b.ToTable("activity_logs", (string)null);
                 });
 
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.AgentChatMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Attachments")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("attachments");
+
+                    b.Property<Guid?>("BoardId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("board_id");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("role");
+
+                    b.Property<Guid?>("TaskId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("task_id");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_agent_chat_messages");
+
+                    b.HasIndex("TaskId")
+                        .HasDatabaseName("ix_agent_chat_messages_task_id");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_agent_chat_messages_user_id");
+
+                    b.HasIndex("BoardId", "CreatedAt")
+                        .HasDatabaseName("ix_agent_chat_messages_board_id_created_at");
+
+                    b.HasIndex("WorkspaceId", "CreatedAt")
+                        .HasDatabaseName("ix_agent_chat_messages_workspace_id_created_at");
+
+                    b.ToTable("agent_chat_messages", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_agent_chat_messages_role", "\"role\" IN ('User', 'Assistant')");
+
+                            t.HasCheckConstraint("ck_agent_chat_messages_scope", "num_nonnulls(\"board_id\", \"task_id\") = 1");
+                        });
+                });
+
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.AgentRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1455,6 +1524,34 @@ namespace TeamNexus.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_activity_logs_workspaces_workspace_id");
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.AgentChatMessage", b =>
+                {
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.Board", null)
+                        .WithMany()
+                        .HasForeignKey("BoardId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_agent_chat_messages_boards_board_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.BoardTask", null)
+                        .WithMany()
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_agent_chat_messages_tasks_task_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_agent_chat_messages_asp_net_users_user_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_agent_chat_messages_workspaces_workspace_id");
                 });
 
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.AgentRun", b =>

@@ -30,6 +30,19 @@ public interface IAiActionService
     Task<IReadOnlyList<AiActionLogResponse>> ListAsync(
         Guid boardId, AiActionStatus? status, int take, Guid userId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Workspace-wide action history (Phase 14.5 A1.1): every board-scoped action of the workspace plus
+    /// the workspace-scoped ones (the board template). Manager/Admin only; unknown workspace ⇒ 404.
+    /// </summary>
+    Task<IReadOnlyList<AiActionLogResponse>> ListForWorkspaceAsync(
+        Guid workspaceId,
+        AiActionStatus? status,
+        string? entityType,
+        string? action,
+        int take,
+        Guid userId,
+        CancellationToken ct = default);
+
     /// <summary>One action with its snapshots (Manager/Admin of the owning workspace).</summary>
     Task<AiActionLogDetailResponse> GetAsync(Guid logId, Guid userId, CancellationToken ct = default);
 
@@ -90,6 +103,36 @@ public interface IAiActionService
         Guid userId,
         string afterSnapshotJson,
         string basisJson,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Records a board-chat proposal to change a task's fields as a <c>Pending</c>
+    /// <c>UpdateTaskFields</c> action (Phase 14.5 §B). Scope is <c>entity_type = 'Task'</c>.
+    /// <para>
+    /// Member+ at the request step (the person reviewing the AI's suggestion is usually not a Manager),
+    /// Manager+ at the approve step — the same split as <see cref="RequestChatCommentAsync"/>. The task must
+    /// live on <paramref name="boardId"/>, so a proposal cannot reach a card of another board.
+    /// </para>
+    /// </summary>
+    Task<AiActionLogResponse> RequestUpdateTaskFieldsAsync(
+        Guid boardId,
+        Guid taskId,
+        string afterSnapshotJson,
+        string basisJson,
+        Guid userId,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Records a board-chat proposal to move a task as a <c>Pending</c> <c>MoveTaskToColumn</c> action
+    /// (Phase 14.5 §B). Same scope and permission rules as
+    /// <see cref="RequestUpdateTaskFieldsAsync"/>.
+    /// </summary>
+    Task<AiActionLogResponse> RequestMoveTaskAsync(
+        Guid boardId,
+        Guid taskId,
+        string afterSnapshotJson,
+        string basisJson,
+        Guid userId,
         CancellationToken ct = default);
 }
 
@@ -363,6 +406,93 @@ public sealed class AiActionService : IAiActionService
         return BuildResponse(log, names.GetValueOrDefault(userId));
     }
 
+    // ---- request (board chat field actions, Phase 14.5 §B) ------------------
+
+    public Task<AiActionLogResponse> RequestUpdateTaskFieldsAsync(
+        Guid boardId,
+        Guid taskId,
+        string afterSnapshotJson,
+        string basisJson,
+        Guid userId,
+        CancellationToken ct = default)
+        => RequestTaskScopedAsync(AiActionTypes.UpdateTaskFields, boardId, taskId, afterSnapshotJson, basisJson, userId, ct);
+
+    public Task<AiActionLogResponse> RequestMoveTaskAsync(
+        Guid boardId,
+        Guid taskId,
+        string afterSnapshotJson,
+        string basisJson,
+        Guid userId,
+        CancellationToken ct = default)
+        => RequestTaskScopedAsync(AiActionTypes.MoveTaskToColumn, boardId, taskId, afterSnapshotJson, basisJson, userId, ct);
+
+    /// <summary>
+    /// Shared request path for the two board-chat actions that target one task. Both need the identical
+    /// guards and produce the identical log shape, so they differ only by the action type string — which
+    /// is what <see cref="ResolveApplier"/> then uses to route them.
+    /// <para>
+    /// Member+ rather than Manager+ on purpose (precedent: <c>RequestChatCommentAsync</c>): submitting a
+    /// proposal is not the accountable act — approving it is, and that gate is unchanged.
+    /// </para>
+    /// </summary>
+    private async Task<AiActionLogResponse> RequestTaskScopedAsync(
+        string actionType,
+        Guid boardId,
+        Guid taskId,
+        string afterSnapshotJson,
+        string basisJson,
+        Guid userId,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(afterSnapshotJson))
+        {
+            throw new BadRequestException("Đề xuất không có nội dung.");
+        }
+
+        var board = await _db.Boards
+            .AsNoTracking()
+            .FirstOrDefaultAsync(b => b.Id == boardId, ct)
+            ?? throw new NotFoundException("Board not found.");
+
+        await _access.RequireMemberAsync(board.WorkspaceId, userId, ct);
+
+        // The Tasks query filter makes a soft-deleted task a 404, and the board check keeps the proposal
+        // inside the conversation's board — a client cannot point it at a card it merely knows the id of.
+        var task = await _db.Tasks
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == taskId, ct)
+            ?? throw new NotFoundException("Task not found.");
+
+        if (task.BoardId != boardId)
+        {
+            throw new BadRequestException("Thẻ không thuộc bảng này.");
+        }
+
+        var log = new AiActionLog
+        {
+            Action = actionType,
+            EntityType = AiEntityTypes.Task,
+            EntityId = taskId,
+            Basis = string.IsNullOrWhiteSpace(basisJson) ? "{}" : basisJson,
+            AfterSnapshot = afterSnapshotJson,
+            Status = AiActionStatus.Pending,
+            RequestedByUserId = userId,
+        };
+
+        // ONLY the log row: the field change or the move happens when a Manager approves it, through the
+        // registered applier. This is the invariant every AI write action shares.
+        _db.AiActionLogs.Add(log);
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "AI action {Action} for task {TaskId} (board {BoardId}) requested as Pending (log {LogId}) "
+            + "by user {UserId}.",
+            actionType, taskId, boardId, log.Id, userId);
+
+        var names = await LoadUserNamesAsync([userId], ct);
+        return BuildResponse(log, names.GetValueOrDefault(userId));
+    }
+
     // ---- read --------------------------------------------------------------
     public async Task<IReadOnlyList<AiActionLogResponse>> ListAsync(
         Guid boardId,
@@ -411,6 +541,87 @@ public sealed class AiActionService : IAiActionService
         var log = await LoadLogAsync(logId, ct);
         await ResolveAsync(log, userId, ct);
         return await BuildDetailAsync(logId, ct);
+    }
+
+    /// <summary>
+    /// Workspace-wide action history (Phase 14.5 A1.1).
+    /// <para>
+    /// <b>Why a second list is needed at all.</b> <c>ai_action_logs</c> has no <c>workspace_id</c>: a
+    /// board-scoped action stores <c>entity_type='Board'</c> + <c>entity_id=boardId</c>, and the board
+    /// template stores <c>'Workspace'</c> + workspaceId. So a log that <i>creates</i> a board can never
+    /// appear in the board-scoped list — there was no board to scope it to — and before this method the
+    /// only way to see, approve or undo a board-template proposal was inside the board it had just
+    /// created. Resolving the workspace's board ids and matching both shapes is what closes that gap
+    /// without adding a column or an index (the existing
+    /// <c>(entity_type, entity_id, created_at)</c> index serves the first predicate exactly).
+    /// </para>
+    /// </summary>
+    public async Task<IReadOnlyList<AiActionLogResponse>> ListForWorkspaceAsync(
+        Guid workspaceId,
+        AiActionStatus? status,
+        string? entityType,
+        string? action,
+        int take,
+        Guid userId,
+        CancellationToken ct = default)
+    {
+        var workspaceExists = await _db.Workspaces
+            .AsNoTracking()
+            .AnyAsync(w => w.Id == workspaceId, ct);
+
+        if (!workspaceExists)
+        {
+            throw new NotFoundException("Workspace not found.");
+        }
+
+        await _access.RequireManagerAsync(workspaceId, userId, ct);
+
+        var clampedTake = Math.Clamp(take <= 0 ? DefaultListTake : take, 1, MaxListTake);
+
+        // The board ids are read first rather than joined inline: the predicate below then stays a simple
+        // (entity_type, entity_id) pair per branch, which is the shape the existing index was built for.
+        var boardIds = await _db.Boards
+            .AsNoTracking()
+            .Where(b => b.WorkspaceId == workspaceId)
+            .Select(b => b.Id)
+            .ToListAsync(ct);
+
+        var query = _db.AiActionLogs
+            .AsNoTracking()
+            .Where(x => (x.EntityType == AiEntityTypes.Board && x.EntityId != null && boardIds.Contains(x.EntityId.Value))
+                        || (x.EntityType == AiEntityTypes.Workspace && x.EntityId == workspaceId));
+
+        if (status.HasValue)
+        {
+            query = query.Where(x => x.Status == status.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(entityType))
+        {
+            var trimmedType = entityType.Trim();
+            query = query.Where(x => x.EntityType == trimmedType);
+        }
+
+        if (!string.IsNullOrWhiteSpace(action))
+        {
+            var trimmedAction = action.Trim();
+            query = query.Where(x => x.Action == trimmedAction);
+        }
+
+        var logs = await query
+            .OrderByDescending(x => x.CreatedAt)
+            .Take(clampedTake)
+            .ToListAsync(ct);
+
+        var names = await LoadUserNamesAsync(
+            logs.Select(l => l.RequestedByUserId)
+                .Concat(logs.Where(l => l.DecidedByUserId.HasValue).Select(l => l.DecidedByUserId!.Value)),
+            ct);
+
+        return logs.Select(l => BuildResponse(
+            l,
+            names.GetValueOrDefault(l.RequestedByUserId),
+            l.DecidedByUserId.HasValue ? names.GetValueOrDefault(l.DecidedByUserId.Value) : null)).ToList();
     }
 
     // ---- decisions ---------------------------------------------------------
@@ -815,6 +1026,10 @@ public sealed class AiActionService : IAiActionService
             // exact previous key set — the additions are purely additive.
             createdBoardId = result.CreatedBoardId,
             createdColumnIds = result.CreatedColumnIds,
+            // Phase 14.5 §B: the two field-level actions of the board chat. Optional + nulls omitted, so
+            // no pre-14.5 snapshot gains a key.
+            updatedTaskId = result.UpdatedTaskId,
+            fromColumnId = result.FromColumnId,
             warnings = result.Warnings,
             appliedAt = DateTimeOffset.UtcNow,
         }, Json);

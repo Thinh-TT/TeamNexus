@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   DndContext,
   type DragEndEvent,
@@ -49,6 +49,8 @@ import type {
   TaskResponse,
 } from '../types/board.types'
 import { SmartSetupModal } from '../../ai/components/SmartSetupModal'
+import { AgentChatFab } from '../../ai/components/AgentChatFab'
+import { AgentChatPanel, AGENT_CHAT_DROPZONE_ID } from '../../ai/components/AgentChatPanel'
 import { AiActionHistoryDrawer } from '../../ai/components/AiActionHistoryDrawer'
 import { NotificationDrawer } from '../../ai/components/NotificationDrawer'
 import { ObserverRunsDrawer } from '../../ai/components/ObserverRunsDrawer'
@@ -205,17 +207,89 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
   const [aiHistoryOpen, setAiHistoryOpen] = useState(false)
   const [notificationOpen, setNotificationOpen] = useState(false)
   const [observerRunsOpen, setObserverRunsOpen] = useState(false)
+
+  /**
+   * AI Agent Chat (Phase 14.5 §B): a docked panel, not a Drawer.
+   *
+   * The feature's defining interaction is dragging a card out of a column and into the chat, so the panel
+   * has to be part of the layout — an overlay would sit on top of the very cards the user is trying to
+   * drag, and dnd-kit would have no stable measurable target underneath it.
+   */
+  const [agentChatOpen, setAgentChatOpen] = useState(false)
+  /**
+   * Panel width. The spec asks for "about a quarter of the board", which is only meaningful for the board
+   * the user is actually looking at — so the default is a fraction of the measured canvas and the user can
+   * drag the divider. Clamped so the panel can never swallow the board or collapse to nothing.
+   */
+  const [agentChatWidth, setAgentChatWidth] = useState(360)
+  const [agentChatAttachRequest, setAgentChatAttachRequest] = useState<{
+    token: number
+    task: { taskId: string; title: string }
+  } | null>(null)
+  const [agentChatAttachedCount, setAgentChatAttachedCount] = useState(0)
+
+  const canvasRef = useRef<HTMLDivElement | null>(null)
+
+  const AGENT_CHAT_MIN_WIDTH = 320
+  const AGENT_CHAT_MAX_WIDTH = 560
+
+  // "One quarter of the board, within reason": measured on first open rather than guessed from the window,
+  // because the board canvas is not the whole window (the header and the app shell take their share).
+  const openAgentChat = useCallback(() => {
+    const canvasWidth = canvasRef.current?.clientWidth ?? window.innerWidth
+
+    setAgentChatWidth(
+      Math.round(
+        Math.max(AGENT_CHAT_MIN_WIDTH, Math.min(canvasWidth / 4, AGENT_CHAT_MAX_WIDTH))
+      )
+    )
+    setAgentChatOpen(true)
+  }, [])
+
+  /** Resizes the panel from the divider the user drags. Never below the minimum, never past the maximum. */
+  const handleAgentChatResizeStart = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      event.preventDefault()
+
+      const startX = event.clientX
+      const startWidth = agentChatWidth
+
+      const onMove = (moveEvent: PointerEvent) => {
+        const next = startWidth - (moveEvent.clientX - startX)
+        setAgentChatWidth(
+          Math.round(Math.max(AGENT_CHAT_MIN_WIDTH, Math.min(next, AGENT_CHAT_MAX_WIDTH)))
+        )
+      }
+
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+      }
+
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+    },
+    [agentChatWidth]
+  )
+
   const [pendingAiActionCount, setPendingAiActionCount] = useState<number>(0)
   const [unreadNotificationCount, setUnreadNotificationCount] = useState<number>(0)
   const { isManagerOrAdmin } = useWorkspaceRole(workspaceId)
 
-  // Fetch pending AI actions count on mount / board change
+  // Fetch pending AI actions count. Phase 14.5 §Track A (A2.3) removed the duplicate fetch that used to sit
+  // in the mount effect below: two calls to the same endpoint on every board open meant two round trips for
+  // one number, and the `refreshPendingCount` helper already existed for the post-approval refresh — so the
+  // mount path now just calls it.
   const refreshPendingCount = useCallback(() => {
     if (!boardId) return
     aiActionApi
       .listAiActions(boardId, { status: 'Pending', take: 100 })
       .then((logs) => setPendingAiActionCount(logs.length))
-      .catch(() => {})
+      .catch((err: unknown) => {
+        // Phase 14.5 (A2.3): this used to swallow silently. A wrong badge with no trace is worse than a
+        // noisy log — the count is advisory, so the request must not fail, but the reason must be findable.
+        console.warn('[BoardView] Không tải được số hành động AI đang chờ duyệt', err)
+      })
   }, [boardId])
 
   // Fetch unread notification count
@@ -223,26 +297,19 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
     notificationApi
       .listNotifications({ take: 1 })
       .then((res) => setUnreadNotificationCount(res.unreadCount))
-      .catch(() => {})
+      .catch((err: unknown) => {
+        // Phase 14.5 (A2.3): same reasoning as the pending count — advisory data must not break the board,
+        // but a silently wrong badge should leave a trace.
+        console.warn('[BoardView] Không tải được số thông báo chưa đọc', err)
+      })
   }, [])
 
   useEffect(() => {
-    let ignore = false
-    if (boardId) {
-      aiActionApi
-        .listAiActions(boardId, { status: 'Pending', take: 100 })
-        .then((logs) => {
-          if (!ignore) {
-            setPendingAiActionCount(logs.length)
-          }
-        })
-        .catch(() => {})
-    }
+    // Phase 14.5 (A2.3): ONE fetch for the pending count, through the same helper the modals call after a
+    // decision. The duplicate inline call that used to live here is gone, and the helper logs its failures.
+    refreshPendingCount()
     refreshNotificationCount()
-    return () => {
-      ignore = true
-    }
-  }, [boardId, refreshNotificationCount])
+  }, [refreshPendingCount, refreshNotificationCount])
 
   // Configure Dnd sensors (Pointer with 5px threshold to allow card clicks)
   const sensors = useSensors(
@@ -323,6 +390,30 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
 
     const activeId = String(active.id)
     const overId = String(over.id)
+
+    // AI Agent Chat (Phase 14.5 §B): a card dragged onto the chat panel is ATTACHED, not moved.
+    //
+    // Checked FIRST, before any column resolution: without this early return the drop would fall through
+    // to the "over a column/task" branches, fail to find a target column, and silently do nothing — the
+    // card would appear to vanish. The task's own column is never touched, so a drag that ends here is a
+    // pure no-op on the board.
+    if (overId === AGENT_CHAT_DROPZONE_ID) {
+      const dragged = Object.values(tasksByColumn)
+        .flat()
+        .find((t) => t.id === activeId)
+
+      if (dragged) {
+        openAgentChat()
+        setAgentChatAttachRequest((prev) => ({
+          token: (prev?.token ?? 0) + 1,
+          // Only the id and the title are needed; the server reads the live task, so the copy here is for
+          // the pill only.
+          task: { taskId: dragged.id, title: dragged.title },
+        }))
+      }
+
+      return
+    }
 
     if (activeId === overId) return
 
@@ -644,10 +735,15 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
           onTaskClick={(task) => setActiveTask(task)}
         />
       ) : (
-      /* Main Kanban Canvas with DndContext */
+      /* Main Kanban Canvas with DndContext, plus the docked AI Agent Chat (Phase 14.5 §B).
+         One flex row: the canvas flexes, the panel keeps its width. This is what makes "drag a card into
+         the chat" possible at all — the cards stay visible and draggable while the drop target is docked. */
+      <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
       <div
+        ref={canvasRef}
         style={{
           flex: 1,
+          minWidth: 0,
           padding: '20px 24px',
           overflowX: 'auto',
           overflowY: 'hidden',
@@ -727,7 +823,38 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
           </DragOverlay>
         </DndContext>
       </div>
+
+      {/* Docked AI Agent Chat (Phase 14.5 §B). Mounted only while open: that is what makes the panel load
+          the stored transcript on open (and re-load when the board changes) instead of on every board view. */}
+      {agentChatOpen && (
+        <>
+          {/* Resize handle: a 6px column the user drags to widen or narrow the panel. */}
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Kéo để đổi kích thước AI Agent Chat"
+            data-testid="agent-chat-resizer"
+            onPointerDown={handleAgentChatResizeStart}
+            style={{ width: 6, cursor: 'col-resize', backgroundColor: 'transparent' }}
+          />
+          <AgentChatPanel
+            boardId={boardId}
+            columns={columns}
+            width={agentChatWidth}
+            onClose={() => setAgentChatOpen(false)}
+            attachRequest={agentChatAttachRequest}
+            onAttachmentsChange={setAgentChatAttachedCount}
+          />
+        </>
       )}
+      </div>
+      )}
+
+      <AgentChatFab
+        open={agentChatOpen}
+        attachedCount={agentChatAttachedCount}
+        onToggle={() => (agentChatOpen ? setAgentChatOpen(false) : openAgentChat())}
+      />
 
       {/* Modals & Drawers */}
       <TaskDetailModal

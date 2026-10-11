@@ -2,10 +2,10 @@ Module AI của TeamNexus (modular monolith):
 1. **AI Smart Setup (Phase 3):** biến mô tả công việc của trưởng nhóm thành **đề xuất** sub-tasks + nhãn + người phụ trách qua DeepSeek API để con người chỉnh sửa và xác nhận (không ghi DB).
 2. **Accountability Layer (Phase 4):** cổng trung gian kiểm soát mọi hành động AI ghi dữ liệu (`AiActionLog`, vòng đời `Pending → Approved / Rejected → Undone`). Nút "Xác nhận" tạo log `Pending`, chỉ khi con người **Duyệt** mới sinh `tasks`/`labels`/`task_labels` thật, và hỗ trợ **Hoàn tác** (soft-delete + dọn nhãn).
 3. **AI Observer (Phase 5):** `BackgroundService` quét hoạt động board theo chu kỳ, phát hiện tín hiệu bất thường và cảnh báo riêng cho Manager/Admin qua `notifications`.
-4. **AI Agent Executor (Phase 7 — 🔄 đang làm):** Agent là thành viên ảo của workspace, được gán task như người thật, tự chạy vòng lặp tool-calling, kết quả đi qua Accountability Layer và có guardrail ngân sách.
+4. **AI Agent Executor (Phase 7 — ✅ đã hoàn tất & verify):** Agent là thành viên ảo của workspace, được gán task như người thật, tự chạy vòng lặp tool-calling, kết quả đi qua Accountability Layer và có guardrail ngân sách.
 
-> Trạng thái: **Giai đoạn 3–5 đã hoàn tất & verify.** **Giai đoạn 7 đang làm** — kế hoạch chi tiết ở
-> `project-docs/tasks/phase-7-ai-agent-executor.md`, schema đã chốt ở `project-docs/04-database-design.md` §3.8.
+> Trạng thái: **Giai đoạn 3–5, 7, 14 và 14.5 đã hoàn tất & verify.** Chi tiết Phase 14.5 ở
+> `project-docs/tasks/phase-14-5-foundation-and-agent-chat.md`; schema ở `project-docs/04-database-design.md` §3.10.
 
 ## §1 — Cấu hình & đăng ký (đã hiện thực)
 
@@ -629,3 +629,74 @@ board template dùng `boards`/`board_columns`/`tasks` sẵn có; `entity_type = 
    `Weight = 0` (dưới 1 ngày) mà severity vẫn `Critical`. Đó là chủ ý (weight chỉ dùng để **sắp xếp**).
 6. `MaxSignalsPerWorkspace` (20) **không** được nâng cho Phase 14; nếu `AtRiskDeadline` làm vượt trần ở workspace
    lớn thì việc cắt diễn ra **có đếm** (`signalsDroppedBeforePrompt`) chứ không im lặng.
+
+---
+
+## Phase 14.5 — Củng cố nền + AI Agent Chat cấp Board
+
+> **Bối cảnh:** giai đoạn **nối tiếp 14**, không có trong roadmap gốc. Người dùng yêu cầu (a) rà lại tính năng
+> để củng cố nền cho Giai đoạn 15/16, và (b) gộp `AI Agent` + "Hỏi AI" thành **một AI Agent Chat tổng của board**.
+> **⚠️ Lệch DoD có chủ ý:** Phase 14 §8 **cấm** *lưu transcript ở DB* và *chat nhiều task cùng lúc* — 14.5 thay thế
+> hai dòng đó. *Chat có tool/function-calling* **vẫn cấm**.
+
+### Thành phần mới
+
+| Thành phần | File | Ghi chú |
+|---|---|---|
+| Options | `Options/AgentChatOptions.cs` | Section **`AgentChat`**, **riêng** với `AiChat`; mọi giá trị **clamp** trong `Effective` |
+| DTO | `DTOs/AgentChatDtos.cs` | `AgentChatSendRequest` (messages + attachedTaskIds), `SaveAgentChatAnswerRequest`, `AgentChatMessageResponse` |
+| Prompt | `Services/AgentChatPrompts.cs` | `Marker` (chọn nhánh fake), context block (board + cột + **N thẻ đính kèm** + thành viên), **hợp đồng JSON đề xuất** |
+| Parser (**hàm thuần**) | `Services/AgentChatProposalParser.cs` | Tách khối ```json **cuối cùng** khỏi câu trả lời; bỏ envelope `{proposal:{…}}`; JSON hỏng ⇒ **không ném** |
+| Validator (**hàm thuần**) | `Services/AgentChatProposalValidator.cs` | `taskId` ∈ tập đính kèm · `columnId` ∈ board · priority qua `NormalizePriority` (bẫy BUG-1) · `DateTimeOffset` → `ToUtc` (bẫy BUG-2) · **đúng 1** đề xuất |
+| Validator dùng chung | `Services/AiChatTranscriptValidator.cs` | Tách ra ở 14.5 để **chat task và chat board** dùng **cùng** luật với trần khác nhau (không có bản sao thứ hai để trôi) |
+| Service | `Services/AgentChatService.cs` | `PrepareAsync` (mọi guard eager ⇒ JSON + status thật) tách khỏi `StreamPreparedAsync` (lazy ⇒ lỗi giữa luồng là khung `error`); lưu transcript **best-effort** sau khi đã stream |
+| SSE | `Endpoints/AgentChatEndpoints.cs` + `Services/SseStreamResult.cs` | Khung **giống hệt** Phase 14 (`meta`/`delta`/`done`/`error`), ghi bằng `AiChatSseWriter` |
+| Applier cập nhật thẻ | `Services/Appliers/UpdateTaskFieldsApplier.cs` | Chụp **cả 5** trường vào `before_snapshot` **tại thời điểm apply** ⇒ Undo khôi phục chính xác |
+| Applier di chuyển thẻ | `Services/Appliers/MoveTaskToColumnApplier.cs` | `applied_snapshot.fromColumnId` ⇒ Undo về cột cũ; cột đích **đọc lại** ở bước Apply (không tin snapshot) |
+| Retention | `Services/AgentChatRetentionRunner.cs` | Xoá lượt cũ hơn `RetentionDays` (90) theo **batch**; scoped + gọi trực tiếp được từ test |
+| Seam tích hợp | `Services/Integrations/IExternalAlertSink.cs` | Port + `ExternalAlertMessage` + `NoOpExternalAlertSink`; gọi từ `NotificationService` (nơi **cả 4** đường notification đi qua) |
+| Reaper (tách ra) | `Services/Agent/AgentRunReaperRunner.cs` | Scoped, gọi trực tiếp được; thêm nhánh đóng run của **task đã xoá mềm** (`TaskChanged`) |
+
+### Route mới
+
+```http
+GET  /api/boards/{boardId}/agent-chat/session                 (Member+ · idempotent)
+GET  /api/boards/{boardId}/agent-chat/messages?take=&before=  (Member+ · cũ→mới, keyset)
+POST /api/boards/{boardId}/agent-chat/stream                  (Member+ · antiforgery ⇒ text/event-stream)
+POST /api/boards/{boardId}/agent-chat/message                 (Member+ · antiforgery ⇒ 201 Pending PostComment)
+POST /api/boards/{boardId}/agent-chat/proposal/confirm         (Member+ · antiforgery ⇒ 201 Pending)
+GET  /api/workspaces/{workspaceId}/ai-actions?status=&entityType=&action=&take=   (Manager+)
+```
+
+### Guardrail (section `AgentChat`, **không** dùng chung `AiChat`)
+
+`Enabled` (false ⇒ **503**) · `MaxHistoryMessages 24` · `MaxHistoryChars 24000` · `MaxOutputTokens 2400` ·
+`MaxAttachedTasks 8` · `MaxTaskContextChars 3000`/thẻ · `MaxTotalContextChars 24000` ·
+`MaxCommentsInContext 6`/thẻ · `MaxMessageChars 16000` · `MaxAnswerChars 2000` (**không** nới) ·
+`MaxProposalsPerAnswer 1` (**clamp cứng `[1,1]`**) · `RetentionDays 90` · `RetentionBatchSize 2000`.
+Vượt trần ⇒ **400 TRƯỚC khi gọi provider** (**0 token**).
+
+### Hạn chế đã biết của Phase 14.5 (ghi trước để không ai tưởng là bug)
+
+1. **Task chat trong `TaskDetailModal` VẪN transcript ở client** (D2 của Phase 14 còn hiệu lực cho nó; chỉ nhãn
+   đổi thành *"Hỏi AI về thẻ này"*). Hệ quả: cùng một thẻ có thể có **2 nguồn hội thoại** (tab trong modal tạm
+   thời, panel board bền). `agent_chat_messages.task_id` là **chỗ chừa** để hợp nhất sau **không cần migration**.
+2. **Chat không có tool/function-calling.** Model chỉ **đề xuất** JSON; người bấm *Gửi đề xuất*, Manager duyệt.
+   Đúng chốt người dùng và giữ chat **không tự ghi**.
+3. **`TestServer` có thể đệm body** ⇒ suite khoá **hợp đồng** (thứ tự khung, `done.answer == Σ delta`), không
+   chứng minh được streaming ở tầng byte. Bỏ `FlushAsync` trong `SseStreamResult` ⇒ **không test nào đỏ**.
+4. **Lưu transcript là best-effort:** lỗi DB **sau** khi stream đã mở chỉ được log — câu trả lời đã tới tay người
+   dùng, `pending` không thể đổi thành 500.
+5. **`task_attachments` vẫn chỉ `text/*` ≤ 512 KB** (nợ cho Phase 15: diff/ảnh GitHub).
+6. **Nợ A3 (không làm ở 14.5):** webhook idempotency, seam `IWorkItemLink` (GitHub PR ↔ task), AI provider fallback.
+
+### Bug thật đã bắt & sửa ở 14.5 (đọc trước khi "tối ưu" lại)
+
+- **P1 — hai service chat bỏ chữ ở khung cuối.** Cả `AiChatService` và `AgentChatService` kiểm `chunk.Done`
+  **trước** khi nối `chunk.Delta`. Provider offline đặt **text ở chính khung kết thúc** ⇒ chữ đó **bị mất**, mọi
+  câu trả lời **ngắn đi đúng một chunk**, và bất biến `done.answer == Σ delta` **sai âm thầm**. Bộ test Phase 14
+  không bắt được vì chỉ khẳng định hai thứ *cùng tồn tại*. **Thứ tự đúng: nối `delta` TRƯỚC, kiểm `Done` SAU.**
+- **P2 — duyệt `MoveTaskToColumn` trả 500.** `TaskService.MoveTaskAsync` mở transaction riêng trong khi
+  `AiActionService.ApproveAsync` đã mở ⇒ `InvalidOperationException`. Đã **bỏ transaction thừa** (mọi thay đổi
+  nằm trong **một** `SaveChangesAsync` nên nguyên tử không đổi). **Đừng** thêm lại `BeginTransactionAsync` vào
+  `MoveTaskAsync`: `AiActionService` bọc mọi applier trong transaction của nó.

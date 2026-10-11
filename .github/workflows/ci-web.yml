@@ -61,6 +61,8 @@ jobs:
       # Giai đoạn 13 = 508 (86 file): Calendar (GĐ13 §1) + Burndown/Velocity (§4) + digest toggle (§5).
       # Giai đoạn 14 = 570 (96 file): Hỏi AI (GĐ14 §1) + Sức khỏe dự án (§2) + AI Board Template (§3).
       # Trang chủ Redesign = 578 (99 file): LandingPage + RootHomePage router + Command Center + NexusLogo.
+      # Giai đoạn 14.5 = 633 (107 file): AI Agent Chat cấp board (§B) + lịch sử AI cấp workspace, retention,
+      #   seam IExternalAlertSink, bỏ fetch trùng badge (Track A).
       - name: Assert test count did not regress
         shell: pwsh
         run: |
@@ -69,7 +71,7 @@ jobs:
           $failed = [int]$report.numFailedTests
           Write-Host "vitest: total=$total failed=$failed"
           if ($failed -ne 0) { throw "vitest reported $failed failing tests" }
-          if ($total -lt 578) { throw "Số test đã tụt: $total (baseline hiện tại là 578)" }
+          if ($total -lt 633) { throw "Số test đã tụt: $total (baseline hiện tại là 633)" }
 
       - name: Build (vite)
         run: npm run build

@@ -144,6 +144,10 @@ export const AiActionLogItem: React.FC<AiActionLogItemProps> = ({
                 ? 'Tạo sub-tasks đề xuất'
                 : log.action === 'CreateBoardFromTemplate'
                 ? 'Tạo board từ mẫu AI'
+                : log.action === 'UpdateTaskFields'
+                ? 'Cập nhật thẻ (AI đề xuất)'
+                : log.action === 'MoveTaskToColumn'
+                ? 'Di chuyển thẻ (AI đề xuất)'
                 : log.action}
             </Text>
             <Tag color="blue" style={{ borderRadius: 10 }}>

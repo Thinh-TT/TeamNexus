@@ -365,7 +365,21 @@ Cả **4 ô** (A chat · B risk + health · C board template · D guardrail) + *
 
 ## 8. ⛔ KHÔNG được làm
 
-- ❌ **Không** thêm migration/bảng/cột/index nào. `dotnet ef migrations list` **phải là 10**. Không có ngoại lệ ở giai đoạn này (khác Giai đoạn 13 — ở đây **không** có lệch DoD về schema).
+> **⚠️ CẬP NHẬT GIAI ĐOẠN 14.5:** hai điều khoản dưới đây **đã được thay thế có chủ ý** khi làm Giai đoạn 14.5
+> (`tasks/phase-14-5-foundation-and-agent-chat.md`), theo yêu cầu trực tiếp của người dùng:
+> - ~~❌ **Không** mở rộng phạm vi sang: … **lưu transcript chat ở DB**, **chat nhiều task cùng lúc** …~~
+>   ⇒ **Nay CÓ:** bảng `agent_chat_messages` (migration thứ **11**, `Phase14_5AgentChat`) lưu transcript của
+>   **chat cấp board**, và một lượt hỏi có thể đính kèm tới **8** thẻ.
+> - **Vẫn CẤM:** *chat có function-calling/tool*. Chat board chỉ **đề xuất** JSON; người dùng bấm
+>   "Gửi đề xuất" và Manager duyệt. **Không** chat nào có tool loop.
+> - **Không đổi:** chat của **tab trong `TaskDetailModal`** vẫn **transcript ở client** — D2 của Phase 14
+>   vẫn hiệu lực **cho nó**; chỉ nhãn đổi thành **"Hỏi AI về thẻ này"**, `data-testid="ai-chat-tab"` giữ
+>   nguyên (1 assertion test được sửa — ngoại lệ **duy nhất** của 14.5).
+> - **Không đổi:** mọi mục còn lại của danh sách dưới (Slack/Discord/GitHub, mobile/Flutter, health score
+>   **lịch sử**, board template tạo **nhiều** board, template tự thêm member, digest tuần, real-time cho
+>   chat, iCal export, hard delete) **vẫn CẤM** ở cả 14.5.
+
+- ❌ **Không** thêm migration/bảng/cột/index nào. `dotnet ef migrations list` **phải là 10**. Không có ngoại lệ ở giai đoạn này (khác Giai đoạn 13 — ở đây **không** có lệch DoD về schema). *(Trạng thái này giữ nguyên cho Phase 14; migration thứ 11 thuộc Giai đoạn 14.5.)*
 - ❌ **Không** thêm method vào `IAiProvider`/`IAiToolCallingProvider` (dùng port **mới** `IAiStreamingProvider` — D10).
 - ❌ **Không** dùng `EventSource` cho chat (không gửi được `X-XSRF-TOKEN`, không POST được — D3).
 - ❌ **Không** "buffer toàn bộ rồi mới trả" trong `AiChatService` — phải `yield` từng khung; nếu không thì SSE chỉ là hình thức.

@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
+using TeamNexus.Modules.Ai.Services.Integrations;
 using TeamNexus.Persistence.Data;
 
 namespace TeamNexus.Api.Tests.Infrastructure;
@@ -189,7 +190,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
     public async Task<TestScenario> CreateScenarioAsync(
         ScriptedAiProvider? scriptedAi = null,
         TimeProvider? clock = null,
-        bool? aiChatEnabled = null)
+        bool? aiChatEnabled = null,
+        IExternalAlertSink? externalAlerts = null)
     {
         Require();
 
@@ -199,10 +201,13 @@ public sealed class DatabaseFixture : IAsyncLifetime
         try
         {
             // The shared host is reused for every ordinary scenario. A DI override (scripted AI, a
-            // fixed clock, the chat's off switch) cannot be applied to it, so those cases build their
-            // own host — the cost is a real ASP.NET Core host build, which is why it is opt-in rather
-            // than the default.
-            var needsOwnHost = scriptedAi is not null || clock is not null || aiChatEnabled.HasValue;
+            // fixed clock, the chat's off switch, a recording alert sink) cannot be applied to it, so
+            // those cases build their own host — the cost is a real ASP.NET Core host build, which is why
+            // it is opt-in rather than the default.
+            var needsOwnHost = scriptedAi is not null
+                               || clock is not null
+                               || aiChatEnabled.HasValue
+                               || externalAlerts is not null;
 
             var factory = needsOwnHost
                 ? new TeamNexusApiFactory
@@ -211,6 +216,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
                     ScriptedAi = scriptedAi,
                     Clock = clock,
                     AiChatEnabled = aiChatEnabled ?? true,
+                    ExternalAlerts = externalAlerts,
                 }
                 : Factory;
 

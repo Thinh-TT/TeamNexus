@@ -252,7 +252,9 @@ describe('TaskDetailModal', () => {
   it('renders "Hỏi AI" tab with data-testid="ai-chat-tab"', () => {
     renderModal()
     expect(screen.getByTestId('ai-chat-tab')).toBeInTheDocument()
-    expect(screen.getByText('Hỏi AI')).toBeInTheDocument()
+    // Phase 14.5 §B clarified the label: the board has its own "AI Agent Chat" panel, so this tab names
+    // WHICH chat it opens. The `data-testid` is unchanged, so nothing that located the tab by id broke.
+    expect(screen.getByText('Hỏi AI về thẻ này')).toBeInTheDocument()
   })
 
   it('switches to "Hỏi AI" tab and renders AiChatPanel while keeping modal open', async () => {

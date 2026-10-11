@@ -11,9 +11,19 @@ kết hợp Kanban real-time với AI Agent (xem `project-docs/`).
 - 🌐 **Web App (Frontend)**: [https://app.teamnexus.cloud](https://app.teamnexus.cloud) *(Host trên Vercel, quản lý DNS & SSL qua Cloudflare)*
 - ⚙️ **API Backend**: [https://api.teamnexus.cloud](https://api.teamnexus.cloud) *(Host trên Render với Docker .NET 10; Base API: `/api`)*
 - ✉️ **Transactional Email**: `TeamNexus <noreply@teamnexus.cloud>` *(Xác thực SPF, DKIM, DMARC qua Cloudflare DNS + Resend API)*
-- 🗄️ **Database**: Neon Serverless PostgreSQL (Singapore `ap-southeast-1`, 10/10 EF Core migrations)
+- 🗄️ **Database**: Neon Serverless PostgreSQL (Singapore `ap-southeast-1`, **11/11** EF Core migrations)
 
 > 💡 **Lưu ý Cold-start**: Do chạy trên Free Tier của Render, khi không có request trong 15 phút máy chủ sẽ tạm ngủ. Request đầu tiên có thể mất ~30–60 giây để máy chủ thức dậy. Giao diện frontend đã tích hợp sẵn cơ chế auto-reconnect & thông báo tiếng Việt mượt mà.
+
+## Trạng thái (Giai đoạn 14.5) — AI Agent Chat cấp Board
+
+Một cửa AI duy nhất cho cả board: nút nổi góc phải-dưới mở **panel chat docked (~1/4 bề rộng, kéo được)**; **kéo thẻ từ cột vào panel để đính kèm** (tối đa 8 thẻ/lượt); câu trả lời **stream SSE** và **transcript được lưu ở DB** nên hội thoại sống qua reload.
+
+Khi AI cho rằng nên thay đổi gì đó, nó **đề xuất** (khối JSON trong câu trả lời) và người dùng bấm **"Gửi đề xuất"** ⇒ `ai_action_logs` ở trạng thái **`Pending`** ⇒ **Manager duyệt** mới ghi dữ liệu thật (3 dạng: `CreateSubtasks`, `UpdateTaskFields`, `MoveTaskToColumn`). Bất biến của Accountability Layer **không đổi**: *không có dữ liệu nghiệp vụ nào bị ghi khi chưa `Approved`*.
+
+Giai đoạn này cũng củng cố nền cho Giai đoạn 15/16: lịch sử AI **cấp workspace** (`GET /api/workspaces/{id}/ai-actions` — log tạo board trước đây **không hiện ở đâu**), seam **`IExternalAlertSink`** (Phase 15 cắm Slack/Discord/webhook mà **không** phải sửa Observer/Agent/member path), reaper dọn run của **task đã xoá**, và retention 90 ngày cho transcript.
+
+Chi tiết: `project-docs/tasks/phase-14-5-foundation-and-agent-chat.md` · `project-docs/report/phase-14-5-foundation-and-agent-chat-test-report.md`.
 
 ## Kiến trúc
 
@@ -49,7 +59,7 @@ npm run dev
 
 ### Migration (EF Core)
 
-Một chuỗi migration duy nhất trên `TeamNexusDbContext` (xem `project-docs/04-database-design.md` §1.1). Hiện có **10** migration, mới nhất là `Phase13DailyDigest` (Giai đoạn 13 — thêm cột `users.digest_enabled` để bật/tắt email tóm tắt hằng ngày).
+Một chuỗi migration duy nhất trên `TeamNexusDbContext` (xem `project-docs/04-database-design.md` §1.1). Hiện có **11** migration, mới nhất là `Phase14_5AgentChat` (Giai đoạn 14.5 — bảng `agent_chat_messages` lưu transcript của AI Agent Chat cấp board).
 
 ```bash
 dotnet ef migrations list   --project src/TeamNexus.Persistence --startup-project src/TeamNexus.Api

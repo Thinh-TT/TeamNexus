@@ -35,6 +35,7 @@ import {
   Space,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from 'antd'
@@ -707,7 +708,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     <span data-testid="ai-chat-tab">
                       <Space size={4}>
                         <RobotOutlined style={{ color: '#6366f1' }} />
-                        <span>Hỏi AI</span>
+                        {/* Phase 14.5 §B: the label now says WHICH chat this is. The board has an
+                            "AI Agent Chat" panel of its own, so an unqualified "Hỏi AI" in two places
+                            would leave the user guessing how the two differ. */}
+                        <Tooltip title="Hỏi AI về đúng một thẻ này. Muốn hỏi cả bảng, dùng AI Agent Chat ở góc phải dưới bảng.">
+                          <span>Hỏi AI về thẻ này</span>
+                        </Tooltip>
                       </Space>
                     </span>
                   ),

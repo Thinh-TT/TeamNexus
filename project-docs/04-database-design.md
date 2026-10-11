@@ -591,6 +591,7 @@ Fan-out giữ nguyên "1 row / 1 người nhận".
 | `AgentOutputKind` | `text` + CHECK | `Comment`, `Attachment` | `agent_runs.output_kind` |
 | `InvitationStatus` | `text` + CHECK | `Pending`, `Accepted`, `Cancelled`, `Expired` | `workspace_invitations.status` |
 | `EmailMessageStatus` | `text` + CHECK | `Queued`, `Sent`, `Failed` | `email_messages.status` |
+| `AgentChatRole` | `text` + CHECK | `User`, `Assistant` | **Giai đoạn 14.5** — `agent_chat_messages.role`. **Không** có `system`: prompt hệ thống do server dựng mỗi request, không bao giờ là row |
 
 > Nguyên tắc: enum có tập giá trị cố định (role, priority, status) dùng `CHECK`; enum dự kiến mở rộng (action type, notification type) dùng `text` tự do kèm bộ giá trị gợi ý để không phải sửa constraint mỗi lần thêm loại mới.
 >
@@ -630,6 +631,8 @@ Fan-out giữ nguyên "1 row / 1 người nhận".
 | `workspace_invitations` | `accepted_by_user_id` | IX | Truy vết người chấp nhận lời mời |
 | `email_messages` | `(workspace_id, created_at)` | IX | Lịch sử gửi email theo workspace |
 | `email_messages` | `sent_by_user_id` | IX | Lọc email do người dùng gửi |
+| `agent_chat_messages` | `(board_id, created_at)` | IX | **Giai đoạn 14.5** — nạp transcript của một board (keyset, cũ→mới) |
+| `agent_chat_messages` | `(workspace_id, created_at)` | IX | **Giai đoạn 14.5** — retention quét theo workspace, cũ nhất trước |
 
 > Các FK còn lại (`activity_logs.board_id`/`user_id`, `notifications.workspace_id`, `ai_observer_runs.workspace_id`, `agent_runs.agent_user_id`/`triggered_by_user_id`/`previous_run_id`, `task_attachments.created_by_user_id`/`source_run_id`, …) **không** khai báo tường minh: EF Core sinh index theo FK convention (đúng tiền lệ Phase 4 §1.2 — FK `decided_by_user_id` cũng sinh index phụ, chấp nhận).
 >
@@ -658,11 +661,47 @@ Fan-out giữ nguyên "1 row / 1 người nhận".
 | 8 | `Phase9ModelSync` | 9/10 | Đồng bộ hoá model snapshot và quan hệ |
 | 9 | `Phase11MemberProfile` | 11 | Bổ sung `workspace_invitations`, `email_messages`, partial UQ pending invite |
 | 10 | `Phase13DailyDigest` | 13 | **Thêm 1 cột** `users.digest_enabled` (`boolean NOT NULL DEFAULT true`) — bật/tắt email tóm tắt hằng ngày |
+| 11 | `Phase14_5AgentChat` | 14.5 | **Thêm 1 bảng** `agent_chat_messages` (+ 2 index, + 2 CHECK) — transcript của AI Agent Chat cấp board |
 
-> Dùng `dotnet ef migrations list` để đối chiếu — hiện tại phải là **10**.
+> Dùng `dotnet ef migrations list` để đối chiếu — hiện tại phải là **11**.
 
-> **Giai đoạn 14 — KHÔNG có migration nào (vẫn 10, `has-pending-model-changes` sạch).** Cả ba tính năng
-> đều không cần schema: xem §7 bên dưới. Đây là điểm **khác** Giai đoạn 13 (giai đoạn đó có 1 cột additive).
+> **Giai đoạn 14 — KHÔNG có migration nào (10 → 11 là do Giai đoạn 14.5, không phải 14).** Cả ba tính năng
+> của 14 đều không cần schema: xem §7 bên dưới. Đây là điểm **khác** Giai đoạn 13 (giai đoạn đó có 1 cột additive).
+
+---
+
+### 3.10 Module AI — AI Agent Chat cấp Board (Giai đoạn 14.5)
+
+> **Lệch DoD có chủ ý so với Giai đoạn 14:** Phase 14 (D1/D2) **cấm** migration và cấm lưu transcript ở DB.
+> Người dùng đã chốt **lưu DB** cho chat **cấp board**, nên 14.5 có **đúng 1** migration. Dialog chat của
+> **tab trong `TaskDetailModal`** vẫn **không** lưu (D2 của Phase 14 vẫn hiệu lực cho nó) — và cột
+> `task_id` dưới đây là **chỗ chừa** để hợp nhất sau này mà **không cần migration nữa**.
+
+#### `agent_chat_messages`
+Một row = một lượt (một câu hỏi **hoặc** một câu trả lời) của AI Agent Chat. Một cặp hỏi–đáp là **2 row**, nhờ vậy phát lại hội thoại cho model đúng thứ tự chỉ bằng `ORDER BY created_at`.
+
+| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
+|---|---|---|---|---|
+| `id` | uuid | — | PK | |
+| `board_id` | uuid | **null** | FK→`boards` (Restrict), IX `(board_id, created_at)` | set khi là chat cấp board |
+| `task_id` | uuid | **null** | FK→`tasks` (Restrict) | **chỗ chừa**: đặt cùng bảng để task chat ghi được vào đây sau này **không cần migration** |
+| `workspace_id` | uuid | — | FK→`workspaces` (Restrict), IX `(workspace_id, created_at)` | retention theo workspace |
+| `user_id` | uuid | **null** | FK→`users` (Restrict) | tác giả lượt `User`; **null** với lượt `Assistant` |
+| `role` | text(16) | — | CHECK `role IN ('User','Assistant')` | **không** có `system`: prompt hệ thống do server dựng mỗi request, không bao giờ là row |
+| `content` | text | — | | app layer cap `AgentChat:MaxMessageChars` (**16000**) |
+| `attachments` | jsonb | null | | `[{ taskId, title }]` — để dựng lại pill + audit *"câu trả lời được phép thấy gì"*; **không** đọc lại làm ngữ cảnh (ngữ cảnh lấy từ board sống) |
+| `created_at` | timestamptz | — | | keyset paging + nạp transcript |
+| `updated_at` | timestamptz | — | | stamp tự động qua `IAuditableEntity` |
+
+**CHECK `ck_agent_chat_messages_scope`: `num_nonnulls(board_id, task_id) = 1`** — đúng một phạm vi. Hai CHECK riêng `IS NOT NULL` **không** biểu diễn được "một trong hai, và chỉ một" mà không cần cặp OR/AND.
+
+> **Ghi chú tinh chỉnh (Giai đoạn 14.5 — chốt ở bước lập kế hoạch, chi tiết `tasks/phase-14-5-foundation-and-agent-chat.md` §2):**
+> - **Append-only, KHÔNG query filter, KHÔNG soft-delete** — tiền lệ `ai_action_logs`/`agent_runs`. Một lượt chat là bản ghi audit; che nó đi sẽ làm không thể dựng lại vết của đề xuất. Dọn dữ liệu bằng **retention**, không bằng `deleted_at`.
+> - **KHÔNG navigation property trên entity.** `Workspace`/`Board`/`BoardTask` đều có global query filter, và một navigation bắt buộc trỏ tới principal đã bị lọc làm EF cảnh báo rằng join có thể **âm thầm mất row**. Khai báo quan hệ **chỉ bằng FK** (đúng như `AiObserverRun`) giữ model trung thực: transcript đọc theo id, tên hiển thị thì service nạp tường minh.
+> - **HAI lệnh `ToTable(…, t => t.HasCheckConstraint(...))`, không phải một chuỗi.** EF Core 10 **không** cho chuỗi `HasCheckConstraint` trên `CheckConstraintBuilder`, và dạng gộp một lệnh làm model **không round-trip qua snapshot** ⇒ `has-pending-model-changes` báo "thay đổi ma" **vĩnh viễn**. (Đã gặp thật trong phiên thi hành.)
+> - **Retention 90 ngày theo batch** (`AgentChat:RetentionDays` / `RetentionBatchSize`, runner `AgentChatRetentionRunner`, scoped + gọi trực tiếp được từ test theo tiền lệ `DailyDigestRunner`): một lượt quét đầu trên DB lâu năm không được khoá bảng.
+> - **Transcript lưu KHÔNG chứa khối JSON đề xuất.** Khối đó thuộc `ai_action_logs.after_snapshot` (nơi Manager đọc nó như **bản xem trước**), còn transcript là hội thoại người đọc. Khung `done` **vẫn** mang **đủ** câu trả lời (kể cả khối JSON) vì client cần nó để dựng action card. Lưu là **best-effort**: lỗi DB sau khi đã stream chỉ được log — câu trả lời đã tới tay người dùng rồi.
+> - **Bảo mật:** `role` chỉ nhận `User`/`Assistant`; `system` do server sở hữu nên **không** được nhận từ client (nếu không sẽ là đường buôn chỉ thị vào lịch sử đã lưu).
 
 ---
 
@@ -675,6 +714,12 @@ Fan-out giữ nguyên "1 row / 1 người nhận".
 - **Giai đoạn 14 — Snapshot jsonb bỏ khoá `null`.** `AiActionAppliedResult` thêm hai field **optional** (`createdBoardId`/`createdColumnIds`) cho board template, và serializer của `ai_action_logs` nay dùng `JsonIgnoreCondition.WhenWritingNull`. Nhờ vậy snapshot của Phase 4/7 **không** mọc thêm hai khoá `null` — hình dạng jsonb cũ giữ nguyên và "absent" vẫn đồng nghĩa "null" với các applier cũ (test hồi quy `BT_REGRESS_1` khoá lại điều này).
 - **Giai đoạn 14 — Undo board template là SOFT delete, không hard delete.** `boards.deleted_at` được set; row vẫn còn trong DB. Hard delete sẽ phá bất biến "append-only + mọi FK RESTRICT" của §7, và `tasks` của board đó đã tự động bị ẩn vì query filter của `BoardTask` đi theo board đã soft-delete. Hệ quả đã biết & chấp nhận: `activity_logs` vẫn giữ `boardId` của board đã xoá — đó là **lịch sử**, che nó đi là viết lại quá khứ (test `BT_UNDO_1` khẳng định phạm vi thật: danh sách board + số liệu dashboard).
 - **Giai đoạn 14 — Tín hiệu `AtRiskDeadline` không thêm bảng nào.** Nó đi qua đúng pipeline sẵn có: `ObserverSignalDetector` → `ObserverSummarizer` → `ai_observer_runs.summary` (jsonb) → `notifications.type` (text tự do) + `notifications.payload` (jsonb). Run summary có thêm 2 khoá chẩn đoán (`signalsPreserved`/`signalsDroppedBeforePrompt`) — additive trong jsonb, không đổi schema.
+- **Giai đoạn 14.5 — Migration DUY NHẤT: bảng `agent_chat_messages`.** Đây là **lệch DoD có chủ ý** so với Giai đoạn 14 (giai đoạn đó cấm migration): người dùng chốt **lưu transcript của chat cấp board** vào DB, mà "client giữ hội thoại" không thể làm được điều đó (hội thoại phải sống qua reload và giống nhau với mọi người mở board). Bốn gạch đầu dòng giải thích **vì sao vẫn không cần gì thêm ngoài một bảng**:
+  1. **`task_id` để sẵn ⇒ hợp nhất task chat sau này KHÔNG cần migration nữa.** CHECK `num_nonnulls(board_id, task_id) = 1` cho phép cùng bảng phục vụ hai phạm vi. Dialog của tab `TaskDetailModal` **vẫn** ở client ở giai đoạn này (D2 của Phase 14 còn hiệu lực cho nó).
+  2. **Không có bảng `ai_chat_sessions`.** "Session" **là** các row của một board — mở panel hai lần không tạo hội thoại thứ hai. Một bảng session riêng chỉ thêm một FK và một khái niệm để sai.
+  3. **Không cột/index mới cho `ai_action_logs`.** Hai action mới của chat (`UpdateTaskFields`, `MoveTaskToColumn`) dùng đúng `entity_type = 'Task'` + index `(entity_type, entity_id, created_at)` đã có; `applied_snapshot` chỉ mọc thêm hai khoá **optional** (`updatedTaskId`/`fromColumnId`) mà serializer **bỏ khoá null** ⇒ snapshot Phase 4/7 giữ **nguyên** hình dạng.
+  4. **Retention không cần bảng/cột nào.** `AgentChatRetentionRunner` xoá theo `created_at` + `AgentChat:RetentionDays` (mặc định 90), theo batch — dùng đúng index `(workspace_id, created_at)` của bảng mới. Không có cờ "đã dọn" nào phải lưu (khác digest, vốn cần idempotency theo ngày).
+- **Giai đoạn 14.5 — `IExternalAlertSink` KHÔNG thêm bảng.** Seam chỉ *phát* cảnh báo đã ghi (`notifications`) ra một transport; trạng thái gửi của transport (retry, dead-letter) là việc của Phase 15 — cố ý **không** cam kết schema cho nó bây giờ.
 - **Giai đoạn 13 — Migration additive DUY NHẤT: `users.digest_enabled`.** Một cột `boolean NOT NULL DEFAULT true`; **không** bảng mới, **không** cột nào khác bị sửa/xoá, **không** index mới. Lý do buộc phải có cột: digest do `BackgroundService` chạy **phía server** gửi, nên lựa chọn bật/tắt phải **đọc được từ DB** — cờ ở client (`localStorage`/Zustand) không thoả mãn, và `users` không có cột nào tái dùng được. `DEFAULT true` khiến migration **không cần backfill** và **không** đổi hành vi của bất kỳ row cũ nào.
 - **Giai đoạn 13 — Chống trùng digest dựa vào `email_messages`, KHÔNG thêm cột.** Idempotency key là `(kind = 'DailyDigest', to_email, ngày UTC của người nhận)`. Trên host free-tier tiến trình ngủ/thức nhiều lần trong ngày, nên mọi cờ in-memory sẽ bị reset bởi cold start và cùng một người nhận nhiều email. Dùng lại bảng audit sẵn có vừa bền vững vừa đúng nguyên tắc "chỉ thêm cột khi không còn đường nào khác". `email_messages` **không** có cột `recipient_user_id` ⇒ khoá theo `to_email`, hợp lệ vì `users.normalized_email` là **UQ** (1 email = 1 user).
 - **Giai đoạn 13 — Digest KHÔNG ghi `notifications` và KHÔNG ghi `activity_logs`.** Digest là một lần **đọc lại** dữ liệu người dùng đã thấy được; nếu nó bắt đầu sinh notification/activity thì mọi dashboard và trang hoạt động sẽ báo digest như một sự kiện nghiệp vụ. Có test tích hợp khẳng định **cả hai bảng đều không tăng** sau khi gửi digest.
