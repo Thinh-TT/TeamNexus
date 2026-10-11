@@ -98,7 +98,7 @@ POST /boards/{id}/smart-setup/confirm    → AiActionLog { Pending }   ← KHÔN
 
 - [x] `dotnet ef migrations add Phase4AccountabilityLayer --project src/TeamNexus.Persistence --startup-project src/TeamNexus.Api` — sinh `20260910073621_Phase4AccountabilityLayer.cs` + `.Designer.cs`
 - [x] `dotnet ef database update --project src/TeamNexus.Persistence --startup-project src/TeamNexus.Api` — đã áp lên PostgreSQL local (DB `TeamNexus`)
-- [x] Cập nhật `Project-Documents/04-database-design.md`: §3.5 thêm 2 cột `applied_snapshot`, `decision_note` + ghi chú quy ước `entity_type='Board'`/`entity_id=boardId`; §5 thêm dòng index `ai_action_logs (entity_type, entity_id, created_at)` — *đã làm ở bước lập kế hoạch (commit `bab22d3`)*
+- [x] Cập nhật `project-docs/04-database-design.md`: §3.5 thêm 2 cột `applied_snapshot`, `decision_note` + ghi chú quy ước `entity_type='Board'`/`entity_id=boardId`; §5 thêm dòng index `ai_action_logs (entity_type, entity_id, created_at)` — *đã làm ở bước lập kế hoạch (commit `bab22d3`)*
 - [x] **Verify §1:** `dotnet build TeamNexus.sln` → **0 warning / 0 error**; migration sinh đúng 15 cột (4 `jsonb`, `status` varchar(16), `decision_note` varchar(500)), `ck_ai_action_logs_status`, 2 FK `users` RESTRICT, 3 index; `dotnet ef migrations list` → 4 migration **đã applied**; 3 migration cũ không bị sửa (`git diff` chỉ +109 dòng snapshot cho entity mới); **33 check PASS** bằng harness tạm (information_schema/pg_constraint/pg_indexes + round-trip insert→read→delete + probe CHECK 23514 + probe FK 23503), bảng về 0 row sau verify, harness đã xoá.
 
 ---
@@ -301,7 +301,7 @@ POST /boards/{id}/smart-setup/confirm    → AiActionLog { Pending }   ← KHÔN
 
 > ## 🔻 BÀN GIAO §4 + §5.2 CHO ANTIGRAVITY (backend đã xong 100%, verify 54/54)
 >
-> Backend Giai đoạn 4 (schema + `AiActionService` + endpoint) **đã hoàn tất và verify end-to-end**: 54/54 check PASS với API thật + PostgreSQL thật + **SignalR client thật** (xem §5.1 và `Project-Documents/report/phase-4-accountability-test-report.md`). Việc còn lại **chỉ là frontend §4 + test §5.2** — backend sẽ không đổi nữa, cứ code theo đúng contract dưới đây.
+> Backend Giai đoạn 4 (schema + `AiActionService` + endpoint) **đã hoàn tất và verify end-to-end**: 54/54 check PASS với API thật + PostgreSQL thật + **SignalR client thật** (xem §5.1 và `project-docs/report/phase-4-accountability-test-report.md`). Việc còn lại **chỉ là frontend §4 + test §5.2** — backend sẽ không đổi nữa, cứ code theo đúng contract dưới đây.
 >
 > ### 1) Sáu endpoint (base `/api`, dùng `frontend/src/shared/api/httpClient.ts`)
 > | # | Method + path | Body | Thành công | Ghi chú |
@@ -411,7 +411,7 @@ POST /boards/{id}/smart-setup/confirm    → AiActionLog { Pending }   ← KHÔN
 >
 > ### 7) Sau khi xong §4 + §5.2
 > - Tick các checkbox §4.1–§4.4, §5.2 và 2 dòng "Việc của antigravity" ở cuối file.
-> - Bổ sung ảnh chụp (drawer + luồng duyệt) vào `Project-Documents/report/phase-4-accountability-test-report.md` (mục "Phần UI — bổ sung sau §4").
+> - Bổ sung ảnh chụp (drawer + luồng duyệt) vào `project-docs/report/phase-4-accountability-test-report.md` (mục "Phần UI — bổ sung sau §4").
 > - Xoá câu "Còn §5.2 (UI gọi API thật) do antigravity" ở §5.3 sau khi test xong.
 
 ### 4.1 Types, API, hook
@@ -460,7 +460,7 @@ POST /boards/{id}/smart-setup/confirm    → AiActionLog { Pending }   ← KHÔN
 
 > Cùng cách Phase 3 §Verify §4: harness đặt ngoài workspace, tự ký JWT bằng `Jwt:SigningKey` trong User Secrets, **xoá sau khi chạy**, không commit.
 >
-> **Trạng thái: ✅ ĐÃ CHẠY — 54/54 check PASS** (`ALL CHECKS PASSED`, exit 0). API chạy nền cổng **5196** ở `Development` với `DeepSeek__ApiKey` rỗng ⇒ `FakeAiProvider` (**không gọi AI thật, không tốn token**); JWT tự ký qua `JwtService` trong cookie `access_token`; CSRF lấy từ cookie `XSRF-TOKEN`; **SignalR client thật** (`Microsoft.AspNetCore.SignalR.Client` 8.0.24) join group `board-{boardId}`. Fixture (gồm user thứ 2 + membership Manager) tự tạo rồi hard-delete; `ai_action_logs` về đúng baseline; API đã stop (cổng 5196 đóng); harness đã xoá. Báo cáo: `Project-Documents/report/phase-4-accountability-test-report.md`.
+> **Trạng thái: ✅ ĐÃ CHẠY — 54/54 check PASS** (`ALL CHECKS PASSED`, exit 0). API chạy nền cổng **5196** ở `Development` với `DeepSeek__ApiKey` rỗng ⇒ `FakeAiProvider` (**không gọi AI thật, không tốn token**); JWT tự ký qua `JwtService` trong cookie `access_token`; CSRF lấy từ cookie `XSRF-TOKEN`; **SignalR client thật** (`Microsoft.AspNetCore.SignalR.Client` 8.0.24) join group `board-{boardId}`. Fixture (gồm user thứ 2 + membership Manager) tự tạo rồi hard-delete; `ai_action_logs` về đúng baseline; API đã stop (cổng 5196 đóng); harness đã xoá. Báo cáo: `project-docs/report/phase-4-accountability-test-report.md`.
 
 1. [x] Migration: `ai_action_logs` đủ cột/CHECK/index đúng thiết kế §1 — **A1–A4 PASS**: 15 cột đúng thứ tự, 4 cột `jsonb`, `ck_ai_action_logs_status`, 3 index (`entity_type/entity_id/created_at` + 2 FK).
 2. [x] `POST .../smart-setup/confirm` (Manager, CSRF hợp lệ) → **201**, `status = "Pending"`, `ai_action_logs` +1 với `basis` + `after_snapshot` JSON hợp lệ (`jsonb_typeof(basis)='object'`, `jsonb_array_length(after_snapshot->'tasks')=3`); **`tasks`/`labels`/`task_labels` KHÔNG đổi** (1/1/1 trước ↔ sau) — **C13, C13b PASS**.
@@ -472,7 +472,7 @@ POST /boards/{id}/smart-setup/confirm    → AiActionLog { Pending }   ← KHÔN
 8. [x] `GET /api/boards/{boardId}/ai-actions` → 4 log sort `created_at DESC`; `?status=Pending` (board 3) → 1; `?status=Rejected` → 1; `take=1000` clamp, `take=0` về default; `taskCount` = 3 khớp `after_snapshot`; `GET /api/ai-actions/{id}` trả đủ 4 JSON + `createdTaskIds` — **C31–C36 PASS**.
 9. [x] Harness hàm thuần (không cần HTTP/DB): `ValidateConfirmRequest` (description 0/4000/4001; tasks 0/20/21; title 0/200/201; priority `"urgent"`/`"Critical"`; 6 nhãn; nhãn 81 ký tự; `labelId` ngoài workspace; assignee ngoài member; `columnId` ngoài board; task `null`); `BuildBasis` (excerpt ≤ 300); `BuildAppliedSnapshotJson` round-trip + `MergeUndoWarnings` — **B1–B9 PASS**.
 10. [x] Kiểm tra kiến trúc "cổng duy nhất": `_db.(Tasks|Labels|TaskLabels).(Add|AddRange|Remove|RemoveRange)` trong `src/Modules/Ai` → **chỉ 1 match**: `_db.TaskLabels.RemoveRange(links)` trong `Services/Appliers/CreateSubtasksApplier.cs`; đường ghi log duy nhất là `_db.AiActionLogs.Add(log)` trong `AiActionService` (đúng thiết kế).
-11. [x] *(Tuỳ chọn)* `Project-Documents/report/phase-4-accountability-test-report.md` — **đã tạo** (phần backend + frontend).
+11. [x] *(Tuỳ chọn)* `project-docs/report/phase-4-accountability-test-report.md` — **đã tạo** (phần backend + frontend).
 
 ### 5.2 Frontend (Vitest + Testing Library)
 
@@ -519,8 +519,8 @@ POST /boards/{id}/smart-setup/confirm    → AiActionLog { Pending }   ← KHÔN
 
 ## 7. Tài liệu
 
-- [x] Tạo `Project-Documents/tasks/phase-4-accountability-layer.md` (checklist như trên).
-- [x] Cập nhật `Project-Documents/04-database-design.md` §3.5 (2 cột mới + quy ước `entity_type`/`entity_id`) và §5 (index mới).
+- [x] Tạo `project-docs/tasks/phase-4-accountability-layer.md` (checklist như trên).
+- [x] Cập nhật `project-docs/04-database-design.md` §3.5 (2 cột mới + quy ước `entity_type`/`entity_id`) và §5 (index mới).
 - [x] Cập nhật `src/Modules/Ai/TeamNexus.Modules.Ai/README.md`: bảng endpoint mới, vòng đời log, applier registry, mã 409, contract bàn giao Giai đoạn 5.
 - [x] Cập nhật `README.md` root (mục "Trạng thái (Giai đoạn 4 – Accountability Layer)") và tick checklist `03-roadmap.md` khi hoàn tất.
 

@@ -1,4 +1,4 @@
-# TeamNexus – Roadmap Phát triển
+﻿# TeamNexus – Roadmap Phát triển
 
 > Roadmap ở mức giai đoạn lớn (chưa chia task chi tiết). Mỗi giai đoạn kèm các yêu cầu hoàn thiện để coi là "xong" trước khi chuyển sang giai đoạn kế tiếp.
 
@@ -100,9 +100,9 @@ Viết test (xUnit, Vitest), dọn UI/UX, cấu hình CI/CD bằng GitHub Action
 **Yêu cầu hoàn thiện:**
 - [x] Test cơ bản cho các luồng chính bằng xUnit/Vitest — backend **172 test**, frontend **206 test**
 - [x] CI/CD pipeline qua GitHub Actions chạy build/test tự động — cả hai workflow **xanh** trên run thật
-- [ ] Backend deploy thành công lên Render, Database trên Neon, Frontend trên Vercel
-- [ ] Kiểm tra và xử lý ổn thỏa hiện tượng cold-start ảnh hưởng SignalR (phần frontend **đã xong**)
-- [ ] UI/UX rà soát lại tổng thể, sẵn sàng để demo/đưa vào CV
+- [x] Backend deploy thành công lên Render, Database trên Neon, Frontend trên Vercel
+- [x] Kiểm tra và xử lý ổn thỏa hiện tượng cold-start ảnh hưởng SignalR (phần frontend **đã xong**)
+- [x] UI/UX rà soát lại tổng thể, sẵn sàng để demo/đưa vào CV
 
 ## Giai đoạn 9: Đơn giản hóa Kiến trúc Role — ✅ HOÀN THÀNH
 

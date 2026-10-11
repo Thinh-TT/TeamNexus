@@ -121,15 +121,15 @@ Toàn bộ 15 file test kiểm thử tự động đã được xây dựng và 
   - Cập nhật ghi chú: `Baseline cuối Giai đoạn 8 là 206 test (37 file); Giai đoạn 10 là 279 test (47 file); Giai đoạn 11 là 359 test (60 file)`.
 
 ### 4.2 Cập nhật Tài liệu Dự án
-- **`Project-Documents/04-database-design.md`**:
+- **`project-docs/04-database-design.md`**:
   - Bổ sung **§3.9 Module Quản lý Thành viên & Hồ sơ Cá nhân**: Schema bảng `workspace_invitations` và `email_messages`.
   - Bổ sung enum: `InvitationStatus` (`Pending`, `Accepted`, `Cancelled`, `Expired`), `EmailMessageStatus` (`Queued`, `Sent`, `Failed`).
   - Bổ sung các chỉ mục: `(workspace_id, invited_email)` WHERE `status = 'Pending'` (partial unique), `token_hash` (unique), `(workspace_id, status)` (IX), `(workspace_id, created_at)` (IX).
   - Cập nhật chuỗi migration lên **9 migrations** và bổ sung quy tắc toàn vẹn dữ liệu: bảo mật token SHA-256, cấm chủ sở hữu tự rời workspace.
-- **`Project-Documents/03-roadmap.md`**:
+- **`project-docs/03-roadmap.md`**:
   - Đánh dấu hoàn thành Giai đoạn 11 trong thứ tự thi hành `1 → ... → 11 (đã hoàn thành) → 12 → 13`.
   - Tích chọn toàn bộ 5/5 yêu cầu hoàn thiện của Giai đoạn 11 kèm số liệu kiểm thử thực tế.
-- **`Project-Documents/01-system-specification.md`**:
+- **`project-docs/01-system-specification.md`**:
   - Cập nhật mục 10 `Quản lý Member & Profile — Giai đoạn 11 ✅` với chi tiết chức năng mời thành viên qua email, cơ chế lưu vết token, email nhanh, hồ sơ cá nhân và trung tâm thông báo.
 - **`README.md`**:
   - Cập nhật số lượng migration EF Core lên **9**.

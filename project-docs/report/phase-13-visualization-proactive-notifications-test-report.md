@@ -180,11 +180,11 @@ Row `Failed` **cũng** được coi là "đã xử lý hôm nay" — **cố ý**
 
 | File | Nội dung |
 |---|---|
-| `Project-Documents/tasks/phase-13-visualization-proactive-notifications.md` | Kế hoạch chia task (D1–D14, ca biên, bằng chứng) — đã có từ bước lập kế hoạch |
-| `Project-Documents/tasks/phase-13-remaining-frontend-handover.md` | **Note bàn giao frontend cho antigravity** (§1 Calendar · §4 Burndown/Velocity · §5 Digest toggle + hợp đồng API + test phải viết + 10 bẫy đã biết) |
-| `Project-Documents/03-roadmap.md` | Giai đoạn 13: trạng thái 🔄 (backend ✅), tick 3 ô backend, **ghi tường minh 2 lệch DoD + lý do**, số đo thật, link tài liệu + note bàn giao |
-| `Project-Documents/01-system-specification.md` | +§12: ngữ nghĩa chuỗi thời gian (`openTasks`/`completions`/`creations` + `tzOffsetMinutes`), endpoint mới, cơ chế digest (1 email/người/ngày, chống trùng ở DB, không sinh sự kiện, mặc định tắt), quyết định `digestEnabled` **vắng ⇒ giữ nguyên** |
-| `Project-Documents/04-database-design.md` | §3.1 `users`: +dòng `digest_enabled`; §6: +migration **10**; §7: +5 gạch đầu dòng (migration additive duy nhất + lý do, chống trùng qua `email_messages` + lý do **không** thêm cột, digest không ghi notification/activity, row `Failed` coi như đã xử lý) |
+| `project-docs/tasks/phase-13-visualization-proactive-notifications.md` | Kế hoạch chia task (D1–D14, ca biên, bằng chứng) — đã có từ bước lập kế hoạch |
+| `project-docs/tasks/phase-13-remaining-frontend-handover.md` | **Note bàn giao frontend cho antigravity** (§1 Calendar · §4 Burndown/Velocity · §5 Digest toggle + hợp đồng API + test phải viết + 10 bẫy đã biết) |
+| `project-docs/03-roadmap.md` | Giai đoạn 13: trạng thái 🔄 (backend ✅), tick 3 ô backend, **ghi tường minh 2 lệch DoD + lý do**, số đo thật, link tài liệu + note bàn giao |
+| `project-docs/01-system-specification.md` | +§12: ngữ nghĩa chuỗi thời gian (`openTasks`/`completions`/`creations` + `tzOffsetMinutes`), endpoint mới, cơ chế digest (1 email/người/ngày, chống trùng ở DB, không sinh sự kiện, mặc định tắt), quyết định `digestEnabled` **vắng ⇒ giữ nguyên** |
+| `project-docs/04-database-design.md` | §3.1 `users`: +dòng `digest_enabled`; §6: +migration **10**; §7: +5 gạch đầu dòng (migration additive duy nhất + lý do, chống trùng qua `email_messages` + lý do **không** thêm cột, digest không ghi notification/activity, row `Failed` coi như đã xử lý) |
 | `README.md` | +`## Trạng thái (Giai đoạn 13)`; Migration **10**; bảng CI (`assert 480` / `≥ 407`); baseline frontend **407** (ghi rõ lệch so với 406 của tài liệu) |
 
 ### 5.3 Từ vựng mới (append-only, không sửa whitelist nào)

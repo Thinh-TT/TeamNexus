@@ -20,7 +20,7 @@
 > danh tính, đã sửa (§3.8).
 > Sau khi sửa: **kỳ vọng `Failed: 0 / Passed: 371 / Skipped: 0`** — **chưa chạy lại trên CI** tại thời điểm ghi tài liệu.
 
-> **Nguồn:** `Project-Documents/03-roadmap.md` → *Giai đoạn 11: Quản lý Member & Profile*.
+> **Nguồn:** `project-docs/03-roadmap.md` → *Giai đoạn 11: Quản lý Member & Profile*.
 > **Tiền đề:** Giai đoạn 7 (AI Agent Executor) · 8 (Test/CI/Deploy) · 9 (Đơn giản hoá Role) · 10 (Nâng cao Task & Workspace UX) — **đã merge**.
 > **Nhánh:** `feat/phase11-member-profile`
 > **Schema:** ✅ **CÓ migration đầu tiên sau Giai đoạn 9.** `20260913180740_Phase9ModelSync` (thứ 8) → thêm `Phase11MemberProfile` ⇒ **9 migration**.
@@ -350,11 +350,11 @@ Thư mục **mới**: `shared/components/AppHeader.tsx` (**G**) · `shared/compo
 |---|---|---|
 | 1 | `.github/workflows/ci-backend.yml` | Nâng cổng `if ($total -ne 226)` → **số đo thật**; +biến `Email__ApiKey: " "` để CI **không** gửi email thật; cập nhật comment chuỗi |
 | 2 | `.github/workflows/ci-web.yml` | `if ($total -le 206)` → **`-le 279`** + comment baseline mới |
-| 3 | `Project-Documents/04-database-design.md` | +**§3.9** (`email_messages` **bảng mới** + ghi chú `workspace_invitations`); cập nhật bảng `NotificationType`; +2 dòng index ở §5; **sửa §6 chuỗi migration 6 → 9** (đang lệch thực tế); +3 gạch đầu dòng ở §7 |
-| 4 | `Project-Documents/03-roadmap.md` | Giai đoạn 11: gắn link tài liệu này + baseline + "+1 migration (9 tổng)" |
-| 5 | `Project-Documents/01-system-specification.md` | §10: chốt luồng accept (email phải khớp tài khoản; role do người mời chọn) |
+| 3 | `project-docs/04-database-design.md` | +**§3.9** (`email_messages` **bảng mới** + ghi chú `workspace_invitations`); cập nhật bảng `NotificationType`; +2 dòng index ở §5; **sửa §6 chuỗi migration 6 → 9** (đang lệch thực tế); +3 gạch đầu dòng ở §7 |
+| 4 | `project-docs/03-roadmap.md` | Giai đoạn 11: gắn link tài liệu này + baseline + "+1 migration (9 tổng)" |
+| 5 | `project-docs/01-system-specification.md` | §10: chốt luồng accept (email phải khớp tài khoản; role do người mời chọn) |
 | 6 | `README.md` | +`## Trạng thái (Giai đoạn 11)`; **sửa mục Migration** (đang ghi sai *"6 migration, mới nhất `Phase7AiAgentSchema`"* → **9**); hướng dẫn `Email:ApiKey` |
-| 7 | `Project-Documents/report/phase-11-member-profile-management-test-report.md` | Tạo khi kết thúc |
+| 7 | `project-docs/report/phase-11-member-profile-management-test-report.md` | Tạo khi kết thúc |
 
 ---
 
@@ -423,7 +423,7 @@ Thư mục **mới**: `shared/components/AppHeader.tsx` (**G**) · `shared/compo
 | 9 | 2 workflow CI xanh | `ci-backend` (total = số thật) + `ci-web` (≥ 341) | ⬜ |
 
 ### 12.3 Điều kiện "xong"
-Cả **5 ô** (A–E) + **4 hạng mục phát sinh** (F, G, H, I) đóng bằng bằng chứng §12.2; **đúng 1 migration mới** (9 tổng) và `has-pending-model-changes` sạch; 2 cổng CI đã nâng baseline và chạy xanh; `03-roadmap.md` + `README.md` + `04-database-design.md` ghi **số thật**; báo cáo tại `Project-Documents/report/phase-11-member-profile-management-test-report.md`.
+Cả **5 ô** (A–E) + **4 hạng mục phát sinh** (F, G, H, I) đóng bằng bằng chứng §12.2; **đúng 1 migration mới** (9 tổng) và `has-pending-model-changes` sạch; 2 cổng CI đã nâng baseline và chạy xanh; `03-roadmap.md` + `README.md` + `04-database-design.md` ghi **số thật**; báo cáo tại `project-docs/report/phase-11-member-profile-management-test-report.md`.
 
 ---
 

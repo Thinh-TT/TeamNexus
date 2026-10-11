@@ -790,7 +790,7 @@ export interface ReportBoardOptionResponse { id: string; name: string; taskCount
 > - Cập nhật `features/board/components/__tests__/BoardView.test.tsx`: nút "Báo cáo" **hiện** với Manager/Admin, **ẩn** với Member.
 >
 > **Sau khi xong §6 + §7.2:** (1) tick §6.1–§6.4 + §7.2 trong file này; (2) chạy 4 lệnh DoD và ghi **số test thật** vào §7.2;
-> (3) bổ sung ảnh chụp (trang Báo cáo + drawer xuất PDF/Excel) vào `Project-Documents/report/phase-6-reporting-test-report.md`
+> (3) bổ sung ảnh chụp (trang Báo cáo + drawer xuất PDF/Excel) vào `project-docs/report/phase-6-reporting-test-report.md`
 > (mục "Phần UI — bổ sung sau §6") và tick 4 ô `03-roadmap.md` (dòng 67–70) — lúc đó Giai đoạn 6 mới khép lại.
 >
 > **Runbook dev:** `dotnet run --project src/TeamNexus.Api` (đặt `Observer__Enabled=false`) + `npm run dev`; vào workspace
@@ -849,16 +849,16 @@ export interface ReportBoardOptionResponse { id: string; name: string; taskCount
 
 ## 9. Tài liệu
 
-- [x] Tạo `Project-Documents/tasks/phase-6-reporting-export.md` (file này — checklist như trên).
-- [x] Cập nhật `Project-Documents/04-database-design.md`:
+- [x] Tạo `project-docs/tasks/phase-6-reporting-export.md` (file này — checklist như trên).
+- [x] Cập nhật `project-docs/04-database-design.md`:
   - §3.7 (Module Reporting): **khẳng định không bảng**, ghi rõ nguồn projection (`tasks` / `board_columns` / `boards` / `activity_logs` / `ai_observer_runs`), quyền Manager/Admin, cửa sổ mặc định 30 ngày + clamp 365, cap `MaxExportRows`, "byte trong RAM — không lưu file" ⇒ *đã làm ở bước lập kế hoạch*;
   - §4/§5: ghi chú **không** phát sinh enum/index mới ở Giai đoạn 6;
   - §7: thêm gạch đầu dòng "Báo cáo là projection read-only: không soft-delete, không retention riêng, không ghi dữ liệu";
   - §8 "Giả định chính": thêm dòng "Giai đoạn 6 đã được chốt ở bước lập kế hoạch theo `tasks/phase-6-reporting-export.md` §0" (tiền lệ Phase 4/5).
 - [x] Tạo `src/Modules/Reporting/TeamNexus.Modules.Reporting/README.md`: 3 endpoint (bảng đầy đủ), options `Reports`, **bảng công thức metric** (copy §1.3), luồng load→aggregate→render, quyền Manager/Admin, hành vi cap/empty/503, license QuestPDF Community, runbook harness (nhắc "toàn GET nên không cần CSRF").
 - [x] Cập nhật `README.md` root: thêm dòng `Modules/Reporting/` vào cây `src/` + mục **"Trạng thái (Giai đoạn 6 – Báo cáo & Xuất dữ liệu)"**.
-- [x] Cập nhật `Project-Documents/03-roadmap.md`: tick 4 ô Giai đoạn 6 + ghi chú trạng thái (giống khối "Trạng thái" của Giai đoạn 5).
-- [x] Tạo `Project-Documents/report/phase-6-reporting-test-report.md` (format Phase 4/5: môi trường, phương pháp, 6 nhóm check có mã + **số liệu thật**, bug thật đã sửa, known gaps, ảnh chụp PDF/Excel + màn hình Báo cáo).
+- [x] Cập nhật `project-docs/03-roadmap.md`: tick 4 ô Giai đoạn 6 + ghi chú trạng thái (giống khối "Trạng thái" của Giai đoạn 5).
+- [x] Tạo `project-docs/report/phase-6-reporting-test-report.md` (format Phase 4/5: môi trường, phương pháp, 6 nhóm check có mã + **số liệu thật**, bug thật đã sửa, known gaps, ảnh chụp PDF/Excel + màn hình Báo cáo).
 
 ---
 

@@ -1,7 +1,7 @@
 # Giai đoạn 14 — Nâng cao AI (Kế hoạch chia task)
 
 > **Trạng thái thi hành:** ✅ **BACKEND ĐÃ HOÀN THÀNH & VERIFY · FRONTEND 📤 BÀN GIAO cho antigravity.**
-> **Nguồn:** `Project-Documents/03-roadmap.md` → *Giai đoạn 14: Nâng cao AI* (4 ô A/B/C/D).
+> **Nguồn:** `project-docs/03-roadmap.md` → *Giai đoạn 14: Nâng cao AI* (4 ô A/B/C/D).
 > **Tiền đề đã merge:** Giai đoạn 7 · 8 · 9 · 10 · 11 · 12 · **13 (Trực quan hóa & Thông báo Chủ động)**.
 > **📤 Note bàn giao Frontend:** `tasks/phase-14-remaining-frontend-handover.md`.
 > **Báo cáo nghiệm thu:** `report/phase-14-ai-advanced-test-report.md`.
@@ -297,13 +297,13 @@ Approve mới thật sự tạo board/cột/task. Undo = soft-delete board. `Max
 
 | # | File | Việc |
 |---|---|---|
-| 1 | `Project-Documents/tasks/phase-14-ai-advanced.md` | **Tài liệu này** — điền **số thật** vào §6.1 sau khi đo |
-| 2 | `Project-Documents/03-roadmap.md` | Giai đoạn 14: 🔄 (**backend ✅ · frontend 📤 bàn giao**), tick 4 ô backend, **ghi tường minh lệch DoD D6**, link 2 tài liệu |
-| 3 | `Project-Documents/01-system-specification.md` | += **§13 Giai đoạn 14**: hợp đồng SSE, guard `AiChat`, "lưu thành bình luận ⇒ Pending ⇒ Approve" (D11), định nghĩa `AtRiskDeadline` + severity, công thức sức khỏe + `band`, board template (1 board / 2–6 cột / 5–10 task / pin 1 cột done / Undo = soft-delete) |
-| 4 | `Project-Documents/04-database-design.md` | §6: **khẳng định KHÔNG có migration mới** (vẫn **10**) **kèm lý do** (D1); §7: +4 gạch đầu dòng (lý do không cần cột/bảng/index mới) |
+| 1 | `project-docs/tasks/phase-14-ai-advanced.md` | **Tài liệu này** — điền **số thật** vào §6.1 sau khi đo |
+| 2 | `project-docs/03-roadmap.md` | Giai đoạn 14: 🔄 (**backend ✅ · frontend 📤 bàn giao**), tick 4 ô backend, **ghi tường minh lệch DoD D6**, link 2 tài liệu |
+| 3 | `project-docs/01-system-specification.md` | += **§13 Giai đoạn 14**: hợp đồng SSE, guard `AiChat`, "lưu thành bình luận ⇒ Pending ⇒ Approve" (D11), định nghĩa `AtRiskDeadline` + severity, công thức sức khỏe + `band`, board template (1 board / 2–6 cột / 5–10 task / pin 1 cột done / Undo = soft-delete) |
+| 4 | `project-docs/04-database-design.md` | §6: **khẳng định KHÔNG có migration mới** (vẫn **10**) **kèm lý do** (D1); §7: +4 gạch đầu dòng (lý do không cần cột/bảng/index mới) |
 | 5 | `README.md` | += `## Trạng thái (Giai đoạn 14)`; xác nhận Migration vẫn là **10** |
 | 6 | `src/Modules/Ai/TeamNexus.Modules.Ai/README.md` | += `## Phase 14` (port streaming, guard `AiChat`, `AtRiskDeadline`, board template, bảng route mới, hạn chế đã biết) |
-| 7 | `Project-Documents/report/phase-14-ai-advanced-test-report.md` | **Tạo khi kết thúc** (theo mẫu `report/phase-13-*.md`) |
+| 7 | `project-docs/report/phase-14-ai-advanced-test-report.md` | **Tạo khi kết thúc** (theo mẫu `report/phase-13-*.md`) |
 
 ### 6.4 Điều kiện "xong" (phần backend)
 Cả **4 ô** (A chat · B risk + health · C board template · D guardrail) + **8 hạng mục phát sinh** (E–L)

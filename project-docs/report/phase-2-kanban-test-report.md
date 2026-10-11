@@ -113,7 +113,7 @@ Bảng Kanban đầy đủ 3 cột trạng thái, thẻ công việc, huy hiệu
 
 ### 5.4. Video Ghi Hình Quá Trình Kiểm Thử Tự Động
 Video toàn bộ quy trình tương tác thực tế trên trình duyệt:
-*(Xem file video tại: [`Project-Documents/report/assets/kanban-live-test.webp`](assets/kanban-live-test.webp))*
+*(Xem file video tại: [`project-docs/report/assets/kanban-live-test.webp`](assets/kanban-live-test.webp))*
 
 ---
 
@@ -128,5 +128,5 @@ Video toàn bộ quy trình tương tác thực tế trên trình duyệt:
 ## 7. Kết Luận Nghiệm Thu
 
 - **Trạng thái Giai đoạn 2 (Kanban Core):** **HOÀN THÀNH 100% (ACCEPTANCE PASSED)**.
-- **Tiến độ dự án:** Đã cập nhật checklist trong [`tasks/phase-2-kanban.md`](file:///e:/TeamNexus/Project-Documents/tasks/phase-2-kanban.md), [`03-roadmap.md`](file:///e:/TeamNexus/Project-Documents/03-roadmap.md) và [`README.md`](file:///e:/TeamNexus/README.md).
+- **Tiến độ dự án:** Đã cập nhật checklist trong [`tasks/phase-2-kanban.md`](file:///e:/TeamNexus/project-docs/tasks/phase-2-kanban.md), [`03-roadmap.md`](file:///e:/TeamNexus/project-docs/03-roadmap.md) và [`README.md`](file:///e:/TeamNexus/README.md).
 - **Chuyển giao:** Hệ thống đã sẵn sàng 100% để triển khai **Giai đoạn 3: AI Smart Setup**.

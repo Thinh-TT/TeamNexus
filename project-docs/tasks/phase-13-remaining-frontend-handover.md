@@ -13,7 +13,7 @@
 > ước tính đếm theo *test method* còn thực tế nhiều test có nhiều `it(...)`; **số đo thắng tài liệu**.
 > Các mục ✅/⬜ dưới đây đã được đánh dấu theo tình trạng thật.
 >
-> **Nguồn:** `Project-Documents/tasks/phase-13-visualization-proactive-notifications.md` (kế hoạch đã chốt) — tài liệu này **không** thay thế kế hoạch.
+> **Nguồn:** `project-docs/tasks/phase-13-visualization-proactive-notifications.md` (kế hoạch đã chốt) — tài liệu này **không** thay thế kế hoạch.
 > **⛔ Không được làm:** xem §3 — mọi ràng buộc của kế hoạch vẫn hiệu lực (không package mới, không `dangerouslySetInnerHTML`, không sửa shape hợp đồng đã verify, không viết lại test cũ đang xanh).
 
 ---
@@ -361,8 +361,8 @@ interface UpdateProfileRequest {
 3. **Không cần API mới** cho Calendar — dùng `GET /api/workspaces/{id}/tasks/search` (**đã có từ Giai đoạn 12**).
 4. **Việc còn lại sau frontend — ĐÃ XONG:**
    - ✅ Nâng cổng CI: `.github/workflows/ci-backend.yml` (`-ne 423` ⇒ **`-ne 480`**) và `.github/workflows/ci-web.yml` (`-lt 406` ⇒ **`-lt 508`**).
-   - ✅ Cập nhật `Project-Documents/03-roadmap.md` (**tick cả 3 ô + ghi rõ 2 lệch DoD**), `01-system-specification.md` (§12 + hành vi Calendar/digest toggle), `04-database-design.md` (+`users.digest_enabled`, migration thứ 10), `README.md` (Migration = **10**, CI mới).
-   - ✅ Viết `Project-Documents/report/phase-13-visualization-proactive-notifications-test-report.md`.
+   - ✅ Cập nhật `project-docs/03-roadmap.md` (**tick cả 3 ô + ghi rõ 2 lệch DoD**), `01-system-specification.md` (§12 + hành vi Calendar/digest toggle), `04-database-design.md` (+`users.digest_enabled`, migration thứ 10), `README.md` (Migration = **10**, CI mới).
+   - ✅ Viết `project-docs/report/phase-13-visualization-proactive-notifications-test-report.md`.
    - ⬜ **Còn lại duy nhất:** chạy lại 2 workflow trên **GitHub Actions** để xác nhận xanh trên CI thật, và chụp ảnh kiểm thử tay 4 bước (§7 #6).
 
 ---
@@ -400,5 +400,5 @@ interface UpdateProfileRequest {
 
 Tài liệu này là **bản rút gọn dành cho người làm frontend**. Nguồn chuẩn (đầy đủ quyết định D1–D14, ca biên, rủi ro, bằng chứng) là:
 
-`Project-Documents/tasks/phase-13-visualization-proactive-notifications.md`
+`project-docs/tasks/phase-13-visualization-proactive-notifications.md`
 → các mục **§3** (Calendar) · **§4.3** (hợp đồng API series) · **§6** (Burndown + Digest toggle) · **§9** (⛔ không được làm).

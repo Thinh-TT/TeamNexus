@@ -1,7 +1,7 @@
 # Giai đoạn 13 — Trực quan hóa & Thông báo Chủ động (Kế hoạch chia task)
 
 > **Trạng thái thi hành:** ✅ **ĐÃ HOÀN THÀNH & VERIFY ĐẦY ĐỦ (Backend + Frontend + CI + Tài liệu).**
-> **Nguồn:** `Project-Documents/03-roadmap.md` → *Giai đoạn 13: Trực quan hóa & Thông báo Chủ động* (3 ô A/B/C).
+> **Nguồn:** `project-docs/03-roadmap.md` → *Giai đoạn 13: Trực quan hóa & Thông báo Chủ động* (3 ô A/B/C).
 > **Tiền đề đã merge:** Giai đoạn 7 · 8 · 9 · 10 · 11 · **12 (Dashboard & Tìm kiếm)**.
 > **📤 Note bàn giao Frontend** (đã hiện thực xong; giữ làm hồ sơ hợp đồng API + bẫy đã biết):
 > `tasks/phase-13-remaining-frontend-handover.md`.
@@ -319,7 +319,7 @@ dotnet test --filter "FullyQualifiedName~ReportProgressSeries" → PASS toàn b�
 | `Persistence/Data/Entities/ApplicationUser.cs` | +`public bool DigestEnabled { get; set; } = true;` (doc comment nêu rõ: **không** phải IAuditableEntity ⇒ không có `updated_at` cho `users`) |
 | `Persistence/Data/Configurations/ApplicationUserConfiguration.cs` | +`.Property(u => u.DigestEnabled).HasDefaultValue(true).IsRequired();` ⇒ migration sinh `DEFAULT true` cho row cũ (**không** cần backfill) |
 | `Persistence/Migrations/2026xxxx_Phase13DailyDigest.cs` | Sinh bằng `dotnet ef migrations add Phase13DailyDigest --project src/TeamNexus.Persistence/TeamNexus.Persistence.csproj --startup-project src/TeamNexus.Api/TeamNexus.Api.csproj --no-build` (build trước; `dotnet ef` **không** nhận `-m:1`/`-nr:false`) |
-| `Project-Documents/04-database-design.md` | §3.1 `users`: +dòng `digest_enabled`; §6: +dòng migration thứ 10 |
+| `project-docs/04-database-design.md` | §3.1 `users`: +dòng `digest_enabled`; §6: +dòng migration thứ 10 |
 
 > **Điều kiện kiểm tra bắt buộc:** `Up()` chỉ được có **1** `AddColumn` + **1** `AlterColumn/DEFAULT` —
 > **không** `DropColumn`, **không** `CreateTable`, **không** `CreateIndex` nào khác. `Down()` chỉ `DropColumn`.
@@ -488,12 +488,12 @@ dotnet test (TEAMNEXUS_TEST_DB)                             → Failed 0 / Skipp
 
 | # | File | Việc |
 |---|---|---|
-| 1 | `Project-Documents/tasks/phase-13-visualization-proactive-notifications.md` | **Tài liệu này** — điền **số thật** vào §1.2 + §7.1 sau khi đo; ghi rõ **lệch DoD** ở **D2** |
-| 2 | `Project-Documents/03-roadmap.md` | Giai đoạn 13: tick `[x]` 3 ô + link tài liệu này + baseline thật; sửa dòng *"không cần migration mới"* ⇒ *"có 1 migration additive `users.digest_enabled` (10 tổng) — lý do: opt-out phải đọc được ở server (D2)"*; sửa dòng *"Không cần API mới ngoài … và EmailGateway"* ⇒ thêm `GET .../reports/progress-series` |
-| 3 | `Project-Documents/01-system-specification.md` | +§: ngữ nghĩa chuỗi thời gian (`openTasks`/`completions`/`creations` + tz), route mới, cơ chế digest (1 email/user/ngày, chống trùng bằng `email_messages`, hạn mức riêng), quyết định `digestEnabled` **vắng ⇒ giữ nguyên** (D13) |
-| 4 | `Project-Documents/04-database-design.md` | §3.1 `users`: +`digest_enabled`; §6: +dòng migration 10 `Phase13DailyDigest`; §7: +3 gạch đầu dòng (digest **không** ghi notification/activity; `email_messages` dùng làm dedupe key theo `(to_email, ngày UTC)`; **không** thêm index mới ở giai đoạn này và **vì sao**) |
+| 1 | `project-docs/tasks/phase-13-visualization-proactive-notifications.md` | **Tài liệu này** — điền **số thật** vào §1.2 + §7.1 sau khi đo; ghi rõ **lệch DoD** ở **D2** |
+| 2 | `project-docs/03-roadmap.md` | Giai đoạn 13: tick `[x]` 3 ô + link tài liệu này + baseline thật; sửa dòng *"không cần migration mới"* ⇒ *"có 1 migration additive `users.digest_enabled` (10 tổng) — lý do: opt-out phải đọc được ở server (D2)"*; sửa dòng *"Không cần API mới ngoài … và EmailGateway"* ⇒ thêm `GET .../reports/progress-series` |
+| 3 | `project-docs/01-system-specification.md` | +§: ngữ nghĩa chuỗi thời gian (`openTasks`/`completions`/`creations` + tz), route mới, cơ chế digest (1 email/user/ngày, chống trùng bằng `email_messages`, hạn mức riêng), quyết định `digestEnabled` **vắng ⇒ giữ nguyên** (D13) |
+| 4 | `project-docs/04-database-design.md` | §3.1 `users`: +`digest_enabled`; §6: +dòng migration 10 `Phase13DailyDigest`; §7: +3 gạch đầu dòng (digest **không** ghi notification/activity; `email_messages` dùng làm dedupe key theo `(to_email, ngày UTC)`; **không** thêm index mới ở giai đoạn này và **vì sao**) |
 | 5 | `README.md` | +`## Trạng thái (Giai đoạn 13)`; xác nhận mục Migration là **10** |
-| 6 | `Project-Documents/report/phase-13-visualization-proactive-notifications-test-report.md` | **Tạo khi kết thúc** (theo mẫu `report/phase-12-dashboard-search-test-report.md`) |
+| 6 | `project-docs/report/phase-13-visualization-proactive-notifications-test-report.md` | **Tạo khi kết thúc** (theo mẫu `report/phase-12-dashboard-search-test-report.md`) |
 
 ### 7.4 Điều kiện "xong"
 
@@ -502,7 +502,7 @@ F endpoint progress-series · G dedupe ở DB · H khoá theo email · I hạn m
 **đúng 10 migration** và `has-pending-model-changes` sạch; **`Skipped: 0`** ở backend;
 2 cổng CI đã nâng baseline và **chạy xanh trên GitHub Actions**;
 `03-roadmap.md` + `README.md` + `01-system-specification.md` + `04-database-design.md` ghi **số thật**;
-báo cáo tại `Project-Documents/report/phase-13-visualization-proactive-notifications-test-report.md`.
+báo cáo tại `project-docs/report/phase-13-visualization-proactive-notifications-test-report.md`.
 
 ### 7.5 Bảng bằng chứng
 

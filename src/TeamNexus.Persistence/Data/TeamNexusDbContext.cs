@@ -7,7 +7,7 @@ namespace TeamNexus.Persistence.Data;
 
 /// <summary>
 /// The single DbContext for the whole modular monolith — Identity + all domain
-/// entities — keeping ONE EF Core migration chain (Project-Documents/04-database-design.md §1.1).
+/// entities — keeping ONE EF Core migration chain (/04-database-design.md §1.1).
 /// Column/table names follow snake_case via the EFCore.NamingConventions package.
 /// </summary>
 public class TeamNexusDbContext

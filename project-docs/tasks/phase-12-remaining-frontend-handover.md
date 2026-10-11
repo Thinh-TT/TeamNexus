@@ -4,9 +4,9 @@
 > **Người giao:** phiên làm **backend §1–§3** (đã xong; xem bảng trạng thái dưới).
 >
 > **Tham chiếu bắt buộc — đọc trước khi code:**
-> - `Project-Documents/tasks/phase-12-dashboard-search.md` — **kế hoạch gốc**: bảng quyết định **D1–D13**, phát sinh **P1–P6**, ca biên, bảng bằng chứng. Đây là hợp đồng cứng.
-> - `Project-Documents/03-roadmap.md` → *Giai đoạn 12* (ô A–C) · `01-system-specification.md` §11.
-> - `Project-Documents/tasks/phase-11-remaining-frontend-handover.md` — note bàn giao mẫu trước đó (cùng văn phong, cùng mức chi tiết).
+> - `project-docs/tasks/phase-12-dashboard-search.md` — **kế hoạch gốc**: bảng quyết định **D1–D13**, phát sinh **P1–P6**, ca biên, bảng bằng chứng. Đây là hợp đồng cứng.
+> - `project-docs/03-roadmap.md` → *Giai đoạn 12* (ô A–C) · `01-system-specification.md` §11.
+> - `project-docs/tasks/phase-11-remaining-frontend-handover.md` — note bàn giao mẫu trước đó (cùng văn phong, cùng mức chi tiết).
 >
 > **Phạm vi note này:** **§4 (Dashboard UI)** + **§5 (Search UI)** + **§6 (@mention UI)** + **§7.2 (CI)** + **§7.3 (tài liệu)**.
 > **Backend §1–§3 ĐÃ XONG** — **không** làm lại, **không** sửa file backend (xem §8).
@@ -373,12 +373,12 @@ body: { "content": "Nhờ @Trần An xem lại phần auth", "mentionUserIds": [
 
 | # | File | Việc |
 |---|---|---|
-| 1 | `Project-Documents/tasks/phase-12-dashboard-search.md` | Điền **số thật** frontend vào §7.1 (backend đã ghi **423**); ghi lại 2 quyết định hiện thực mới (§8 dưới) |
-| 2 | `Project-Documents/03-roadmap.md` | Giai đoạn 12: tick `[x]` **3 ô** + baseline thật + ghi **"không migration (9 tổng)"** |
-| 3 | `Project-Documents/01-system-specification.md` | §11 **đã cập nhật** (backend phiên này đã chốt ngữ nghĩa bucket + route + mention) — chỉ cần kiểm lại |
-| 4 | `Project-Documents/04-database-design.md` | §4 bảng `NotificationType`: +`CommentMention`; §7: +3 gạch đầu dòng (mention tường minh · dashboard read-only không bảng mới · search keyset `(updated_at, id)`); §5: ghi rõ **không** thêm index và **vì sao** |
+| 1 | `project-docs/tasks/phase-12-dashboard-search.md` | Điền **số thật** frontend vào §7.1 (backend đã ghi **423**); ghi lại 2 quyết định hiện thực mới (§8 dưới) |
+| 2 | `project-docs/03-roadmap.md` | Giai đoạn 12: tick `[x]` **3 ô** + baseline thật + ghi **"không migration (9 tổng)"** |
+| 3 | `project-docs/01-system-specification.md` | §11 **đã cập nhật** (backend phiên này đã chốt ngữ nghĩa bucket + route + mention) — chỉ cần kiểm lại |
+| 4 | `project-docs/04-database-design.md` | §4 bảng `NotificationType`: +`CommentMention`; §7: +3 gạch đầu dòng (mention tường minh · dashboard read-only không bảng mới · search keyset `(updated_at, id)`); §5: ghi rõ **không** thêm index và **vì sao** |
 | 5 | `README.md` | +`## Trạng thái (Giai đoạn 12)`; xác nhận mục Migration vẫn **9** |
-| 6 | `Project-Documents/report/phase-12-dashboard-search-test-report.md` | **Tạo khi kết thúc** (theo mẫu `report/phase-11-member-profile-management-test-report.md`) |
+| 6 | `project-docs/report/phase-12-dashboard-search-test-report.md` | **Tạo khi kết thúc** (theo mẫu `report/phase-11-member-profile-management-test-report.md`) |
 
 ### 7.3 Bảng bằng chứng
 

@@ -4,9 +4,9 @@
 > **Người giao:** phiên làm **backend §1–§6** (đã xong; xem bảng trạng thái dưới).
 >
 > **Tham chiếu bắt buộc — đọc trước khi code:**
-> - `Project-Documents/tasks/phase-11-member-profile-management.md` — **kế hoạch gốc**: bảng quyết định **D1–D14**, phát sinh **P1–P6**, ca biên, bảng bằng chứng. Đây là hợp đồng cứng.
-> - `Project-Documents/03-roadmap.md` → *Giai đoạn 11* (ô A–E) · `01-system-specification.md` §10 · `02-tech-stack-decisions.md` §2.9.
-> - `Project-Documents/tasks/phase-10-remaining-frontend-handover.md` — note bàn giao mẫu trước đó (cùng văn phong, cùng mức chi tiết).
+> - `project-docs/tasks/phase-11-member-profile-management.md` — **kế hoạch gốc**: bảng quyết định **D1–D14**, phát sinh **P1–P6**, ca biên, bảng bằng chứng. Đây là hợp đồng cứng.
+> - `project-docs/03-roadmap.md` → *Giai đoạn 11* (ô A–E) · `01-system-specification.md` §10 · `02-tech-stack-decisions.md` §2.9.
+> - `project-docs/tasks/phase-10-remaining-frontend-handover.md` — note bàn giao mẫu trước đó (cùng văn phong, cùng mức chi tiết).
 >
 > **Phạm vi note này:** **§7 (toàn bộ frontend)** + **§8 (CI & tài liệu)**.
 > **Backend §1–§6 ĐÃ XONG** — **không** làm lại, **không** sửa file backend (xem §7).
@@ -292,11 +292,11 @@ Run CI đầu tiên của nhánh: **7 test đỏ / 364 xanh**. **Cả 7 là test
 |---|---|---|
 | 1 | `.github/workflows/ci-backend.yml` | Nâng cổng `if ($total -ne 226)` → **`-ne 371`**; **thêm `Email__ApiKey: " "`** vào khối `env:` (một khoảng trắng — cùng trick `DeepSeek:ApiKey`; nếu thiếu, CI có thể gửi **email thật**); cập nhật comment chuỗi ("171 → 189 → 226 → **371 Giai đoạn 11**") |
 | 2 | `.github/workflows/ci-web.yml` | `if ($total -le 206)` → **`-le 279`** + comment "Giai đoạn 10 là 279 → Giai đoạn 11 là ~341" |
-| 3 | `Project-Documents/04-database-design.md` | **+§3.9 Module Member & Profile (Giai đoạn 11)**: mô tả `email_messages` (**bảng mới**, không có trong thiết kế gốc) + ghi chú `workspace_invitations` (partial UQ `Pending`, FK workspace **optional** vì bảng cố ý không có query filter); cập nhật bảng `NotificationType` ở §4 (thêm `TaskAssigned`, `CommentOnTask`, `WorkspaceInvitation`); thêm index mới ở §5; **sửa §6** chuỗi migration **6 → 9** (tài liệu đang lệch thực tế: 8 rồi 9) + ghi chú Giai đoạn 9/10/11; bổ sung 3 gạch đầu dòng ở §7 (token invite chỉ lưu hash; kick member để lại `tasks.assignee_id`; hạn mức email) |
-| 4 | `Project-Documents/03-roadmap.md` | Giai đoạn 11: gắn link task doc + baseline + "**+1 migration (9 tổng)**" + kết quả đo thật khi xong |
-| 5 | `Project-Documents/01-system-specification.md` | §10: chốt luồng accept (email tài khoản **phải khớp** lời mời; role do **người mời** chọn, người nhận không tự chọn) |
+| 3 | `project-docs/04-database-design.md` | **+§3.9 Module Member & Profile (Giai đoạn 11)**: mô tả `email_messages` (**bảng mới**, không có trong thiết kế gốc) + ghi chú `workspace_invitations` (partial UQ `Pending`, FK workspace **optional** vì bảng cố ý không có query filter); cập nhật bảng `NotificationType` ở §4 (thêm `TaskAssigned`, `CommentOnTask`, `WorkspaceInvitation`); thêm index mới ở §5; **sửa §6** chuỗi migration **6 → 9** (tài liệu đang lệch thực tế: 8 rồi 9) + ghi chú Giai đoạn 9/10/11; bổ sung 3 gạch đầu dòng ở §7 (token invite chỉ lưu hash; kick member để lại `tasks.assignee_id`; hạn mức email) |
+| 4 | `project-docs/03-roadmap.md` | Giai đoạn 11: gắn link task doc + baseline + "**+1 migration (9 tổng)**" + kết quả đo thật khi xong |
+| 5 | `project-docs/01-system-specification.md` | §10: chốt luồng accept (email tài khoản **phải khớp** lời mời; role do **người mời** chọn, người nhận không tự chọn) |
 | 6 | `README.md` | +`## Trạng thái (Giai đoạn 11 – Quản lý Member & Profile)` (checklist 5 ô) + **sửa mục Migration** (đang ghi sai *"6 migration, mới nhất `Phase7AiAgentSchema`"* → **9**, mới nhất `Phase11MemberProfile`) + hướng dẫn cấu hình `Email:ApiKey` (User Secrets local / `Email__ApiKey` env trên Render) |
-| 7 | `Project-Documents/report/phase-11-member-profile-management-test-report.md` | Tạo khi kết thúc: số test **thật**, bug thật bắt được, bằng chứng §12 của task doc, ảnh chụp luồng mời/accept |
+| 7 | `project-docs/report/phase-11-member-profile-management-test-report.md` | Tạo khi kết thúc: số test **thật**, bug thật bắt được, bằng chứng §12 của task doc, ảnh chụp luồng mời/accept |
 
 ---
 

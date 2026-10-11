@@ -68,7 +68,7 @@ public sealed record ProjectHealthResult(
 /// Board-owned dashboard could never embed an Ai-owned value. The <b>risk rule itself</b> is shared
 /// (<see cref="DeadlineRiskRules"/>), which is the part that must not drift; the score is a read model
 /// over data the dashboard already loads. This deviation is recorded in
-/// <c>Project-Documents/03-roadmap.md</c> and in the Phase 14 report — see decision D6.
+/// <c>project-docs/03-roadmap.md</c> and in the Phase 14 report — see decision D6.
 /// </para>
 /// <para>
 /// <b>Deterministic and total:</b> no clock, no I/O, every ratio guarded against a zero denominator,

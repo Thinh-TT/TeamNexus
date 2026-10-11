@@ -21,7 +21,7 @@
 > **Baseline trước giai đoạn này là 371** ⇒ `423 = 371 + 52` test mới
 > (**14** dashboard + **24** search + **10** mention + **4** `kind`).
 >
-> **Nguồn:** `Project-Documents/03-roadmap.md` → *Giai đoạn 12: Dashboard & Tìm kiếm* (3 ô A/B/C).
+> **Nguồn:** `project-docs/03-roadmap.md` → *Giai đoạn 12: Dashboard & Tìm kiếm* (3 ô A/B/C).
 > **Tiền đề đã merge:** Giai đoạn 7 (AI Agent Executor) · 8 (Test/CI/Deploy) · 9 (Đơn giản hoá Role) · 10 (Nâng cao Task & Workspace UX) · **11 (Quản lý Member & Profile)**.
 > **Nhánh đề xuất:** `feat/phase12-dashboard-search`
 > **Schema:** ⛔ **KHÔNG migration, KHÔNG bảng/cột/index mới.** Vẫn **9** migration (mới nhất `20260914105025_Phase11MemberProfile`). `has-pending-model-changes` phải tiếp tục trả *"No changes have been made to the model since the last migration."*
@@ -537,12 +537,12 @@ dotnet test --filter "FullyQualifiedName~EmailTemplateTests" → 14/14 PASS (h�
 
 | # | File | Việc |
 |---|---|---|
-| 1 | `Project-Documents/tasks/phase-12-dashboard-search.md` | **Tài liệu này** — điền **số thật** vào §1.2 + §7.1 sau khi đo |
-| 2 | `Project-Documents/03-roadmap.md` | Giai đoạn 12: tick `[x]` 3 ô + link tài liệu này + baseline thật + ghi **"không migration (9 tổng)"** |
-| 3 | `Project-Documents/01-system-specification.md` | §11: chốt ngữ nghĩa 3 bucket (§2 D7), route `/workspaces/{id}/dashboard` + `/search`, quyết định `mentionUserIds` tường minh (D11) |
-| 4 | `Project-Documents/04-database-design.md` | §4 bảng `NotificationType`: +`CommentMention`; §7: +3 gạch đầu dòng (mention tường minh · dashboard read-only không bảng mới · search keyset `(updated_at, id)`); §5: ghi rõ **không** thêm index và **vì sao** |
+| 1 | `project-docs/tasks/phase-12-dashboard-search.md` | **Tài liệu này** — điền **số thật** vào §1.2 + §7.1 sau khi đo |
+| 2 | `project-docs/03-roadmap.md` | Giai đoạn 12: tick `[x]` 3 ô + link tài liệu này + baseline thật + ghi **"không migration (9 tổng)"** |
+| 3 | `project-docs/01-system-specification.md` | §11: chốt ngữ nghĩa 3 bucket (§2 D7), route `/workspaces/{id}/dashboard` + `/search`, quyết định `mentionUserIds` tường minh (D11) |
+| 4 | `project-docs/04-database-design.md` | §4 bảng `NotificationType`: +`CommentMention`; §7: +3 gạch đầu dòng (mention tường minh · dashboard read-only không bảng mới · search keyset `(updated_at, id)`); §5: ghi rõ **không** thêm index và **vì sao** |
 | 5 | `README.md` | +`## Trạng thái (Giai đoạn 12)`; xác nhận mục Migration vẫn **9** |
-| 6 | `Project-Documents/report/phase-12-dashboard-search-test-report.md` | **Tạo khi kết thúc** (theo mẫu `report/phase-11-member-profile-management-test-report.md`) |
+| 6 | `project-docs/report/phase-12-dashboard-search-test-report.md` | **Tạo khi kết thúc** (theo mẫu `report/phase-11-member-profile-management-test-report.md`) |
 
 ### 7.4 Điều kiện "xong"
 
@@ -550,7 +550,7 @@ Cả **3 ô** (A, B, C) + **3 hạng mục phát sinh** (D `kind` · E route · 
 **vẫn đúng 9 migration** và `has-pending-model-changes` sạch;
 2 cổng CI đã nâng baseline và **chạy xanh trên GitHub Actions**;
 `03-roadmap.md` + `README.md` + `01-system-specification.md` + `04-database-design.md` ghi **số thật**;
-báo cáo tại `Project-Documents/report/phase-12-dashboard-search-test-report.md`.
+báo cáo tại `project-docs/report/phase-12-dashboard-search-test-report.md`.
 
 ### 7.5 Bảng bằng chứng
 

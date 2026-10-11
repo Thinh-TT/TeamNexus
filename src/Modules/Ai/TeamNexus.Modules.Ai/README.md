@@ -5,7 +5,7 @@ Module AI của TeamNexus (modular monolith):
 4. **AI Agent Executor (Phase 7 — 🔄 đang làm):** Agent là thành viên ảo của workspace, được gán task như người thật, tự chạy vòng lặp tool-calling, kết quả đi qua Accountability Layer và có guardrail ngân sách.
 
 > Trạng thái: **Giai đoạn 3–5 đã hoàn tất & verify.** **Giai đoạn 7 đang làm** — kế hoạch chi tiết ở
-> `Project-Documents/tasks/phase-7-ai-agent-executor.md`, schema đã chốt ở `Project-Documents/04-database-design.md` §3.8.
+> `project-docs/tasks/phase-7-ai-agent-executor.md`, schema đã chốt ở `project-docs/04-database-design.md` §3.8.
 
 ## §1 — Cấu hình & đăng ký (đã hiện thực)
 
@@ -383,7 +383,7 @@ Harness tạm ngoài workspace (không commit, đã xoá sau khi chạy), chạy
 | H/I/J. Dedupe, concurrency, failure modes | **2/2**, **3/3**, **4/4** — dedupe 24h; 1 `Completed` + 1 `Skipped(AlreadyRunning)`; JSON hỏng/provider lỗi ⇒ `Failed` + 0 notification |
 
 Harness đặt **ngoài workspace** (`%TEMP%`, đã xoá), API thật + PostgreSQL thật + `FakeAiProvider`/stub
-⇒ **không gọi DeepSeek, không tốn token**. Chi tiết: `Project-Documents/report/phase-5-ai-observer-test-report.md`.
+⇒ **không gọi DeepSeek, không tốn token**. Chi tiết: `project-docs/report/phase-5-ai-observer-test-report.md`.
 
 **Lưu ý khi viết harness cho module này:**
 1. Lấy lại token CSRF **sau** khi gắn JWT cookie (token ẩn danh 155 ký tự ≠ token đã bind identity 198 ký tự; echo token cũ ⇒ 403).
@@ -410,8 +410,8 @@ qua Accountability Layer** — không có cơ chế giải trình riêng cho Age
 
 > **Trạng thái: ✅ ĐÃ HIỆN THỰC & VERIFY (270/270 check PASS — nhóm B/C 89 · D/E/H/I 107 · F+503 46 · G 21 ·
 > 1 lần gọi DeepSeek thật 7).** `dotnet build` 0 warning / 0 error; `dotnet ef migrations list` = **6** (không sinh migration
-> mới); frontend không bị chạm. Chi tiết: `Project-Documents/report/phase-7-ai-agent-executor-test-report.md` §2.3.
-> Nguồn thiết kế: `Project-Documents/tasks/phase-7-ai-agent-executor.md` (§0 bảng quyết định D1–D20).
+> mới); frontend không bị chạm. Chi tiết: `project-docs/report/phase-7-ai-agent-executor-test-report.md` §2.3.
+> Nguồn thiết kế: `project-docs/tasks/phase-7-ai-agent-executor.md` (§0 bảng quyết định D1–D20).
 >
 > **Sáu điều chỉnh khi hiện thực so với bản kế hoạch §4** (ghi ở đây để người đọc code không thấy lệch):
 > 1. **Kết quả thuộc về AGENT, không phải người duyệt.** `PostCommentApplier`/`PostAttachmentApplier` dùng
@@ -538,7 +538,7 @@ Hai applier mới đi qua **nguyên** vòng đời `Pending → Approved/Rejecte
 9. `after_snapshot` của `PostAttachment` mang base64 (cap 512 KB ⇒ row jsonb ≤ ~700 KB) nên `GET /api/ai-actions/{logId}` trả payload đó.
 10. Nhóm **J** (frontend) chưa chạy — thuộc §5; §4 **không** chạm frontend (baseline 155 test giữ nguyên).
 
-> **Bàn giao §5 frontend:** `Project-Documents/tasks/phase-7-frontend-handover.md` — hợp đồng API đã verify (7 route + mã lỗi
+> **Bàn giao §5 frontend:** `project-docs/tasks/phase-7-frontend-handover.md` — hợp đồng API đã verify (7 route + mã lỗi
 > thật), 11 sự thật backend mà UI phải tôn trọng (ví dụ `status=Completed` không bao giờ được set ⇒ phán quyết nằm ở
 > `ai_action_logs`; `activeAgentRunId` gồm cả run đang chờ), danh sách file cần sửa kèm số dòng, và cách verify offline
 > **không tốn token**.
@@ -547,9 +547,9 @@ Hai applier mới đi qua **nguyên** vòng đời `Pending → Approved/Rejecte
 
 ## Phase 14 — Nâng cao AI (✅ backend xong · 📤 frontend bàn giao)
 
-Kế hoạch: `Project-Documents/tasks/phase-14-ai-advanced.md` · Note bàn giao FE:
-`Project-Documents/tasks/phase-14-remaining-frontend-handover.md` · Báo cáo:
-`Project-Documents/report/phase-14-ai-advanced-test-report.md`.
+Kế hoạch: `project-docs/tasks/phase-14-ai-advanced.md` · Note bàn giao FE:
+`project-docs/tasks/phase-14-remaining-frontend-handover.md` · Báo cáo:
+`project-docs/report/phase-14-ai-advanced-test-report.md`.
 
 **Schema:** ⛔ **không migration nào** — `dotnet ef migrations list` vẫn **10**. Chat dùng `ai_action_logs`
 (bảng đã có; `action`/`entity_type` là text tự do) + transcript ở **client**; sức khỏe dự án tính lại mỗi request;

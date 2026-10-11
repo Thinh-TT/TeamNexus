@@ -2,9 +2,9 @@
 
 > **Trạng thái thi hành:** ✅ **§1 (Backend Task UX) XONG** — 2 bug thật đã bắt & sửa (§1.3) · ✅ **§2 (Backend Workspace & Activity) XONG** · ✅ **§3 (Frontend Task UX) XONG** · ✅ **§4 (Frontend Workspace Settings & Activity) XONG** · ✅ **§5 (CI & Tài liệu) XONG**.
 >
-> 📤 **Nghiệm thu hoàn tất:** Baseline frontend tăng từ 206 lên **279 tests (47 files)**, backend bảo toàn **226 tests**. Cổng CI `ci-web.yml` đã nâng bảo vệ baseline. Báo cáo hoàn chỉnh tại `Project-Documents/report/phase-10-advanced-task-workspace-ux-test-report.md`.
+> 📤 **Nghiệm thu hoàn tất:** Baseline frontend tăng từ 206 lên **279 tests (47 files)**, backend bảo toàn **226 tests**. Cổng CI `ci-web.yml` đã nâng bảo vệ baseline. Báo cáo hoàn chỉnh tại `project-docs/report/phase-10-advanced-task-workspace-ux-test-report.md`.
 
-> **Nguồn:** `Project-Documents/03-roadmap.md` → *Giai đoạn 10: Nâng cao Task & Workspace UX*.
+> **Nguồn:** `project-docs/03-roadmap.md` → *Giai đoạn 10: Nâng cao Task & Workspace UX*.
 > **Tiền đề:** Giai đoạn 7 (AI Agent Executor) · Giai đoạn 8 (Test/CI/Deploy) · Giai đoạn 9 (Đơn giản hoá Role) — **đã merge**.
 > **Nhánh:** `feat/phase10-advanced-task-workspace-ux`
 > **Schema:** ⛔ **KHÔNG migration.** `tasks.due_date` / `tasks.priority` / `tasks.description` đã có từ Phase 2
@@ -549,10 +549,10 @@ pages/WorkspaceActivityPage.tsx
 |---|---|---|
 | 1 | `.github/workflows/ci-web.yml` | Nâng cổng `if ($total -le 187)` → **`-le 206`** (baseline thật cuối Giai đoạn 8); sửa comment cho khớp ("baseline cuối Giai đoạn 7 là 187 → Giai đoạn 8 là 206 → Giai đoạn 10 là 279") |
 | 2 | `.github/workflows/ci-backend.yml` | ✅ **ĐÃ NÂNG** — `if ($total -ne 226)` (chuỗi: 171 Giai đoạn 9 → 189 §1 → **226 §2**) |
-| 3 | `Project-Documents/03-roadmap.md` | Giai đoạn 10: gắn link tài liệu này + baseline + "⛔ không migration" + 2 bug thật (theo mẫu Giai đoạn 6/7) |
+| 3 | `project-docs/03-roadmap.md` | Giai đoạn 10: gắn link tài liệu này + baseline + "⛔ không migration" + 2 bug thật (theo mẫu Giai đoạn 6/7) |
 | 4 | `README.md` | Thêm `## Trạng thái (Giai đoạn 10 – Nâng cao Task & Workspace UX)` với checklist theo 5 ô + nêu rõ **không** thêm migration |
-| 5 | `Project-Documents/04-database-design.md` | **KHÔNG sửa.** Nếu thấy cần ⇒ tức là đã đi sai (xem "Không được làm" ở §10) |
-| 6 | `Project-Documents/report/phase-10-...-test-report.md` | Tạo khi kết thúc: số test thật, bug thật bắt được, bằng chứng §9 |
+| 5 | `project-docs/04-database-design.md` | **KHÔNG sửa.** Nếu thấy cần ⇒ tức là đã đi sai (xem "Không được làm" ở §10) |
+| 6 | `project-docs/report/phase-10-...-test-report.md` | Tạo khi kết thúc: số test thật, bug thật bắt được, bằng chứng §9 |
 
 ---
 
@@ -620,7 +620,7 @@ pages/WorkspaceActivityPage.tsx
 | 10 | 2 workflow CI xanh | GitHub Actions | `ci-backend` (`total = 226`) + `ci-web` (`total ≥ 279`) | ✅ Đã cấu hình cổng CI (`-le 206` / baseline 279) |
 
 ### 9.3 Điều kiện "xong"
-Cả **5 ô** (A–E) + **3 hạng mục phát sinh** (F, G, H) đóng bằng bằng chứng ở §9.2; hai cổng CI đã nâng baseline và chạy xanh; `03-roadmap.md` + `README.md` đã ghi **số thật**; báo cáo tại `Project-Documents/report/phase-10-advanced-task-workspace-ux-test-report.md`.
+Cả **5 ô** (A–E) + **3 hạng mục phát sinh** (F, G, H) đóng bằng bằng chứng ở §9.2; hai cổng CI đã nâng baseline và chạy xanh; `03-roadmap.md` + `README.md` đã ghi **số thật**; báo cáo tại `project-docs/report/phase-10-advanced-task-workspace-ux-test-report.md`.
 
 ---
 

@@ -143,7 +143,7 @@
   ```
 - [x] `dotnet ef migrations add Phase5AiObserverSchema --project src/TeamNexus.Persistence --startup-project src/TeamNexus.Api` → sinh 1 file `.cs` + `.Designer.cs` (cả 3 bảng trong **một** migration; không có phụ thuộc vòng).
 - [x] `dotnet ef database update --project src/TeamNexus.Persistence --startup-project src/TeamNexus.Api` — áp lên PostgreSQL local (DB `TeamNexus`).
-- [x] Cập nhật `Project-Documents/04-database-design.md` §3.6/§4/§5 — *đã làm ở bước lập kế hoạch (commit tài liệu), theo tiền lệ Phase 4 §1.4*.
+- [x] Cập nhật `project-docs/04-database-design.md` §3.6/§4/§5 — *đã làm ở bước lập kế hoạch (commit tài liệu), theo tiền lệ Phase 4 §1.4*.
 - [x] **Verify §1 (đã chạy):** `dotnet build TeamNexus.sln` → **0 warning / 0 error**; harness tạm ngoài workspace (`%TEMP%\tn-ai-s5-s1-verify`, đã xoá) đọc `information_schema`/`pg_constraint`/`pg_indexes` + round-trip insert→read→delete → **28/28 check PASS**; `dotnet ef migrations list` → **5 migration đã applied** (`20260910105154_Phase5AiObserverSchema`); **4 migration cũ + 8 file cũ zero-diff**, snapshot chỉ **+227 dòng / −0**; DB dev về đúng baseline (`workspaces=2, boards=15, tasks=18, users=1, ai_action_logs=1`, 3 bảng mới `0 row`).
 
 > **Ghi chú hiện thực §1 (khác biệt nhỏ so với spec, có chủ ý):**
@@ -693,7 +693,7 @@
 >
 > ### 7) Sau khi xong §6 + §7.2
 > - Tick các checkbox §6.1–§6.4 và §7.2 trong file này.
-> - Bổ sung ảnh chụp (drawer cảnh báo + observer runs) vào `Project-Documents/report/phase-5-ai-observer-test-report.md` (mục "Phần UI — bổ sung sau §6").
+> - Bổ sung ảnh chụp (drawer cảnh báo + observer runs) vào `project-docs/report/phase-5-ai-observer-test-report.md` (mục "Phần UI — bổ sung sau §6").
 > - Xoá dòng "Còn §7.2 (UI gọi API thật) do antigravity" ở §7.3 sau khi test xong.
 >
 > ### 8) Runbook dev (đọc trước khi tự chạy backend)
@@ -704,7 +704,7 @@
 > 5. ⚠️ **Đừng** boot API rồi để chạy quá 60s với DB dev nếu không muốn Observer tự quét (timer mặc định 30 phút, nhưng lần chạy đầu tiên sau `StartupDelaySeconds` sẽ thực hiện).
 >
 > ### 9) Backend đã verify — antigravity KHÔNG cần chạy lại
-> Tổng **178 check PASS** (API thật + PostgreSQL thật + `FakeAiProvider`/stub, không tốn token). Chi tiết đầy đủ: `Project-Documents/report/phase-5-ai-observer-test-report.md`. Tóm tắt: A schema **28/28** · B detector thuần **44/44** · B2 validator/summarizer/fake **15/15** (+7/7 sau fix) · C background service **3/3** · D scan end-to-end **6/6** · E chi phí **3/3** · F HTTP API 6 endpoint **32/32** · G activity log **31/31** · H dedupe/retention **2/2** · I concurrency **3/3** · J failure modes **4/4**.
+> Tổng **178 check PASS** (API thật + PostgreSQL thật + `FakeAiProvider`/stub, không tốn token). Chi tiết đầy đủ: `project-docs/report/phase-5-ai-observer-test-report.md`. Tóm tắt: A schema **28/28** · B detector thuần **44/44** · B2 validator/summarizer/fake **15/15** (+7/7 sau fix) · C background service **3/3** · D scan end-to-end **6/6** · E chi phí **3/3** · F HTTP API 6 endpoint **32/32** · G activity log **31/31** · H dedupe/retention **2/2** · I concurrency **3/3** · J failure modes **4/4**.
 > Hai bug thật đã bắt & sửa trong quá trình verify (nêu trong báo cáo): (1) `POST .../observer/scan` thiếu kiểm tra quyền ⇒ Member quét được; (2) `FakeAiProvider` nhánh Observer parse sai offset marker ⇒ **im lặng trả findings rỗng**. Nếu bạn thấy behavior khác hai điều trên, hãy báo lại thay vì tự sửa backend.
 
 
@@ -747,7 +747,7 @@
 
 > Cùng cách Phase 3 §Verify §4 / Phase 4 §5.1: harness đặt **ngoài workspace** (`%TEMP%`), tự ký JWT bằng `Jwt:SigningKey` trong User Secrets, **xoá sau khi chạy**, không commit. `DeepSeek__ApiKey` để trống ⇒ `FakeAiProvider` (**không gọi AI thật, không tốn token**). Fixture tự tạo rồi hard-delete; DB về baseline; API đã stop; harness đã xoá.
 >
-> **Trạng thái: ✅ BACKEND XONG (§1–§5) — §7.1 đã chạy đủ 12 nhóm: A **28/28** · B **44/44** · B2 **15/15** (+ B2m chạy lại **7/7** sau fix) · C **3/3** · D **6/6** · E **3/3** · F **32/32** · G **31/31** · H **2/2** · I **3/3** · J **4/4** · K **PASS** ⇒ **178 check PASS**. Frontend §6 + §7.2 đã hoàn tất bởi antigravity (122 tests PASS, oxlint 0/0, tsc sạch, vite build sạch).** Số liệu đầy đủ: `Project-Documents/report/phase-5-ai-observer-test-report.md`.
+> **Trạng thái: ✅ BACKEND XONG (§1–§5) — §7.1 đã chạy đủ 12 nhóm: A **28/28** · B **44/44** · B2 **15/15** (+ B2m chạy lại **7/7** sau fix) · C **3/3** · D **6/6** · E **3/3** · F **32/32** · G **31/31** · H **2/2** · I **3/3** · J **4/4** · K **PASS** ⇒ **178 check PASS**. Frontend §6 + §7.2 đã hoàn tất bởi antigravity (122 tests PASS, oxlint 0/0, tsc sạch, vite build sạch).** Số liệu đầy đủ: `project-docs/report/phase-5-ai-observer-test-report.md`.
 
 **Ma trận check (mã hoá để báo cáo giống Phase 4):**
 
@@ -762,7 +762,7 @@
 9. **I. Concurrency (I1–I3) — ✅ 3/3 PASS:** 2 `ScanAsync` song song ⇒ **1 `Completed` + 1 `Skipped(AlreadyRunning)`** (SemaphoreSlim trong process; advisory lock là tầng 2); đua không nhân bội notification (≤ 2× một vòng gửi — hạn chế đã ghi rõ ở "Ghi chú hiện thực §4"); advisory lock **được giải phóng** ⇒ scan kế tiếp `Completed`.
 10. **J. Failure modes (J1–J4) — ✅ 4/4 PASS:** JSON AI hỏng (đã strip code fence nhưng vẫn sai) ⇒ run `Failed` + `summary.error` 102 ký tự + **0** notification; provider ném `AiProviderException` ⇒ `Failed`; `findings: []` ⇒ `Completed` + 0 notification; finding có **ID bịa** ⇒ alert vẫn được tạo nhưng **evidence rỗng** (`taskIds=0`, `userIds=0`) ⇒ không lộ ID không tồn tại.
 11. **K. Kiểm tra kiến trúc (K1–K3) — ✅ PASS:** `ObserverService`/`NotificationService` không có đường ghi `Tasks`/`Labels`/`TaskLabels`/`AiActionLogs`; `ObserverService` không tham chiếu `IAiActionService`; `git diff --name-only -- '*.csproj'` **rỗng** (không thêm project reference); `AiModule` **không** đổi §4 (DI để §5.4).
-12. [ ] *(Tuỳ chọn)* Tạo `Project-Documents/report/phase-5-ai-observer-test-report.md` (đúng format Phase 4: môi trường, phương pháp, bảng check có mã + bằng chứng định lượng, known gaps).
+12. [ ] *(Tuỳ chọn)* Tạo `project-docs/report/phase-5-ai-observer-test-report.md` (đúng format Phase 4: môi trường, phương pháp, bảng check có mã + bằng chứng định lượng, known gaps).
 
 ### 7.2 Frontend (Vitest + Testing Library)
 
@@ -815,12 +815,12 @@
 
 ## 9. Tài liệu
 
-- [x] Tạo `Project-Documents/tasks/phase-5-ai-observer.md` (file này — checklist như trên).
-- [x] Cập nhật `Project-Documents/04-database-design.md`: §3.6 (3 bảng sau khi tinh chỉnh: `payload`/`summary` jsonb, `activity_logs` append-only **không** query filter, `notifications` fan-out theo Manager + `read_at`, `ai_observer_runs.status` thêm `Skipped`), §4 (`ObserverRunStatus`/`NotificationSeverity`), §5 (index mới), §7 (retention + advisory lock + ghi chú Observer không ghi dữ liệu nghiệp vụ) — *đã làm ở bước lập kế hoạch, theo tiền lệ Phase 4 §1.4*.
+- [x] Tạo `project-docs/tasks/phase-5-ai-observer.md` (file này — checklist như trên).
+- [x] Cập nhật `project-docs/04-database-design.md`: §3.6 (3 bảng sau khi tinh chỉnh: `payload`/`summary` jsonb, `activity_logs` append-only **không** query filter, `notifications` fan-out theo Manager + `read_at`, `ai_observer_runs.status` thêm `Skipped`), §4 (`ObserverRunStatus`/`NotificationSeverity`), §5 (index mới), §7 (retention + advisory lock + ghi chú Observer không ghi dữ liệu nghiệp vụ) — *đã làm ở bước lập kế hoạch, theo tiền lệ Phase 4 §1.4*.
 - [x] Cập nhật `src/Modules/Ai/TeamNexus.Modules.Ai/README.md`: mục **"Phase 5 — AI Observer"** (bảng 6 endpoint, options `Observer`, công thức 4 tín hiệu, luồng 9 bước, dedupe 24h, advisory lock, retention, `FakeAiProvider` 2 nhánh, kênh in-app + email *tương lai*) + mục **"Verify §5"** (178 check + 4 lưu ý viết harness) — **đã làm**
 - [x] Cập nhật `src/Modules/Board/TeamNexus.Modules.Board/README.md`: mục **"Phát activity log cho AI Observer"** (5 mutation + payload + best-effort) — **đã làm**
 - [x] Cập nhật `README.md` root (mục "Trạng thái (Giai đoạn 5 – AI Observer)") và tick checklist `03-roadmap.md` — **đã làm**
-- [x] Tạo `Project-Documents/report/phase-5-ai-observer-test-report.md` (format Phase 4: môi trường, phương pháp, 12 nhóm check có mã + bằng chứng, 2 bug thật đã sửa, known gaps) — **đã làm**
+- [x] Tạo `project-docs/report/phase-5-ai-observer-test-report.md` (format Phase 4: môi trường, phương pháp, 12 nhóm check có mã + bằng chứng, 2 bug thật đã sửa, known gaps) — **đã làm**
 
 ---
 

@@ -716,8 +716,8 @@ Fan-out giữ nguyên "1 row / 1 người nhận".
 - **Giai đoạn 7 chưa chốt (cố ý để ngỏ, ghi rõ để không ai tưởng là sót):** cơ chế prune `agent_runs` theo retention (bảng đã có `Agent:RetentionDays` nhưng việc dọn chỉ làm sau khi phần chính ổn định); API tải/lưu attachment ngoài PostgreSQL (nếu một ngày vượt 512 KB/file, sẽ là **migration + storage mới**, không phải sửa cột hiện có).
 
 **Tài liệu nguồn:**
-- `Project-Documents/01-system-specification.md`
-- `Project-Documents/02-tech-stack-decisions.md`
-- `Project-Documents/03-roadmap.md`
-- `Project-Documents/tasks/phase-1-auth.md`
-- `Project-Documents/tasks/phase-7-ai-agent-executor.md`
+- `project-docs/01-system-specification.md`
+- `project-docs/02-tech-stack-decisions.md`
+- `project-docs/03-roadmap.md`
+- `project-docs/tasks/phase-1-auth.md`
+- `project-docs/tasks/phase-7-ai-agent-executor.md`

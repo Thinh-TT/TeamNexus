@@ -1,7 +1,7 @@
 # Giai đoạn 14 — Bàn giao Frontend cho antigravity (AI Task Chat · Sức khỏe dự án · AI Board Template)
 
 > **Trạng thái:** 📤 **BÀN GIAO — backend đã xong & verify, frontend CHƯA bắt đầu.**
-> **Nguồn:** `Project-Documents/tasks/phase-14-ai-advanced.md` (kế hoạch đã chốt) — tài liệu này **không** thay thế kế hoạch.
+> **Nguồn:** `project-docs/tasks/phase-14-ai-advanced.md` (kế hoạch đã chốt) — tài liệu này **không** thay thế kế hoạch.
 > Tài liệu này là **hồ sơ hợp đồng API + danh sách các bẫy đã biết** cho phần frontend Giai đoạn 14
 > (và vì các giai đoạn sau — đặc biệt **Flutter / Giai đoạn 16** — dùng lại đúng các hợp đồng API mô tả ở §1.2, §2.2, §3.2).
 >

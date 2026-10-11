@@ -4,9 +4,9 @@
 > **Người giao:** phiên làm **backend §1 + §2** (đã xong và verify: **226/226 test PASS, 0 fail, 0 skip** trên PostgreSQL 18 thật).
 >
 > **Tham chiếu bắt buộc:**
-> - `Project-Documents/tasks/phase-10-advanced-task-workspace-ux.md` — **kế hoạch gốc, đọc trước khi code.** Có bảng quyết định **D1–D12**, checklist theo từng file, ca biên, bảng bằng chứng.
-> - `Project-Documents/03-roadmap.md` → *Giai đoạn 10* (5 ô hoàn thiện A–E).
-> - `Project-Documents/tasks/phase-8-2b-frontend-handover.md` — note bàn giao mẫu trước đó (cùng văn phong, cùng mức chi tiết).
+> - `project-docs/tasks/phase-10-advanced-task-workspace-ux.md` — **kế hoạch gốc, đọc trước khi code.** Có bảng quyết định **D1–D12**, checklist theo từng file, ca biên, bảng bằng chứng.
+> - `project-docs/03-roadmap.md` → *Giai đoạn 10* (5 ô hoàn thiện A–E).
+> - `project-docs/tasks/phase-8-2b-frontend-handover.md` — note bàn giao mẫu trước đó (cùng văn phong, cùng mức chi tiết).
 >
 > **Phạm vi note này:** **§3 + §4 + §5** — tức **toàn bộ frontend** của Giai đoạn 10, **cộng** 2 việc nhỏ về CI và tài liệu.
 > **Backend §1 và §2 ĐÃ XONG** — bạn **không** cần làm lại, và **không được sửa** các file backend (xem §7).
@@ -244,10 +244,10 @@ Nếu làm §3/§4 xong trước rồi mới sửa thì cũng được, nhưng *
 
 | # | File | Việc |
 |---|---|---|
-| 1 | `Project-Documents/tasks/phase-10-advanced-task-workspace-ux.md` | Đánh dấu **§3 / §4 / §5 = XONG**; điền **số test frontend thật** vào §9.1 và §9.2; dòng đầu ghi trạng thái thi hành |
-| 2 | `Project-Documents/03-roadmap.md` | Giai đoạn 10: tick các ô **A (Due Date)**, **C (Description)**, **D (Workspace Settings)**, **E (Activity Log UI)** — ô **B** đã tick từ §1 |
+| 1 | `project-docs/tasks/phase-10-advanced-task-workspace-ux.md` | Đánh dấu **§3 / §4 / §5 = XONG**; điền **số test frontend thật** vào §9.1 và §9.2; dòng đầu ghi trạng thái thi hành |
+| 2 | `project-docs/03-roadmap.md` | Giai đoạn 10: tick các ô **A (Due Date)**, **C (Description)**, **D (Workspace Settings)**, **E (Activity Log UI)** — ô **B** đã tick từ §1 |
 | 3 | `README.md` | Mục `## Trạng thái (Giai đoạn 10 …)`: thêm gạch đầu dòng **§3** và **§4/§5**, cập nhật số test frontend thật |
-| 4 | `Project-Documents/report/phase-10-advanced-task-workspace-ux-test-report.md` | **Tạo mới** — số test thật (trước/sau), bug thật bắt được (2 bug backend ở §1 + bug frontend nếu có), bằng chứng |
+| 4 | `project-docs/report/phase-10-advanced-task-workspace-ux-test-report.md` | **Tạo mới** — số test thật (trước/sau), bug thật bắt được (2 bug backend ở §1 + bug frontend nếu có), bằng chứng |
 
 > ⚠️ **Số mục tiêu hiện tại trong tài liệu là `frontend ≥ 279`, `backend ≥ 281`.** Backend thật đang là **226** và sẽ **không đổi** ở §3–§5 ⇒ khi chốt tài liệu, sửa mục tiêu backend thành **226** (đúng, không phải "≥ 281") hoặc ghi rõ "226 là con số cuối của giai đoạn".
 
@@ -310,6 +310,6 @@ Ghi ở task doc §2.7; tóm tắt phần **áp dụng được cho frontend**:
 ## 9. Sau khi §3+§4+§5 xong
 
 1. Điền số test thật vào task doc §9 + `03-roadmap.md` + `README.md`.
-2. Tạo `Project-Documents/report/phase-10-advanced-task-workspace-ux-test-report.md`.
+2. Tạo `project-docs/report/phase-10-advanced-task-workspace-ux-test-report.md`.
 3. Chạy lại toàn bộ bảng bằng chứng §6, dán số thật, rồi mới coi Giai đoạn 10 là **hoàn thành**.
 4. Chuyển sang **Giai đoạn 11 (Quản lý Member & Profile)** — cần migration mới (`workspace_invitations`).

@@ -2,7 +2,7 @@
 
 Sở hữu **một DbContext duy nhất** (`TeamNexusDbContext`) cùng toàn bộ domain entities,
 EF configurations và **một chuỗi migration duy nhất** cho toàn bộ modular monolith
-(theo `Project-Documents/04-database-design.md` §1.1).
+(theo `project-docs/04-database-design.md` §1.1).
 
 - `Data/Entities/` – entities (Identity + Workspace/Board/RefreshToken ở Giai đoạn 1; BoardColumn/
   BoardTask/Label/TaskLabel/TaskComment ở Giai đoạn 2).

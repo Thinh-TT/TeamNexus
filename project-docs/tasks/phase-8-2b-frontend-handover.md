@@ -2,8 +2,8 @@
 
 > **Người nhận:** Antigravity (agent/đội thực thi frontend).
 > **Người giao:** phiên làm backend §2 (**đã xong và verify: 170/170 test PASS** trên PostgreSQL 18 thật).
-> **Tham chiếu bắt buộc:** `Project-Documents/tasks/phase-8-completion-test-deploy.md` §2b, §3, §6.2 · §0.2 (D7/D8/D9) ·
-> `Project-Documents/03-roadmap.md` (Giai đoạn 8) · `Project-Documents/report/phase-8-completion-test-deploy-report.md` (sẽ tạo ở §9).
+> **Tham chiếu bắt buộc:** `project-docs/tasks/phase-8-completion-test-deploy.md` §2b, §3, §6.2 · §0.2 (D7/D8/D9) ·
+> `project-docs/03-roadmap.md` (Giai đoạn 8) · `project-docs/report/phase-8-completion-test-deploy-report.md` (sẽ tạo ở §9).
 >
 > **Phạm vi:** CHỈ `frontend/` + list đóng 3 file backend ở §3.1. **Không** sửa `Program.cs`, **không** sinh migration,
 > **không** đổi hợp đồng REST/DTO, **không** thêm route.
@@ -223,7 +223,7 @@ export const useBoardHub = (boardId: string | undefined, refetch?: () => void | 
 
 **Phải ghi vào báo cáo khi xong:** số test frontend mới (trước/sau), số test backend vẫn 170, và **bất kỳ phát hiện nào trái với note này**
 (ví dụ `withAutomaticReconnect` cần chữ ký khác, hoặc `BoardView` không truyền được `reconnect` như mô tả) — ghi thẳng vào
-`Project-Documents/report/phase-8-completion-test-deploy-report.md`, **đừng** tự ý đổi hợp đồng ở §2b/§3.
+`project-docs/report/phase-8-completion-test-deploy-report.md`, **đừng** tự ý đổi hợp đồng ở §2b/§3.
 
 ---
 

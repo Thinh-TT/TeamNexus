@@ -4,8 +4,8 @@
 > **Người giao:** phiên làm backend §2–§4 + verify §7 (đã xong, **270 → 291 check PASS**).
 > **Phạm vi:** chỉ **frontend** (`frontend/`). Backend §2–§4 **đã xong và đã verify trên API thật + PostgreSQL 18 thật**;
 > **không** cần sửa backend, **không** sinh migration, **không** thêm route.
-> **Nguồn chuẩn:** `Project-Documents/tasks/phase-7-ai-agent-executor.md` §5.1 (**hợp đồng đã đóng băng**) + §5.2 (checklist),
-> `Project-Documents/report/phase-7-ai-agent-executor-test-report.md` §2.3 (bằng chứng verify).
+> **Nguồn chuẩn:** `project-docs/tasks/phase-7-ai-agent-executor.md` §5.1 (**hợp đồng đã đóng băng**) + §5.2 (checklist),
+> `project-docs/report/phase-7-ai-agent-executor-test-report.md` §2.3 (bằng chứng verify).
 >
 > **Việc phải làm, tóm tắt:** (A) dropdown đổi người thực hiện — hạng mục **bắt buộc**, là nửa còn lại của ô roadmap;
 > (B) trạng thái "Chờ làm rõ" + nút **"Chạy lại"** trên Kanban; (C) panel chạy Agent + real-time + duyệt kết quả + tệp đính kèm;
@@ -215,8 +215,8 @@ export interface AgentRunProgressEvent {
    `FakeAiProvider` hỏi lại) ⇒ task sang cột "Chờ làm rõ" + nút **"Chạy lại"** hoạt động sau khi trả lời bằng comment.
    > Mẹo: để test offline **không tốn token**, đặt env `DeepSeek__ApiKey` = **một khoảng trắng** `' '` (env rỗng bị .NET coi là
    > "unset" và User Secrets sẽ thắng trở lại ⇒ gọi DeepSeek thật).
-3. Cập nhật: `Project-Documents/tasks/phase-7-ai-agent-executor.md` §5 (tick checklist + banner kết quả),
-   `README.md` (dòng §5), `Project-Documents/report/phase-7-ai-agent-executor-test-report.md` (thêm §2.5 nhóm **J** với số
+3. Cập nhật: `project-docs/tasks/phase-7-ai-agent-executor.md` §5 (tick checklist + banner kết quả),
+   `README.md` (dòng §5), `project-docs/report/phase-7-ai-agent-executor-test-report.md` (thêm §2.5 nhóm **J** với số
    test thật). Ghi rõ nhóm **J** trong §7 là **hạng mục cuối cùng** còn lại của Giai đoạn 7 ⇒ sau đó §8 chỉ còn đối chiếu.
 4. **Không** sửa backend. Nếu phát hiện lệch hợp đồng, dừng lại và báo (kèm request/response thật) thay vì tự sửa DTO.
 

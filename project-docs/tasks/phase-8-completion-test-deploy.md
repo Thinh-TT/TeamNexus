@@ -1124,7 +1124,7 @@ Và ngay cả khi reconnect thành công, `useBoardHub` **không refetch** (B8) 
 - [ ] **Cold-start:** đo được ≤ **90 giây** tự phục hồi sau ≥ 20 phút rỗi, không cần F5 (§6.5), có số thật.
 - [ ] **UI/UX:** đi hết §7.1 một vòng, mọi mục trong danh sách chốt §7.2 đã xử lý, ❌ không phát sinh redesign ngoài danh sách.
 - [ ] **5 ô roadmap Giai đoạn 8** đều có thể tick, mỗi ô dẫn được tới bằng chứng cụ thể.
-- [ ] **Báo cáo:** `Project-Documents/report/phase-8-completion-test-deploy-report.md` tồn tại, có số liệu thật + URL + ảnh chụp + thời gian cold-start.
+- [ ] **Báo cáo:** `project-docs/report/phase-8-completion-test-deploy-report.md` tồn tại, có số liệu thật + URL + ảnh chụp + thời gian cold-start.
 
 ### 9.2 Ma trận rủi ro
 
@@ -1142,7 +1142,7 @@ Và ngay cả khi reconnect thành công, `useBoardHub` **không refetch** (B8) 
 
 ### 9.3 Báo cáo cần nộp
 
-- [ ] `Project-Documents/report/phase-8-completion-test-deploy-report.md` — gồm: bảng số test backend/frontend thật; kết quả 2 workflow CI (link run);
+- [ ] `project-docs/report/phase-8-completion-test-deploy-report.md` — gồm: bảng số test backend/frontend thật; kết quả 2 workflow CI (link run);
   URL production (API + FE); kết quả 10 mục checklist §5.8; **thời gian cold-start đo được**; danh sách phát hiện UI/UX + đã sửa gì + cố ý bỏ gì;
   bug thật bắt được trong giai đoạn (nếu có) và cách sửa; ảnh chụp màn hình làm bằng chứng.
 - [ ] Cập nhật `03-roadmap.md` (tick 5 ô) + `README.md` (link demo, badge, số test) sau khi hoàn thành.

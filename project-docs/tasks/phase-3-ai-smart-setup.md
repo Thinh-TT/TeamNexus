@@ -350,7 +350,7 @@
 
 ## 8. Tài liệu
 
-- [x] Tạo `Project-Documents/tasks/phase-3-ai-smart-setup.md` (checklist như trên).
+- [x] Tạo `project-docs/tasks/phase-3-ai-smart-setup.md` (checklist như trên).
 - [x] Tạo `src/Modules/Ai/TeamNexus.Modules.Ai/README.md` (endpoints, service, cấu hình DeepSeek, contract bàn giao).
 - [x] Cập nhật `README.md` root (mục "Trạng thái Giai đoạn 3") và tick checklist `03-roadmap.md` khi hoàn tất.
 

@@ -134,7 +134,7 @@ Kết luận: trong module Ai **chỉ** có 1 chỗ ghi dữ liệu nghiệp v�
 - ✅ 6 endpoint trả đúng mã (201/200/400/401/403/404/405/409) và JSON camelCase; rollback giữ log `Pending` khi apply lỗi.
 - ✅ **54/54 check PASS** ở lớp end-to-end (§5.1), cộng thêm 33 (schema) + 83 (service) + 36 (endpoint) check đã chạy ở các bước trước.
 
-**Còn lại của Giai đoạn 4:** §4 frontend (`src/features/ai/`) + §5.2 test Vitest — bàn giao **antigravity**, theo note bàn giao trong `Project-Documents/tasks/phase-4-accountability-layer.md` §4.
+**Còn lại của Giai đoạn 4:** §4 frontend (`src/features/ai/`) + §5.2 test Vitest — bàn giao **antigravity**, theo note bàn giao trong `project-docs/tasks/phase-4-accountability-layer.md` §4.
 
 ---
 

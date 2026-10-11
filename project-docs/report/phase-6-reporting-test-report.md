@@ -130,7 +130,7 @@ thật trước khi xét fallback (D21) ⇒ không còn phụ thuộc thứ tự
 ## 6. Phần UI — bổ sung sau §6
 
 > **Chưa có.** Frontend (§6 + §7.2) được **bàn giao antigravity**; contract đầy đủ ở
-> `Project-Documents/tasks/phase-6-reporting-export.md` mục "🔻 BÀN GIAO §6" và hướng dẫn verify ở §7.2 của file đó.
+> `project-docs/tasks/phase-6-reporting-export.md` mục "🔻 BÀN GIAO §6" và hướng dẫn verify ở §7.2 của file đó.
 >
 > **Baseline ghi trước khi bàn giao (2026-09-10):** `oxlint` **0 warn/0 err** · `tsc -b` **exit 0** ·
 > `vitest run` **22 files / 122 tests PASS**.

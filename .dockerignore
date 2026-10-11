@@ -9,6 +9,6 @@
 **/dist
 frontend/
 tests/
-Project-Documents/
+project-docs/
 *.md
 .gitignore

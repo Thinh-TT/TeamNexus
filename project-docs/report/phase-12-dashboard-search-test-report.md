@@ -133,11 +133,11 @@ Toàn bộ 17 file test kiểm thử tự động đã được xây dựng và 
      ```
 
 ### 5.2 Cập Nhật Tài Liệu Dự Án
-1. `Project-Documents/03-roadmap.md`: Đánh dấu `[x]` hoàn thành cả 3 mục của Giai đoạn 12; ghi nhận số đo thật 423 backend / 406 frontend.
-2. `Project-Documents/01-system-specification.md`: Cập nhật trạng thái mục §11 thành *"ĐÃ HOÀN THÀNH & VERIFY ĐẦY ĐỦ"*.
-3. `Project-Documents/04-database-design.md`: Bổ sung ghi chú thiết kế Giai đoạn 12 vào Mục 7 (Toàn vẹn dữ liệu, edge cases & failure modes).
+1. `project-docs/03-roadmap.md`: Đánh dấu `[x]` hoàn thành cả 3 mục của Giai đoạn 12; ghi nhận số đo thật 423 backend / 406 frontend.
+2. `project-docs/01-system-specification.md`: Cập nhật trạng thái mục §11 thành *"ĐÃ HOÀN THÀNH & VERIFY ĐẦY ĐỦ"*.
+3. `project-docs/04-database-design.md`: Bổ sung ghi chú thiết kế Giai đoạn 12 vào Mục 7 (Toàn vẹn dữ liệu, edge cases & failure modes).
 4. `README.md`: Thêm phân mục *"Trạng thái (Giai đoạn 12 – Dashboard & Tìm kiếm)"* và cập nhật bảng CI, hướng dẫn chạy test.
-5. `Project-Documents/tasks/phase-12-dashboard-search.md`: Điền đầy đủ số đo thực tế vào bảng DoD và bảng bằng chứng nghiệm thu.
+5. `project-docs/tasks/phase-12-dashboard-search.md`: Điền đầy đủ số đo thực tế vào bảng DoD và bảng bằng chứng nghiệm thu.
 
 ---
 
