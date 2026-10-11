@@ -36,6 +36,7 @@ import { useWorkspaceRole } from '../../../shared/hooks/useWorkspaceRole'
 import { AppHeader } from '../../../shared/components/AppHeader'
 import { BoardModal } from '../components/BoardModal'
 import { BoardTemplateModal } from '../../ai'
+import { AiActionHistoryDrawer } from '../../ai/components/AiActionHistoryDrawer'
 import { boardApi } from '../services/boardApi'
 import type { BoardResponse, CreateBoardRequest, UpdateBoardRequest } from '../types/board.types'
 
@@ -51,6 +52,13 @@ export const BoardListPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingBoard, setEditingBoard] = useState<BoardResponse | null>(null)
   const [aiTemplateModalOpen, setAiTemplateModalOpen] = useState(false)
+
+  /**
+   * Workspace-wide AI history (Phase 14.5 A1.1). Separate from the board's own drawer on purpose: a log
+   * that creates a board is scoped to the WORKSPACE, so without this the only way to approve or undo a
+   * board-template proposal was to open the board it had already created.
+   */
+  const [aiHistoryOpen, setAiHistoryOpen] = useState(false)
 
   const fetchBoards = useCallback(async () => {
     if (!workspaceId) return
@@ -210,6 +218,14 @@ export const BoardListPage: React.FC = () => {
                   >
                     Tạo board bằng AI
                   </Button>
+                  <Button
+                    icon={<HistoryOutlined />}
+                    data-testid="workspace-ai-history-btn"
+                    style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}
+                    onClick={() => setAiHistoryOpen(true)}
+                  >
+                    Lịch sử AI
+                  </Button>
                 </>
               )}
               <Button
@@ -364,6 +380,17 @@ export const BoardListPage: React.FC = () => {
         workspaceId={workspaceId ?? ''}
         onCreated={fetchBoards}
       />
+
+      {/* Workspace-scoped history: an approved board-template action CREATES a board, so the list has to be
+          re-fetched after a decision — otherwise the new board only appears on the next manual reload. */}
+      {isManagerOrAdmin && (
+        <AiActionHistoryDrawer
+          open={aiHistoryOpen}
+          onClose={() => setAiHistoryOpen(false)}
+          workspaceId={workspaceId ?? ''}
+          onBoardChanged={fetchBoards}
+        />
+      )}
     </Layout>
   )
 }

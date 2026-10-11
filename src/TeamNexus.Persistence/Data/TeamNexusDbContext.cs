@@ -7,7 +7,7 @@ namespace TeamNexus.Persistence.Data;
 
 /// <summary>
 /// The single DbContext for the whole modular monolith — Identity + all domain
-/// entities — keeping ONE EF Core migration chain (Project-Documents/04-database-design.md §1.1).
+/// entities — keeping ONE EF Core migration chain (/04-database-design.md §1.1).
 /// Column/table names follow snake_case via the EFCore.NamingConventions package.
 /// </summary>
 public class TeamNexusDbContext
@@ -54,6 +54,11 @@ public class TeamNexusDbContext
     public DbSet<WorkspaceInvitation> WorkspaceInvitations => Set<WorkspaceInvitation>();
 
     public DbSet<EmailMessage> EmailMessages => Set<EmailMessage>();
+
+    // AI Agent Chat (Phase 14.5 §B): append-only board-scoped chat transcript. `task_id` is the
+    // reserved half of the scope CHECK, so a later phase can move the task tab onto server storage
+    // without another migration.
+    public DbSet<AgentChatMessage> AgentChatMessages => Set<AgentChatMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -67,6 +67,11 @@ public sealed record AiActionContext(
 /// and defaults to <c>null</c> so no existing applier has to be touched, and the snapshot writer emits
 /// it only when present.
 /// </para>
+/// <para>
+/// <see cref="UpdatedTaskId"/>/<see cref="FromColumnId"/> were added in Phase 14.5 (§B) for the two
+/// field-level actions the board chat can propose. Both are optional for the same reason: the snapshot
+/// writer omits nulls, so every earlier snapshot keeps its exact previous key set.
+/// </para>
 /// </summary>
 public sealed record AiActionAppliedResult(
     string EntityType,
@@ -77,4 +82,6 @@ public sealed record AiActionAppliedResult(
     Guid? CreatedCommentId = null,
     Guid? CreatedAttachmentId = null,
     IReadOnlyList<Guid>? CreatedColumnIds = null,
-    Guid? CreatedBoardId = null);
+    Guid? CreatedBoardId = null,
+    Guid? UpdatedTaskId = null,
+    Guid? FromColumnId = null);

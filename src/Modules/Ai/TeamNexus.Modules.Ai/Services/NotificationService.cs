@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TeamNexus.Modules.Ai.DTOs;
 using TeamNexus.Modules.Ai.Options;
+using TeamNexus.Modules.Ai.Services.Integrations;
 using TeamNexus.Modules.Board.Services;
 using TeamNexus.Persistence.Data;
 using TeamNexus.Persistence.Data.Entities;
@@ -109,15 +110,18 @@ public sealed class NotificationService : INotificationService
 
     private readonly TeamNexusDbContext _db;
     private readonly ObserverOptions _options;
+    private readonly IExternalAlertSink _externalAlerts;
     private readonly ILogger<NotificationService> _logger;
 
     public NotificationService(
         TeamNexusDbContext db,
         IOptions<ObserverOptions> options,
+        IExternalAlertSink externalAlerts,
         ILogger<NotificationService> logger)
     {
         _db = db;
         _options = options.Value;
+        _externalAlerts = externalAlerts;
         _logger = logger;
     }
 
@@ -190,6 +194,24 @@ public sealed class NotificationService : INotificationService
 
         _db.Notifications.AddRange(toAdd);
         await _db.SaveChangesAsync(ct);
+
+        // Phase 14.5 (A1.2): the in-app rows are committed, so this is the first honest moment to offer
+        // the alert to an external transport. The Observer path may carry several findings, so each one
+        // is published separately — a workspace-level Slack channel should show three alerts, not one
+        // digest the transport would have to split.
+        foreach (var alert in toAdd
+                     .GroupBy(n => new { n.Type, n.Title, n.Message, n.Payload })
+                     .Select(group => new ExternalAlertMessage(
+                         workspaceId,
+                         group.Key.Type,
+                         group.Key.Title,
+                         group.Key.Message,
+                         group.Key.Payload,
+                         group.Select(n => n.RecipientUserId).ToList())))
+        {
+            await PublishExternalAsync(alert, ct);
+        }
+
         return toAdd.Count;
     }
 
@@ -231,6 +253,18 @@ public sealed class NotificationService : INotificationService
 
         _db.Notifications.AddRange(rows);
         await _db.SaveChangesAsync(ct);
+
+        // Phase 14.5 (A1.2): same seam as the Observer and member paths — every alert family leaves the
+        // system through one place.
+        await PublishExternalAsync(
+            new ExternalAlertMessage(
+                workspaceId,
+                notification.Type,
+                notification.Title,
+                notification.Message,
+                notification.PayloadJson,
+                rows.Select(r => r.RecipientUserId).ToList()),
+            ct);
 
         _logger.LogInformation(
             "Agent notification {Type} written for {Recipients} recipient(s) of workspace {WorkspaceId}.",
@@ -358,6 +392,19 @@ public sealed class NotificationService : INotificationService
         _db.Notifications.AddRange(rows);
         await _db.SaveChangesAsync(ct);
 
+        // Phase 14.5 (A1.2): the member-facing path (task assigned, comment, mention, invitation) goes
+        // through the same seam. Phase 15 wants "task overdue" and "member joined" on Slack, and both
+        // of those are exactly this call.
+        await PublishExternalAsync(
+            new ExternalAlertMessage(
+                workspaceId,
+                type,
+                Truncate(title, 200),
+                Truncate(message, 2000),
+                payloadJson,
+                recipients),
+            ct);
+
         _logger.LogInformation(
             "Notification {Type} written for {Recipients} recipient(s) of workspace {WorkspaceId}.",
             type,
@@ -379,6 +426,32 @@ public sealed class NotificationService : INotificationService
     }
 
     // ---- helpers -----------------------------------------------------------
+
+    /// <summary>
+    /// Offers one committed alert to the outbound seam (Phase 14.5 A1.2).
+    /// <para>
+    /// <b>Swallows every failure, on purpose.</b> The alert is already a row; a Slack outage or a bad
+    /// webhook must not fail the request that produced it — the identical reasoning that makes
+    /// <c>NotificationWriter</c> never throw. A broken transport therefore degrades to "in-app only"
+    /// instead of breaking task assignment.
+    /// </para>
+    /// </summary>
+    private async Task PublishExternalAsync(ExternalAlertMessage alert, CancellationToken ct)
+    {
+        try
+        {
+            await _externalAlerts.PublishAsync(alert, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "External alert sink failed for the {Type} notification of workspace {WorkspaceId}; "
+                + "the in-app notification is already stored and the caller is unaffected.",
+                alert.Type,
+                alert.WorkspaceId);
+        }
+    }
 
     /// <summary>
     /// Manager/Admin recipients, capped and ordered by user id so the same workspace always

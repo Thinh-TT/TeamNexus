@@ -254,10 +254,18 @@ public sealed class TaskService : ITaskService
         }
 
         var fromColumnId = task.ColumnId;
-        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
 
         // Rebuild the target column's order: source tasks first (compact), then the moved
         // task inserted at the requested index, then renumber 0..n-1.
+        //
+        // Phase 14.5 §B: this used to be wrapped in its own explicit transaction. It no longer is, and the
+        // atomicity is unchanged — every mutation below is tracked by the SAME DbContext and committed by
+        // ONE SaveChangesAsync, which is already a transaction. The explicit one became a liability the day
+        // an AI action applier (which runs inside AiActionService.ApproveAsync's transaction) needed to move
+        // a card: two nested `BeginTransactionAsync` on one connection is an InvalidOperationException, and
+        // the whole approval answered 500. Removing it is the fix that keeps BOTH callers correct, whereas
+        // teaching the applier to move cards by hand would have duplicated the renumbering and skipped the
+        // SignalR broadcast every other client depends on.
         var tasksInColumn = await _db.Tasks
             .Where(t => t.ColumnId == targetColumn.Id)
             .OrderBy(t => t.Position)
@@ -280,15 +288,14 @@ public sealed class TaskService : ITaskService
         task.CompletedAt = targetColumn.IsDone ? DateTimeOffset.UtcNow : null;
 
         await _db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
 
         await _events.TaskMoved(
             task.BoardId,
             new TaskMovedEventPayload(task.Id, fromColumnId, targetColumn.Id, insertIndex),
             ct);
 
-        // Phase 5 §2.3: MUST be after CommitAsync — an activity row must never be part of (or
-        // roll back with) the drag & drop transaction.
+        // Phase 5 §2.3: MUST be after the move commits — an activity row must never be part of (or roll
+        // back with) the drag & drop write.
         await _activityLog.RecordAsync(new ActivityLogEntry(
             workspaceId,
             task.BoardId,

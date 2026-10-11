@@ -12,6 +12,7 @@ using TeamNexus.Modules.Ai.Services.Agent;
 using TeamNexus.Modules.Ai.Services.Agent.Agents;
 using TeamNexus.Modules.Ai.Services.Appliers;
 using TeamNexus.Modules.Ai.Services.Email;
+using TeamNexus.Modules.Ai.Services.Integrations;
 using TeamNexus.Modules.Board.Endpoints;
 using TeamNexus.Modules.Board.Services;
 using TeamNexus.Shared.Endpoints;
@@ -95,6 +96,12 @@ public static class AiModule
         services.AddOptions<ObserverOptions>()
             .Bind(configuration.GetSection(ObserverOptions.SectionName));
         services.AddScoped<INotificationService, NotificationService>();
+
+        // Outbound alert seam (Phase 14.5 A1.2). Registered BEFORE any transport exists on purpose: the
+        // three notification write paths (Observer · agent · member) now already funnel through it, so
+        // Phase 15 adds one implementation here and edits no producer. NoOp is the intended production
+        // default — with no transport configured, the in-app notification is the whole feature.
+        services.AddSingleton<IExternalAlertSink, NoOpExternalAlertSink>();
 
         // User-facing alerts (Phase 11 §6.4): Board declares the port + a no-op default, this line
         // overrides it — the same ordering rule as IEmailGateway/IActivityLogWriter above.
@@ -240,6 +247,27 @@ public static class AiModule
         services.AddScoped<IBoardTemplateService, BoardTemplateService>();
         services.AddScoped<IAiActionApplier, CreateBoardFromTemplateApplier>();
 
+        // ---- AI Agent Chat (Phase 14.5 §B) --------------------------------------
+        // The board-scoped chat reuses the Phase 14 streaming port and SSE frame writer, but keeps its
+        // OWN budget section: it deliberately carries 2-3x the context (up to AgentChat:MaxAttachedTasks
+        // tasks plus a longer conversation), and widening `AiChat` would silently loosen the task chat's
+        // ceiling too. `Enabled` follows the chat precedent (default true, 503 when false).
+        services.AddOptions<AgentChatOptions>()
+            .Bind(configuration.GetSection(AgentChatOptions.SectionName));
+
+        services.AddScoped<IAgentChatService, AgentChatService>();
+
+        // The two new AI write actions of this phase. Registered next to every other applier so
+        // AiActionService stays the single gateway — one class + one line is the whole cost (D-per-phase
+        // rule since Phase 4).
+        services.AddScoped<IAiActionApplier, UpdateTaskFieldsApplier>();
+        services.AddScoped<IAiActionApplier, MoveTaskToColumnApplier>();
+
+        // Transcript retention. Scoped + directly callable from a test (the DailyDigestRunner precedent)
+        // rather than a second hosted service: the sweep is idempotent and batch-bounded, so hooking it
+        // onto an existing tick is enough and one fewer background timer cannot misfire.
+        services.AddScoped<AgentChatRetentionRunner>();
+
         // Agent identity port (Phase 7 D7): Board declares it + registers NullAiAgentResolver, and this
         // line — which MUST stay after AddBoardModule in Program.cs — overrides it, exactly like
         // IActivityLogWriter above.
@@ -266,8 +294,11 @@ public static class AiModule
         // Singleton: the cancellation/reservation table must be shared by every request scope, and the
         // reaper must run even when Agent:Enabled is false.
         services.AddSingleton<AgentRunCancellationRegistry>();
-        services.AddHostedService<AgentRunReaper>();
 
+        // Phase 14.5: the sweep is a scoped type and the hosted service only triggers it, so the reaping
+        // rules can be exercised directly by a test instead of by waiting for a BackgroundService to wake up.
+        services.AddScoped<AgentRunReaperRunner>();
+        services.AddHostedService<AgentRunReaper>();
 
         // ---- Endpoint filters (resolved from DI) -----------------------------
         // DomainExceptionFilter (Board) maps BoardModuleException → { error, status }
@@ -298,6 +329,8 @@ public static class AiModule
         endpoints.MapAiChatEndpoints();
         // Phase 14 §4: the AI Board Template (workspace-scoped proposal + confirmation).
         endpoints.MapBoardTemplateEndpoints();
+        // Phase 14.5 §B: the board-scoped AI Agent Chat (own budget, stored transcript, proposals).
+        endpoints.MapAgentChatEndpoints();
 
         return endpoints;
     }
@@ -416,5 +449,24 @@ public static class AiModule
             effectiveChat.Temperature,
             effectiveChat.MaxCommentsInContext,
             effectiveChat.MaxAnswerChars);
+
+        // AI Agent Chat (Phase 14.5 §B): exactly ONE line, and it is a SEPARATE line from AiChat on
+        // purpose — the two budgets are independent, and an operator turning one down must be able to see
+        // that the other did not move. Contains no secret.
+        var agentChat = configuration.GetSection(AgentChatOptions.SectionName).Get<AgentChatOptions>()
+                        ?? new AgentChatOptions();
+        var effectiveAgentChat = agentChat.Effective;
+
+        logger.LogInformation(
+            "Ai module: AgentChat enabled={Enabled}, maxHistoryMessages={MaxMessages}, "
+            + "maxHistoryChars={MaxChars}, maxOutputTokens={MaxOutputTokens}, maxAttachedTasks={MaxTasks}, "
+            + "maxTotalContextChars={MaxContext}, retentionDays={RetentionDays}.",
+            agentChat.Enabled,
+            effectiveAgentChat.MaxHistoryMessages,
+            effectiveAgentChat.MaxHistoryChars,
+            effectiveAgentChat.MaxOutputTokens,
+            effectiveAgentChat.MaxAttachedTasks,
+            effectiveAgentChat.MaxTotalContextChars,
+            effectiveAgentChat.RetentionDays);
     }
 }

@@ -14,7 +14,16 @@ export type AiActionHookStatus =
   | 'undoing'
 
 export interface UseAiActionsOptions {
-  boardId: string
+  /**
+   * Board-scoped history. Exactly one of `boardId`/`workspaceId` is expected:
+   * <list type="bullet">
+   *   <item>`boardId` — the board's own history (the Board view drawer).</item>
+   *   <item>`workspaceId` — every action of the workspace including the workspace-scoped ones, which is the
+   *   ONLY way a board-template proposal can be listed before the board exists (Phase 14.5 A1.1).</item>
+   * </list>
+   */
+  boardId?: string
+  workspaceId?: string
   onBoardChanged?: () => void
 }
 
@@ -91,6 +100,7 @@ const mapHttpError = (err: unknown): { message: string; status: number } => {
 
 export const useAiActions = ({
   boardId,
+  workspaceId,
   onBoardChanged,
 }: UseAiActionsOptions): UseAiActionsResult => {
   const [logs, setLogs] = useState<AiActionLog[]>([])
@@ -102,18 +112,36 @@ export const useAiActions = ({
     useState<AiActionLogDetail | null>(null)
   const [isLoadingDetail, setIsLoadingDetail] = useState(false)
 
+  /**
+   * One fetch path for both scopes, so the filter, the take cap and the pending count cannot behave
+   * differently depending on which drawer is open.
+   */
+  const fetchLogs = useCallback(
+    (statusFilter?: AiActionStatus, take = 50) => {
+      if (workspaceId) {
+        return aiActionApi.listWorkspaceAiActions(workspaceId, { status: statusFilter, take })
+      }
+
+      if (boardId) {
+        return aiActionApi.listAiActions(boardId, { status: statusFilter, take })
+      }
+
+      return Promise.resolve([] as AiActionLog[])
+    },
+    [boardId, workspaceId]
+  )
+
+  const scopeKey = workspaceId ?? boardId
+
   const reload = useCallback(
     async (statusFilter?: AiActionStatus): Promise<AiActionLog[]> => {
-      if (!boardId) return []
+      if (!scopeKey) return []
       setStatus('loading')
       setError(null)
       setHttpStatus(null)
 
       try {
-        const data = await aiActionApi.listAiActions(boardId, {
-          status: statusFilter,
-          take: 50,
-        })
+        const data = await fetchLogs(statusFilter, 50)
         setLogs(data)
 
         // If not filtered or filtering by Pending, update pendingCount
@@ -124,8 +152,7 @@ export const useAiActions = ({
           setPendingCount(data.length)
         } else {
           // Fetch pending count separately in background if filtered by another status
-          aiActionApi
-            .listAiActions(boardId, { status: 'Pending', take: 100 })
+          fetchLogs('Pending', 100)
             .then((pData) => setPendingCount(pData.length))
             .catch(() => {})
         }
@@ -140,7 +167,7 @@ export const useAiActions = ({
         return []
       }
     },
-    [boardId]
+    [fetchLogs, scopeKey]
   )
 
   const fetchDetail = useCallback(
@@ -196,17 +223,15 @@ export const useAiActions = ({
         setError(message)
         setHttpStatus(code)
         setStatus('idle')
-        if (code === 409 && boardId) {
-          const freshLogs = await aiActionApi
-            .listAiActions(boardId, { take: 50 })
-            .catch(() => [])
+        if (code === 409 && scopeKey) {
+          const freshLogs = await fetchLogs(undefined, 50).catch(() => [])
           setLogs(freshLogs)
           setPendingCount(freshLogs.filter((l) => l.status === 'Pending').length)
         }
         return null
       }
     },
-    [boardId, onBoardChanged, selectedLogDetail]
+    [fetchLogs, onBoardChanged, scopeKey, selectedLogDetail]
   )
 
   const reject = useCallback(
@@ -245,17 +270,15 @@ export const useAiActions = ({
         setError(message)
         setHttpStatus(code)
         setStatus('idle')
-        if (code === 409 && boardId) {
-          const freshLogs = await aiActionApi
-            .listAiActions(boardId, { take: 50 })
-            .catch(() => [])
+        if (code === 409 && scopeKey) {
+          const freshLogs = await fetchLogs(undefined, 50).catch(() => [])
           setLogs(freshLogs)
           setPendingCount(freshLogs.filter((l) => l.status === 'Pending').length)
         }
         return null
       }
     },
-    [boardId, selectedLogDetail]
+    [fetchLogs, scopeKey, selectedLogDetail]
   )
 
   const undo = useCallback(
@@ -290,17 +313,15 @@ export const useAiActions = ({
         setError(message)
         setHttpStatus(code)
         setStatus('idle')
-        if (code === 409 && boardId) {
-          const freshLogs = await aiActionApi
-            .listAiActions(boardId, { take: 50 })
-            .catch(() => [])
+        if (code === 409 && scopeKey) {
+          const freshLogs = await fetchLogs(undefined, 50).catch(() => [])
           setLogs(freshLogs)
           setPendingCount(freshLogs.filter((l) => l.status === 'Pending').length)
         }
         return null
       }
     },
-    [boardId, onBoardChanged, selectedLogDetail]
+    [fetchLogs, onBoardChanged, scopeKey, selectedLogDetail]
   )
 
   const clearError = useCallback(() => {

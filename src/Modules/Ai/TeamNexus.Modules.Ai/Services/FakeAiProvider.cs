@@ -332,13 +332,20 @@ public sealed class FakeAiProvider : IAiProvider, IAiToolCallingProvider, IAiStr
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (!request.SystemPrompt.Contains(AiChatPrompts.Marker, StringComparison.Ordinal))
+        // Two chat branches, distinguished by their markers. They must stay separate: an offline test that
+        // asked the task chat a board question would otherwise get a task-shaped answer, and the whole
+        // proposal path would be verified against the wrong prompt.
+        var isBoardChat = request.SystemPrompt.Contains(AgentChatPrompts.Marker, StringComparison.Ordinal);
+
+        if (!isBoardChat && !request.SystemPrompt.Contains(AiChatPrompts.Marker, StringComparison.Ordinal))
         {
             throw new AiProviderException(
-                "FakeAiProvider: prompt không phải của AI Task Chat (thiếu marker ở system prompt).");
+                "FakeAiProvider: prompt không phải của chat (thiếu marker ở system prompt).");
         }
 
-        var answer = BuildChatAnswer(request.SystemPrompt);
+        var answer = isBoardChat
+            ? BuildAgentChatAnswer(request.SystemPrompt)
+            : BuildChatAnswer(request.SystemPrompt);
         var chunks = SplitIntoChunks(answer, ChunkSizeCharacters);
 
         for (var i = 0; i < chunks.Count; i++)
@@ -362,6 +369,134 @@ public sealed class FakeAiProvider : IAiProvider, IAiToolCallingProvider, IAiStr
         {
             yield return new AiStreamChunk(null, EstimateTokens(request), 0, Done: true);
         }
+    }
+
+    /// <summary>
+    /// Board-chat sample answer (Phase 14.5 §B). It carries a <b>real, submittable proposal</b> built from
+    /// the ids the context block actually contained — the same "reuse what the server sent" trick the
+    /// Observer's fake uses, and the reason the entire offline flow (stream → parse → submit → Pending →
+    /// approve → the task really moves) can be verified at zero token cost.
+    /// <para>
+    /// When the prompt has no column to move to, or no attached task to move, the answer degrades to plain
+    /// text <b>without</b> a JSON block — so the "no proposal available" rendering is exercised too rather
+    /// than being unreachable in the fake.
+    /// </para>
+    /// </summary>
+    private static string BuildAgentChatAnswer(string systemPrompt)
+    {
+        var header = "Đây là câu trả lời mẫu (FakeAiProvider) cho AI Agent Chat cấp board. "
+                     + "Nội dung được chia thành nhiều khung nhỏ để kiểm tra luồng SSE và KHÔNG gọi mạng nên không tốn token.";
+
+        var taskId = FirstAttachedTaskId(systemPrompt);
+        var targetColumn = FirstNonDoneColumnId(systemPrompt);
+
+        if (taskId is null || targetColumn is null)
+        {
+            return header + " Hiện chưa có đủ thẻ đang gắn và cột đích nên không có đề xuất nào được tạo.";
+        }
+
+        var columnName = ColumnNameOf(systemPrompt, targetColumn.Value) ?? targetColumn.Value.ToString();
+
+        return header
+               + $"\n\nĐề xuất: chuyển thẻ đang gắn sang cột \"{columnName}\" để tiếp tục xử lý."
+               + "\n\n```json"
+               + "\n{"
+               + "\n  \"proposal\": {"
+               + "\n    \"kind\": \"MoveTaskToColumn\","
+               + "\n    \"summary\": \"Chuyển thẻ sang cột tiếp theo trong luồng công việc.\","
+               + "\n    \"payload\": {"
+               + $"\n      \"taskId\": \"{taskId.Value}\","
+               + $"\n      \"columnId\": \"{targetColumn.Value}\""
+               + "\n    }"
+               + "\n  }"
+               + "\n}"
+               + "\n```";
+    }
+
+    /// <summary>
+    /// First attached task id in the context block. The prompt lists attached tasks as
+    /// <c>* [{taskId}] {title}</c>, so the bracket pair is the marker — and it is written by
+    /// <see cref="AgentChatPrompts.BuildContextBlock"/>, so the two cannot drift.
+    /// </summary>
+    private static Guid? FirstAttachedTaskId(string systemPrompt)
+    {
+        const string marker = "- Thẻ đang gắn";
+        var start = systemPrompt.IndexOf(marker, StringComparison.Ordinal);
+
+        if (start < 0)
+        {
+            return null;
+        }
+
+        var open = systemPrompt.IndexOf('[', start);
+        if (open < 0)
+        {
+            return null;
+        }
+
+        var close = systemPrompt.IndexOf(']', open);
+        if (close < 0)
+        {
+            return null;
+        }
+
+        return Guid.TryParse(systemPrompt[(open + 1)..close].Trim(), out var taskId) ? taskId : null;
+    }
+
+    /// <summary>
+    /// First column that is not the done column. The prompt writes <c>* {id} — {name} — {có|không}</c>,
+    /// so the third segment is the flag — and moving a card INTO done is a poor default sample.
+    /// </summary>
+    private static Guid? FirstNonDoneColumnId(string systemPrompt)
+    {
+        const string marker = "- Cột (theo thứ tự, id — tên — hoàn thành?):";
+        var start = systemPrompt.IndexOf(marker, StringComparison.Ordinal);
+
+        if (start < 0)
+        {
+            return null;
+        }
+
+        foreach (var rawLine in systemPrompt[start..].Split('\n').Skip(1))
+        {
+            var line = rawLine.Trim();
+
+            if (!line.StartsWith("* ", StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            var parts = line[2..].Split('—', StringSplitOptions.TrimEntries);
+            if (parts.Length < 3 || !Guid.TryParse(parts[0], out var columnId))
+            {
+                continue;
+            }
+
+            if (!string.Equals(parts[2], "có", StringComparison.Ordinal))
+            {
+                return columnId;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Display name of a column, for a sample answer that reads like a sentence.</summary>
+    private static string? ColumnNameOf(string systemPrompt, Guid columnId)
+    {
+        var needle = columnId.ToString();
+        var index = systemPrompt.IndexOf(needle, StringComparison.OrdinalIgnoreCase);
+
+        if (index < 0)
+        {
+            return null;
+        }
+
+        var lineEnd = systemPrompt.IndexOf('\n', index);
+        var line = (lineEnd < 0 ? systemPrompt[index..] : systemPrompt[index..lineEnd]).Trim();
+        var parts = line.Split('—', StringSplitOptions.TrimEntries);
+
+        return parts.Length >= 2 ? parts[1] : null;
     }
 
     /// <summary>Characters per streamed chunk. Small on purpose: more frames = a better pipeline test.</summary>

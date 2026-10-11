@@ -219,4 +219,32 @@ describe('AiActionLogItem', () => {
       ).toBeInTheDocument()
     })
   })
+
+  // Phase 14.5 §B: the two field-level actions the board chat can propose. Without their own labels they
+  // would fall through to the raw action string ("UpdateTaskFields" / "MoveTaskToColumn").
+  it('labels the UpdateTaskFields action the board chat proposes', () => {
+    render(
+      <AiActionLogItem
+        log={{ ...mockPendingLog, action: 'UpdateTaskFields', entityType: 'Task', entityId: 'task-1' }}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+        onUndo={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('Cập nhật thẻ (AI đề xuất)')).toBeInTheDocument()
+  })
+
+  it('labels the MoveTaskToColumn action the board chat proposes', () => {
+    render(
+      <AiActionLogItem
+        log={{ ...mockPendingLog, action: 'MoveTaskToColumn', entityType: 'Task', entityId: 'task-1' }}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+        onUndo={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('Di chuyển thẻ (AI đề xuất)')).toBeInTheDocument()
+  })
 })

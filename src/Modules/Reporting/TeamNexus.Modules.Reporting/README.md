@@ -9,7 +9,7 @@ Module Giai đoạn 6: tổng hợp **tiến độ** + **hiệu suất** của m
 > **đã xong & verify** — 43 check PASS ngoài workspace (QuestPDF + ClosedXML round-trip + PdfPig đọc lại file).
 > §5 DTO + 3 endpoint **đã xong & verify** — **34 check PASS** bằng API thật (Kestrel + PostgreSQL thật + JWT
 > tự ký qua cookie), app boot thật `GET /api/health` 200. **Backend Giai đoạn 6 đã đủ**; còn §6 frontend —
-> xem `Project-Documents/tasks/phase-6-reporting-export.md` (mục "🔻 BÀN GIAO §6").
+> xem `project-docs/tasks/phase-6-reporting-export.md` (mục "🔻 BÀN GIAO §6").
 
 ## Endpoints (Phase 6 §5.2)
 

@@ -3,7 +3,7 @@
   <!--
     TeamNexus.Persistence – the SINGLE DbContext + domain entities + EF configurations
     and the single EF Core migration chain for the whole modular monolith
-    (see Project-Documents/04-database-design.md §1.1).
+    (see project-docs/04-database-design.md §1.1).
     Feature modules (Auth, later Board/Ai/Reporting) reference this project and register
     their services/endpoints on top of the shared model.
   -->

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using TeamNexus.Modules.Ai.Services;
+using TeamNexus.Modules.Ai.Services.Integrations;
 using TeamNexus.Modules.Auth.Options;
 
 namespace TeamNexus.Api.Tests.Infrastructure;
@@ -84,6 +85,14 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
     /// model's raw answer (e.g. unparsable JSON) without touching the offline fake's fixed sample.
     /// </summary>
     public ScriptedAiProvider? ScriptedAi { get; init; }
+
+    /// <summary>
+    /// When set, replaces the registered <c>IExternalAlertSink</c> (Phase 14.5 A1.2) for this host, so a
+    /// suite can prove every notification family reaches the outbound seam. Kept on the factory rather than
+    /// the shared host for the same reason as <see cref="ScriptedAi"/>: the default host must stay free of
+    /// test-only doubles.
+    /// </summary>
+    public IExternalAlertSink? ExternalAlerts { get; init; }
 
     /// <summary>Overrides <c>Agent:Enabled</c>; the safe off-switch must answer 503 (Phase 7 D18).</summary>
     public bool AgentEnabled { get; init; } = true;
@@ -227,6 +236,15 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
                 services.AddSingleton<IAiToolCallingProvider>(ScriptedAi);
                 services.AddSingleton<IAiStreamingProvider>(ScriptedAi);
             });
+        }
+
+        if (ExternalAlerts is not null)
+        {
+            // Phase 14.5 A1.2: replacing the NoOp sink is the whole point of that seam — a Phase 15 Slack
+            // transport will be registered in exactly this position, and this override proves a suite can
+            // observe what it would receive without any producer knowing about it.
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton<IExternalAlertSink>(ExternalAlerts));
         }
 
         // Phase 14 §2: the chat is ON by default (it is user-initiated and cannot mail anyone), but the

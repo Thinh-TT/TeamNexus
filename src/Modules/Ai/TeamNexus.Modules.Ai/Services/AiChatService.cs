@@ -79,9 +79,6 @@ public sealed record AiChatPreparedRequest(
 
 public sealed class AiChatService : IAiChatService
 {
-    /// <summary>Roles a client may send. <c>system</c> is server-owned and never accepted from outside.</summary>
-    private static readonly string[] AllowedRoles = ["user", "assistant"];
-
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private readonly TeamNexusDbContext _db;
@@ -237,16 +234,20 @@ public sealed class AiChatService : IAiChatService
                     completionTokens = chunk.CompletionTokens;
                 }
 
-                if (chunk.Done)
-                {
-                    completed = true;
-                    break;
-                }
-
+                // Append the delta BEFORE looking at `Done`. The two are not mutually exclusive: a provider
+                // may put text in the same chunk that terminates the stream, and checking `Done` first
+                // silently dropped that text — shortening every answer by one chunk and breaking the
+                // documented invariant `done.answer == Σ delta` that the client relies on for recovery.
                 if (chunk.Delta is { Length: > 0 } delta)
                 {
                     answer.Append(delta);
                     yield return AiChatSseWriter.Delta(delta);
+                }
+
+                if (chunk.Done)
+                {
+                    completed = true;
+                    break;
                 }
             }
         }
@@ -355,57 +356,18 @@ public sealed class AiChatService : IAiChatService
     // =====================================================================
 
     /// <summary>
-    /// Turns the client transcript into provider messages, or throws <see cref="BadRequestException"/>
-    /// (400) explaining exactly which limit was broken. Every rule here exists to bound cost before the
+    /// Turns the client transcript into provider messages through the shared, pure
+    /// <see cref="AiChatTranscriptValidator"/> (extracted in Phase 14.5 so the board chat applies the
+    /// identical rules against its own, larger limits). Every rule exists to bound cost before the
     /// provider is called at all.
     /// </summary>
     private static List<AiChatMessage> ValidateMessages(
         AiChatSendRequest request,
         AiChatEffectiveOptions effective)
-    {
-        var messages = request.Messages;
-
-        if (messages is null || messages.Count == 0)
-        {
-            throw new BadRequestException("Cần ít nhất một tin nhắn để hỏi AI.");
-        }
-
-        if (messages.Count > effective.MaxHistoryMessages)
-        {
-            throw new BadRequestException(
-                $"Lịch sử hội thoại tối đa {effective.MaxHistoryMessages} tin nhắn (nhận {messages.Count}).");
-        }
-
-        var validated = new List<AiChatMessage>(messages.Count);
-        var totalChars = 0;
-
-        foreach (var message in messages)
-        {
-            if (message is null || string.IsNullOrWhiteSpace(message.Role)
-                || !AllowedRoles.Contains(message.Role, StringComparer.OrdinalIgnoreCase))
-            {
-                throw new BadRequestException(
-                    "Vai trò tin nhắn phải là 'user' hoặc 'assistant'.");
-            }
-
-            var content = message.Content?.Trim();
-            if (string.IsNullOrEmpty(content))
-            {
-                throw new BadRequestException("Tin nhắn không được để trống.");
-            }
-
-            totalChars += content.Length;
-            validated.Add(new AiChatMessage(message.Role.ToLowerInvariant(), content));
-        }
-
-        if (totalChars > effective.MaxHistoryChars)
-        {
-            throw new BadRequestException(
-                $"Tổng nội dung hội thoại tối đa {effective.MaxHistoryChars} ký tự (nhận {totalChars}).");
-        }
-
-        return validated;
-    }
+        => AiChatTranscriptValidator.Validate(
+            request.Messages,
+            effective.MaxHistoryMessages,
+            effective.MaxHistoryChars);
 
     /// <summary>
     /// Reads the bounded task context: description excerpt, column/board names, assignee and the newest

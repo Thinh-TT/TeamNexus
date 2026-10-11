@@ -29,6 +29,20 @@ public static class AiActionTypes
     /// <c>ITaskService</c>, Undo <b>soft-deletes</b> the board (D14).
     /// </summary>
     public const string CreateBoardFromTemplate = "CreateBoardFromTemplate";
+
+    /// <summary>
+    /// Board-chat proposal to change an attached task's fields (Phase 14.5 §B). Scope is
+    /// <c>entity_type = 'Task'</c>; Apply delegates to <c>ITaskService.UpdateTaskAsync</c> and captures the
+    /// task's full previous field set so Undo restores it exactly.
+    /// </summary>
+    public const string UpdateTaskFields = "UpdateTaskFields";
+
+    /// <summary>
+    /// Board-chat proposal to move an attached task to another column of the same board (Phase 14.5 §B).
+    /// Scope is <c>entity_type = 'Task'</c>; Apply delegates to <c>ITaskService.MoveTaskAsync</c> and Undo
+    /// moves the card back to the column recorded in <c>applied_snapshot.fromColumnId</c>.
+    /// </summary>
+    public const string MoveTaskToColumn = "MoveTaskToColumn";
 }
 
 /// <summary>Entity types stored in <c>ai_action_logs.entity_type</c>.</summary>

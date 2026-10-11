@@ -125,6 +125,9 @@ public sealed class TestScenario : IAsyncDisposable
             // Phase 11 §1: without these two the invitation/email state leaks between tests and the
             // suite turns flaky (the partial unique index on Pending invitations makes it fail loudly).
             "email_messages", "workspace_invitations",
+            // Phase 14.5 §B: the board-chat transcript is append-only and is read back by "load the stored
+            // conversation", so a row left behind makes the next suite see someone else's history.
+            "agent_chat_messages",
         ];
 
         var present = wanted.Where(existing.Contains).ToList();
