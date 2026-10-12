@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { MAX_ATTACHED_TASKS, attachTask, detachTask, toRequestIds } from '../utils/agentChatAttachments'
 import { parseProposal, splitProposal } from '../utils/agentChatProposal'
+import { redactAnswerProse, redactIdentifiers } from '../utils/redactIdentifiers'
 import { agentChatApi } from '../services/agentChatApi'
 import { trimHistory, toRequestMessages } from '../utils/aiChatHistory'
 import type { AiActionLog } from '../types/aiAction.types'
@@ -209,7 +210,11 @@ export function useAgentChat(boardId: string | undefined): UseAgentChatReturn {
             onEvent: ({ event, data }) => {
               if (event === 'delta' && data?.text) {
                 accumulatorRef.current += data.text
-                setStreamingAnswer(accumulatorRef.current)
+                // Phase 14.6 §A2: the DISPLAY is redacted from the raw accumulator, never from one delta —
+                // a Guid split across two frames is only recognisable once both halves have arrived. The
+                // proposal block is stripped by `redactAnswerProse`, so a real `taskId` inside it survives
+                // and the "Gửi đề xuất" button still sends exactly what the model produced.
+                setStreamingAnswer(redactAnswerProse(accumulatorRef.current))
               } else if (event === 'done' && data?.answer) {
                 // The full answer is authoritative: if a delta frame was lost, this still has everything.
                 finalAnswer = data.answer
@@ -225,11 +230,16 @@ export function useAgentChat(boardId: string | undefined): UseAgentChatReturn {
         const answer = finalAnswer ?? accumulatorRef.current
         const { visibleText, jsonBlock } = splitProposal(answer)
 
-        if (visibleText) {
+        // Phase 14.6 §A2: the turn that becomes the transcript is the redacted prose. The server redacts
+        // again before storing it (a reload must not resurrect what was hidden) — doing it here too is what
+        // keeps "Lưu thành bình luận" from posting an identifier the user never saw.
+        const proseText = redactIdentifiers(visibleText)
+
+        if (proseText) {
           const assistant: AgentChatMessage = {
             id: newId(),
             role: 'assistant',
-            content: visibleText,
+            content: proseText,
             createdAt: new Date().toISOString(),
           }
 
@@ -372,7 +382,9 @@ function toLocalMessage(stored: AgentChatStoredMessage): AgentChatMessage {
   return {
     id: stored.id,
     role: stored.role,
-    content: stored.content,
+    // Assistant prose only, and again on the way IN: turns written before §A2 may still hold an identifier,
+    // and re-reading them must not put it back on screen. A user's own words are never rewritten.
+    content: stored.role === 'assistant' ? redactIdentifiers(stored.content) : stored.content,
     createdAt: stored.createdAt,
   }
 }

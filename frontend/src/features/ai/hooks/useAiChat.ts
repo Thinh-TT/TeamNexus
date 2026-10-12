@@ -4,8 +4,10 @@ import type {
   AiChatMessage,
   AiChatMeta,
 } from '../types/aiChat.types'
+import type { AgentChatStoredMessage } from '../types/agentChat.types'
 import type { AiActionLog } from '../types/aiAction.types'
 import { canSaveAnswer, toRequestMessages, trimHistory } from '../utils/aiChatHistory'
+import { redactIdentifiers } from '../utils/redactIdentifiers'
 import { streamAiChat, type StreamHttpError } from '../utils/aiChatStream'
 
 export type AiChatStatus = 'idle' | 'streaming' | 'saving' | 'error'
@@ -23,6 +25,17 @@ export interface UseAiChatReturn {
   clearError: () => void
 }
 
+/** How many stored turns the task tab loads on open — the board panel's page size, for the same reason. */
+const TRANSCRIPT_PAGE_SIZE = 50
+
+/**
+ * State for one task's AI chat (Phase 14 §2.2, transcript added in Phase 14.6 §A3).
+ *
+ * <p><b>What changed in 14.6.</b> The transcript used to live only in this hook's state, so the task tab lost
+ * its conversation on every reload and no teammate could ever see it. It is now read from
+ * <c>agent_chat_messages</c> on open (<c>task_id</c> instead of <c>board_id</c> — the same table the board
+ * chat uses), and the server stores each exchange as it is answered.</p>
+ */
 export function useAiChat(taskId: string): UseAiChatReturn {
   const [messages, setMessages] = useState<AiChatMessage[]>([])
   const [streamingAnswer, setStreamingAnswer] = useState<string>('')
@@ -38,6 +51,51 @@ export function useAiChat(taskId: string): UseAiChatReturn {
   useEffect(() => {
     messagesRef.current = messages
   }, [messages])
+
+  // Load the stored conversation for this task (Phase 14.6 §A3). Re-running on a task change is the point:
+  // two cards must never show each other's history.
+  useEffect(() => {
+    if (!taskId) {
+      return
+    }
+
+    let ignore = false
+
+    const run = async () => {
+      try {
+        const res = await httpClient.get<AgentChatStoredMessage[]>(
+          `/tasks/${taskId}/agent-chat/messages`,
+          { params: { take: TRANSCRIPT_PAGE_SIZE } }
+        )
+
+        if (ignore) {
+          return
+        }
+
+        // Never overwrite a turn the user has already produced while this was in flight: the history is
+        // context, and a slow response must not eat a question someone just asked.
+        if (messagesRef.current.length > 0) {
+          return
+        }
+
+        const stored = (res.data ?? []).map(toLocalMessage)
+        messagesRef.current = stored
+        setMessages(stored)
+      } catch (err: unknown) {
+        // A failed load must not block the chat — the panel stays usable and simply starts empty. The
+        // conversation is the SERVER's now, so this is a real degradation worth recording.
+        if (!ignore) {
+          console.warn('[useAiChat] Không tải được lịch sử hội thoại của thẻ', err)
+        }
+      }
+    }
+
+    void run()
+
+    return () => {
+      ignore = true
+    }
+  }, [taskId])
 
   useEffect(() => {
     return () => {
@@ -107,7 +165,9 @@ export function useAiChat(taskId: string): UseAiChatReturn {
               setMeta(data)
             } else if (event === 'delta' && data?.text) {
               streamingAccumulatorRef.current += data.text
-              setStreamingAnswer(streamingAccumulatorRef.current)
+              // Phase 14.6 §A2: redact the accumulated text, never one delta — an identifier split across
+              // two frames is only recognisable once both halves have arrived.
+              setStreamingAnswer(redactIdentifiers(streamingAccumulatorRef.current))
             } else if (event === 'done' && data) {
               if (data.answer) {
                 finalAnswerFromDone = data.answer
@@ -127,7 +187,10 @@ export function useAiChat(taskId: string): UseAiChatReturn {
               ? crypto.randomUUID()
               : `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
             role: 'assistant',
-            content: answerText,
+            // Phase 14.6 §A2: the turn kept in the transcript is the redacted prose, so "Lưu thành bình
+            // luận" can never post an identifier the user never saw. The server redacts again before it
+            // stores the turn (a reload must not resurrect what was hidden).
+            content: redactIdentifiers(answerText),
             createdAt: new Date().toISOString(),
           }
           setMessages((prev) => [...prev, assistantMessage])
@@ -203,5 +266,21 @@ export function useAiChat(taskId: string): UseAiChatReturn {
     cancel,
     saveAnswer,
     clearError,
+  }
+}
+
+/**
+ * A stored turn as local component state.
+ *
+ * <p>Assistant prose is redacted on the way in for the same reason it is redacted on the way out: turns
+ * written before §A2 may still hold an identifier, and merely reloading a conversation must not put it back
+ * on screen. A user's own words are never rewritten.</p>
+ */
+function toLocalMessage(stored: AgentChatStoredMessage): AiChatMessage {
+  return {
+    id: stored.id,
+    role: stored.role,
+    content: stored.role === 'assistant' ? redactIdentifiers(stored.content) : stored.content,
+    createdAt: stored.createdAt,
   }
 }

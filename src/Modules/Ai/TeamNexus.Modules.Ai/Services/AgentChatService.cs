@@ -120,15 +120,12 @@ public sealed record SubmitAgentChatProposalRequest(
 public sealed class AgentChatService : IAgentChatService
 {
     /// <summary>Default page size for the stored transcript.</summary>
-    public const int DefaultMessageTake = 50;
+    public const int DefaultMessageTake = AgentChatTranscriptQuery.DefaultTake;
 
     /// <summary>Hard ceiling on a transcript page, so one request cannot pull the whole history.</summary>
-    public const int MaxMessageTake = 200;
+    public const int MaxMessageTake = AgentChatTranscriptQuery.MaxTake;
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-
-    /// <summary>Marker used to find the assistant turn of a pair when persisting (see SaveTranscriptAsync).</summary>
-    private const string AssistantRole = "assistant";
 
     private readonly TeamNexusDbContext _db;
     private readonly IWorkspaceAccess _access;
@@ -352,28 +349,15 @@ public sealed class AgentChatService : IAgentChatService
 
         await _access.RequireMemberAsync(board.WorkspaceId, userId, ct);
 
-        var limit = take <= 0 ? DefaultMessageTake : Math.Clamp(take, 1, MaxMessageTake);
+        var limit = AgentChatTranscriptQuery.ClampTake(take);
 
-        var query = _db.AgentChatMessages
-            .AsNoTracking()
-            .Where(m => m.BoardId == boardId);
+        var rows = await AgentChatTranscriptQuery.NewestPageAsync(
+            _db.AgentChatMessages.Where(m => m.BoardId == boardId),
+            before,
+            limit,
+            ct);
 
-        if (before is { } cursor)
-        {
-            query = query.Where(m => m.CreatedAt < cursor);
-        }
-
-        // Newest page from the database, then reversed: keyset pagination needs the newest rows first,
-        // while the UI reads a conversation top-down.
-        var rows = await query
-            .OrderByDescending(m => m.CreatedAt)
-            .ThenByDescending(m => m.Id)
-            .Take(limit)
-            .ToListAsync(ct);
-
-        rows.Reverse();
-
-        return rows.Select(ToResponse).ToList();
+        return rows.Select(AgentChatTranscriptMapper.ToResponse).ToList();
     }
 
     public async Task SaveTranscriptAsync(
@@ -455,7 +439,13 @@ public sealed class AgentChatService : IAgentChatService
                 m => string.Equals(m.Role, "user", StringComparison.OrdinalIgnoreCase))?.Content
                 ?? string.Empty;
 
-            var visibleAnswer = AgentChatProposalParser.Parse(fullAnswer).VisibleText;
+            // Phase 14.6 §A2: the stored prose is sanitized, not just prompted against. The parser has
+            // already removed the JSON block (whose ids are legitimate and must survive), so whatever is
+            // left is conversation — and a raw Guid there is a leak that a reload would replay verbatim.
+            // The live stream is filtered on the client for the same reason; this is the half that keeps a
+            // reload from resurrecting what was hidden.
+            var visibleAnswer = AiChatAnswerSanitizer.RedactIdentifiers(
+                AgentChatProposalParser.Parse(fullAnswer).VisibleText);
 
             await SaveTranscriptAsync(prepared, question, visibleAnswer, ct);
         }
@@ -781,13 +771,129 @@ public sealed class AgentChatService : IAgentChatService
                 (m, u) => new AgentChatContextMember(u.Id, u.DisplayName ?? string.Empty))
             .ToListAsync(ct);
 
+        // Phase 14.6 §A4: with nothing attached the prompt used to carry column NAMES and nothing else, so
+        // "how is Sprint 1 going?" was answered with an empty refusal on a board full of cards. The digest
+        // is read ONLY in that case — an attachment list already describes the tasks the user cares about,
+        // and adding board-wide statistics on top would spend tokens on something nobody asked about.
+        var digest = attached.Count == 0
+            ? await LoadDigestAsync(board.Id, columns, effective, ct)
+            : null;
+
         return new AgentChatBoardContext(
             board.Name,
             Cap(board.Description, Math.Min(effective.MaxTotalContextChars, 1000)),
             columns,
             attached,
-            members);
+            members,
+            digest);
     }
+
+    /// <summary>
+    /// Reads the data behind the Lightweight Board Digest (Phase 14.6 §A4): exact card counts per column plus
+    /// the cards worth naming first.
+    /// <para>
+    /// <b>Why ranking happens in memory.</b> <c>tasks.priority</c> is a text column, so ordering by it in SQL
+    /// would sort alphabetically — <c>High, Low, Medium, Urgent</c> — which is not the severity order and
+    /// would make the digest name the <i>least</i> urgent cards. A bounded page (see
+    /// <see cref="DigestCandidateLimit"/>) is therefore read and ranked with the real enum.
+    /// </para>
+    /// <para>
+    /// <b>Why the counts are a second query.</b> They must be exact even when the board holds more cards
+    /// than the candidate page: a digest that says "3 cards" about a 300-card board would be worse than no
+    /// digest at all.
+    /// </para>
+    /// </summary>
+    private async Task<AgentChatDigest> LoadDigestAsync(
+        Guid boardId,
+        IReadOnlyList<AgentChatContextColumn> columns,
+        AgentChatEffectiveOptions effective,
+        CancellationToken ct)
+    {
+        var counts = await _db.Tasks
+            .AsNoTracking()
+            .Where(t => t.BoardId == boardId)
+            .GroupBy(t => t.ColumnId)
+            .Select(g => new { ColumnId = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+
+        var countByColumn = counts.ToDictionary(c => c.ColumnId, c => c.Count);
+
+        var digestColumns = columns
+            .Select(c => new AgentChatDigestColumn(c.Name, countByColumn.GetValueOrDefault(c.ColumnId)))
+            .ToList();
+
+        // A column can exist in `counts` without appearing in `columns` only if it was created between the
+        // two queries; reporting it as an unnamed bucket is still better than silently dropping its cards.
+        foreach (var orphan in counts.Where(c => columns.All(col => col.ColumnId != c.ColumnId)))
+        {
+            digestColumns.Add(new AgentChatDigestColumn("(cột không xác định)", orphan.Count));
+        }
+
+        var total = counts.Sum(c => c.Count);
+
+        if (total == 0)
+        {
+            return new AgentChatDigest(digestColumns, [], 0, effective.MaxDigestChars);
+        }
+
+        var candidates = await _db.Tasks
+            .AsNoTracking()
+            .Where(t => t.BoardId == boardId)
+            .OrderBy(t => t.Position)
+            .ThenBy(t => t.Id)
+            .Take(DigestCandidateLimit)
+            .Select(t => new
+            {
+                t.Title,
+                t.ColumnId,
+                t.Priority,
+                t.DueDate,
+                t.AssigneeId,
+            })
+            .ToListAsync(ct);
+
+        var assigneeNames = await LoadAssigneeNamesAsync(
+            candidates.Where(c => c.AssigneeId.HasValue).Select(c => c.AssigneeId!.Value).Distinct().ToList(),
+            ct);
+
+        var columnNames = columns.ToDictionary(c => c.ColumnId, c => c.Name);
+
+        var topTasks = candidates
+            // Urgent first, then High, … then anything without a priority; within a rank, the nearest
+            // deadline wins (a card with no deadline sorts last), and the title breaks the remaining ties so
+            // the digest is stable across two identical requests.
+            .OrderBy(c => PriorityRank(c.Priority))
+            .ThenBy(c => c.DueDate ?? DateTimeOffset.MaxValue)
+            .ThenBy(c => c.Title, StringComparer.Ordinal)
+            .Take(effective.MaxDigestTasks)
+            .Select(c => new AgentChatDigestTask(
+                c.Title,
+                columnNames.TryGetValue(c.ColumnId, out var name) ? name : string.Empty,
+                c.Priority?.ToString(),
+                c.DueDate,
+                c.AssigneeId is { } assigneeId && assigneeNames.TryGetValue(assigneeId, out var assignee)
+                    ? assignee
+                    : null))
+            .ToList();
+
+        return new AgentChatDigest(digestColumns, topTasks, total, effective.MaxDigestChars);
+    }
+
+    /// <summary>
+    /// How many cards the digest considers before ranking. Bounded so a board with thousands of cards costs
+    /// one page, not the whole table; a card outside the page can only be missing from the "top" list, never
+    /// from the per-column counts.
+    /// </summary>
+    private const int DigestCandidateLimit = 200;
+
+    private static int PriorityRank(TaskPriority? priority) => priority switch
+    {
+        TaskPriority.Urgent => 0,
+        TaskPriority.High => 1,
+        TaskPriority.Medium => 2,
+        TaskPriority.Low => 3,
+        _ => 4,
+    };
 
     private async Task<Dictionary<Guid, string>> LoadAssigneeNamesAsync(
         IReadOnlyList<Guid> userIds,
@@ -926,35 +1032,6 @@ public sealed class AgentChatService : IAgentChatService
         }
 
         return taskId;
-    }
-
-    private static AgentChatMessageResponse ToResponse(AgentChatMessage row)
-    {
-        var attachments = new List<AgentChatAttachmentResponse>();
-
-        if (!string.IsNullOrWhiteSpace(row.Attachments))
-        {
-            try
-            {
-                var parsed = JsonSerializer.Deserialize<List<AgentChatAttachmentResponse>>(row.Attachments, Json);
-                if (parsed is not null)
-                {
-                    attachments.AddRange(parsed.Where(a => a is not null));
-                }
-            }
-            catch (JsonException)
-            {
-                // A corrupted jsonb column must not break the whole transcript: the turns are still
-                // readable, and losing the pills of one historical row is a cosmetic loss.
-            }
-        }
-
-        return new AgentChatMessageResponse(
-            row.Id,
-            row.Role == AgentChatRole.User ? "user" : AssistantRole,
-            row.Content,
-            attachments,
-            row.CreatedAt);
     }
 
     /// <summary>Truncates a prompt/storage value, marking a cut with an ellipsis so a reader can tell.</summary>

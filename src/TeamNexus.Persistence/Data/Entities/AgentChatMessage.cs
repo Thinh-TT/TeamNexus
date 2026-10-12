@@ -16,13 +16,15 @@ public enum AgentChatRole
 }
 
 /// <summary>
-/// One persisted turn of a board-scoped AI Agent Chat (Phase 14.5 §B).
+/// One persisted turn of an AI chat: the board's AI Agent Chat (Phase 14.5 §B) or a task's
+/// "Hỏi AI về thẻ này" tab (Phase 14.6 §A3). One table, two scopes, exactly one of which is set.
 /// <para>
-/// <b>Why this table exists at all.</b> Phase 14 kept the task-chat transcript in the browser on
-/// purpose (D2) and that decision is still in force for the task tab. The board chat is a different
-/// thing: it is the long-lived entry point of a board, it can carry several attached tasks, and it
-/// produces proposals that a Manager approves later — so the conversation has to survive a reload and
-/// be the same for whoever opens the board.
+/// <b>Why this table exists at all.</b> Phase 14 kept the task-chat transcript in the browser on purpose
+/// (D2) and that decision is still <i>half</i> in force: the client still sends and replays the history. What
+/// changed in 14.6 is that the conversation is now also <b>kept</b> — a board's chat had to survive a reload
+/// because it can carry several attached tasks and produces proposals a Manager approves later, and a task's
+/// chat had to survive it for the same reason a teammate joining a discussion expects to read what was
+/// already said.
 /// </para>
 /// <para>
 /// <b>Append-only, no query filter, no soft delete.</b> Faithful to <c>ai_action_logs</c> and
@@ -38,15 +40,18 @@ public class AgentChatMessage : IAuditableEntity
     /// <summary>
     /// Board this conversation belongs to. Null for a task-scoped turn — the CHECK constraint
     /// <c>ck_agent_chat_messages_scope</c> requires exactly one of <see cref="BoardId"/>/<see cref="TaskId"/>.
-    /// <para>
-    /// <see cref="TaskId"/> is the <b>reserved</b> half of that pair: it is what lets a future phase move
-    /// the task tab onto server storage <b>without another migration</b>. The AI Agent Chat only ever
-    /// writes <see cref="BoardId"/>.
-    /// </para>
     /// </summary>
     public Guid? BoardId { get; set; }
 
-    /// <summary>Task a task-scoped turn belongs to; null for every board-chat turn.</summary>
+    /// <summary>
+    /// Task a task-scoped turn belongs to; null for every board-chat turn.
+    /// <para>
+    /// Reserved as nullable in Migration 11 precisely so the task tab could move onto server storage without
+    /// another migration — which is what Phase 14.6 §A3 then did. A task conversation writes
+    /// <see cref="TaskId"/> and leaves <see cref="BoardId"/> null, and the CHECK makes that structural, so the
+    /// two transcripts can never mix.
+    /// </para>
+    /// </summary>
     public Guid? TaskId { get; set; }
 
     /// <summary>Denormalised workspace id: retention and pruning are per workspace, not per board.</summary>
@@ -70,6 +75,15 @@ public class AgentChatMessage : IAuditableEntity
     /// </summary>
     public string? Attachments { get; set; }
 
+    /// <summary>
+    /// When the turn was written.
+    /// <para>
+    /// <b>Not sufficient to order a transcript on its own.</b> The audit stamping takes one timestamp per
+    /// <c>SaveChanges</c>, so the two rows of an exchange carry the <b>identical</b> value and the tie has to be
+    /// broken by <see cref="Role"/> (question before answer). <c>AgentChatTranscriptQuery</c> owns that rule,
+    /// and Phase 14.6 §A3 fixed the defect where a random Guid decided it instead.
+    /// </para>
+    /// </summary>
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }

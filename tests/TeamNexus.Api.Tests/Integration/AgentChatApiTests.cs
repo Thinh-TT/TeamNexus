@@ -627,14 +627,14 @@ public sealed class AgentChatApiTests : IClassFixture<DatabaseFixture>
     }
 
     [Fact]
-    public async Task AGENTCHAT22_TheTaskChatEndpointIsUnchanged()
+    public async Task AGENTCHAT22_TheTaskChatMetaIsUnchangedAndItsTranscriptStaysTaskScoped()
     {
         await using var scenario = await _database.CreateScenarioAsync();
         var seed = await SeedAsync(scenario);
         using var client = await scenario.AsUserAsync(seed.User);
 
-        // Phase 14's contract must survive Phase 14.5 untouched: the two chats share a transport, not a
-        // feature, and a shared refactor that changed the task chat's shape would be a silent regression.
+        // Phase 14's CONTRACT must survive Phase 14.5/14.6 untouched: the two chats share a transport, not a
+        // feature, and a shared refactor that changed the task chat's SSE shape would be a silent regression.
         var request = new HttpRequestMessage(
             HttpMethod.Post, $"/api/tasks/{seed.Task.Id}/ai-chat/stream")
         {
@@ -656,8 +656,30 @@ public sealed class AgentChatApiTests : IClassFixture<DatabaseFixture>
         Assert.Equal(seed.Task.Id, meta.GetProperty("taskId").GetGuid());
         Assert.Equal(seed.Task.Title, meta.GetProperty("taskTitle").GetString());
 
-        // And the task chat still writes no transcript of its own (Phase 14 D2 is still in force).
-        Assert.Equal(0, await scenario.CountAsync<AgentChatMessage>());
+        // ⚠️ Phase 14.6 §A3 CHANGES this half of Phase 14's D2 on purpose, and this is the ONLY assertion of
+        // Phase 14.5 that had to move: "the task chat keeps no transcript at all (D2)" becomes "the task chat
+        // keeps its own transcript, under task_id". The whole point of A3 is that a conversation at the task
+        // tab used to vanish on F5; leaving it unrecorded is exactly the defect being fixed.
+        //
+        // What must NOT change — and is what this test now guards — is the SCOPE: task turns carry a
+        // `task_id` and no `board_id`, so asking a question in the task tab can never appear in the board's
+        // AI Agent Chat (and vice versa). The CHECK constraint from Migration 11 makes that structural.
+        Assert.Equal(0, await scenario.CountAsync<AgentChatMessage>(m => m.BoardId != null));
+        Assert.Equal(2, await scenario.CountAsync<AgentChatMessage>(m => m.TaskId == seed.Task.Id));
+
+        var stored = await client.GetJsonAsync<List<JsonElement>>(
+            $"/api/tasks/{seed.Task.Id}/agent-chat/messages");
+
+        Assert.NotNull(stored);
+        Assert.Equal(2, stored!.Count);
+
+        // ...and it stays invisible to the board conversation, which is the isolation the assertion above
+        // describes in the database rather than in an HTTP response.
+        var boardTranscript = await client.GetJsonAsync<List<JsonElement>>(
+            $"/api/boards/{seed.Board.Id}/agent-chat/messages");
+
+        Assert.NotNull(boardTranscript);
+        Assert.Empty(boardTranscript!);
     }
 
     // ---- helpers ----------------------------------------------------------

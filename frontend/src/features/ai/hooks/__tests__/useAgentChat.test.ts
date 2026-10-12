@@ -344,4 +344,78 @@ describe('useAgentChat', () => {
     expect(result.current.messages).toHaveLength(1)
     expect(result.current.streamingAnswer).toBe('')
   })
+
+  // ---- Phase 14.6 §A2: the identifier leak ---------------------------------
+
+  it('hides an identifier the model leaked into its prose, live and in the kept turn', async () => {
+    const leakedId = '9724c884-d103-4147-9b68-7532d97f04a9'
+
+    mocked.stream.mockImplementation(async (_boardId, _request, options) => {
+      options.onEvent({
+        event: 'delta',
+        data: { text: `Nên chuyển sang cột "process" (id: ${leakedId}).` },
+      })
+      options.onEvent({
+        event: 'done',
+        data: { answer: `Nên chuyển sang cột "process" (id: ${leakedId}).` },
+      })
+    })
+
+    const { result } = renderHook(() => useAgentChat('b1'))
+    await waitFor(() => expect(mocked.getSession).toHaveBeenCalled())
+
+    let pending: Promise<void> | undefined
+    act(() => {
+      pending = result.current.ask('Nên chuyển thẻ này đi đâu?')
+    })
+
+    // The live bubble is filtered too, not just the turn that lands in the transcript.
+    await waitFor(() => expect(result.current.streamingAnswer).not.toBe(''))
+
+    await act(async () => {
+      await pending
+    })
+
+    expect(result.current.streamingAnswer).not.toContain(leakedId)
+    expect(result.current.messages[1].content).not.toContain(leakedId)
+    expect(result.current.messages[1].content).toContain('[mã nội bộ]')
+
+    // Redacted, not deleted: the sentence the user reads is otherwise intact.
+    expect(result.current.messages[1].content).toContain('Nên chuyển sang cột "process"')
+  })
+
+  it('keeps the real ids inside a proposal block so the card stays submittable', async () => {
+    const taskId = '9724c884-d103-4147-9b68-7532d97f04a9'
+    const columnId = '11111111-2222-3333-4444-555555555555'
+
+    mocked.stream.mockImplementation(async (_boardId, _request, options) => {
+      options.onEvent({
+        event: 'done',
+        data: {
+          answer:
+            `Nên chuyển thẻ sang cột Xong (id: ${columnId}).\n\n` +
+            '```json\n' +
+            `{"proposal":{"kind":"MoveTaskToColumn","summary":"Chuyển thẻ","payload":{"taskId":"${taskId}","columnId":"${columnId}"}}}\n` +
+            '```',
+        },
+      })
+    })
+
+    const { result } = renderHook(() => useAgentChat('b1'))
+    await waitFor(() => expect(mocked.getSession).toHaveBeenCalled())
+
+    await act(async () => {
+      await result.current.ask('Nên làm gì?')
+    })
+
+    // The prose is filtered...
+    expect(result.current.messages[1].content).not.toContain(columnId)
+    expect(result.current.messages[1].content).not.toContain('```json')
+
+    // ...while the block keeps the ids the server needs to re-validate and apply the proposal. Redacting here
+    // would turn a submittable proposal into a guaranteed 400.
+    expect(result.current.proposalJson).toContain(taskId)
+    expect(result.current.proposalJson).toContain(columnId)
+    expect(result.current.proposal).toMatchObject({ kind: 'MoveTaskToColumn' })
+  })
 })

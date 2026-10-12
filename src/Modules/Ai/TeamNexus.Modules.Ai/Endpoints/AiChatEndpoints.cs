@@ -40,6 +40,16 @@ public static class AiChatEndpoints
             .RequireAuthorization()
             .AddEndpointFilter<AntiforgeryValidationEndpointFilter>();
 
+        // Phase 14.6 §A3: the stored transcript of a task's chat. Deliberately a SEPARATE path from
+        // `/ai-chat/...` rather than a new verb under it: the stream and the message endpoints are the
+        // Phase 14 contract (frozen — the Flutter client will reuse it verbatim), while the transcript is
+        // the new half that reads the shared `agent_chat_messages` table.
+        var transcript = endpoints.MapGroup("/api/tasks/{taskId:guid}/agent-chat")
+            .WithTags("AiChat")
+            .AddEndpointFilter<DomainExceptionFilter>();
+
+        transcript.MapGet("/messages", ListMessagesAsync).RequireAuthorization();
+
         return endpoints;
     }
 
@@ -73,5 +83,17 @@ public static class AiChatEndpoints
     {
         var log = await chat.SaveAnswerAsync(taskId, request, http.RequireUserId(), ct);
         return Results.Created($"/api/ai-actions/{log.Id}", log);
+    }
+
+    private static async Task<IResult> ListMessagesAsync(
+        Guid taskId,
+        DateTimeOffset? before,
+        int? take,
+        HttpContext http,
+        IAiChatService chat,
+        CancellationToken ct)
+    {
+        var messages = await chat.ListMessagesAsync(taskId, before, take ?? 0, http.RequireUserId(), ct);
+        return Results.Ok(messages);
     }
 }

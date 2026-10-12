@@ -230,12 +230,26 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
 
   const canvasRef = useRef<HTMLDivElement | null>(null)
 
+  // Kept in a ref so `openAgentChat` can tell "open it" from "it is already open" without re-creating the
+  // callback (and therefore without re-rendering the Kanban canvas) on every open/close.
+  const agentChatOpenRef = useRef(false)
+
   const AGENT_CHAT_MIN_WIDTH = 320
   const AGENT_CHAT_MAX_WIDTH = 560
+
+  useEffect(() => {
+    agentChatOpenRef.current = agentChatOpen
+  }, [agentChatOpen])
 
   // "One quarter of the board, within reason": measured on first open rather than guessed from the window,
   // because the board canvas is not the whole window (the header and the app shell take their share).
   const openAgentChat = useCallback(() => {
+    // Already open ⇒ keep the width the user dragged to. Recomputing it here would silently undo their
+    // resize every time a card is attached, which is exactly the kind of friction Phase 14.6 §A1 removes.
+    if (agentChatOpenRef.current) {
+      return
+    }
+
     const canvasWidth = canvasRef.current?.clientWidth ?? window.innerWidth
 
     setAgentChatWidth(
@@ -245,6 +259,22 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
     )
     setAgentChatOpen(true)
   }, [])
+
+  /**
+   * Phase 14.6 §A1: a card's "…" menu can send it straight into the chat. Shares the drop path's mechanism
+   * (`attachRequest` + a token that changes every time) so the panel cannot tell the two routes apart — and
+   * a second request for a card already attached still produces the "already attached" feedback.
+   */
+  const sendTaskToAgentChat = useCallback(
+    (task: TaskResponse) => {
+      openAgentChat()
+      setAgentChatAttachRequest((prev) => ({
+        token: (prev?.token ?? 0) + 1,
+        task: { taskId: task.id, title: task.title },
+      }))
+    },
+    [openAgentChat]
+  )
 
   /** Resizes the panel from the divider the user drags. Never below the minimum, never past the maximum. */
   const handleAgentChatResizeStart = useCallback(
@@ -368,6 +398,15 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
     () => Object.values(filteredTasksByColumn).flat(),
     [filteredTasksByColumn]
   )
+
+  /**
+   * Every card of the board, unfiltered — the input to the AI chat's card picker (Phase 14.6 §A1).
+   *
+   * Deliberately NOT `allFilteredTasks`: the board's search box answers "what do I want to look at right
+   * now?", while the picker answers "which card am I talking about?". Sharing the filter would make a card
+   * unfindable precisely when someone was searching for it.
+   */
+  const allBoardTasks = useMemo(() => Object.values(tasksByColumn).flat(), [tasksByColumn])
 
   // ---- Drag & Drop Event Handlers ----
   const handleDragStart = (event: DragStartEvent) => {
@@ -772,6 +811,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
               }}
               onDeleteColumn={deleteColumn}
               onCreateTask={createTask}
+              onSendToAiChat={sendTaskToAgentChat}
             />
           ))}
 
@@ -844,6 +884,10 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
             onClose={() => setAgentChatOpen(false)}
             attachRequest={agentChatAttachRequest}
             onAttachmentsChange={setAgentChatAttachedCount}
+            // Phase 14.6 §A1: the picker searches EVERY card of the board, not just the ones the board's own
+            // search box currently shows — "which card do I mean?" is a different question, and inheriting
+            // that filter would hide cards exactly when the user goes looking for them.
+            tasks={allBoardTasks}
           />
         </>
       )}

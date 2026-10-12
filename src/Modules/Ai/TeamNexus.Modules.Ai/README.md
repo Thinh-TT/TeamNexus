@@ -4,8 +4,9 @@ Module AI của TeamNexus (modular monolith):
 3. **AI Observer (Phase 5):** `BackgroundService` quét hoạt động board theo chu kỳ, phát hiện tín hiệu bất thường và cảnh báo riêng cho Manager/Admin qua `notifications`.
 4. **AI Agent Executor (Phase 7 — ✅ đã hoàn tất & verify):** Agent là thành viên ảo của workspace, được gán task như người thật, tự chạy vòng lặp tool-calling, kết quả đi qua Accountability Layer và có guardrail ngân sách.
 
-> Trạng thái: **Giai đoạn 3–5, 7, 14 và 14.5 đã hoàn tất & verify.** Chi tiết Phase 14.5 ở
-> `project-docs/tasks/phase-14-5-foundation-and-agent-chat.md`; schema ở `project-docs/04-database-design.md` §3.10.
+> Trạng thái: **Giai đoạn 3–5, 7, 14, 14.5 và 14.6 (Track A) đã hoàn tất & verify.** Chi tiết Phase 14.5 ở
+> `project-docs/tasks/phase-14-5-foundation-and-agent-chat.md`, Phase 14.6 Track A ở
+> `project-docs/tasks/phase-14-6-ai-agent-enhancements.md`; schema ở `project-docs/04-database-design.md` §3.10.
 
 ## §1 — Cấu hình & đăng ký (đã hiện thực)
 
@@ -681,6 +682,7 @@ Vượt trần ⇒ **400 TRƯỚC khi gọi provider** (**0 token**).
 1. **Task chat trong `TaskDetailModal` VẪN transcript ở client** (D2 của Phase 14 còn hiệu lực cho nó; chỉ nhãn
    đổi thành *"Hỏi AI về thẻ này"*). Hệ quả: cùng một thẻ có thể có **2 nguồn hội thoại** (tab trong modal tạm
    thời, panel board bền). `agent_chat_messages.task_id` là **chỗ chừa** để hợp nhất sau **không cần migration**.
+   → **ĐÃ TRẢ NỢ ở Phase 14.6 §A3:** task chat ghi/nạp transcript qua `task_id`; xem mục *Phase 14.6* ở cuối file.
 2. **Chat không có tool/function-calling.** Model chỉ **đề xuất** JSON; người bấm *Gửi đề xuất*, Manager duyệt.
    Đúng chốt người dùng và giữ chat **không tự ghi**.
 3. **`TestServer` có thể đệm body** ⇒ suite khoá **hợp đồng** (thứ tự khung, `done.answer == Σ delta`), không
@@ -700,3 +702,52 @@ Vượt trần ⇒ **400 TRƯỚC khi gọi provider** (**0 token**).
   `AiActionService.ApproveAsync` đã mở ⇒ `InvalidOperationException`. Đã **bỏ transaction thừa** (mọi thay đổi
   nằm trong **một** `SaveChangesAsync` nên nguyên tử không đổi). **Đừng** thêm lại `BeginTransactionAsync` vào
   `MoveTaskAsync`: `AiActionService` bọc mọi applier trong transaction của nó.
+
+---
+
+## Phase 14.6 Track A — Hoàn thiện trải nghiệm & bịt rò rỉ ID
+
+> Kế hoạch: `project-docs/tasks/phase-14-6-ai-agent-enhancements.md` (§1 Track A).
+> **Schema: ⛔ 0 migration** — `dotnet ef migrations list` vẫn **11**; A3 dùng đúng cột `task_id` mà
+> Migration 11 đã chừa sẵn.
+
+| # | Việc | File |
+|---|---|---|
+| **A2** | Quy tắc "không in raw ID/GUID/UUID" vào **cả hai** system prompt | `Services/AgentChatPrompts.cs` · `Services/AiChatPrompts.cs` |
+| **A2** | Bộ lọc **thuần**: thay mọi chuỗi dạng UUID bằng `[mã nội bộ]` | `Services/AiChatAnswerSanitizer.cs` |
+| **A2** | Transcript lưu DB được lọc **trước khi ghi** (đọc lại không hồi sinh thứ đã ẩn) | `Services/AgentChatService.cs` (board) · `Services/AiChatService.cs` (task) |
+| **A3** | Transcript của task chat: ghi 2 row với `task_id`, `board_id = null` | `Services/AiChatService.cs` |
+| **A3** | Đọc transcript của task (Member+, keyset) | `Services/AiChatService.ListMessagesAsync` + `Endpoints/AiChatEndpoints.cs` |
+| **A3** | Luật đọc **dùng chung** cho cả hai transcript | `Services/AgentChatTranscriptQuery.cs` · `Services/AgentChatTranscriptMapper.cs` |
+| **A4** | Lightweight Board Digest (chỉ khi **không** gắn thẻ nào) | `Services/AgentChatPrompts.BuildDigestBlock` · `Services/AgentChatService.LoadDigestAsync` |
+| **A4** | 2 knob mới, đều clamp | `Options/AgentChatOptions.cs` (`MaxDigestTasks` 10 · `MaxDigestChars` 2000) |
+
+### Route mới (A3)
+
+```http
+GET  /api/tasks/{taskId}/agent-chat/messages?take=&before=   (Member+ · cũ→mới, keyset)
+POST /api/tasks/{taskId}/ai-chat/stream                      (không đổi shape — nay GHI thêm transcript)
+```
+
+### ⚠️ Lệch DoD có chủ ý (đọc trước khi "khôi phục" D2 của Phase 14)
+
+- **Phase 14 D2 ("server không giữ bảng chat nào") bị thay thế cho task chat.** Người dùng chốt A3. Hệ quả:
+  1 assertion của `AgentChatApiTests.AGENTCHAT22` **phải** đổi từ "0 row" thành "2 row, `task_id` set,
+  `board_id` null" — đây là **ngoại lệ duy nhất** của giai đoạn này. Hợp đồng **SSE** và `meta` của task chat
+  **không** đổi (vẫn tên TASK), và **isolation** giữa hai transcript được kiểm bằng cả DB lẫn HTTP.
+- **A2 không viết lại luồng SSE trực tiếp.** `done.answer == Σ delta` là bất biến client dựa vào để khôi phục
+  khung bị mất, mà một UUID **vắt qua hai khung** thì lọc từng khung vừa phá bất biến vừa cắt nát khối JSON đề
+  xuất **thật** (`taskId`/`columnId` là ID hợp lệ, phải sống). Vì vậy: prompt (yêu cầu) + **server lọc phần
+  lưu DB** + **client lọc phần hiển thị** (`frontend/src/features/ai/utils/redactIdentifiers.ts` — lọc trên
+  **chuỗi tích luỹ**, không lọc từng delta). **Đây là một phần hợp đồng API**: client Phase 16 phải lọc prose
+  trước khi render, đừng render thẳng `answer`.
+
+### Bug thật đã bắt & sửa ở 14.6 Track A
+
+- **A1 — thứ tự transcript do Guid ngẫu nhiên quyết định.** Cả hai row của một lượt hỏi-đáp được ghi trong
+  **một** `SaveChangesAsync`, mà `StampAuditableTimestamps` lấy **một** `DateTimeOffset.UtcNow` cho cả lần lưu
+  ⇒ hai row có `created_at` **giống hệt nhau**. Truy vấn cũ (`ORDER BY created_at, id`) để **Guid ngẫu nhiên**
+  phân xử, nên khoảng **một nửa số lần mở lại** transcript hiện câu trả lời **trước** câu hỏi. Suite của
+  Phase 14.5 (`AGENTCHAT3`) **may mắn** nên không bắt được. Luật đúng nằm ở `AgentChatTranscriptQuery`:
+  `created_at` → **`role`** (câu hỏi trước câu trả lời) → `id` cho ổn định. **Đừng** bỏ khoá thứ hai.
+

@@ -7,8 +7,13 @@ using TeamNexus.Persistence.Data;
 namespace TeamNexus.Modules.Ai.Services;
 
 /// <summary>
-/// Deletes board-chat turns older than <c>AgentChat:RetentionDays</c> (Phase 14.5 §B).
+/// Deletes chat turns older than <c>AgentChat:RetentionDays</c> (Phase 14.5 §B).
 /// <para>
+/// <b>One sweep for both conversations.</b> The predicate is <c>created_at</c> across the whole table, so a
+/// board's turns and a task's turns (Phase 14.6 §A3) age out together — the window is a property of "a chat
+/// transcript", not of which scope wrote it, and two owners for one table is how a table ends up with rows
+/// nothing prunes.
+/// </para>
 /// <b>Why a chat needs retention at all.</b> Every other append-only table in this schema either belongs
 /// to an existing prune (the Observer's runs) or stores something a human explicitly asked to keep
 /// (attachments, comments). A chat transcript is neither: it is unbounded prose that grows on every

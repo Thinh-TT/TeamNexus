@@ -670,28 +670,35 @@ Fan-out giữ nguyên "1 row / 1 người nhận".
 
 ---
 
-### 3.10 Module AI — AI Agent Chat cấp Board (Giai đoạn 14.5)
+### 3.10 Module AI — AI Agent Chat cấp Board (Giai đoạn 14.5) & Chat của thẻ (Giai đoạn 14.6 §A3)
 
 > **Lệch DoD có chủ ý so với Giai đoạn 14:** Phase 14 (D1/D2) **cấm** migration và cấm lưu transcript ở DB.
-> Người dùng đã chốt **lưu DB** cho chat **cấp board**, nên 14.5 có **đúng 1** migration. Dialog chat của
-> **tab trong `TaskDetailModal`** vẫn **không** lưu (D2 của Phase 14 vẫn hiệu lực cho nó) — và cột
-> `task_id` dưới đây là **chỗ chừa** để hợp nhất sau này mà **không cần migration nữa**.
+> Người dùng đã chốt **lưu DB** cho chat **cấp board**, nên 14.5 có **đúng 1** migration. Giai đoạn **14.6 §A3**
+> dùng nốt nửa còn lại của bảng: dialog của **tab trong `TaskDetailModal`** cũng ghi/nạp transcript qua
+> `task_id` ⇒ D2 của Phase 14 hết hiệu lực cho **cả hai** bề mặt, và việc đó **không cần migration nào**
+> (đúng như cột `task_id` được chừa sẵn ở Migration 11).
 
 #### `agent_chat_messages`
-Một row = một lượt (một câu hỏi **hoặc** một câu trả lời) của AI Agent Chat. Một cặp hỏi–đáp là **2 row**, nhờ vậy phát lại hội thoại cho model đúng thứ tự chỉ bằng `ORDER BY created_at`.
+Một row = một lượt (một câu hỏi **hoặc** một câu trả lời) của một cuộc chat AI. Một cặp hỏi–đáp là **2 row**; một bảng phục vụ **hai** phạm vi (board / task), đúng một trong hai cột được set.
+
+> ⚠️ **`ORDER BY created_at` KHÔNG đủ để dựng lại thứ tự.** `StampAuditableTimestamps` lấy **một**
+> `DateTimeOffset.UtcNow` cho **mỗi** `SaveChangesAsync`, nên hai row của cùng một lượt hỏi–đáp có `created_at`
+> **giống hệt nhau**. Luật đọc đúng (`AgentChatTranscriptQuery.NewestPageAsync`): `created_at` → **`role`**
+> (câu hỏi trước câu trả lời) → `id`. Xem §"Bug thật" trong `tasks/phase-14-6-ai-agent-enhancements.md`.
 
 | Cột | Kiểu | Null | Ràng buộc | Ghi chú |
 |---|---|---|---|---|
 | `id` | uuid | — | PK | |
 | `board_id` | uuid | **null** | FK→`boards` (Restrict), IX `(board_id, created_at)` | set khi là chat cấp board |
-| `task_id` | uuid | **null** | FK→`tasks` (Restrict) | **chỗ chừa**: đặt cùng bảng để task chat ghi được vào đây sau này **không cần migration** |
-| `workspace_id` | uuid | — | FK→`workspaces` (Restrict), IX `(workspace_id, created_at)` | retention theo workspace |
+| `task_id` | uuid | **null** | FK→`tasks` (Restrict), IX `(task_id)` (EF tự tạo cho FK) | **đã dùng từ 14.6 §A3**: chat của tab "Hỏi AI về thẻ này"; `board_id` để **null** |
+| `workspace_id` | uuid | — | FK→`workspaces` (Restrict), IX `(workspace_id, created_at)` | retention theo workspace — **một** lượt quét cho cả hai phạm vi |
 | `user_id` | uuid | **null** | FK→`users` (Restrict) | tác giả lượt `User`; **null** với lượt `Assistant` |
 | `role` | text(16) | — | CHECK `role IN ('User','Assistant')` | **không** có `system`: prompt hệ thống do server dựng mỗi request, không bao giờ là row |
-| `content` | text | — | | app layer cap `AgentChat:MaxMessageChars` (**16000**) |
-| `attachments` | jsonb | null | | `[{ taskId, title }]` — để dựng lại pill + audit *"câu trả lời được phép thấy gì"*; **không** đọc lại làm ngữ cảnh (ngữ cảnh lấy từ board sống) |
-| `created_at` | timestamptz | — | | keyset paging + nạp transcript |
+| `content` | text | — | | app layer cap `AgentChat:MaxMessageChars` (**16000**) cho chat board, `AiChat:MaxMessageChars` (**16000**) cho chat thẻ; **prose** đã lọc GUID trước khi ghi (§A2) |
+| `attachments` | jsonb | null | | `[{ taskId, title }]` — để dựng lại pill + audit *"câu trả lời được phép thấy gì"*; **không** đọc lại làm ngữ cảnh (ngữ cảnh lấy từ board sống). Chat của thẻ để **null** (chỉ có đúng một thẻ, và nó là chủ thể của tab) |
+| `created_at` | timestamptz | — | | keyset paging + nạp transcript (**không** đủ để sắp thứ tự — xem cảnh báo trên) |
 | `updated_at` | timestamptz | — | | stamp tự động qua `IAuditableEntity` |
+
 
 **CHECK `ck_agent_chat_messages_scope`: `num_nonnulls(board_id, task_id) = 1`** — đúng một phạm vi. Hai CHECK riêng `IS NOT NULL` **không** biểu diễn được "một trong hai, và chỉ một" mà không cần cặp OR/AND.
 
@@ -715,7 +722,7 @@ Một row = một lượt (một câu hỏi **hoặc** một câu trả lời) c
 - **Giai đoạn 14 — Undo board template là SOFT delete, không hard delete.** `boards.deleted_at` được set; row vẫn còn trong DB. Hard delete sẽ phá bất biến "append-only + mọi FK RESTRICT" của §7, và `tasks` của board đó đã tự động bị ẩn vì query filter của `BoardTask` đi theo board đã soft-delete. Hệ quả đã biết & chấp nhận: `activity_logs` vẫn giữ `boardId` của board đã xoá — đó là **lịch sử**, che nó đi là viết lại quá khứ (test `BT_UNDO_1` khẳng định phạm vi thật: danh sách board + số liệu dashboard).
 - **Giai đoạn 14 — Tín hiệu `AtRiskDeadline` không thêm bảng nào.** Nó đi qua đúng pipeline sẵn có: `ObserverSignalDetector` → `ObserverSummarizer` → `ai_observer_runs.summary` (jsonb) → `notifications.type` (text tự do) + `notifications.payload` (jsonb). Run summary có thêm 2 khoá chẩn đoán (`signalsPreserved`/`signalsDroppedBeforePrompt`) — additive trong jsonb, không đổi schema.
 - **Giai đoạn 14.5 — Migration DUY NHẤT: bảng `agent_chat_messages`.** Đây là **lệch DoD có chủ ý** so với Giai đoạn 14 (giai đoạn đó cấm migration): người dùng chốt **lưu transcript của chat cấp board** vào DB, mà "client giữ hội thoại" không thể làm được điều đó (hội thoại phải sống qua reload và giống nhau với mọi người mở board). Bốn gạch đầu dòng giải thích **vì sao vẫn không cần gì thêm ngoài một bảng**:
-  1. **`task_id` để sẵn ⇒ hợp nhất task chat sau này KHÔNG cần migration nữa.** CHECK `num_nonnulls(board_id, task_id) = 1` cho phép cùng bảng phục vụ hai phạm vi. Dialog của tab `TaskDetailModal` **vẫn** ở client ở giai đoạn này (D2 của Phase 14 còn hiệu lực cho nó).
+  1. **`task_id` để sẵn ⇒ hợp nhất task chat sau này KHÔNG cần migration nữa.** CHECK `num_nonnulls(board_id, task_id) = 1` cho phép cùng bảng phục vụ hai phạm vi. → **Giai đoạn 14.6 §A3 đã dùng đúng chỗ chừa này**: dialog của tab `TaskDetailModal` ghi/nạp qua `task_id`, **0 migration mới**, và CHECK khiến hai transcript **không thể** trộn vào nhau.
   2. **Không có bảng `ai_chat_sessions`.** "Session" **là** các row của một board — mở panel hai lần không tạo hội thoại thứ hai. Một bảng session riêng chỉ thêm một FK và một khái niệm để sai.
   3. **Không cột/index mới cho `ai_action_logs`.** Hai action mới của chat (`UpdateTaskFields`, `MoveTaskToColumn`) dùng đúng `entity_type = 'Task'` + index `(entity_type, entity_id, created_at)` đã có; `applied_snapshot` chỉ mọc thêm hai khoá **optional** (`updatedTaskId`/`fromColumnId`) mà serializer **bỏ khoá null** ⇒ snapshot Phase 4/7 giữ **nguyên** hình dạng.
   4. **Retention không cần bảng/cột nào.** `AgentChatRetentionRunner` xoá theo `created_at` + `AgentChat:RetentionDays` (mặc định 90), theo batch — dùng đúng index `(workspace_id, created_at)` của bảng mới. Không có cờ "đã dọn" nào phải lưu (khác digest, vốn cần idempotency theo ngày).
