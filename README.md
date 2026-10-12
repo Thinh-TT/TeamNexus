@@ -25,6 +25,18 @@ Giai đoạn này cũng củng cố nền cho Giai đoạn 15/16: lịch sử AI
 
 Chi tiết: `project-docs/tasks/phase-14-5-foundation-and-agent-chat.md` · `project-docs/report/phase-14-5-foundation-and-agent-chat-test-report.md`.
 
+## Trạng thái (Giai đoạn 14.6 — Track A) — Hoàn thiện trải nghiệm & bịt rò rỉ ID
+
+Bốn ma sát phát hiện khi kiểm thử thực chiến trên bản live đã được xử lý, **không migration nào**:
+
+- **Đính kèm thẻ không cần kéo-thả:** nút **"Đính kèm thẻ"** mở popover tìm nhanh theo tiêu đề/người phụ trách, và menu `...` của mỗi thẻ Kanban có **"Gửi vào AI Chat"** (tự mở panel + gắn thẻ). Kéo-thả vẫn giữ nguyên.
+- **Không còn rò GUID:** cả hai system prompt đều cấm in raw ID, **và** có bộ lọc cưỡng chế hai đầu — `AiChatAnswerSanitizer` (lọc transcript trước khi ghi DB) + `redactIdentifiers` (lọc phần hiển thị trên client). Khối JSON đề xuất **không** bị lọc.
+- **Transcript của thẻ đã bền:** tab *"Hỏi AI về thẻ này"* ghi/nạp `agent_chat_messages` qua `task_id` (`GET /api/tasks/{taskId}/agent-chat/messages`) ⇒ F5 không mất hội thoại. Dùng đúng cột `task_id` mà Migration 11 đã chừa sẵn.
+- **Hỏi tiến độ bảng không còn trả lời rỗng:** khi chưa gắn thẻ nào, server tự thêm **Lightweight Board Digest** (số thẻ mỗi cột + top thẻ theo ưu tiên/hạn chót, trần 2.000 ký tự).
+
+Track B (Multi-Agent Personas, Proactive Auto-Healing, ReAct tool-calling, Workspace RAG) **vẫn là kế hoạch**.
+Chi tiết: `project-docs/tasks/phase-14-6-ai-agent-enhancements.md` · `project-docs/report/phase-14-6-track-a-test-report.md`.
+
 ## Kiến trúc
 
 **Modular Monolith** ASP.NET Core (.NET 10) + React (TypeScript, Vite) + PostgreSQL (EF Core).

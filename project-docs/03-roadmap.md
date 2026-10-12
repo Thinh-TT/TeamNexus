@@ -2,7 +2,7 @@
 
 > Roadmap ở mức giai đoạn lớn (chưa chia task chi tiết). Mỗi giai đoạn kèm các yêu cầu hoàn thiện để coi là "xong" trước khi chuyển sang giai đoạn kế tiếp.
 
-> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (✅)** → **8 (✅)** → **9 (✅)** → **10 (✅)** → **11 (✅)** → **12 (✅)** → **13 (✅)** → **14 (✅)** → **14.5 (✅)** → **14.6 (📋)** → 15 → 16.
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (✅)** → **8 (✅)** → **9 (✅)** → **10 (✅)** → **11 (✅)** → **12 (✅)** → **13 (✅)** → **14 (✅)** → **14.5 (✅)** → **14.6 (🟡 Track A ✅ / Track B 📋)** → 15 → 16.
 >
 > Số giai đoạn đã được **đánh lại** (lần 2 — sau Giai đoạn 12): **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Đơn giản hóa Role**, **10 = Nâng cao Task & Workspace UX**, **11 = Quản lý Member & Profile**, **12 = Dashboard & Tìm kiếm**, **13 = Trực quan hóa & Thông báo**, **14 = Nâng cao AI**, **14.5 = Củng cố nền + AI Agent Chat cấp Board**, **14.6 = Hoàn thiện Trải nghiệm & Nâng cấp Năng lực AI Agent**, **15 = Tích hợp bên ngoài**, **16 = Mobile (Flutter)**. `01-system-specification.md` và `02-tech-stack-decisions.md` sẽ cập nhật khi mỗi giai đoạn bắt đầu.
 >
@@ -376,17 +376,19 @@ và mở rộng Smart Setup thành **AI Board Template**.
 
 ---
 
-## Giai đoạn 14.6: Hoàn thiện Trải nghiệm & Nâng cấp Năng lực AI Agent — 📋 LÊN KẾ HOẠCH
+## Giai đoạn 14.6: Hoàn thiện Trải nghiệm & Nâng cấp Năng lực AI Agent — 🟡 TRACK A XONG, TRACK B 📋 LÊN KẾ HOẠCH
 
 > **Vì sao có giai đoạn này:** Sau khi đưa Phase 14.5 lên production (`app.teamnexus.cloud`), kiểm thử thực chiến phát hiện các điểm ma sát UX thực tế (kéo thẻ vào dropzone khó khăn trên laptop/touch, model để lộ raw UUID ra chat, transcript task chat vẫn ở client, hỏi tiến độ rỗng khi chưa gắn thẻ) và yêu cầu nâng cấp dự án thành nền tảng **Autonomous AI Agent**.
 > **Kế hoạch chi tiết:** `tasks/phase-14-6-ai-agent-enhancements.md`.
+> **Báo cáo Track A:** `report/phase-14-6-track-a-test-report.md`.
 > **Nguyên tắc bất biến:** Accountability Layer giữ nguyên 100% (chưa duyệt chưa ghi DB nghiệp vụ); 0 migration mới ở Track A (dùng lại cột `task_id` ở migration 11); giữ vững trần token & guardrail.
 
-### Track A — Khắc phục ma sát & Hoàn thiện trải nghiệm (Quick-Wins)
-- **A1. Bộ chọn đính kèm thẻ trực quan:** Thêm nút **"+ Đính kèm thẻ"** (Dropdown tìm kiếm) trên header chat panel song song với kéo-thả dnd; thêm action **"Gửi vào AI Chat"** trong menu `...` của TaskCard.
-- **A2. Chặn rò rỉ ID kỹ thuật (GUID / UUID):** Bổ sung rule nghiêm ngặt vào System Prompt và bộ lọc sanitize để model không bao giờ in raw GUID của task/cột ra văn bản đàm thoại của người dùng.
-- **A3. Hợp nhất Transcript Task Chat:** Lưu và nạp transcript của task chat từ bảng `agent_chat_messages` (dùng cột `task_id` đã có sẵn từ Migration 11), giúp lịch sử hỏi đáp của task bền qua reload mà **không cần thêm migration mới**.
-- **A4. Lightweight Board Digest:** Khi chưa đính kèm thẻ, chat context tự động nhận tóm tắt siêu nhẹ về tổng quan số lượng thẻ và top thẻ quan trọng, giúp AI trả lời tiến độ board ngay lập tức mà không từ chối rỗng.
+### Track A — Khắc phục ma sát & Hoàn thiện trải nghiệm (Quick-Wins) — ✅ ĐÃ THI HÀNH
+- **A1. Bộ chọn đính kèm thẻ trực quan:** ✅ Nút **"Đính kèm thẻ"** (Popover tìm kiếm theo tiêu đề/người phụ trách, hiển thị title + priority + assignee) trên header vùng đính kèm, song song với kéo-thả dnd; action **"Gửi vào AI Chat"** trong menu `...` của `TaskCard` (chỉ hiện khi có handler, tự mở panel + gắn thẻ).
+- **A2. Chặn rò rỉ ID kỹ thuật (GUID / UUID):** ✅ Rule nghiêm ngặt trong **cả hai** system prompt (`AgentChatPrompts` + `AiChatPrompts`) **và** bộ lọc cưỡng chế: `AiChatAnswerSanitizer` (C#, lọc transcript trước khi ghi DB) + `redactIdentifiers.ts` (FE, lọc trên chuỗi tích luỹ khi hiển thị). Khối JSON đề xuất **không** bị lọc (ID thật phải sống để duyệt được).
+- **A3. Hợp nhất Transcript Task Chat:** ✅ Task chat ghi/nạp `agent_chat_messages` qua `task_id` (`board_id = null`, CHECK của Migration 11 giữ isolation) + route `GET /api/tasks/{taskId}/agent-chat/messages`. **0 migration mới.**
+- **A4. Lightweight Board Digest:** ✅ Khi `attachedTaskIds` rỗng, server tự dựng digest (số thẻ mỗi cột + top thẻ theo priority/hạn chót, trần `MaxDigestChars = 2000`); có thẻ đính kèm thì **không** thêm digest.
+
 
 ### Track B — Nâng cấp Năng lực AI Agent (Autonomous Platform)
 - **B1. Đội ngũ AI Chuyên Gia (Multi-Agent Personas):** Chuyên môn hóa các vai trò: Scrum Master / PO Agent (chất lượng User Story, cảnh báo trễ hạn), Tech Lead Agent (kiến trúc, DB, API), QA & Security Agent (test cases, security checklist). Hỗ trợ `@mention` trong thảo luận thẻ.

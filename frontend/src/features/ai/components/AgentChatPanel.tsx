@@ -9,6 +9,7 @@ import {
   Empty,
   Flex,
   Input,
+  Popover,
   Space,
   Tag,
   Tooltip,
@@ -19,17 +20,19 @@ import {
   CloseOutlined,
   CommentOutlined,
   LoadingOutlined,
+  PlusOutlined,
   RobotOutlined,
   SendOutlined,
   StopOutlined,
   ThunderboltOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import type { ColumnResponse } from '../../board/types/board.types'
+import type { ColumnResponse, TaskResponse } from '../../board/types/board.types'
 import { AGENT_CHAT_PROPOSAL_LABELS } from '../types/agentChat.types'
 import type { AgentChatAttachment } from '../types/agentChat.types'
 import { MAX_ATTACHED_TASKS, attachRefusalReason } from '../utils/agentChatAttachments'
 import { useAgentChat } from '../hooks/useAgentChat'
+import { AgentChatTaskPicker } from './AgentChatTaskPicker'
 
 const { Text } = Typography
 
@@ -50,6 +53,11 @@ interface AgentChatPanelProps {
   attachRequest?: { token: number; task: AgentChatAttachment } | null
   /** Lets the parent show the attachment count without owning the list. */
   onAttachmentsChange?: (count: number) => void
+  /**
+   * Every card of the board, for the Phase 14.6 §A1 picker. Optional so the panel stays renderable (and
+   * every existing test valid) without it: the drag-and-drop path needs no task list at all.
+   */
+  tasks?: TaskResponse[]
 }
 
 /**
@@ -71,8 +79,10 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   width,
   attachRequest,
   onAttachmentsChange,
+  tasks = [],
 }) => {
   const [input, setInput] = useState('')
+  const [pickerOpen, setPickerOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
   const {
@@ -163,6 +173,20 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     }
   }
 
+  // The picker and the drop zone share ONE refusal rule, so "why can't I attach this?" is answered the same
+  // way whichever route the user took.
+  const handlePickTask = (task: TaskResponse) => {
+    const reason = attachRefusalReason(attachments, task.id)
+
+    if (reason) {
+      message.warning(reason)
+      return
+    }
+
+    attach({ taskId: task.id, title: task.title })
+    setPickerOpen(false)
+  }
+
   const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
   const savable = streamingAnswer || lastAssistant?.content || ''
   const canSave = attachments.length > 0 && savable.length > 0 && savable.length <= 2000
@@ -170,7 +194,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   const attachmentRefusal =
     attachments.length >= MAX_ATTACHED_TASKS
       ? `Đã gắn tối đa ${MAX_ATTACHED_TASKS} thẻ`
-      : 'Kéo thẻ từ bảng vào đây để đính kèm'
+      : 'Kéo thẻ từ bảng vào đây, hoặc bấm "Đính kèm thẻ" để tìm nhanh'
 
   return (
     <aside
@@ -232,7 +256,36 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
           <Text type="secondary" style={{ fontSize: 11 }}>
             {attachmentRefusal}
           </Text>
-          {attachments.length > 0 && <Badge count={attachments.length} style={{ backgroundColor: '#6366f1' }} />}
+          <Space size={6}>
+            {attachments.length > 0 && (
+              <Badge count={attachments.length} style={{ backgroundColor: '#6366f1' }} />
+            )}
+            {/* Phase 14.6 §A1: the same attachment, without the gesture. Drag & drop stays (it is faster
+                for a card already on screen), but it is no longer the only way in. */}
+            <Popover
+              trigger="click"
+              open={pickerOpen}
+              onOpenChange={setPickerOpen}
+              placement="bottomRight"
+              title={<Text style={{ fontSize: 12 }}>Đính kèm thẻ vào AI Chat</Text>}
+              content={
+                <AgentChatTaskPicker
+                  tasks={tasks}
+                  attachments={attachments}
+                  onPick={handlePickTask}
+                />
+              }
+            >
+              <Button
+                size="small"
+                icon={<PlusOutlined />}
+                data-testid="agent-chat-attach-picker-button"
+                style={{ fontSize: 11 }}
+              >
+                Đính kèm thẻ
+              </Button>
+            </Popover>
+          </Space>
         </Flex>
 
         {attachments.length === 0 ? (

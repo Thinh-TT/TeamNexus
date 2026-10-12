@@ -49,6 +49,8 @@ public static class AiChatPrompts
         3. Trả lời trực tiếp, ngắn gọn, ưu tiên gạch đầu dòng khi liệt kê. Tối đa 2000 ký tự.
         4. Giữ nguyên ngôn ngữ tiếng Việt có dấu.
         5. Không dùng HTML; chỉ văn bản thuần (có thể xuống dòng).
+        6. TUYỆT ĐỐI KHÔNG hiển thị raw ID, GUID hoặc UUID trong câu trả lời. Chỉ gọi tên hiển thị của
+           thẻ, cột và người bằng ngôn ngữ tự nhiên; không viết kèm mã kỹ thuật.
         """;
 
     /// <summary>The rendered system prompt for one task context.</summary>

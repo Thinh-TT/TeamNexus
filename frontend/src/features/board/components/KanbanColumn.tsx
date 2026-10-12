@@ -44,6 +44,11 @@ interface KanbanColumnProps {
   onEditColumn: (column: ColumnResponse) => void
   onDeleteColumn: (columnId: string) => void
   onCreateTask: (data: CreateTaskRequest) => Promise<unknown>
+  /**
+   * Phase 14.6 §A1: forwarded to every card so its "…" menu can offer "Gửi vào AI Chat". Optional — a
+   * column rendered without the AI chat wired up simply shows no menu.
+   */
+  onSendToAiChat?: (task: TaskResponse) => void
 }
 
 export const KanbanColumn: React.FC<KanbanColumnProps> = ({
@@ -54,6 +59,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
   onEditColumn,
   onDeleteColumn,
   onCreateTask,
+  onSendToAiChat,
 }) => {
   const [isAddingTask, setIsAddingTask] = useState(false)
   const [newTaskTitle, setNewTaskTitle] = useState('')
@@ -231,6 +237,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
               task={task}
               isDoneColumn={column.isDone}
               onClick={() => onTaskClick(task)}
+              onSendToAiChat={onSendToAiChat}
             />
           ))}
         </SortableContext>

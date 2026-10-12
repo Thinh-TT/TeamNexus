@@ -51,6 +51,13 @@ public static class AgentChatPrompts
         3. Trả lời trực tiếp, ngắn gọn, ưu tiên gạch đầu dòng khi liệt kê.
         4. Giữ nguyên ngôn ngữ tiếng Việt có dấu.
         5. Không dùng HTML; chỉ văn bản thuần (có thể xuống dòng).
+        6. TUYỆT ĐỐI KHÔNG hiển thị raw ID, GUID hoặc UUID trong phần văn bản trò chuyện. Chỉ gọi tên
+           hiển thị của thẻ và của cột bằng ngôn ngữ tự nhiên (ví dụ: "cột Đang làm"), tuyệt đối không
+           viết kèm mã kỹ thuật kiểu "(id: <mã-cột>)". Các ID kỹ thuật chỉ được xuất hiện bên trong
+           khối JSON đề xuất cuối cùng.
+        7. Khi danh sách thẻ đang gắn rỗng, ngữ cảnh vẫn có phần "TỔNG QUAN BẢNG" (số thẻ mỗi cột và
+           các thẻ quan trọng nhất). Hãy dùng phần đó để trả lời câu hỏi về tiến độ chung của bảng;
+           không được nói rằng bạn không có dữ liệu khi phần đó tồn tại.
 
         NẾU BẠN MUỐN ĐỀ XUẤT MỘT THAY ĐỔI:
         - Viết phần giải thích bằng tiếng Việt trước, rồi kết thúc câu trả lời bằng ĐÚNG MỘT khối mã
@@ -111,6 +118,17 @@ public static class AgentChatPrompts
         if (context.AttachedTasks.Count == 0)
         {
             builder.AppendLine("- Thẻ đang gắn: (không có thẻ nào — người dùng chỉ hỏi về bảng)");
+
+            // Phase 14.6 §A4: with nothing attached the model used to receive column NAMES and nothing else,
+            // so "Sprint 1 tiến độ thế nào?" was answered with an empty refusal even though the board had
+            // dozens of cards. The digest is the smallest amount of board state that makes that question
+            // answerable, and it is only ever built when there is no attachment list to describe.
+            var digest = BuildDigestBlock(context.Digest);
+
+            if (digest.Length > 0)
+            {
+                builder.AppendLine(digest);
+            }
         }
         else
         {
@@ -160,6 +178,91 @@ public static class AgentChatPrompts
 
         return builder.ToString().TrimEnd();
     }
+
+    // =====================================================================
+    // Lightweight Board Digest (Phase 14.6 §A4)
+    // =====================================================================
+
+    /// <summary>Heading of the digest section; rule 7 of the system prompt refers to it by this name.</summary>
+    public const string DigestHeader = "TỔNG QUAN BẢNG";
+
+    /// <summary>
+    /// The line that <b>opens</b> the digest block. Distinct from <see cref="DigestHeader"/> on purpose: rule 7
+    /// of the system prompt quotes the heading by name, so only this marker proves the digest itself is
+    /// present (a test asserting on the bare heading would match the rule text and pass with the digest gone).
+    /// </summary>
+    public const string DigestBlockMarker = "- " + DigestHeader + ":";
+
+    /// <summary>
+    /// Renders the digest inside <see cref="AgentChatDigest.MaxChars"/> characters, or an empty string when
+    /// there is nothing worth saying.
+    /// <para>
+    /// <b>Why the budget is enforced here and not by the caller.</b> The whole point of a <i>lightweight</i>
+    /// digest is that it can never push the prompt past its cost ceiling; a board with 300 cards and 12
+    /// columns would otherwise turn "summarize my board" into the most expensive request in the product. The
+    /// cut is made line-by-line, so the model never receives half a task title.
+    /// </para>
+    /// <para>Pure: the caller loads the numbers, this only shapes text, so it needs no database to test.</para>
+    /// </summary>
+    public static string BuildDigestBlock(AgentChatDigest? digest)
+    {
+        if (digest is null)
+        {
+            return string.Empty;
+        }
+
+        var budget = Math.Max(0, digest.MaxChars);
+
+        if (budget == 0 || (digest.Columns.Count == 0 && digest.TopTasks.Count == 0))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder();
+
+        // Silently DROPS a line that would not fit, rather than truncating it: the task list is written last,
+        // so a budget that runs out costs the model the least important cards, never half of a title.
+        void AppendCapped(string line)
+        {
+            var cost = line.Length + Environment.NewLine.Length;
+
+            if (builder.Length + cost > budget)
+            {
+                return;
+            }
+
+            builder.AppendLine(line);
+        }
+
+        AppendCapped(DigestBlockMarker);
+        AppendCapped($"  Tổng số: {digest.TotalTasks} thẻ");
+
+        foreach (var column in digest.Columns)
+        {
+            AppendCapped($"  * {column.Name}: {column.Count}");
+        }
+
+        if (digest.TopTasks.Count > 0)
+        {
+            AppendCapped($"  Thẻ quan trọng nhất ({digest.TopTasks.Count}):");
+
+            foreach (var task in digest.TopTasks)
+            {
+                var priority = string.IsNullOrWhiteSpace(task.Priority) ? "(chưa đặt)" : task.Priority;
+                var due = task.DueDate is { } dueAt ? $"hạn {dueAt:yyyy-MM-dd HH:mm} (UTC)" : "không hạn";
+                var assignee = string.IsNullOrWhiteSpace(task.AssigneeName) ? "chưa gán" : task.AssigneeName;
+                var columnName = string.IsNullOrWhiteSpace(task.ColumnName) ? "(không rõ cột)" : task.ColumnName;
+
+                AppendCapped($"  * [{priority}] {task.Title} — {columnName} · {due} · {assignee}");
+            }
+        }
+
+        // TrimEnd before the length check so a block that only ever fitted its first line is still measured
+        // honestly rather than being reported one newline longer than it is.
+        var text = builder.ToString().TrimEnd();
+
+        return text.Length <= budget ? text : string.Empty;
+    }
 }
 
 /// <summary>
@@ -171,7 +274,30 @@ public sealed record AgentChatBoardContext(
     string? BoardDescription,
     IReadOnlyList<AgentChatContextColumn> Columns,
     IReadOnlyList<AgentChatContextTask> AttachedTasks,
-    IReadOnlyList<AgentChatContextMember> Members);
+    IReadOnlyList<AgentChatContextMember> Members,
+    AgentChatDigest? Digest = null);
+
+/// <summary>
+/// The "lightweight board digest" (Phase 14.6 §A4): how many cards each column holds plus the handful a
+/// manager would name first. Deliberately carried only when nothing is attached — see
+/// <see cref="AgentChatPrompts.BuildContextBlock"/>.
+/// </summary>
+public sealed record AgentChatDigest(
+    IReadOnlyList<AgentChatDigestColumn> Columns,
+    IReadOnlyList<AgentChatDigestTask> TopTasks,
+    int TotalTasks,
+    int MaxChars);
+
+/// <summary>One column's card count in the digest.</summary>
+public sealed record AgentChatDigestColumn(string Name, int Count);
+
+/// <summary>One "card worth naming first" in the digest. No id: the digest is for answering, not proposing.</summary>
+public sealed record AgentChatDigestTask(
+    string Title,
+    string ColumnName,
+    string? Priority,
+    DateTimeOffset? DueDate,
+    string? AssigneeName);
 
 /// <summary>One board column as the prompt sees it: the model needs the id to propose a move.</summary>
 public sealed record AgentChatContextColumn(Guid ColumnId, string Name, bool IsDone);

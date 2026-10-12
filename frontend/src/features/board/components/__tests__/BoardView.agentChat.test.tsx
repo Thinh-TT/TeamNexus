@@ -184,4 +184,39 @@ describe('BoardView — AI Agent Chat', () => {
     // Two round trips for one badge number was the bug; this assertion is what keeps it fixed.
     expect(vi.mocked(aiActionApi.listAiActions)).toHaveBeenCalledTimes(1)
   })
+
+  it('AGENTCHAT_FE5_sends a card to the chat from its "…" menu, without dragging it', async () => {
+    renderComponent()
+
+    // Phase 14.6 §A1: the card's own menu is the second way in. The panel is not open yet, so this also proves
+    // the action OPENS the chat rather than only working once it is already visible.
+    expect(screen.queryByTestId('agent-chat-panel')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('task-card-menu-task-1'))
+    fireEvent.click(await screen.findByText('Gửi vào AI Chat'))
+
+    expect(await screen.findByTestId('agent-chat-panel')).toBeInTheDocument()
+    expect(await screen.findByTestId('agent-chat-attachment-task-1')).toBeInTheDocument()
+
+    // Attaching is not moving: the card must still be in its column, and no write may have been issued.
+    expect(moveTask).not.toHaveBeenCalled()
+  })
+
+  it('AGENTCHAT_FE6_offers the board picker with the same attachment representation as a drop', async () => {
+    renderComponent()
+
+    fireEvent.click(screen.getByTestId('agent-chat-fab'))
+    await screen.findByTestId('agent-chat-panel')
+
+    fireEvent.click(screen.getByTestId('agent-chat-attach-picker-button'))
+
+    // Every card of the board is offered, even though the board's own search box is empty and the column
+    // fixture holds exactly one card.
+    expect(await screen.findByTestId('agent-chat-picker-option-task-1')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('agent-chat-picker-option-task-1'))
+
+    expect(await screen.findByTestId('agent-chat-attachment-task-1')).toBeInTheDocument()
+    expect(moveTask).not.toHaveBeenCalled()
+  })
 })

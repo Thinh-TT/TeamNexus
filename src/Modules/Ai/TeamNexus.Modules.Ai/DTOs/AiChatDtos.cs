@@ -3,9 +3,15 @@ namespace TeamNexus.Modules.Ai.DTOs;
 /// <summary>
 /// One message the client sends back for the AI Task Chat (Phase 14 §2.3).
 /// <para>
-/// The server keeps <b>no</b> chat table (decision D2), so the transcript lives in the browser and is
-/// replayed on every turn. That makes this list the entire conversation state — which is also why it is
-/// validated (count, total length, role vocabulary) <b>before</b> any provider call.
+/// The transcript lives in the browser and is replayed on every turn, so this list is the entire
+/// conversation state for one request — which is why it is validated (count, total length, role vocabulary)
+/// <b>before</b> any provider call.
+/// </para>
+/// <para>
+/// <b>Phase 14.6 §A3 changed where it is KEPT, not how it is sent.</b> Phase 14's decision D2 ("the server
+/// keeps no chat table") is replaced: each exchange is now also written to <c>agent_chat_messages</c> under
+/// <c>task_id</c>, so the tab survives a reload and every teammate can read it. The client still replays the
+/// history, so the request shape — and this type — are unchanged.
 /// </para>
 /// </summary>
 /// <param name="Role"><c>"user"</c> or <c>"assistant"</c>. Anything else is a 400.</param>

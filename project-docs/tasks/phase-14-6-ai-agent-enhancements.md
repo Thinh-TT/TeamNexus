@@ -1,12 +1,15 @@
 # Giai đoạn 14.6 — Hoàn thiện Trải nghiệm & Nâng cấp Năng lực AI Agent
 
-> **Trạng thái:** 📋 **KẾ HOẠCH & ĐẶC TẢ CHI TIẾT.**
+> **Trạng thái:** 🟡 **TRACK A ĐÃ THI HÀNH XONG (backend + frontend + test).** Track B vẫn là 📋 kế hoạch.
 > **Nguồn gốc:** Đúc kết từ kiểm thử thực chiến trên live `app.teamnexus.cloud` sau Giai đoạn 14.5.
 > **Mục tiêu:** Giải quyết dứt điểm các điểm ma sát (UX friction) của hệ thống AI hiện tại, đồng thời thiết kế kiến trúc nâng cấp TeamNexus thành một nền tảng **Autonomous AI Agent** chuyên nghiệp trước khi bước vào Giai đoạn 15 (Tích hợp bên ngoài) và 16 (Mobile Flutter).
 > **Nguyên tắc bất biến:**
 > - **Accountability Layer giữ nguyên 100%:** AI không bao giờ tự ý ghi đè dữ liệu nghiệp vụ nếu chưa có xác nhận/duyệt của con người (`Pending` → `CAS Approve` → `Undo`).
 > - **Không thêm migration DB ở Track A:** Tận dụng tối đa schema hiện có (`agent_chat_messages` đã có sẵn cột `task_id` từ Migration 11).
 > - **Giữ vững trần ngân sách & token guardrail:** Ngăn chặn bùng nổ chi phí LLM.
+>
+> **Báo cáo nghiệm thu Track A:** `project-docs/report/phase-14-6-track-a-test-report.md`.
+
 
 ---
 
@@ -91,19 +94,65 @@ Thay vì chỉ có một bot duy nhất ("AI Agent"), xây dựng hệ thống P
 
 ## 3. Ma trận Kiểm thử & Định nghĩa Hoàn thành (DoD)
 
-### 3.1. Tiêu chuẩn Kiểm thử (Test Gates)
-- **Backend Tests:** Tất cả 643 tests hiện tại giữ nguyên trạng thái PASS. Thêm unit/integration tests cho:
-  - Board Chat Prompt: Khẳng định không có GUID nào xuất hiện trong câu trả lời văn bản.
-  - Task Chat Transcript: Kiểm tra lưu và nạp transcript từ bảng `agent_chat_messages` qua khóa `task_id`.
-  - Lightweight Board Digest: Kiểm tra payload context khi không có thẻ đính kèm.
-- **Frontend Tests:** Tất cả 633 tests hiện tại giữ nguyên trạng thái PASS. Thêm tests cho:
-  - Card Picker dropdown trong `AgentChatPanel`.
-  - Context menu action "Gửi vào AI Chat" từ `TaskCard`.
-- **Lint & Build:** `npm run lint` (0 warning), `npx tsc -b` (exit 0), `npm run build` (OK).
+### 3.1. Tiêu chuẩn Kiểm thử (Test Gates) — ✅ TRACK A ĐÃ ĐẠT
+- **Backend Tests:** ~~643~~ → **665 PASS** (`Skipped: 0`, PostgreSQL 18 thật); **0** test cũ bị viết lại, **1** assertion được sửa (xem §4, ngoại lệ duy nhất). Đã thêm đúng ba nhóm được yêu cầu:
+  - Board Chat Prompt + bộ lọc: `Pure/AgentChatDigestTests` (rule §A2/§A4, template không chứa GUID thật) + `Pure/AiChatAnswerSanitizerTests` + `Integration/Phase146TrackATests` (GUID model rò ra ⇒ transcript lưu DB đã lọc).
+  - Task Chat Transcript: `Integration/Phase146TrackATests` (ghi/nạp qua `task_id`, isolation với board, phân quyền, keyset).
+  - Lightweight Board Digest: `Pure/AgentChatDigestTests` (dựng khối + trần ký tự) + `Integration/Phase146TrackATests` (`PrepareAsync` **có** digest khi không gắn thẻ, **không** có khi đã gắn).
+- **Frontend Tests:** ~~633~~ → **657 PASS / 110 file**. Đã thêm đúng hai nhóm được yêu cầu:
+  - Card Picker trong `AgentChatPanel` (`AgentChatPanel.picker.test.tsx`, 5 test).
+  - Menu `...` của `TaskCard` với "Gửi vào AI Chat" (`TaskCard.aiChat.test.tsx`, 4 test) **và** đường nối thật ở `BoardView.agentChat.test.tsx` (+2 test).
+- **Lint & Build:** ✅ `npm run lint` **0 warning / 0 error** · `npx tsc -b` **exit 0** · `npm run build` **OK**.
 
-### 3.2. Definition of Done (DoD)
-1. Người dùng có thể đính kèm thẻ vào AI Chat bằng cả kéo-thả và nút chọn thẻ trực tiếp.
-2. AI Chat không bao giờ để lộ UUID/GUID của database ra giao diện văn bản người dùng.
-3. Người dùng hỏi tiến độ board mà không đính kèm thẻ vẫn nhận được câu trả lời tổng quan chính xác.
-4. Lịch sử chat của từng task được lưu bền vững vào database và nạp lại đầy đủ khi mở lại modal.
-5. Bất biến Accountability Layer: Mọi thay đổi dữ liệu vẫn phải thông qua xác nhận `Pending` → `Approve` → `Undo`.
+### 3.2. Definition of Done (DoD) — ✅ đạt cả 5
+1. Người dùng có thể đính kèm thẻ vào AI Chat bằng cả kéo-thả và nút chọn thẻ trực tiếp. ✅ (popover tìm kiếm + menu `...`; **cùng** một luật từ chối, **cùng** một cách hiển thị pill)
+2. AI Chat không bao giờ để lộ UUID/GUID của database ra giao diện văn bản người dùng. ✅ (rule prompt **+** lọc trước khi ghi DB **+** lọc khi hiển thị **và** khi nạp lại; khối JSON đề xuất **không** bị lọc vì ID trong đó là hợp lệ — xem §4)
+3. Người dùng hỏi tiến độ board mà không đính kèm thẻ vẫn nhận được câu trả lời tổng quan chính xác. ✅ (Lightweight Board Digest, trần 2.000 ký tự)
+4. Lịch sử chat của từng task được lưu bền vững vào database và nạp lại đầy đủ khi mở lại modal. ✅ (`task_id` + `board_id = null`; **0 migration**)
+5. Bất biến Accountability Layer: Mọi thay đổi dữ liệu vẫn phải thông qua xác nhận `Pending` → `Approve` → `Undo`. ✅ (**không** file nào của Accountability Layer bị sửa; `SubmitProposalAsync`/`SaveAnswerAsync` không đổi)
+
+---
+
+## 4. Track A — Nhật ký thi hành (phát sinh & lệch kế hoạch, ghi để không bị coi là sai)
+
+> **Số ĐO THẬT:** backend **665 / 0 / 0** (baseline 643 ⇒ **+22**) · FE **657 / 110 file** (baseline 633 / 107 ⇒ **+24 / +3**) · `migrations list` = **11** (không đổi) · `has-pending-model-changes` = **sạch** · `dotnet build` **0/0** · lint **0/0** · `tsc -b` exit **0** · `npm run build` **OK**.
+> Báo cáo đầy đủ: `report/phase-14-6-track-a-test-report.md`.
+
+### 4.1 Phát sinh **bắt buộc** (không phải lệch kế hoạch — kế hoạch không thể biết trước)
+
+| # | Phát sinh | Cách xử lý |
+|---|---|---|
+| **P1** | ❗ **BUG THẬT có sẵn từ Phase 14.5:** hai row của một lượt hỏi–đáp được ghi trong **một** `SaveChangesAsync`, mà `StampAuditableTimestamps` lấy **một** `DateTimeOffset.UtcNow` cho mỗi lần lưu ⇒ `created_at` **giống hệt nhau**. Truy vấn cũ (`created_at`, rồi `id`) để **Guid ngẫu nhiên** phân xử ⇒ khoảng **một nửa** số lần mở lại, câu trả lời hiện **trước** câu hỏi. Suite Phase 14.5 (`AGENTCHAT3`) chỉ **may** nên không bắt được. | Luật đọc **dùng chung** `AgentChatTranscriptQuery.NewestPageAsync`: `created_at` → **`role`** (hỏi trước đáp) → `id` (chỉ để ổn định). Vá **cả hai** transcript. **Không** sửa `StampAuditableTimestamps` (dùng chung mọi bảng; thứ tự `ChangeTracker.Entries` không được bảo đảm) và **không** thêm cột thứ tự (cần migration). |
+| **P2** | React bubble sự kiện synthetic **xuyên portal**, nên item của `Dropdown` (render qua portal) vẫn là "click trong thẻ" ⇒ chọn "Gửi vào AI Chat" **cũng mở modal chi tiết thẻ**. | `info.domEvent.stopPropagation()` trong `onClick` của menu item (không phải chỉ trên nút trigger). |
+| **P3** | Rule 7 của prompt **nhắc tên** tiêu đề digest (`"TỔNG QUAN BẢNG"`), nên test "không có digest" bằng chính tiêu đề đó **luôn đỏ** (xanh/đỏ giả). | Tách `AgentChatPrompts.DigestBlockMarker` = dòng **mở đầu** khối (`"- TỔNG QUAN BẢNG:"`) và dùng nó ở cả hai chiều khẳng định. |
+| **P4** | `tasks.priority` là **text** ⇒ `ORDER BY priority` sắp theo **chữ cái** (`High, Low, Medium, Urgent`) — **ngược** mức độ gấp. | Xếp hạng top thẻ **trong bộ nhớ** bằng enum thật, trên một trang ứng viên bị chặn (`DigestCandidateLimit = 200`); số thẻ mỗi cột vẫn là query gộp riêng nên **chính xác** kể cả board > 200 thẻ. |
+| **P5** | `useAiChat` trước đây **không** gọi `httpClient.get` ⇒ mock của `useAiChat.test.ts` thiếu hàm đó. | Thêm `get: vi.fn()` + `mockResolvedValue({ data: [] })` trong `beforeEach`. **Không** assertion nào bị đổi — chỉ bổ sung mock cho endpoint mới. |
+
+### 4.2 **Lệch kế hoạch có chủ ý — ngoại lệ DUY NHẤT**
+
+**`AgentChatApiTests.AGENTCHAT22` bị sửa 1 assertion** (và đổi tên cho đúng nội dung mới): từ
+*"task chat vẫn ghi 0 row"* thành *"2 row, `task_id` set, `board_id` null — và transcript của board **rỗng**"*.
+
+- **Vì sao:** Phase 14 **D2** ("server không giữ bảng chat nào") bị **§A3 thay thế có chủ ý** — đúng thứ mà
+  tài liệu Phase 14.5 §8 đã ghi là **nợ kỹ thuật có chủ ý** với "chỗ chừa để hợp nhất sau **không cần
+  migration**". Giữ nguyên assertion cũ nghĩa là **giữ nguyên chính defect mà A3 sinh ra để sửa**.
+- **Phần KHÔNG đổi:** hợp đồng SSE, thứ tự khung, và `meta` vẫn mang **tên TASK** (không bị chat board chiếm).
+- **Test còn được TĂNG CƯỜNG:** thêm khẳng định isolation hai chiều (transcript của board **rỗng** sau khi
+  hỏi ở tab thẻ, và ngược lại được kiểm ở `Phase146TrackATests.PHASE146A_A2`).
+- Ngoài dòng này, **không** test cũ nào bị sửa; `Pure/ObserverVocabularyTests` (Phase 14) **không** bị đụng.
+
+### 4.3 Ghi chú thiết kế phải đọc trước khi "sửa lại cho đúng ý"
+
+1. **§A2 KHÔNG viết lại luồng SSE.** `done.answer == Σ delta` là bất biến client dựa vào để khôi phục khung
+   bị mất, mà một UUID **vắt qua hai khung** ⇒ lọc từng khung vừa phá bất biến, vừa cắt nát khối JSON đề
+   xuất **thật** (`taskId`/`columnId` hợp lệ, **phải sống** để Manager duyệt được). Vì vậy: prompt (yêu cầu)
+   + server lọc **phần lưu DB** + client lọc **phần hiển thị** trên **chuỗi tích luỹ**.
+   → **Hợp đồng API:** client Phase 16 **phải** lọc prose trước khi render, **đừng** render thẳng `answer`.
+2. **§A3 giữ nguyên hình dạng request/response của chat thẻ.** Stream và `/message` của Phase 14 **không**
+   đổi shape (Flutter dùng lại nguyên); chỉ **thêm** một route đọc `GET /api/tasks/{taskId}/agent-chat/messages`.
+3. **Retention không có chủ sở hữu thứ hai.** `AgentChatRetentionRunner` quét theo `created_at` **toàn bảng**
+   ⇒ lượt của thẻ tự động được dọn cùng; **đừng** viết runner thứ hai.
+
+### 4.4 Kiểm thử tay 1 lượt
+Xem `report/phase-14-6-track-a-test-report.md` §6 (6 bước, gồm cả bước kiểm tra bất biến Accountability).
+

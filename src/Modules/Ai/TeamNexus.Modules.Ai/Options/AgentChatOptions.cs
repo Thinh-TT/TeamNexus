@@ -69,6 +69,19 @@ public sealed class AgentChatOptions
     public int MaxCommentCharsInContext { get; set; } = 400;
 
     /// <summary>
+    /// How many "cards worth naming first" the <b>Lightweight Board Digest</b> may list when the user
+    /// attached <b>no</b> card (Phase 14.6 §A4). Clamped to 1..30.
+    /// </summary>
+    public int MaxDigestTasks { get; set; } = 10;
+
+    /// <summary>
+    /// Character ceiling of the whole digest block. This — not <see cref="MaxDigestTasks"/> — is what keeps
+    /// "summarize my board" from becoming the most expensive question in the product on a board with
+    /// hundreds of cards. Clamped to 200..8000.
+    /// </summary>
+    public int MaxDigestChars { get; set; } = 2000;
+
+    /// <summary>
     /// Longest single turn stored in <c>agent_chat_messages.content</c>. Much larger than
     /// <see cref="MaxAnswerChars"/> because this is history, not a posted comment. Clamped 1..16000.
     /// </summary>
@@ -105,6 +118,8 @@ public sealed class AgentChatOptions
         MaxTotalContextChars: Math.Clamp(MaxTotalContextChars, 1000, 48_000),
         MaxCommentsInContext: Math.Clamp(MaxCommentsInContext, 0, 50),
         MaxCommentCharsInContext: Math.Clamp(MaxCommentCharsInContext, 50, 4000),
+        MaxDigestTasks: Math.Clamp(MaxDigestTasks, 1, 30),
+        MaxDigestChars: Math.Clamp(MaxDigestChars, 200, 8000),
         MaxMessageChars: Math.Clamp(MaxMessageChars, 1, 16_000),
         MaxAnswerChars: Math.Clamp(MaxAnswerChars, 1, 2000),
         // `Math.Clamp(_, 1, 1)` reads oddly but states the intent: the knob exists so a future phase can
@@ -128,6 +143,8 @@ public sealed record AgentChatEffectiveOptions(
     int MaxTotalContextChars,
     int MaxCommentsInContext,
     int MaxCommentCharsInContext,
+    int MaxDigestTasks,
+    int MaxDigestChars,
     int MaxMessageChars,
     int MaxAnswerChars,
     int MaxProposalsPerAnswer,

@@ -59,6 +59,14 @@ public sealed class AiChatOptions
     /// </summary>
     public int MaxAnswerChars { get; set; } = 2000;
 
+    /// <summary>
+    /// Longest single turn stored in <c>agent_chat_messages.content</c> for this task (Phase 14.6 §A3).
+    /// Much larger than <see cref="MaxAnswerChars"/> because this is history, not a posted comment, and it
+    /// matches <c>AgentChat:MaxMessageChars</c> so one turn cannot mean two different things depending on
+    /// which chat wrote it. Clamped to 1..16000.
+    /// </summary>
+    public int MaxMessageChars { get; set; } = 16_000;
+
     /// <summary>Clamped view of the options; every consumer reads this, never the raw properties.</summary>
     public AiChatEffectiveOptions Effective => new(
         MaxHistoryMessages: Math.Clamp(MaxHistoryMessages, 2, 50),
@@ -68,7 +76,8 @@ public sealed class AiChatOptions
         MaxCommentsInContext: Math.Clamp(MaxCommentsInContext, 0, 50),
         MaxCommentCharsInContext: Math.Clamp(MaxCommentCharsInContext, 50, 4000),
         MaxTaskContextChars: Math.Clamp(MaxTaskContextChars, 500, 32_000),
-        MaxAnswerChars: Math.Clamp(MaxAnswerChars, 1, 2000));
+        MaxAnswerChars: Math.Clamp(MaxAnswerChars, 1, 2000),
+        MaxMessageChars: Math.Clamp(MaxMessageChars, 1, 16_000));
 }
 
 /// <summary>
@@ -83,4 +92,5 @@ public sealed record AiChatEffectiveOptions(
     int MaxCommentsInContext,
     int MaxCommentCharsInContext,
     int MaxTaskContextChars,
-    int MaxAnswerChars);
+    int MaxAnswerChars,
+    int MaxMessageChars);

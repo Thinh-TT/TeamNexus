@@ -7,6 +7,7 @@ using TeamNexus.Modules.Ai.DTOs;
 using TeamNexus.Modules.Ai.Options;
 using TeamNexus.Modules.Board.Services;
 using TeamNexus.Persistence.Data;
+using TeamNexus.Persistence.Data.Entities;
 
 namespace TeamNexus.Modules.Ai.Services;
 
@@ -59,6 +60,26 @@ public interface IAiChatService
         SaveAiChatMessageRequest request,
         Guid userId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Stored turns of one task's chat, oldest first (Phase 14.6 §A3).
+    /// <para>
+    /// <b>Why the task chat now has a transcript.</b> Phase 14 kept it in the browser on purpose, which made
+    /// "Hỏi AI về thẻ này" the only conversation in the product that vanished on F5 and was invisible to
+    /// every teammate. The row shape is the board chat's — same table, <c>task_id</c> instead of
+    /// <c>board_id</c> — which is exactly what the reserved nullable column from Migration 11 was for.
+    /// </para>
+    /// <para>
+    /// <see cref="before"/> is the same keyset cursor the board transcript uses: the <c>createdAt</c> of the
+    /// oldest row already loaded.
+    /// </para>
+    /// </summary>
+    Task<IReadOnlyList<AgentChatMessageResponse>> ListMessagesAsync(
+        Guid taskId,
+        DateTimeOffset? before,
+        int take,
+        Guid userId,
+        CancellationToken ct = default);
 }
 
 /// <summary>
@@ -79,6 +100,12 @@ public sealed record AiChatPreparedRequest(
 
 public sealed class AiChatService : IAiChatService
 {
+    /// <summary>Default page size for a task's stored transcript (mirrors the board chat's).</summary>
+    public const int DefaultMessageTake = AgentChatTranscriptQuery.DefaultTake;
+
+    /// <summary>Hard ceiling on a transcript page, so one request cannot pull the whole history.</summary>
+    public const int MaxMessageTake = AgentChatTranscriptQuery.MaxTake;
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     private readonly TeamNexusDbContext _db;
@@ -272,7 +299,138 @@ public sealed class AiChatService : IAiChatService
             promptTokens,
             completionTokens);
 
+        // Phase 14.6 §A3: the exchange is stored before the terminal frame is written, so a client that
+        // reads `done` and immediately re-opens the tab finds its own turn already there. Best-effort for
+        // the same reason the board chat is: every frame is already on the wire, so an exception here could
+        // not become a 400 — it would only abort an answer the user has effectively received.
+        await PersistTranscriptBestEffortAsync(prepared, answer.ToString(), ct);
+
         yield return AiChatSseWriter.Done(answer.ToString(), promptTokens, completionTokens);
+    }
+
+    // =====================================================================
+    // Transcript (Phase 14.6 §A3)
+    // =====================================================================
+
+    public async Task<IReadOnlyList<AgentChatMessageResponse>> ListMessagesAsync(
+        Guid taskId,
+        DateTimeOffset? before,
+        int take,
+        Guid userId,
+        CancellationToken ct = default)
+    {
+        var task = await _db.Tasks
+            .AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == taskId, ct)
+            ?? throw new NotFoundException("Task not found.");
+
+        var board = await _db.Boards
+            .AsNoTracking()
+            .FirstOrDefaultAsync(b => b.Id == task.BoardId, ct)
+            ?? throw new NotFoundException("Board not found.");
+
+        // Same rule as every other chat surface: a non-member gets 404, never a 403 that would confirm the
+        // workspace exists.
+        await _access.RequireMemberAsync(board.WorkspaceId, userId, ct);
+
+        // `TaskId`, not `BoardId`: this is the task-scoped half of the table. The CHECK constraint guarantees
+        // the two can never both be set, so the filter cannot pick up board turns.
+        var rows = await AgentChatTranscriptQuery.NewestPageAsync(
+            _db.AgentChatMessages.Where(m => m.TaskId == taskId),
+            before,
+            take,
+            ct);
+
+        return rows.Select(AgentChatTranscriptMapper.ToResponse).ToList();
+    }
+
+    /// <summary>
+    /// Stores one question/answer pair as two rows of <c>agent_chat_messages</c> with
+    /// <c>task_id = taskId</c> and <b>no</b> board id — the shape the <c>ck_agent_chat_messages_scope</c>
+    /// CHECK from Migration 11 permits, and the reason merging the two transcripts needed no new migration.
+    /// </summary>
+    private async Task SaveTranscriptAsync(
+        AiChatPreparedRequest prepared,
+        string question,
+        string answer,
+        CancellationToken ct)
+    {
+        // Bounded here, not trusted from the caller: both strings are user/model text and this is the last
+        // place before a database write.
+        var questionText = Truncate(question, Effective.MaxMessageChars);
+        var answerText = Truncate(answer, Effective.MaxMessageChars);
+
+        if (string.IsNullOrWhiteSpace(questionText) && string.IsNullOrWhiteSpace(answerText))
+        {
+            return;
+        }
+
+        var rows = new List<AgentChatMessage>();
+
+        if (!string.IsNullOrEmpty(questionText))
+        {
+            rows.Add(new AgentChatMessage
+            {
+                TaskId = prepared.TaskId,
+                WorkspaceId = prepared.WorkspaceId,
+                Role = AgentChatRole.User,
+                Content = questionText,
+            });
+        }
+
+        if (!string.IsNullOrEmpty(answerText))
+        {
+            rows.Add(new AgentChatMessage
+            {
+                TaskId = prepared.TaskId,
+                WorkspaceId = prepared.WorkspaceId,
+                Role = AgentChatRole.Assistant,
+                Content = answerText,
+            });
+        }
+
+        _db.AgentChatMessages.AddRange(rows);
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "AI task chat transcript for task {TaskId}: {Rows} row(s) stored.",
+            prepared.TaskId,
+            rows.Count);
+    }
+
+    /// <summary>
+    /// Stores the exchange, swallowing failure — the board chat's reasoning, restated because the stakes
+    /// differ: this runs <i>after</i> the answer has reached the client, so the status line and every frame
+    /// are already on the wire. Losing one stored turn is a reload inconvenience; killing a successful
+    /// answer is a broken feature.
+    /// </summary>
+    private async Task PersistTranscriptBestEffortAsync(
+        AiChatPreparedRequest prepared,
+        string fullAnswer,
+        CancellationToken ct)
+    {
+        try
+        {
+            // `prepared.Messages` is the client's replay of the conversation, so the last user turn IS the
+            // question that produced this answer — no extra request field is needed to know it.
+            var question = prepared.Messages.LastOrDefault(
+                m => string.Equals(m.Role, "user", StringComparison.OrdinalIgnoreCase))?.Content
+                ?? string.Empty;
+
+            // Phase 14.6 §A2: the model's prose is redacted before it becomes durable. The task chat has no
+            // proposal block, so the whole answer is prose and the whole answer is filtered.
+            var answer = AiChatAnswerSanitizer.RedactIdentifiers(fullAnswer);
+
+            await SaveTranscriptAsync(prepared, question, answer, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Could not store the task chat transcript for task {TaskId}; the answer was already streamed "
+                + "to the client and is unaffected.",
+                prepared.TaskId);
+        }
     }
 
     // =====================================================================
@@ -452,5 +610,20 @@ public sealed class AiChatService : IAiChatService
         }
 
         return value.Length <= maxLength ? value : value[..maxLength] + "…";
+    }
+
+    /// <summary>
+    /// Cuts a value to fit a storage column <b>without</b> the ellipsis <see cref="Cap"/> adds: an ellipsis
+    /// belongs in a prompt, where it tells the model "this is an excerpt", but a stored chat turn that ends
+    /// in "…" would read as if the model itself trailed off.
+    /// </summary>
+    private static string Truncate(string? value, int maxLength)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return value.Length <= maxLength ? value : value[..maxLength];
     }
 }
