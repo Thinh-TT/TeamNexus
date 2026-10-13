@@ -2,11 +2,11 @@
 
 > Roadmap ở mức giai đoạn lớn (chưa chia task chi tiết). Mỗi giai đoạn kèm các yêu cầu hoàn thiện để coi là "xong" trước khi chuyển sang giai đoạn kế tiếp.
 
-> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (✅)** → **8 (✅)** → **9 (✅)** → **10 (✅)** → **11 (✅)** → **12 (✅)** → **13 (✅)** → **14 (✅)** → **14.5 (✅)** → **14.6 (🟡 Track A ✅ / Track B 📋)** → 15 → 16.
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (✅)** → **8 (✅)** → **9 (✅)** → **10 (✅)** → **11 (✅)** → **12 (✅)** → **13 (✅)** → **14 (✅)** → **14.5 (✅)** → **14.6 (✅ Track A)** → **14.7 (📋)** → 15 → 16.
 >
-> Số giai đoạn đã được **đánh lại** (lần 2 — sau Giai đoạn 12): **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Đơn giản hóa Role**, **10 = Nâng cao Task & Workspace UX**, **11 = Quản lý Member & Profile**, **12 = Dashboard & Tìm kiếm**, **13 = Trực quan hóa & Thông báo**, **14 = Nâng cao AI**, **14.5 = Củng cố nền + AI Agent Chat cấp Board**, **14.6 = Hoàn thiện Trải nghiệm & Nâng cấp Năng lực AI Agent**, **15 = Tích hợp bên ngoài**, **16 = Mobile (Flutter)**. `01-system-specification.md` và `02-tech-stack-decisions.md` sẽ cập nhật khi mỗi giai đoạn bắt đầu.
+> Số giai đoạn đã được **đánh lại** (lần 2 — sau Giai đoạn 12): **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Đơn giản hóa Role**, **10 = Nâng cao Task & Workspace UX**, **11 = Quản lý Member & Profile**, **12 = Dashboard & Tìm kiếm**, **13 = Trực quan hóa & Thông báo**, **14 = Nâng cao AI**, **14.5 = Củng cố nền + AI Agent Chat cấp Board**, **14.6 = Hoàn thiện Trải nghiệm (Track A)**, **14.7 = Autonomous Agent & Tối ưu hóa Ra Quyết định với Jev (Hybrid AI)**, **15 = Tích hợp bên ngoài**, **16 = Mobile (Flutter)**. `01-system-specification.md` và `02-tech-stack-decisions.md` sẽ cập nhật khi mỗi giai đoạn bắt đầu.
 >
-> **Giai đoạn 14.5 và 14.6 là các giai đoạn NỐI TIẾP của 14:** Giai đoạn 14.5 hoàn thiện chat board và củng cố nền tảng; Giai đoạn 14.6 khắc phục triệt để ma sát thực chiến (UX card picker, prompt sanitize ID, thống nhất transcript, board digest) và đặt nền móng nâng cấp Autonomous AI Agent trước khi bước vào Giai đoạn 15 (Tích hợp ngoài) và 16 (Mobile).
+> **Giai đoạn 14.5, 14.6 và 14.7 là các giai đoạn NỐI TIẾP của 14:** Giai đoạn 14.5 hoàn thiện chat board; Giai đoạn 14.6 giải quyết triệt để ma sát thực chiến UX (Track A); Giai đoạn 14.7 kế thừa và mở rộng Track B, hợp nhất mô hình Jev (Non-Generative Decision AI) để hoàn thiện nền tảng Autonomous AI Agent trước khi mở rộng ra Phase 15 (Tích hợp ngoài) và 16 (Mobile). Chi tiết kiến trúc Jev lưu tại `project-docs/06-adjust-and-upgrade-with-jev.md`.
 >
 > **Lưu ý khi đọc tài liệu cũ:** các tài liệu đã đóng băng của giai đoạn 4/5/6 (`tasks/phase-4..6-*.md`, `report/phase-5-*`, `report/phase-6-*`) vẫn dùng cách đánh số cũ — Giai đoạn 9 (cũ) = Mobile, nay là **Giai đoạn 16**.
 
@@ -376,25 +376,54 @@ và mở rộng Smart Setup thành **AI Board Template**.
 
 ---
 
-## Giai đoạn 14.6: Hoàn thiện Trải nghiệm & Nâng cấp Năng lực AI Agent — 🟡 TRACK A XONG, TRACK B 📋 LÊN KẾ HOẠCH
+## Giai đoạn 14.6: Hoàn thiện Trải nghiệm (Track A) — ✅ ĐÃ HOÀN THÀNH
 
-> **Vì sao có giai đoạn này:** Sau khi đưa Phase 14.5 lên production (`app.teamnexus.cloud`), kiểm thử thực chiến phát hiện các điểm ma sát UX thực tế (kéo thẻ vào dropzone khó khăn trên laptop/touch, model để lộ raw UUID ra chat, transcript task chat vẫn ở client, hỏi tiến độ rỗng khi chưa gắn thẻ) và yêu cầu nâng cấp dự án thành nền tảng **Autonomous AI Agent**.
-> **Kế hoạch chi tiết:** `tasks/phase-14-6-ai-agent-enhancements.md`.
-> **Báo cáo Track A:** `report/phase-14-6-track-a-test-report.md`.
-> **Nguyên tắc bất biến:** Accountability Layer giữ nguyên 100% (chưa duyệt chưa ghi DB nghiệp vụ); 0 migration mới ở Track A (dùng lại cột `task_id` ở migration 11); giữ vững trần token & guardrail.
+> **Vì sao có giai đoạn này:** Sau khi đưa Phase 14.5 lên production (`app.teamnexus.cloud`), kiểm thử thực chiến phát hiện các điểm ma sát UX thực tế (kéo thẻ vào dropzone khó khăn trên laptop/touch, model để lộ raw UUID ra chat, transcript task chat vẫn ở client, hỏi tiến độ rỗng khi chưa gắn thẻ).
+> **Kế hoạch chi tiết & DoD:** `tasks/phase-14-6-ai-agent-enhancements.md`.
+> **Báo cáo nghiệm thu Track A:** `report/phase-14-6-track-a-test-report.md` (665 backend tests / 657 frontend tests PASS).
+> **Ghi chú kiến trúc:** Track B ban đầu của 14.6 được **hợp nhất và nâng tầm vào Giai đoạn 14.7** cùng với mô hình **Jev** để tạo nên nền tảng Autonomous AI Agent toàn diện.
 
-### Track A — Khắc phục ma sát & Hoàn thiện trải nghiệm (Quick-Wins) — ✅ ĐÃ THI HÀNH
+### Các hạng mục đã hoàn thành (Track A — Quick-Wins & Hardening):
 - **A1. Bộ chọn đính kèm thẻ trực quan:** ✅ Nút **"Đính kèm thẻ"** (Popover tìm kiếm theo tiêu đề/người phụ trách, hiển thị title + priority + assignee) trên header vùng đính kèm, song song với kéo-thả dnd; action **"Gửi vào AI Chat"** trong menu `...` của `TaskCard` (chỉ hiện khi có handler, tự mở panel + gắn thẻ).
 - **A2. Chặn rò rỉ ID kỹ thuật (GUID / UUID):** ✅ Rule nghiêm ngặt trong **cả hai** system prompt (`AgentChatPrompts` + `AiChatPrompts`) **và** bộ lọc cưỡng chế: `AiChatAnswerSanitizer` (C#, lọc transcript trước khi ghi DB) + `redactIdentifiers.ts` (FE, lọc trên chuỗi tích luỹ khi hiển thị). Khối JSON đề xuất **không** bị lọc (ID thật phải sống để duyệt được).
 - **A3. Hợp nhất Transcript Task Chat:** ✅ Task chat ghi/nạp `agent_chat_messages` qua `task_id` (`board_id = null`, CHECK của Migration 11 giữ isolation) + route `GET /api/tasks/{taskId}/agent-chat/messages`. **0 migration mới.**
 - **A4. Lightweight Board Digest:** ✅ Khi `attachedTaskIds` rỗng, server tự dựng digest (số thẻ mỗi cột + top thẻ theo priority/hạn chót, trần `MaxDigestChars = 2000`); có thẻ đính kèm thì **không** thêm digest.
 
+---
 
-### Track B — Nâng cấp Năng lực AI Agent (Autonomous Platform)
-- **B1. Đội ngũ AI Chuyên Gia (Multi-Agent Personas):** Chuyên môn hóa các vai trò: Scrum Master / PO Agent (chất lượng User Story, cảnh báo trễ hạn), Tech Lead Agent (kiến trúc, DB, API), QA & Security Agent (test cases, security checklist). Hỗ trợ `@mention` trong thảo luận thẻ.
-- **B2. Kịch bản Phục hồi Chủ động (Proactive Auto-Healing từ AI Observer):** Observer không chỉ dừng ở thông báo thụ động; khi gặp rủi ro `Critical`/`High` (task quá hạn 25 ngày), tự động sinh **Recovery Plan Proposal** (gợi ý phân bổ lại task, tách subtasks) để Quản lý duyệt 1-click.
-- **B3. Mở rộng Tool-Calling (ReAct):** Mở rộng bộ công cụ của AI Agent Executor phục vụ tìm kiếm ngữ cảnh chéo workspace và kiểm tra tiêu chí hoàn thành (Acceptance Criteria).
-- **B4. Bộ nhớ Dự án Ngữ nghĩa (Workspace RAG với pgvector):** Tích hợp pgvector trên PostgreSQL để nhúng tài liệu PRD, tech specs; giúp AI trả lời và phân rã task sát chuẩn kỹ thuật nội bộ của team.
+## Giai đoạn 14.7: Autonomous Agent & Tối ưu hóa Ra Quyết định với Jev (Hybrid AI Platform) — 📋 KẾ HOẠCH
+
+> **Mục tiêu:** Hợp nhất năng lực Autonomous AI Agent (kế thừa Track B của 14.6) với mô hình **Jev (Non-Generative Decision AI)** theo kiến trúc **Hybrid AI: System 1 (Jev - Ra quyết định có cấu trúc siêu tốc) + System 2 (DeepSeek - Tư duy ngôn ngữ & Giải thích sâu)**.
+> **Tài liệu kiến trúc chi tiết:** `project-docs/06-adjust-and-upgrade-with-jev.md`.
+> **Nguyên tắc bất biến:** Accountability Layer giữ nguyên 100% (mọi tác động ghi dữ liệu phải qua `Pending` → `Approve` → `Undo`); tuân thủ trần token & guardrail.
+
+### 1. Nâng cấp Tiền đề Bắt buộc (Foundational Prerequisites)
+- **1.1. Quản lý Nhãn Cố định & Taxonomy Chuẩn hóa:** Xây dựng hệ thống danh mục chuẩn cấp Workspace (`workspace_taxonomies`) gồm Domain (`Backend`, `Frontend`, `DevOps`, `Mobile`, `QA`) và Loại việc (`Feature`, `Bug`, `Refactor`, `Security`), giúp Jev ánh xạ câu hỏi `Choice` chính xác, không bị phân mảnh bởi tag tự do.
+- **1.2. Hồ sơ Kỹ năng (Skills) & Vai trò (Roles) Thành viên:** Mở rộng `workspace_members` với `skills` (JSONB), `primary_role`, `capacity_weight` và `max_wip_limit` — áp dụng đồng bộ cho cả thành viên thực (human) và thành viên ảo (AI Agent Personas).
+- **1.3. Cấu trúc Logic Rẽ nhánh theo "Xác suất Tin cậy" (Confidence Threshold Branching):**
+  - **Cao (≥ 0.85):** Đề xuất đơn nhất với 1-click Auto-fill / Accept.
+  - **Trung bình (0.50 – 0.84):** Đề xuất Top 2-3 lựa chọn kèm tỷ lệ phần trăm phân bổ xác suất cho Quản lý chọn.
+  - **Thấp (< 0.50):** Rẽ nhánh dự phòng (Fallback): để con người tự chọn hoặc chuyển sang LLM System 2 phân tích sâu/hỏi lại làm rõ (`Awaiting Clarification`).
+
+### 2. Tích hợp Mô hình Jev & Tối ưu Hóa Ra Quyết Định (System 1)
+- **2.1. Phân loại Task & Đánh giá Mức độ Gấp (Auto-Triage & Smart Priority):** Single-pass inference (<200ms) trả về Domain, WorkType, Priority (`Urgent`/`High`/`Medium`/`Low`) và cờ `NeedsSecurityReview` ngay khi tạo task.
+- **2.2. Gợi ý Người Thực hiện Phù hợp (Smart Assignee Dispatching):** Khớp nối nội dung task với hồ sơ kỹ năng và độ tải thực tế của thành viên; rẽ nhánh theo confidence score.
+- **2.3. AI Observer Toàn diện (Bộ đôi A + B):**
+  - **Phần A — Đánh giá Mức độ Nghiêm trọng (Risk Severity & Anomaly Filtering):** Jev chấm điểm `Severity` (Low/Medium/High/Critical), xác định cờ báo động khẩn và rủi ro đổ vỡ dây chuyền (Domino effect) mà không lo ảo giác hay rò rỉ ID.
+  - **Phần B — Định tuyến Kịch bản Phục hồi Chủ động (Proactive Auto-Healing Routing):** Jev đưa ra quyết định dạng `Choice` (`ReassignTask`, `SplitSubtasks`, `ExtendDeadline`, `EscalateManager`), hệ thống tự sinh `AiActionLog` ở trạng thái `Pending` để Quản lý duyệt 1-click.
+
+### 3. Nâng cấp Autonomous Agent Platform (Kế thừa Track B 14.6)
+- **3.1. Đội ngũ AI Chuyên Gia (Multi-Agent Personas):** Chuyên môn hóa vai trò: Scrum Master / PO Agent, Tech Lead Agent, QA & Security Agent; định danh chính thức trong `workspace_members` với `member_type = ai_agent`.
+- **3.2. Mở rộng Tool-Calling (ReAct Loop):** Bổ sung các công cụ: `InspectMemberWorkload`, `MatchSkills`, `ValidateAcceptanceCriteria`.
+- **3.3. Bộ nhớ Dự án Ngữ nghĩa (Workspace RAG với pgvector):** Lưu trữ vector embeddings cho PRD, tài liệu kiến trúc, coding standards để Agent thực thi sát chuẩn kỹ thuật của nhóm.
+
+**Yêu cầu hoàn thiện (DoD):**
+- [ ] Interface `IJevDecisionService` và mock `FakeJevProvider` hoạt động ổn định với kiểm thử đơn vị độc lập.
+- [ ] Bổ sung schema `workspace_taxonomies` và các cột `skills`/`primary_role` trên `workspace_members` (kèm migration EF Core sạch).
+- [ ] Tự động gợi ý phân loại và độ khẩn cấp của task phản hồi dưới 300ms.
+- [ ] Gợi ý assignee tuân thủ nghiêm ngặt logic rẽ nhánh theo ngưỡng confidence.
+- [ ] AI Observer phát hiện rủi ro sinh Recovery Plan Proposal ở trạng thái `Pending`, Quản lý có thể Approve/Reject/Undo thành công.
+- [ ] Toàn bộ test suite backend và frontend tiếp tục pass 100%, không vi phạm bất biến của Accountability Layer.
 
 ---
 
