@@ -1,12 +1,14 @@
-# TeamNexus
-
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Thinh-TT/TeamNexus/main/project-docs/report/assets/teamnexus-banner.png" alt="TeamNexus Banner" width="100%" onerror="this.style.display='none'"/>
+  <a href="https://app.teamnexus.cloud" target="_blank" rel="noopener noreferrer">
+    <img src="project-docs/report/assets/teamnexus-logo.svg" alt="TeamNexus Logo" width="128" height="128" />
+  </a>
 </p>
+
+<h1 align="center">TeamNexus</h1>
 
 <p align="center">
   <strong>Trợ lý Điều phối Không gian Làm việc Thông minh (Intelligent Workspace Orchestration Platform)</strong><br/>
-  Nền tảng quản lý dự án & cộng tác nhóm thế hệ mới, kết hợp Kanban Real-time với Kiến trúc Hybrid AI độc phá (Jev System 1 + DeepSeek System 2) và Hệ thống Giải trình Minh bạch (Accountability Layer).
+  Nền tảng quản lý dự án & cộng tác nhóm thế hệ mới, kết hợp Kanban Real-time với Kiến trúc Hybrid AI đột phá (Jev System 1 + DeepSeek System 2) và Hệ thống Giải trình Minh bạch (Accountability Layer).
 </p>
 
 <p align="center">
