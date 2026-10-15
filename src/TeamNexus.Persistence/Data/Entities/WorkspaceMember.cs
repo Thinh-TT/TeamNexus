@@ -25,6 +25,11 @@ public enum MemberType
 /// <summary>
 /// Junction: a user's membership + role in one workspace.
 /// Composite PK (WorkspaceId, UserId) guarantees a single role per user/workspace.
+/// <para>
+/// <b>Giai đoạn 14.7 §A2</b> adds the four <i>capacity</i> fields below. They exist because Jev cannot
+/// guess who should own a task from a display name: assignee dispatching needs a machine-readable skill set
+/// and a real load figure. The same columns serve human members and AI Agent rows.
+/// </para>
 /// </summary>
 public class WorkspaceMember
 {
@@ -44,6 +49,36 @@ public class WorkspaceMember
 
     /// <summary>Display name of the agent inside the workspace; null for human members.</summary>
     public string? AiAgentName { get; set; }
+
+    /// <summary>
+    /// Giai đoạn 14.7 §A2 — canonical skill slugs (<c>csharp</c>, <c>postgresql</c>, <c>react</c>, …),
+    /// stored as a jsonb array.
+    /// <para>
+    /// A <b>list, not a join table</b>, deliberately: skills are only ever read as a whole set when
+    /// dispatching work, never queried relationally, and a set is exactly what the model needs to see.
+    /// Validated on write (lowercase slug form, capped count) by the member service.
+    /// </para>
+    /// </summary>
+    public List<string> Skills { get; set; } = [];
+
+    /// <summary>
+    /// Giai đoạn 14.7 §A2 — the member's primary role (<c>Tech Lead</c>, <c>Backend Dev</c>, …).
+    /// Free text with a service-level whitelist rather than an enum: the vocabulary is presentation-level
+    /// and a new role must not require a migration.
+    /// </summary>
+    public string PrimaryRole { get; set; } = "Member";
+
+    /// <summary>
+    /// Giai đoạn 14.7 §A2 — relative capacity (1.0 = a full-time contributor). A part-time member can
+    /// therefore absorb proportionally less work before <see cref="MaxWipLimit"/> is reached.
+    /// </summary>
+    public double CapacityWeight { get; set; } = 1.0;
+
+    /// <summary>
+    /// Giai đoạn 14.7 §A2 — how many tasks this member may hold in progress at once. Dispatching treats
+    /// reaching this as a negative signal; 0 means "no limit configured".
+    /// </summary>
+    public int MaxWipLimit { get; set; } = 5;
 
     public DateTimeOffset JoinedAt { get; set; } = DateTimeOffset.UtcNow;
 

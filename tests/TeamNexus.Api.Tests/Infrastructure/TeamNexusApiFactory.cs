@@ -94,8 +94,32 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
     /// </summary>
     public IExternalAlertSink? ExternalAlerts { get; init; }
 
-    /// <summary>Overrides <c>Agent:Enabled</c>; the safe off-switch must answer 503 (Phase 7 D18).</summary>
+    /// <summary>
+    /// Overrides <c>Agent:Enabled</c>; the safe off-switch must answer 503 (Phase 7 D18).
+    /// </summary>
     public bool AgentEnabled { get; init; } = true;
+
+    /// <summary>
+    /// Overrides <c>Jev:Enabled</c> (Giai đoạn 14.7 §A3). Defaults to <c>true</c>: the Jev routes are the
+    /// feature under test in their own suite, and with no <c>Jev:ApiKey</c> the app resolves the offline
+    /// <c>FakeJevDecisionProvider</c>, so no suite can reach the network or spend a token. The suite that
+    /// proves the off switch answers 503 builds its own host with <c>false</c>.
+    /// </summary>
+    public bool JevEnabled { get; init; } = true;
+
+    /// <summary>
+    /// Overrides <c>Jev:AutoRecoveryPlanEnabled</c> (Giai đoạn 14.7 §A5 Phần B). Defaults to <c>false</c> —
+    /// the production default — so no existing Observer suite can start drafting data-affecting proposals by
+    /// accident. Only the recovery-plan suite opts in.
+    /// </summary>
+    public bool AutoRecoveryPlanEnabled { get; init; }
+
+    /// <summary>
+    /// Overrides <c>Jev:ObserverSeverityRouting</c> (Giai đoạn 14.7 §A5 Phần A). Defaults to the production
+    /// <c>true</c>: the Jev path is what the phase is verifying, and with the offline fake it costs nothing.
+    /// The suite that proves the Phase 5/14 fallback still works sets it to <c>false</c>.
+    /// </summary>
+    public bool ObserverJevSeverityRouting { get; init; } = true;
 
     /// <summary>Overrides <c>Reports:Enabled</c>.</summary>
     public bool ReportsEnabled { get; init; } = true;
@@ -190,6 +214,14 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Agent:Enabled", AgentEnabled ? "true" : "false");
         builder.UseSetting("Reports:Enabled", ReportsEnabled ? "true" : "false");
         builder.UseSetting("Observer:Enabled", "false");
+
+        // Giai đoạn 14.7 §A3: the Jev switch is stated explicitly for the same reason every other switch is —
+        // a developer's own User Secrets must never decide whether an integration suite behaves one way or
+        // another. Note there is deliberately NO `Jev:ApiKey` here: an absent key is the offline fake, and
+        // setting it (even to a space) is not needed because the factory's settings cannot supply a real one.
+        builder.UseSetting("Jev:Enabled", JevEnabled ? "true" : "false");
+        builder.UseSetting("Jev:AutoRecoveryPlanEnabled", AutoRecoveryPlanEnabled ? "true" : "false");
+        builder.UseSetting("Jev:ObserverSeverityRouting", ObserverJevSeverityRouting ? "true" : "false");
 
         // Phase 13 §3.3 (P4): the digest is the one feature that e-mails people unprompted, so the suite
         // turns it off explicitly. Without this, a developer's own appsettings/User Secrets value would

@@ -35,6 +35,12 @@ public static class MembersEndpoints
             .RequireAuthorization()
             .AddEndpointFilter<AntiforgeryValidationEndpointFilter>();
 
+        // Giai đoạn 14.7 §A2: the capacity profile (skills / primary role / capacity weight / WIP limit).
+        // Admin only, same gate as the role change above — it is the same "repackage the team" act.
+        group.MapPut("/{memberUserId:guid}/profile", UpdateMemberProfileAsync)
+            .RequireAuthorization()
+            .AddEndpointFilter<AntiforgeryValidationEndpointFilter>();
+
         group.MapDelete("/{memberUserId:guid}", RemoveMemberAsync)
             .RequireAuthorization()
             .AddEndpointFilter<AntiforgeryValidationEndpointFilter>();
@@ -73,8 +79,19 @@ public static class MembersEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> RemoveMemberAsync(
+    private static async Task<IResult> UpdateMemberProfileAsync(
         Guid workspaceId,
+        Guid memberUserId,
+        UpdateMemberProfileRequest request,
+        HttpContext http,
+        IWorkspaceMemberService members,
+        CancellationToken ct)
+    {
+        await members.UpdateProfileAsync(workspaceId, memberUserId, request, http.RequireUserId(), ct);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> RemoveMemberAsync(        Guid workspaceId,
         Guid memberUserId,
         HttpContext http,
         IWorkspaceMemberService members,

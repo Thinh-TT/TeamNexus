@@ -84,4 +84,20 @@ public sealed record AiActionAppliedResult(
     IReadOnlyList<Guid>? CreatedColumnIds = null,
     Guid? CreatedBoardId = null,
     Guid? UpdatedTaskId = null,
-    Guid? FromColumnId = null);
+    Guid? FromColumnId = null,
+    // ---- Giai đoạn 14.7 §A5 Phần B: the recovery-plan undo basis -------------------------------
+    // All optional and null-omitted by the snapshot writer, so no pre-14.7 snapshot gains a key.
+    /// <summary>Which <c>RecoveryPlanKinds</c> value was applied — Undo switches on it.</summary>
+    string? RecoveryKind = null,
+    /// <summary>The card the plan acted on (null for a workspace-wide escalation).</summary>
+    Guid? TargetTaskId = null,
+    /// <summary>Assignment BEFORE the plan, so Undo restores it exactly.</summary>
+    Guid? PreviousAssigneeId = null,
+    /// <summary>Assignment the plan wrote — Undo refuses to overwrite a later manual change away from it.</summary>
+    Guid? NewAssigneeId = null,
+    /// <summary>
+    /// Whether the task had a due date at all. Needed because "no date" and "date = null" are the same value
+    /// in the column, so the flag is what makes Undo able to restore the ABSENCE of a deadline.
+    /// </summary>
+    bool? PreviousDueDateHadValue = null,
+    DateTimeOffset? PreviousDueDate = null);

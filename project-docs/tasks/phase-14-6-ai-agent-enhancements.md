@@ -58,6 +58,13 @@
 
 ## 2. Track B — Nâng cấp Năng lực AI Agent (Autonomous Platform)
 
+> **📌 TRẠNG THÁI (cập nhật sau Giai đoạn 14.7 Track A):** **CHƯA THI HÀNH.** Toàn bộ Track B (B1–B4) đã được **hợp nhất và nâng tầm vào Giai đoạn 14.7 Track B** — xem `tasks/phase-14-7-autonomous-agent-jev.md` §5 (§B1 Personas · §B2 Tool-calling · §B3 RAG pgvector).
+> **Lưu ý khi đọc:** Giai đoạn 14.7 **Track A đã xong** (§A1–§A5: client Jev, taxonomy, hồ sơ kỹ năng, triage, assignee dispatching, Observer severity + Recovery Plan). Track B **vẫn còn nguyên** vì hai hạng mục của nó cần thay đổi schema mà Track A cố ý không làm:
+> - **§B1 (Personas)** cần nới index `uq_workspace_members_ai_agent` thành `(workspace_id, persona_key)`.
+> - **§B3 (pgvector)** cần `CREATE EXTENSION vector` + cột `vector(1536)` + index HNSW + đổi image CI sang `pgvector/pgvector:pg18`.
+>
+> Tài liệu dưới đây giữ nguyên như bản gốc để làm hồ sơ thiết kế.
+
 ### B1. Đội ngũ AI Chuyên Gia Đa Vai Trò (Multi-Agent Personas)
 Thay vì chỉ có một bot duy nhất ("AI Agent"), xây dựng hệ thống Personas chuyên môn hóa:
 1. **`AI Scrum Master / Product Owner`:**

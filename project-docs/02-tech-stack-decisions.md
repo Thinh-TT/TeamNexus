@@ -67,8 +67,7 @@
 - **Domain & Xác thực:** Đã cấu hình xác thực tên miền chính thức `teamnexus.cloud` qua Cloudflare DNS (SPF, DKIM, DMARC), gửi mail đại diện dưới danh nghĩa `TeamNexus <noreply@teamnexus.cloud>` tới bất kỳ địa chỉ email nào (không bị giới hạn tài khoản dev).
 - **Lưu ý:** API key lưu trong User Secrets (local) và environment variable `Email__ApiKey` (production Render); không commit vào repo.
 
-### 2.8. AI Agent Executor (Phase 7)
-- **Gán task cho Agent:** thêm pseudo-member `member_type = 'ai_agent'` trong `workspace_members` — gán qua đúng dropdown/kéo-thả assignee hiện có, không xây UI riêng.
+### 2.8. AI Agent Executor (Phase 7)- **Gán task cho Agent:** thêm pseudo-member `member_type = 'ai_agent'` trong `workspace_members` — gán qua đúng dropdown/kéo-thả assignee hiện có, không xây UI riêng.
 - **Vòng lặp thực thi:** mở rộng `IAiProvider`/`DeepSeekAiProvider` để hỗ trợ function-calling (tool-calling loop: plan → gọi tool → quan sát → lặp), khác với luồng gọi 1 lần của Smart Setup.
 - **Bộ tool (whitelist, không cho tool tự do):**
   - `SearchSystemData` — truy vấn task/comment/board nội bộ.
@@ -85,6 +84,17 @@
   - Vượt ngưỡng → tự dừng, log `BudgetExceeded`, thông báo cho trưởng nhóm qua hệ thống `notifications` sẵn có — không lặp vô hạn.
 - **Real-time:** broadcast thay đổi trạng thái `agent_runs` qua `BoardHub` (SignalR) đã có, để trưởng nhóm thấy card đổi trạng thái ngay khi Agent bắt đầu/dừng/hỏi lại.
 
+### 2.10. Jev — System One Decision Model qua OpenRouter (Giai đoạn 14.7 Track A)
+- **Công nghệ:** [Jev](https://openrouter.ai/docs/guides/community/jev) (TypeSafe) gọi qua **OpenRouter**. Dùng **chung** OpenRouter API key nhưng **section cấu hình RIÊNG** (`Jev`), vì route khác hẳn DeepSeek.
+- **⚠️ Khác biệt kiến trúc quan trọng nhất:** Jev **KHÔNG** đi qua `/chat/completions`. Nó có **Decisions API** riêng: `POST /api/alpha/decisions` với body `{ model, state, questions }` → response `{ answers, usage }` trong đó `answers` là **dữ liệu có kiểu** (`noul` = xác suất "có"; `choice` = nhãn + phân phối + `confidence`; `score` = vị trí trên thang có thứ tự). **Hệ quả:** `DeepSeekAiProvider` hiện có **không thể tái dùng kể cả khi chỉ đổi `BaseUrl`** ⇒ cần `JevDecisionHttpProvider` riêng.
+- **Model & giá:** `typesafe/jev-1.13` (alias `~typesafe/jev-latest`), context **32 000 token input**, **output token miễn phí** (chỉ tính input token). Response trả `usage.cost` **thật** bằng USD.
+  - ⚠️ **Đừng so sánh chuỗi `response.model` với `request.model`**: response thường mang id có hậu tố ngày (`typesafe/jev-1.13-20260917`).
+  - ⚠️ **`GET /api/v1/models` KHÔNG liệt kê Jev** (trừ `typesafe/jev-router`) — đừng dùng nó để kiểm tra model id.
+- **Bề mặt alpha ⇒ URL là knob cấu hình:** `Jev:BaseUrl` + `Jev:DecisionsPath`. Bề mặt thay thế tương thích schema là `/api/v1/systemone`. Đổi bằng biến môi trường, **không cần rebuild**.
+- **Fail-soft bắt buộc:** mọi thất bại của Jev map sang `JevDecisionException` (→ 502) giống tiền lệ `AiProviderException`, **nhưng** mọi **caller** phải suy giảm an toàn (`ManualRequired`, `degraded:true`) chứ không làm hỏng luồng người dùng. **Không retry** (tiền lệ `DeepSeekAiProvider`).
+- **Offline:** `Jev:ApiKey` rỗng ⇒ `FakeJevDecisionProvider` — tất định, **0 mạng, 0 token**, chọn kịch bản bằng sentinel `FAKE:JEV_*` trong `state`. Nhờ đó toàn bộ pipeline (rẽ nhánh confidence, Observer routing, Recovery Plan) verify được ngoại tuyến.
+- **`Embeddings` (Track B §B3, chưa dùng):** section riêng trỏ `https://openrouter.ai/api/v1/embeddings`. **Cố ý tách khỏi `Jev`** vì endpoint khác và nhà cung cấp có thể không phải OpenRouter. `Enabled=false` mặc định; `Dimensions` **phải** khớp số chiều cột `vector` trong schema.
+- **Lưu ý:** key lưu bằng User Secrets (local) hoặc `Jev__ApiKey` (Render); **không** commit, **không** log. Có test khẳng định key không xuất hiện trong message ngoại lệ.
 
 ## 3. Database, Hosting & Phân Bổ Tên Miền (teamnexus.cloud)
 
@@ -104,6 +114,8 @@ Toàn bộ hệ thống production được quản lý định danh và bảo m�
 - **CI/CD:** GitHub Actions (miễn phí cho repository) — pipeline build/test → deploy.
 - **Testing Backend:** xUnit.
 - **Testing Frontend:** Vitest + React Testing Library.
+- **⚠️ PostgreSQL cho CI:** image hiện tại là **`postgres:18`** (khớp major version đã verify từ Phase 7). Khi làm **Track B §B3 (pgvector)** phải đổi sang **`pgvector/pgvector:pg18`** — image chính thức của PostgreSQL **không** kèm extension `vector` (nó là extension bên thứ ba, không phải contrib module). Cách dùng **y hệt**: cùng ENV `POSTGRES_PASSWORD`, cùng `ports`, cùng healthcheck `pg_isready` (cùng base image). Vẫn phải chạy `CREATE EXTENSION vector;` một lần cho mỗi database — việc đó nằm trong migration.
+  - Máy dev local cũng phải dùng image pgvector, nếu không nhóm test RAG sẽ **skip** (có thông điệp hướng dẫn) trong khi các nhóm khác vẫn chạy.
 
 ## 5. Nguyên tắc chung khi phát triển
 

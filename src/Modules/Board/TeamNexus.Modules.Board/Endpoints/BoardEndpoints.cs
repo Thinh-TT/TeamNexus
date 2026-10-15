@@ -21,6 +21,8 @@ public static class BoardEndpoints
         endpoints.MapLabelsEndpoints();
         endpoints.MapCommentsEndpoints();
         endpoints.MapMembersEndpoints();
+        // Giai đoạn 14.7 §A2: the workspace's fixed vocabulary (the `Choice` option list Jev answers against).
+        endpoints.MapTaxonomiesEndpoints();
         endpoints.MapInvitationsEndpoints();
         endpoints.MapProfileEndpoints();
 

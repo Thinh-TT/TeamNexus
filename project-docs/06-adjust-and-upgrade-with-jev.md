@@ -183,7 +183,54 @@ Nhằm bảo đảm tính ổn định, mạch lạc và tích hợp sâu kiến
 
 ## 5. THIẾT KẾ DỮ LIỆU & HỢP ĐỒNG API (DATA MODEL & CONTRACTS)
 
-### 5.1. Mở rộng Database Schema (Dự kiến cho Phase 14.7)
+> **📌 CẬP NHẬT SAU KHI THI HÀNH (Giai đoạn 14.7 Track A):** §5.1 và §5.2 dưới đây là **thiết kế dự kiến ban đầu**. Hợp đồng **thật đã hiện thực** khác ở vài điểm quan trọng — xem **§5.3** ngay sau §5.2 để biết chính xác cái gì đã được build. Đừng code theo §5.1/§5.2 mà không đọc §5.3.
+
+### 5.3. Hợp đồng THẬT đã hiện thực (Giai đoạn 14.7 Track A)
+
+**A. Jev KHÔNG đi qua `/chat/completions` — đây là phát hiện quan trọng nhất khi tra tài liệu gốc.**
+Jev có **Decisions API** riêng. Vì vậy `DeepSeekAiProvider` hiện có **không thể tái dùng**, kể cả khi chỉ đổi `BaseUrl`:
+`POST {Jev:BaseUrl}{Jev:DecisionsPath}` (mặc định `https://openrouter.ai` + `/api/alpha/decisions`) với body
+`{ model, state, questions }` → response `{ answers, model, provider, usage: { input_tokens, output_tokens, cost } }`.
+`state` nhận `string | object | array`. `criteria` của `choice` là **object `{ nhãn: mô tả }`**; của `score` là **array tăng dần**.
+Câu trả lời có kiểu: `noul` → `{ type, noul: 0..1 }` (**KHÔNG có `confidence`**); `choice` → `{ type, choice, probabilities, confidence }`; `score` → `{ type, score, legend, probabilities, confidence }`.
+⚠️ `probabilities`/`confidence` là **optional** trong schema OpenRouter (dù Portkey đánh dấu required) ⇒ code phải chịu được thiếu, và thiếu ⇒ **coi là không dùng được**, không được suy diễn thành mặc định tự tin.
+
+**B. Schema thật (1 migration: `Phase147AgentPlatform`, `11 → 12`):**
+- `workspace_members` thêm `skills jsonb NOT NULL DEFAULT '[]'`, `primary_role varchar(50) DEFAULT 'Member'`, `capacity_weight double precision DEFAULT 1.0` (CHECK `> 0`), `max_wip_limit int DEFAULT 5` (CHECK `>= 0`).
+- Bảng **`workspace_taxonomies`**: `id · workspace_id · kind ('domain'|'work_type') · key · label · color_hex · position · created_at · updated_at`, UNIQUE `(workspace_id, kind, key)`, index `(workspace_id, kind, position)`.
+- **KHÁC thiết kế §5.1:** không có cột `domain`/`work_type` trên cùng một bảng như SQL minh hoạ, mà dùng **một cột `kind`** + `key`/`label` — để thêm loại danh mục mới không cần đổi schema. `persona_key` **chưa** thêm (thuộc Track B §B1).
+
+**C. Hợp đồng `IJevDecisionService` thật** (4 method thay vì 3; mọi kết quả đều mang `ConfidenceScore` **và** `RoutingAdvice`):
+```csharp
+Task<TaskTriageResult>            TriageTaskAsync(TaskTriageContext, CancellationToken);
+Task<AssigneeRecommendationResult> RecommendAssigneeAsync(AssigneeDispatchContext, CancellationToken);
+Task<ObserverRiskAssessmentResult> AssessObserverSignalsAsync(ObserverRiskContext, CancellationToken);
+Task<RecoveryActionDecisionResult> DecideRecoveryActionAsync(RecoveryActionContext, CancellationToken);
+```
+- `TaskTriageResult(string? SuggestedDomain, string? SuggestedWorkType, string? SuggestedPriority, bool NeedsSecurityReview, double ConfidenceScore, string RoutingAdvice, IReadOnlyList<TriageOption> Options)`
+- `AssigneeRecommendationResult(Guid? RecommendedUserId, double ConfidenceScore, IReadOnlyList<CandidateScore> CandidateRankings, string RoutingAdvice)`
+- `ObserverRiskAssessmentResult(string EvaluatedSeverity, bool RequireImmediateAlert, bool HasDominoRisk, double ConfidenceScore, string RoutingAdvice)`
+- `RecoveryActionDecisionResult(string? ActionType, Guid? TargetTaskId, Guid? TargetUserId, double ConfidenceScore, string RoutingAdvice)`
+
+**D. Rẽ nhánh confidence là CODE CỦA TA, không phải của provider** (`ConfidenceRouting`, hàm thuần):
+`≥ 0.85` ⇒ `DirectAssign` (đúng 1 đề xuất) · `[0.50, 0.85)` ⇒ `OfferChoices` (≤ 3) · `< 0.50` ⇒ `ManualRequired` **và mọi giá trị đề xuất bị set `null`**.
+Cấu hình ngược (`High < Medium`) bị **clamp** để nhánh giữa không biến mất; `NaN`/`∞` ⇒ `ManualRequired`.
+
+**E. Endpoint HTTP thật:**
+| Method | Route | Quyền | Ghi chú |
+|---|---|---|---|
+| `GET` / `PUT` | `/api/workspaces/{id}/taxonomies` | Member+ / Manager+ | Seed lazy idempotent (`INSERT … ON CONFLICT DO NOTHING`) |
+| `PUT` | `/api/workspaces/{id}/members/{userId}/profile` | Admin/Owner | Từ chối AI Agent; field **vắng ⇒ giữ nguyên**, list **rỗng ⇒ xoá** |
+| `POST` | `/api/boards/{id}/tasks/triage` | Member+ | **Không ghi gì**; tắt ⇒ 503; provider lỗi ⇒ **200 + `degraded:true`** |
+| `POST` | `/api/boards/{id}/tasks/{taskId}/assignee-suggestions` | Member+ | **Không ghi gì**; thẻ khác bảng ⇒ 400 |
+
+**F. Chống rò rỉ ID — mạnh hơn đường LLM:** Jev chỉ nhận **nhãn do server cấp** (`cand-1`, key taxonomy). Nó **không bao giờ** nhận `Guid` ⇒ không thể trả lại. Validator **còn** lọc thêm mọi chuỗi khớp mẫu GUID (phòng thủ theo chiều sâu). Context assignee **không gửi `email`**. Có test khẳng định `userId` không xuất hiện trong trường văn bản, và **test khẳng định email không rời khỏi tiến trình**.
+
+**G. Recovery Plan (Phần B) — thật:** action type **`RecoveryPlan`** (`entity_type='Workspace'`), `kind` nằm **trong payload** (4 giá trị). `RecoveryPlanApplier` **KHÔNG mở transaction** (bẫy P2 Phase 14.5). `SplitSubtasks` **uỷ quyền** `CreateSubtasksApplier` **và phải mang `createdTaskIds` lên** `applied_snapshot`, nếu không Undo xoá 0 thẻ mà báo thành công. `EscalateManager` **không ghi gì** + trả warning. Requester = **Admin/Manager thật** (không có system principal). `AutoRecoveryPlanEnabled = false` **mặc định**.
+
+**H. `FakeJevDecisionProvider` (offline, 0 token):** chọn kịch bản bằng sentinel `FAKE:JEV_HIGH|MED|LOW|ERROR|SLOW` **quét trong toàn bộ `state`** (không chỉ một field — vì ba context đặt tiêu đề ở ba chỗ khác nhau). Luôn **đọc lại chính các nhãn `criteria` mà caller gửi** ⇒ câu trả lời fake không bao giờ lệch khỏi hợp lệ.
+
+### 5.1. Mở rộng Database Schema (thiết kế DỰ KIẾN ban đầu — xem §5.3.A/B cho bản thật)
 ```sql
 -- 1. Bổ sung kỹ năng và vai trò cho thành viên workspace
 ALTER TABLE workspace_members 

@@ -134,6 +134,27 @@ public interface IAiActionService
         string basisJson,
         Guid userId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Records the Observer's proactive recovery plan as a <c>Pending</c> <c>RecoveryPlan</c> action
+    /// (Giai đoạn 14.7 §A5 Phần B). Scope is <c>entity_type = 'Workspace'</c> because a signal can span boards.
+    /// <para>
+    /// <b>Internal API, like <see cref="RequestAgentOutputAsync"/>.</b> There is no HTTP route: the only
+    /// caller is the Observer scan, which already runs as the system with a workspace it has proven access to.
+    /// Exposing it would let a member synthesise an arbitrary "recovery plan" that a Manager might then
+    /// approve without realising it was not AI-authored.
+    /// </para>
+    /// <para>
+    /// Requires Manager/Admin because the resulting <c>Pending</c> row is workspace-scoped and every other
+    /// workspace-scoped action is gated the same way.
+    /// </para>
+    /// </summary>
+    Task<AiActionLogResponse> RequestRecoveryPlanAsync(
+        Guid workspaceId,
+        Guid userId,
+        string afterSnapshotJson,
+        string basisJson,
+        CancellationToken ct = default);
 }
 
 public sealed class AiActionService : IAiActionService
@@ -488,6 +509,54 @@ public sealed class AiActionService : IAiActionService
             "AI action {Action} for task {TaskId} (board {BoardId}) requested as Pending (log {LogId}) "
             + "by user {UserId}.",
             actionType, taskId, boardId, log.Id, userId);
+
+        var names = await LoadUserNamesAsync([userId], ct);
+        return BuildResponse(log, names.GetValueOrDefault(userId));
+    }
+
+    // ---- request (Observer recovery plan, Phase 14.7 §A5) --------------------
+
+    public async Task<AiActionLogResponse> RequestRecoveryPlanAsync(
+        Guid workspaceId,
+        Guid userId,
+        string afterSnapshotJson,
+        string basisJson,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(afterSnapshotJson))
+        {
+            throw new BadRequestException("Kịch bản phục hồi không có nội dung.");
+        }
+
+        var workspaceExists = await _db.Workspaces
+            .AsNoTracking()
+            .AnyAsync(w => w.Id == workspaceId, ct);
+
+        if (!workspaceExists)
+        {
+            throw new NotFoundException("Workspace not found.");
+        }
+
+        await _access.RequireManagerAsync(workspaceId, userId, ct);
+
+        var log = new AiActionLog
+        {
+            Action = AiActionTypes.RecoveryPlan,
+            EntityType = AiEntityTypes.Workspace,
+            EntityId = workspaceId,
+            Basis = string.IsNullOrWhiteSpace(basisJson) ? "{}" : basisJson,
+            AfterSnapshot = afterSnapshotJson,
+            Status = AiActionStatus.Pending,
+            RequestedByUserId = userId,
+        };
+
+        // ONLY the log row, exactly like every other request path: approving it is what applies the plan.
+        _db.AiActionLogs.Add(log);
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "Recovery plan requested as Pending (log {LogId}, workspace {WorkspaceId}) by user {UserId}.",
+            log.Id, workspaceId, userId);
 
         var names = await LoadUserNamesAsync([userId], ct);
         return BuildResponse(log, names.GetValueOrDefault(userId));
@@ -1030,6 +1099,14 @@ public sealed class AiActionService : IAiActionService
             // no pre-14.5 snapshot gains a key.
             updatedTaskId = result.UpdatedTaskId,
             fromColumnId = result.FromColumnId,
+            // Giai đoạn 14.7 §A5 Phần B: the recovery plan's undo basis. Optional + nulls omitted for the
+            // same reason as every field above — an older snapshot keeps its exact previous key set.
+            recoveryKind = result.RecoveryKind,
+            targetTaskId = result.TargetTaskId,
+            previousAssigneeId = result.PreviousAssigneeId,
+            newAssigneeId = result.NewAssigneeId,
+            previousDueDateHadValue = result.PreviousDueDateHadValue,
+            previousDueDate = result.PreviousDueDate,
             warnings = result.Warnings,
             appliedAt = DateTimeOffset.UtcNow,
         }, Json);
@@ -1122,6 +1199,24 @@ public sealed class AiActionService : IAiActionService
     public static string? ReadString(string? snapshotJson, string propertyName)
         => TryGetProperty(snapshotJson, propertyName, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString()
+            : null;
+
+    /// <summary>
+    /// Reads one boolean out of a snapshot (camelCase). Returns <c>false</c> for absent/non-boolean rather than
+    /// <c>null</c>, because every caller so far uses it as "did this flag hold?" (Giai đoạn 14.7 §A5).
+    /// </summary>
+    public static bool ReadBool(string? snapshotJson, string propertyName)
+        => TryGetProperty(snapshotJson, propertyName, out var value) && value.ValueKind == JsonValueKind.True;
+
+    /// <summary>
+    /// Reads one timestamp out of a snapshot (camelCase). Absent, non-string or unparsable ⇒ <c>null</c>, so a
+    /// hand-edited or legacy payload degrades to "unknown" instead of throwing mid-undo.
+    /// </summary>
+    public static DateTimeOffset? ReadDateTimeOffset(string? snapshotJson, string propertyName)
+        => TryGetProperty(snapshotJson, propertyName, out var value)
+           && value.ValueKind == JsonValueKind.String
+           && value.TryGetDateTimeOffset(out var parsed)
+            ? parsed
             : null;
 
     public static AiActionLogResponse BuildResponse(

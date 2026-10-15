@@ -60,6 +60,9 @@ public class TeamNexusDbContext
     // without another migration.
     public DbSet<AgentChatMessage> AgentChatMessages => Set<AgentChatMessage>();
 
+    // Giai đoạn 14.7 §A2: the fixed per-workspace vocabulary Jev answers `Choice` questions against.
+    public DbSet<WorkspaceTaxonomy> WorkspaceTaxonomies => Set<WorkspaceTaxonomy>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

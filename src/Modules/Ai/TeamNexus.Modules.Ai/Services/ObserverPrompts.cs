@@ -51,4 +51,65 @@ public static class ObserverPrompts
     /// <summary>The rendered system prompt (max findings substituted in).</summary>
     public static string BuildSystemPrompt()
         => SystemPrompt.Replace("{0}", MaxFindings.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+
+    /// <summary>
+    /// Directive appended to the SYSTEM prompt when Jev has already assessed the severity
+    /// (Giai đoạn 14.7 §A5 Phần A).
+    /// <para>
+    /// <b>Why the system prompt and not the user prompt.</b> The user prompt is <c>marker + JSON payload</c>
+    /// and both halves are load-bearing: the marker selects the offline provider's branch, and the payload is
+    /// parsed as JSON. Appending prose to it made <c>JsonDocument.Parse</c> fail, so the offline fake silently
+    /// returned <b>zero findings</b> and the Observer stopped alerting entirely — a green-looking change that
+    /// disabled a feature. The system prompt carries no machine-read structure, so it is the safe place for
+    /// instructions.
+    /// </para>
+    /// <para>
+    /// <b>Why a directive rather than replacing the model.</b> Jev cannot write prose — it returns typed
+    /// answers — so the Observer still needs System 2 for the human-readable <c>title</c>/<c>message</c>.
+    /// What Jev <i>can</i> do is decide the severity from the signal shape, which is the part that used to
+    /// rely on the LLM obeying a long "do not invent IDs / do not upgrade severity" instruction. Passing the
+    /// verdict down keeps the LLM in its strength (explaining) and out of its weakness (deciding).
+    /// </para>
+    /// <para>
+    /// Pure, so the wording is verifiable without a provider — the same reason the rest of this class uses
+    /// static templates instead of string concatenation scattered through the service.
+    /// </para>
+    /// </summary>
+    /// <param name="severity">One of <see cref="ObserverSeverity.All"/>; an unknown value yields no directive.</param>
+    /// <param name="requireImmediateAlert">Jev's "escalate now" verdict, surfaced as emphasis rather than as a separate field.</param>
+    /// <param name="hasDominoRisk">Jev's "this will cascade" verdict.</param>
+    public static string BuildJevSeverityDirective(
+        string? severity, bool requireImmediateAlert, bool hasDominoRisk)
+    {
+        var canonical = NotificationSeverities.IsKnown(severity)
+            ? ObserverSeverity.All[NotificationSeverities.Rank(severity)]
+            : null;
+
+        if (canonical is null)
+        {
+            // An unknown severity means the assessment is unusable: emit NOTHING rather than a half
+            // directive, so the model falls back to its own reading of the signals.
+            return string.Empty;
+        }
+
+        var lines = new List<string>
+        {
+            string.Empty,
+            "ĐÁNH GIÁ MỨC ĐỘ ĐÃ CHỐT (từ mô hình quyết định, hãy tuân theo):",
+            $"- Mức nghiêm trọng tổng thể: {canonical}. Dùng đúng mức này cho các finding, trừ khi một "
+            + "tín hiệu cụ thể rõ ràng nhẹ hơn.",
+        };
+
+        if (requireImmediateAlert)
+        {
+            lines.Add("- Cần cảnh báo khẩn: hãy nêu rõ cần xử lý NGAY trong phần message.");
+        }
+
+        if (hasDominoRisk)
+        {
+            lines.Add("- Có nguy cơ đổ vỡ dây chuyền: hãy chỉ ra khả năng lan sang các thẻ hoặc mốc cam kết khác.");
+        }
+
+        return string.Join('\n', lines);
+    }
 }
