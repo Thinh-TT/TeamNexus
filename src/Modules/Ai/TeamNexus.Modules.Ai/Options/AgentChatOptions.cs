@@ -1,3 +1,5 @@
+using TeamNexus.Modules.Ai.Services.Jev;
+
 namespace TeamNexus.Modules.Ai.Options;
 
 /// <summary>
@@ -107,6 +109,17 @@ public sealed class AgentChatOptions
     /// <summary>Rows deleted per retention batch, so a first sweep never locks the table. Clamped 100..20000.</summary>
     public int RetentionBatchSize { get; set; } = 2000;
 
+    /// <summary>
+    /// Giai đoạn 14.7 Track B §B1 — the persona a chat turn uses when the request does not name one.
+    /// <para>
+    /// Defaults to <c>general</c>, which IS the Phase 7/14.5 assistant, so omitting the query parameter keeps
+    /// the previous behaviour exactly. An unknown value here falls back to <c>general</c> rather than failing:
+    /// this is operator configuration, and a stale deployment value must not break every chat request. A
+    /// persona named <b>in the request</b> is validated strictly (400) because that one is client input.
+    /// </para>
+    /// </summary>
+    public string DefaultPersona { get; set; } = PersonaCatalog.GeneralKey;
+
     /// <summary>Clamped view of the options; every consumer reads this, never the raw properties.</summary>
     public AgentChatEffectiveOptions Effective => new(
         MaxHistoryMessages: Math.Clamp(MaxHistoryMessages, 2, 60),
@@ -126,7 +139,10 @@ public sealed class AgentChatOptions
         // raise it deliberately, and no configuration can raise it today.
         MaxProposalsPerAnswer: Math.Clamp(MaxProposalsPerAnswer, 1, 1),
         RetentionDays: Math.Clamp(RetentionDays, 1, 3650),
-        RetentionBatchSize: Math.Clamp(RetentionBatchSize, 100, 20_000));
+        RetentionBatchSize: Math.Clamp(RetentionBatchSize, 100, 20_000),
+        // Canonicalised, and resolved to `general` when unknown: this value is ALWAYS a usable key, so no
+        // consumer needs its own fallback branch.
+        DefaultPersona: PersonaCatalog.Canonical(DefaultPersona) ?? PersonaCatalog.GeneralKey);
 }
 
 /// <summary>
@@ -149,4 +165,5 @@ public sealed record AgentChatEffectiveOptions(
     int MaxAnswerChars,
     int MaxProposalsPerAnswer,
     int RetentionDays,
-    int RetentionBatchSize);
+    int RetentionBatchSize,
+    string DefaultPersona = PersonaCatalog.GeneralKey);

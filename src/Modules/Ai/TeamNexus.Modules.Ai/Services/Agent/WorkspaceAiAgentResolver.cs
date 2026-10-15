@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TeamNexus.Modules.Ai.Options;
+using TeamNexus.Modules.Ai.Services.Jev;
 using TeamNexus.Modules.Board.DTOs;
 using TeamNexus.Modules.Board.Services;
 using TeamNexus.Persistence.Data;
@@ -10,17 +11,24 @@ using TeamNexus.Persistence.Data.Entities;
 namespace TeamNexus.Modules.Ai.Services.Agent;
 
 /// <summary>
-/// Real implementation of the Board module's <see cref="IAiAgentResolver"/> port (Phase 7 D1/D7).
+/// Real implementation of the Board module's <see cref="IAiAgentResolver"/> port (Phase 7 D1/D7,
+/// extended with personas in Giai đoạn 14.7 Track B §B1).
 /// <para>
 /// The port is declared in Board because Board must not reference Ai; this class is registered by
 /// <c>AddAiModule</c>, which runs <b>after</b> <c>AddBoardModule</c> in Program.cs and therefore wins
 /// the resolve over <see cref="NullAiAgentResolver"/> (same trick as <c>IActivityLogWriter</c>).
 /// </para>
 /// <para>
-/// The agent is a real <c>users</c> row because <c>tasks.assignee_id</c> and
+/// An agent is a real <c>users</c> row because <c>tasks.assignee_id</c> and
 /// <c>task_comments.author_id</c> both point at <c>users</c>, and it is created <b>lazily</b> so a
 /// workspace that never uses the agent never grows one. It cannot log in: no password hash, no email,
 /// lockout and 2FA enabled, and no <c>user_logins</c> row.
+/// </para>
+/// <para>
+/// <b>One row per persona since Track B.</b> The single Phase 7 row is the <c>general</c> persona (the
+/// migration backfilled it), and <see cref="EnsureAgentAsync"/> still resolves to exactly that row, so no
+/// existing caller changed meaning. Additional personas are created on demand by code that names one — the
+/// agent chat and the run orchestrator — never by listing members.
 /// </para>
 /// </summary>
 public sealed class WorkspaceAiAgentResolver : IAiAgentResolver
@@ -42,8 +50,19 @@ public sealed class WorkspaceAiAgentResolver : IAiAgentResolver
         _logger = logger;
     }
 
-    public async Task<Guid> EnsureAgentAsync(Guid workspaceId, CancellationToken ct = default)
+    public Task<Guid> EnsureAgentAsync(Guid workspaceId, CancellationToken ct = default)
+        => EnsurePersonaAgentAsync(workspaceId, PersonaCatalog.GeneralKey, ct);
+
+    public async Task<Guid> EnsurePersonaAgentAsync(
+        Guid workspaceId, string personaKey, CancellationToken ct = default)
     {
+        // An unknown key is a caller bug. Refused rather than folded into 'general' because a silent
+        // fallback would make "the persona Select sent a stale value" indistinguishable from working code.
+        var persona = PersonaCatalog.Canonical(personaKey)
+            ?? throw new BadRequestException(
+                $"Persona '{personaKey}' không hợp lệ. Chỉ nhận: "
+                + string.Join(", ", PersonaCatalog.All.Select(p => p.Key)) + ".");
+
         var workspaceExists = await _db.Workspaces
             .AsNoTracking()
             .AnyAsync(w => w.Id == workspaceId, ct);
@@ -53,14 +72,17 @@ public sealed class WorkspaceAiAgentResolver : IAiAgentResolver
             throw new NotFoundException("Workspace not found.");
         }
 
-        var existing = await FindAgentUserIdAsync(workspaceId, ct);
+        var existing = await FindAgentUserIdAsync(workspaceId, persona, ct);
         if (existing is not null)
         {
             return existing.Value;
         }
 
-        var displayName = _options.EffectiveAgentDisplayName;
-        var userName = BuildUserName(workspaceId);
+        var displayName = string.Equals(persona, PersonaCatalog.GeneralKey, StringComparison.Ordinal)
+            ? _options.EffectiveAgentDisplayName
+            : PersonaCatalog.DisplayNameFor(persona);
+
+        var userName = PersonaCatalog.AgentUserName(workspaceId, persona);
 
         var user = new ApplicationUser
         {
@@ -93,6 +115,12 @@ public sealed class WorkspaceAiAgentResolver : IAiAgentResolver
             Role = WorkspaceRole.Member,
             MemberType = MemberType.AiAgent,
             AiAgentName = displayName,
+            // The persona's starting skill set: dispatching has something to match on from the first
+            // assignment instead of treating every agent as skill-less until someone edits it (which the
+            // profile-update path refuses to do for agent rows anyway).
+            Skills = [.. PersonaCatalog.SkillsFor(persona)],
+            // 'general' carries the Phase 7 display name; the other personas are their own co-worker.
+            PersonaKey = persona,
             JoinedAt = DateTimeOffset.UtcNow,
         };
 
@@ -108,10 +136,12 @@ public sealed class WorkspaceAiAgentResolver : IAiAgentResolver
             await transaction.CommitAsync(ct);
 
             _logger.LogInformation(
-                "AI Agent created for workspace {WorkspaceId} (userId {AgentUserId}, name '{Name}').",
+                "AI Agent persona '{Persona}' created for workspace {WorkspaceId} "
+                + "(userId {AgentUserId}, name '{Name}').",
+                persona,
                 workspaceId,
                 user.Id,
-                displayName);
+                membership.AiAgentName);
 
             return user.Id;
         }
@@ -124,18 +154,25 @@ public sealed class WorkspaceAiAgentResolver : IAiAgentResolver
             _db.Entry(user).State = EntityState.Detached;
             _db.Entry(membership).State = EntityState.Detached;
 
-            var winner = await FindAgentUserIdAsync(workspaceId, ct);
+            var winner = await FindAgentUserIdAsync(workspaceId, persona, ct);
             if (winner is not null)
             {
                 _logger.LogInformation(
-                    "AI Agent for workspace {WorkspaceId} was created concurrently; using the existing row {AgentUserId}.",
+                    "AI Agent persona '{Persona}' for workspace {WorkspaceId} was created concurrently; "
+                    + "using the existing row {AgentUserId}.",
+                    persona,
                     workspaceId,
                     winner.Value);
 
                 return winner.Value;
             }
 
-            _logger.LogError(ex, "Could not create the AI Agent for workspace {WorkspaceId}.", workspaceId);
+            _logger.LogError(
+                ex,
+                "Could not create the AI Agent persona '{Persona}' for workspace {WorkspaceId}.",
+                persona,
+                workspaceId);
+
             throw;
         }
     }
@@ -234,18 +271,29 @@ public sealed class WorkspaceAiAgentResolver : IAiAgentResolver
         return column.Id;
     }
 
-    private Task<Guid?> FindAgentUserIdAsync(Guid workspaceId, CancellationToken ct)
-        => _db.WorkspaceMembers
+    /// <summary>
+    /// The agent row of one persona.
+    /// <para>
+    /// <b><c>COALESCE</c> mirrors the unique index.</b> Rows created before Track B were backfilled to
+    /// <c>'general'</c>, but the predicate still tolerates a NULL persona for the general key so the lookup
+    /// can never miss the row the index considers "general" — the two definitions must stay identical or the
+    /// index would allow a duplicate that this lookup never finds.
+    /// </para>
+    /// </summary>
+    private Task<Guid?> FindAgentUserIdAsync(Guid workspaceId, string personaKey, CancellationToken ct)
+    {
+        var isGeneral = string.Equals(personaKey, PersonaCatalog.GeneralKey, StringComparison.Ordinal);
+
+        return _db.WorkspaceMembers
             .AsNoTracking()
-            .Where(wm => wm.WorkspaceId == workspaceId && wm.MemberType == MemberType.AiAgent)
+            .Where(wm => wm.WorkspaceId == workspaceId
+                         && wm.MemberType == MemberType.AiAgent
+                         && (isGeneral
+                             ? wm.PersonaKey == null || wm.PersonaKey == PersonaCatalog.GeneralKey
+                             : wm.PersonaKey == personaKey))
             .Select(wm => (Guid?)wm.UserId)
             .FirstOrDefaultAsync(ct);
-
-    /// <summary>
-    /// Deterministic user name ("ai-agent-&lt;workspaceId:N&gt;"): unique per workspace, traceable in
-    /// the database, and the handle the verification harness uses to clean agent rows up.
-    /// </summary>
-    private static string BuildUserName(Guid workspaceId) => $"ai-agent-{workspaceId:N}";
+    }
 
     private static ColumnResponse ToResponse(BoardColumn column)
         => new(

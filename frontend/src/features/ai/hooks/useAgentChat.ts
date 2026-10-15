@@ -8,6 +8,7 @@ import type { AiActionLog } from '../types/aiAction.types'
 import type {
   AgentChatAttachment,
   AgentChatMessage,
+  AgentChatPersona,
   AgentChatProposal,
   AgentChatStoredMessage,
 } from '../types/agentChat.types'
@@ -21,6 +22,11 @@ export interface UseAgentChatReturn {
   proposal: AgentChatProposal | null
   proposalJson: string | null
   model: string | null
+  /** Phase 14.7 §B: the server's persona catalogue, empty when the server sent none. */
+  personas: AgentChatPersona[]
+  /** The persona the NEXT turn will be answered as; `null` means "let the server decide". */
+  persona: string | null
+  setPersona: (key: string | null) => void
   status: AgentChatStatus
   error: string | null
   httpStatus: number | null
@@ -51,6 +57,8 @@ export function useAgentChat(boardId: string | undefined): UseAgentChatReturn {
   const [proposal, setProposal] = useState<AgentChatProposal | null>(null)
   const [proposalJson, setProposalJson] = useState<string | null>(null)
   const [model, setModel] = useState<string | null>(null)
+  const [personas, setPersonas] = useState<AgentChatPersona[]>([])
+  const [persona, setPersonaState] = useState<string | null>(null)
   const [status, setStatus] = useState<AgentChatStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const [httpStatus, setHttpStatus] = useState<number | null>(null)
@@ -59,6 +67,17 @@ export function useAgentChat(boardId: string | undefined): UseAgentChatReturn {
   const accumulatorRef = useRef('')
   const messagesRef = useRef<AgentChatMessage[]>([])
   const attachmentsRef = useRef<AgentChatAttachment[]>([])
+  // The persona is read INSIDE `ask` when the request is built. A ref keeps that read current without
+  // putting `persona` into `ask`'s dependency list, which would rebuild the callback on every keystroke of
+  // a Select — and, worse, could let a turn that is already streaming see a persona chosen after it began.
+  const personaRef = useRef<string | null>(null)
+
+  const setPersona = useCallback((key: string | null) => {
+    // A blank key is not a persona: it must mean "server default", never `?persona=`.
+    const next = key && key.trim() ? key : null
+    personaRef.current = next
+    setPersonaState(next)
+  }, [])
 
   useEffect(() => {
     messagesRef.current = messages
@@ -101,6 +120,17 @@ export function useAgentChat(boardId: string | undefined): UseAgentChatReturn {
         }
 
         setModel(session.model)
+
+        // Phase 14.7 §B: the catalogue and its default arrive with the session, so the picker is populated
+        // before the first question. `defaultPersona` is only adopted when the catalogue actually offers it —
+        // sending back a key the server would reject is a 400 the user never asked for.
+        const catalogue = session.personas ?? []
+        setPersonas(catalogue)
+        const preferred = session.defaultPersona ?? null
+        const nextPersona = preferred && catalogue.some((p) => p.key === preferred) ? preferred : null
+        personaRef.current = nextPersona
+        setPersonaState(nextPersona)
+
         setMessages(stored.map(toLocalMessage))
         setStatus('idle')
       } catch (err: unknown) {
@@ -191,6 +221,10 @@ export function useAgentChat(boardId: string | undefined): UseAgentChatReturn {
       const controller = new AbortController()
       abortControllerRef.current = controller
 
+      // Captured ONCE, at request time. If the user switches persona while the answer streams, the turn that
+      // lands in the transcript must still be labelled with the role that actually produced it.
+      const turnPersona = personaRef.current
+
       // Trimmed to 10 turns/8000 chars — the BOARD chat's server cap is 24/24000, so this is comfortably
       // inside it. Sending less than the limit is always preferable to being refused with a 400, and the
       // shared helper keeps the two chats from drifting on how history is bounded.
@@ -207,6 +241,7 @@ export function useAgentChat(boardId: string | undefined): UseAgentChatReturn {
           },
           {
             signal: controller.signal,
+            persona: turnPersona,
             onEvent: ({ event, data }) => {
               if (event === 'delta' && data?.text) {
                 accumulatorRef.current += data.text
@@ -241,6 +276,9 @@ export function useAgentChat(boardId: string | undefined): UseAgentChatReturn {
             role: 'assistant',
             content: proseText,
             createdAt: new Date().toISOString(),
+            // Phase 14.7 §B: only a locally produced turn carries a persona. A reload gets its turns from
+            // the server, which does not record one, so old answers stay unlabelled.
+            personaKey: turnPersona,
           }
 
           const withAnswer = [...messagesRef.current, assistant]
@@ -361,6 +399,9 @@ export function useAgentChat(boardId: string | undefined): UseAgentChatReturn {
     proposal,
     proposalJson,
     model,
+    personas,
+    persona,
+    setPersona,
     status,
     error,
     httpStatus,

@@ -355,7 +355,13 @@ public sealed class Phase146TrackATests : IClassFixture<DatabaseFixture>
             [new AiChatMessageRequest("user", "Tiến độ bảng thế nào?")],
             attachedTaskIds.Select(id => new AgentChatAttachmentRequest(id)).ToList());
 
-        return await chat.PrepareAsync(seed.Board.Id, request, seed.User.Id);
+        // Giai đoạn 14.7 Track B §B1 added the optional `persona` argument; passing null keeps this suite on
+        // the default persona, which is the behaviour it was written to pin.
+        return await chat.PrepareAsync(
+            boardId: seed.Board.Id,
+            request: request,
+            persona: null,
+            userId: seed.User.Id);
     }
 
     private static async Task<List<SseFrame>> SendTaskChatAsync(

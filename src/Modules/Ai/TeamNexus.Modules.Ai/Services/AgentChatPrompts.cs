@@ -1,9 +1,11 @@
 using System.Text;
+using TeamNexus.Modules.Ai.Services.Jev;
 
 namespace TeamNexus.Modules.Ai.Services;
 
 /// <summary>
-/// Prompt contract for the board-scoped AI Agent Chat (Phase 14.5 §B).
+/// Prompt contract for the board-scoped AI Agent Chat (Phase 14.5 §B, personas added in Giai đoạn 14.7
+/// Track B §B1).
 /// <para>
 /// Two things separate this from <see cref="AiChatPrompts"/> (the task chat), and both are on purpose:
 /// the model may see <b>several</b> attached tasks plus the board's columns, and it is explicitly
@@ -22,8 +24,17 @@ public static class AgentChatPrompts
     /// <summary>
     /// Identifying fragment of the system prompt. The fake provider recognizes it and the real one simply
     /// carries it as text, so the two can never disagree.
+    /// <para>
+    /// <b>⛔ This string must survive byte-for-byte.</b> It is the marker <c>FakeAiProvider.StreamAsync</c>
+    /// branches on, so changing or removing it would make the offline suite test a different code path than
+    /// production — a green run that proves nothing. The persona block is therefore <b>prepended</b>, never
+    /// substituted for this text.
+    /// </para>
     /// </summary>
     public const string Marker = "AI Agent Chat của TeamNexus";
+
+    /// <summary>Heading of the persona block prepended when a persona other than the default is used.</summary>
+    public const string PersonaHeading = "VAI TRÒ:";
 
     /// <summary>Fence the model is told to use for the proposal block; the parser looks for the last one.</summary>
     public const string ProposalFence = "```json";
@@ -85,7 +96,64 @@ public static class AgentChatPrompts
 
     /// <summary>The rendered system prompt for one board context.</summary>
     public static string BuildSystemPrompt(string contextBlock)
-        => SystemPromptTemplate.Replace("{0}", contextBlock, StringComparison.Ordinal);
+        => BuildSystemPrompt(contextBlock, PersonaCatalog.GeneralKey);
+
+    /// <summary>
+    /// The rendered system prompt for one board context, as one persona (Giai đoạn 14.7 Track B §B1).
+    /// <para>
+    /// <b>The persona block is PREPENDED, and nothing else moves.</b> <see cref="Marker"/> still opens the
+    /// template body, which is what keeps <c>FakeAiProvider</c> on the board-chat branch; the persona only
+    /// adds a sentence at the very top telling the model which co-worker it is answering as. The general
+    /// persona adds nothing at all, so the default request is byte-identical to Phase 14.5.
+    /// </para>
+    /// </summary>
+    public static string BuildSystemPrompt(string contextBlock, string personaKey)
+    {
+        var rendered = SystemPromptTemplate.Replace("{0}", contextBlock, StringComparison.Ordinal);
+
+        var canonical = PersonaCatalog.Canonical(personaKey);
+
+        // No persona (unknown key) or the general persona: the Phase 14.5 prompt, unchanged. Writing an
+        // empty block for the default would still be harmless, but identical bytes make "did this phase
+        // change the default request?" a question a diff can answer.
+        if (canonical is null || string.Equals(canonical, PersonaCatalog.GeneralKey, StringComparison.Ordinal))
+        {
+            return rendered;
+        }
+
+        // Only the ROLE is prepended. The rules (no invented data, no claimed writes, no raw ids) live in
+        // the template and therefore apply to every persona — a persona must never be able to loosen them.
+        return $"{BuildPersonaBlock(canonical)}\n\n{rendered}";
+    }
+
+    /// <summary>
+    /// The one-block role statement for a persona. Returns an empty string for the general persona and for an
+    /// unknown key: the caller only needs to know whether there is anything to prepend.
+    /// </summary>
+    public static string BuildPersonaBlock(string? personaKey)
+    {
+        var persona = PersonaCatalog.Find(personaKey);
+
+        if (persona is null || string.Equals(persona.Key, PersonaCatalog.GeneralKey, StringComparison.Ordinal))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder();
+
+        builder.AppendLine($"{PersonaHeading} {persona.DisplayName}.");
+
+        if (persona.Skills.Count > 0)
+        {
+            builder.AppendLine($"Chuyên môn của bạn: {string.Join(", ", persona.Skills)}.");
+        }
+
+        builder.Append(
+            "Bạn trả lời với tư cách chuyên gia ở vai trò trên, nhưng vẫn TUYỆT ĐỐI tuân thủ mọi quy tắc bên dưới "
+            + "(không bịa dữ liệu, không tự nhận đã ghi dữ liệu, không hiển thị ID kỹ thuật).");
+
+        return builder.ToString();
+    }
 
     /// <summary>
     /// Human-readable context block fed into <see cref="BuildSystemPrompt"/>. Pure and bounded: the caller
@@ -113,6 +181,17 @@ public static class AgentChatPrompts
             {
                 builder.AppendLine($"  * {column.ColumnId} — {column.Name} — {(column.IsDone ? "có" : "không")}");
             }
+        }
+
+        // Giai đoạn 14.7 Track B §B3: retrieved project knowledge, placed BEFORE the digest because it is
+        // reference material (conventions, a spec, a linked article) while the digest is a snapshot of the
+        // board. The block arrives ALREADY rendered and already bounded: the caller owns the character budget
+        // (`Jev:RagMaxContextChars`) and this method only positions the text — which keeps the prompt builder
+        // pure and keeps the knowledge feature's configuration out of it.
+        if (!string.IsNullOrWhiteSpace(context.KnowledgeBlock))
+        {
+            builder.AppendLine();
+            builder.AppendLine(context.KnowledgeBlock.Trim());
         }
 
         if (context.AttachedTasks.Count == 0)
@@ -269,13 +348,21 @@ public static class AgentChatPrompts
 /// Everything the board-chat prompt knows, already truncated and bounded by the caller. A record rather
 /// than entities so <see cref="AgentChatPrompts.BuildContextBlock"/> stays pure.
 /// </summary>
+/// <param name="KnowledgeBlock">
+/// Giai đoạn 14.7 Track B §B3 — the <b>already rendered and already bounded</b> knowledge section retrieved
+/// from the workspace's semantic memory, or <c>null</c>/blank when RAG is off or found nothing. Pre-rendered on
+/// purpose: the character budget belongs to the caller that owns <c>Jev:RagMaxContextChars</c>, so this record
+/// stays configuration-free and the prompt builder stays pure. Optional, so every pre-existing construction
+/// site and test compiles unchanged and simply has one less section.
+/// </param>
 public sealed record AgentChatBoardContext(
     string BoardName,
     string? BoardDescription,
     IReadOnlyList<AgentChatContextColumn> Columns,
     IReadOnlyList<AgentChatContextTask> AttachedTasks,
     IReadOnlyList<AgentChatContextMember> Members,
-    AgentChatDigest? Digest = null);
+    AgentChatDigest? Digest = null,
+    string? KnowledgeBlock = null);
 
 /// <summary>
 /// The "lightweight board digest" (Phase 14.6 §A4): how many cards each column holds plus the handful a

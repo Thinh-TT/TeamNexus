@@ -56,6 +56,25 @@ public static class AiActionTypes
     /// </para>
     /// </summary>
     public const string RecoveryPlan = "RecoveryPlan";
+
+    /// <summary>
+    /// A change to the workspace's semantic knowledge base (Giai đoạn 14.7 Track B §B3): adding a document or
+    /// removing one. Scope is <c>entity_type = 'Workspace'</c>.
+    /// <para>
+    /// <b>One action type with the operation in the payload</b> (<c>kind = 'Delete'</c> when deleting, absent
+    /// when adding), following the <see cref="RecoveryPlan"/> precedent rather than splitting into two types.
+    /// The AI history list, the <c>?action=</c> filter and the single "approve this proposal" UI all read better
+    /// with one entry whose payload says what it will do; two types would fragment the audit trail of one
+    /// feature for no gain.
+    /// </para>
+    /// <para>
+    /// <b>This IS a data-writing action, on purpose.</b> It would have been easy to treat "it is only a
+    /// document" as an exception to the Accountability Layer — and that is exactly how the layer stops being a
+    /// guarantee. Approving writes the document and its chunks; Undo soft-deletes it
+    /// (<c>status = 'deleted'</c>).
+    /// </para>
+    /// </summary>
+    public const string CreateKnowledgeDocument = "CreateKnowledgeDocument";
 }
 
 /// <summary>

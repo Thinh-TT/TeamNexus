@@ -60,6 +60,11 @@ public static class BoardModule
         // real EF adapter afterwards. Null default keeps the Board module self-sufficient.
         services.AddScoped<INotificationWriter, NullNotificationWriter>();
 
+        // Giai đoạn 14.7 Track B §B3: the read half of the semantic knowledge base. Same declaration trick as
+        // the three above — Board declares it (and answers "no knowledge" by default), module Ai registers the
+        // pgvector-backed implementation, which wins because AddAiModule runs last.
+        services.AddScoped<IWorkspaceKnowledgeStore, NullWorkspaceKnowledgeStore>();
+
         // Email port + invitation settings (Phase 11 §2, decision D9): Board declares both so the
         // invitation service can compose an accept link and ask for the email to be sent, without
         // referencing module Ai (which already references Board). Module Ai overrides both.

@@ -40,10 +40,10 @@ public class WorkspaceMember
     public WorkspaceRole Role { get; set; } = WorkspaceRole.Member;
 
     /// <summary>
-    /// Discriminator between humans and the AI Agent (Phase 7). This is the ONLY reliable way to
+    /// Discriminator between humans and an AI Agent (Phase 7). This is the ONLY reliable way to
     /// tell an agent row apart — never infer it from <see cref="AiAgentName"/> or the absence of a
-    /// password hash. Partial unique index <c>uq_workspace_members_ai_agent</c> allows exactly one
-    /// agent per workspace.
+    /// password hash. Since Giai đoạn 14.7 Track B §B1 the partial unique index
+    /// <c>uq_workspace_members_ai_persona</c> allows <b>one agent row per persona</b> per workspace.
     /// </summary>
     public MemberType MemberType { get; set; } = MemberType.Human;
 
@@ -79,6 +79,23 @@ public class WorkspaceMember
     /// reaching this as a negative signal; 0 means "no limit configured".
     /// </summary>
     public int MaxWipLimit { get; set; } = 5;
+
+    /// <summary>
+    /// Giai đoạn 14.7 Track B §B1 — which virtual co-worker this row is: <c>general</c>,
+    /// <c>scrum_master</c>, <c>tech_lead</c> or <c>qa_security</c>.
+    /// <para>
+    /// <b>Null for humans</b> — enforced by <c>ck_workspace_members_persona_human</c>, so a human row can
+    /// never accidentally satisfy an agent lookup. Agent rows created before this column existed were
+    /// backfilled to <c>'general'</c> inside the migration, which is what keeps
+    /// <c>FindAgentUserIdAsync</c> pointing at the same row it always did.
+    /// </para>
+    /// <para>
+    /// The unique index uses <c>COALESCE(persona_key, 'general')</c> because PostgreSQL treats every
+    /// <c>NULL</c> as distinct: a plain unique index on <c>(workspace_id, persona_key)</c> would happily
+    /// accept unlimited <c>NULL</c> agent rows and silently lose the "one row per persona" guarantee.
+    /// </para>
+    /// </summary>
+    public string? PersonaKey { get; set; }
 
     public DateTimeOffset JoinedAt { get; set; } = DateTimeOffset.UtcNow;
 

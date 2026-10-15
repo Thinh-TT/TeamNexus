@@ -2,6 +2,7 @@ using EFCore.NamingConventions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Pgvector.EntityFrameworkCore;
 using TeamNexus.Persistence.Data;
 
 namespace TeamNexus.Persistence;
@@ -23,7 +24,12 @@ public static class DependencyInjection
                 + "Set it via User Secrets or the ConnectionStrings__DefaultConnection env var.");
 
         services.AddDbContext<TeamNexusDbContext>(options =>
-            options.UseNpgsql(connectionString)
+            options.UseNpgsql(
+                       connectionString,
+                       // Giai đoạn 14.7 Track B §B3: registers the pgvector type mappings, which is what lets
+                       // `Vector?` map to a `vector(1536)` column and `.CosineDistance()` compile to `<#>`.
+                       // Without this the provider would reject the Vector CLR type at model-build time.
+                       npgsql => npgsql.UseVector())
                    .UseSnakeCaseNamingConvention());
 
         return services;

@@ -46,12 +46,14 @@ public sealed class WorkspaceMemberApiTests : IClassFixture<DatabaseFixture>
         var keys = human.EnumerateObject().Select(p => p.Name).ToList();
 
         // Phase 10 §4.2's append-only rule: existing names/order first, new fields last.
-        // Giai đoạn 14.7 §A2 appends the four capacity fields at the very end — the ONLY change this phase
-        // makes to this assertion, and the field names/order before them are untouched.
+        // Giai đoạn 14.7 §A2 appends the four capacity fields at the very end; Track B §B1 appends
+        // `personaKey` after them. These are the only changes this assertion ever takes, and the field
+        // names/order before them are untouched — which is the whole point of asserting the exact list
+        // rather than a subset.
         Assert.Equal(
             [
                 "userId", "displayName", "role", "avatarUrl", "memberType", "email", "joinedAt", "isOwner",
-                "skills", "primaryRole", "capacityWeight", "maxWipLimit",
+                "skills", "primaryRole", "capacityWeight", "maxWipLimit", "personaKey",
             ],
             keys);
         Assert.Equal(member.Email, human.GetProperty("email").GetString());
@@ -62,6 +64,9 @@ public sealed class WorkspaceMemberApiTests : IClassFixture<DatabaseFixture>
         Assert.Equal("Member", human.GetProperty("primaryRole").GetString());
         Assert.Equal(1.0, human.GetProperty("capacityWeight").GetDouble());
         Assert.Equal(5, human.GetProperty("maxWipLimit").GetInt32());
+
+        // A human never carries a persona (the schema CHECK enforces it); the agent row does.
+        Assert.Equal(JsonValueKind.Null, human.GetProperty("personaKey").ValueKind);
     }
 
     [Fact]

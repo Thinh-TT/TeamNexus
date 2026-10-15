@@ -16,8 +16,27 @@ public interface IAiAgentResolver
     /// <summary>
     /// The workspace's AI Agent user row, created lazily on first need (D1: exactly one per
     /// workspace, enforced by the partial unique index). Throws when the workspace does not exist.
+    /// <para>
+    /// Since Giai đoạn 14.7 Track B §B1 this is the row of the <b>general</b> persona, not "the agent".
+    /// </para>
     /// </summary>
     Task<Guid> EnsureAgentAsync(Guid workspaceId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Giai đoạn 14.7 Track B §B1 — the agent row of one persona, created lazily on first need.
+    /// <para>
+    /// The key must be inside the persona whitelist; an unknown key is a caller bug and is refused rather
+    /// than silently mapped onto the general persona. Calling this twice for the same
+    /// <c>(workspace, persona)</c> returns the same id — the partial unique index
+    /// <c>uq_workspace_members_ai_persona</c> is the race guard, and a NULL persona counts as
+    /// <c>general</c>.
+    /// </para>
+    /// <para>
+    /// Board declares this member but cannot implement it: the persona vocabulary lives on the Ai side
+    /// (<c>PersonaCatalog</c>), which is why the key arrives as an opaque string here.
+    /// </para>
+    /// </summary>
+    Task<Guid> EnsurePersonaAgentAsync(Guid workspaceId, string personaKey, CancellationToken ct = default);
 
     /// <summary>True when <paramref name="userId"/> is the <c>member_type = 'ai_agent'</c> member of this workspace.</summary>
     Task<bool> IsAiAgentAsync(Guid workspaceId, Guid userId, CancellationToken ct = default);
@@ -42,6 +61,9 @@ public interface IAiAgentResolver
 public sealed class NullAiAgentResolver : IAiAgentResolver
 {
     public Task<Guid> EnsureAgentAsync(Guid workspaceId, CancellationToken ct = default)
+        => throw new NotSupportedException("The Ai module is not registered.");
+
+    public Task<Guid> EnsurePersonaAgentAsync(Guid workspaceId, string personaKey, CancellationToken ct = default)
         => throw new NotSupportedException("The Ai module is not registered.");
 
     public Task<bool> IsAiAgentAsync(Guid workspaceId, Guid userId, CancellationToken ct = default)

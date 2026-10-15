@@ -34,6 +34,14 @@ export interface AgentChatMessage {
   role: AiChatRole
   content: string
   createdAt: string
+  /**
+   * Phase 14.7 §B: the persona THIS turn was answered as. Set only on a turn the local `ask()` produced.
+   *
+   * <p>Turns reloaded from the server never carry it. The stored transcript does not record which persona
+   * answered, so inferring one for history — for example "it is the currently selected persona" — would
+   * label old answers with a role they were never given.</p>
+   */
+  personaKey?: string | null
 }
 
 export interface AgentChatMeta {
@@ -45,10 +53,28 @@ export interface AgentChatMeta {
   model: string
 }
 
+/**
+ * One entry of the server's persona catalogue (Phase 14.7 §B).
+ *
+ * <p>Both halves come from the server: the client renders `displayName` verbatim and never maps a key to a
+ * name of its own, so a persona renamed on the server cannot go stale in the UI.</p>
+ */
+export interface AgentChatPersona {
+  key: string
+  displayName: string
+}
+
 export interface AgentChatSession {
   boardId: string
   hasMessages: boolean
   model: string
+  /**
+   * Phase 14.7 §B. Optional in the TYPE even though the server now always sends it: a response without a
+   * catalogue (an older backend, or a test double) must degrade to "no persona picker" rather than throw.
+   */
+  personas?: AgentChatPersona[]
+  /** The key the server applies when the request carries no `persona` parameter. */
+  defaultPersona?: string | null
 }
 
 export interface AgentChatSendRequest {

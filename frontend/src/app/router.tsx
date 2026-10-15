@@ -8,6 +8,7 @@ import { ReportsPage } from '../features/reporting/pages/ReportsPage'
 import { WorkspaceSettingsPage } from '../features/workspace/pages/WorkspaceSettingsPage'
 import { WorkspaceActivityPage } from '../features/workspace/pages/WorkspaceActivityPage'
 import { WorkspaceMembersPage } from '../features/members/pages/WorkspaceMembersPage'
+import { KnowledgeBasePage } from '../features/knowledge/components/KnowledgeBasePage'
 import { ProfilePage } from '../features/profile/pages/ProfilePage'
 import { AcceptInvitationPage } from '../features/invitations/pages/AcceptInvitationPage'
 import { WorkspaceDashboardPage } from '../features/dashboard/pages/WorkspaceDashboardPage'
@@ -83,6 +84,14 @@ export const AppRouter: React.FC = () => {
           element={
             <ProtectedRoute>
               <WorkspaceMembersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/workspaces/:workspaceId/knowledge"
+          element={
+            <ProtectedRoute>
+              <KnowledgeBasePage />
             </ProtectedRoute>
           }
         />

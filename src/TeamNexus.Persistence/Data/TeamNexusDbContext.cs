@@ -63,9 +63,26 @@ public class TeamNexusDbContext
     // Giai đoạn 14.7 §A2: the fixed per-workspace vocabulary Jev answers `Choice` questions against.
     public DbSet<WorkspaceTaxonomy> WorkspaceTaxonomies => Set<WorkspaceTaxonomy>();
 
+    // Giai đoạn 14.7 Track B §B3 (Workspace RAG): the indexed documents and their embedded slices.
+    // The `vector` extension they need is declared in OnModelCreating below, and created by the migration
+    // with an explicit `CREATE EXTENSION IF NOT EXISTS` — see the remarks there.
+    public DbSet<WorkspaceKnowledgeDocument> WorkspaceKnowledgeDocuments => Set<WorkspaceKnowledgeDocument>();
+
+    public DbSet<WorkspaceKnowledgeChunk> WorkspaceKnowledgeChunks => Set<WorkspaceKnowledgeChunk>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // Giai đoạn 14.7 Track B §B3: `vector` is a third-party extension (NOT a PostgreSQL contrib module),
+        // so the official `postgres` image does not ship it — CI and local dev must use
+        // `pgvector/pgvector:pg18` (project-docs/02-tech-stack-decisions.md §3).
+        //
+        // It is declared here so the requirement lives in the model, but the migration carries an explicit
+        // `CREATE EXTENSION IF NOT EXISTS vector;`: EF Core only records this as an annotation, and a schema
+        // that silently depends on an operator having run that statement by hand is exactly the kind of
+        // "works on my machine" failure this declaration is meant to prevent.
+        modelBuilder.HasPostgresExtension("vector");
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(TeamNexusDbContext).Assembly);
 

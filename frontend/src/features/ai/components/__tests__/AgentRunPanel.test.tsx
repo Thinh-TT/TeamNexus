@@ -135,4 +135,51 @@ describe('AgentRunPanel', () => {
     expect(screen.getByText('3')).toBeInTheDocument() // tool call count
     expect(screen.getByText('300')).toBeInTheDocument() // total tokens
   })
+
+  // ---- Phase 14.7 §B: the run's own persona --------------------------------
+
+  it('PERSONA_shows the run\'s own agent name instead of a hard-coded general one', () => {
+    const qaRun: AgentRunResponse = {
+      ...baseRun,
+      agentDisplayName: 'AI QA & Security',
+    }
+
+    render(
+      <AgentRunPanel
+        {...defaultProps}
+        currentRun={qaRun}
+        runDetail={{ ...baseDetail, run: qaRun }}
+      />
+    )
+
+    // The server resolved the persona for this run; the panel must say so rather than showing the general
+    // agent's name for every run.
+    expect(screen.getByTestId('agent-run-display-name')).toHaveTextContent('AI QA & Security')
+    expect(screen.queryByText('TeamNexus Agent')).not.toBeInTheDocument()
+  })
+
+  it('PERSONA_falls back to a neutral label when the run carries no name', () => {
+    const unnamedRun: AgentRunResponse = {
+      ...baseRun,
+      agentDisplayName: '',
+    }
+
+    render(
+      <AgentRunPanel
+        {...defaultProps}
+        currentRun={unnamedRun}
+        runDetail={{ ...baseDetail, run: unnamedRun }}
+      />
+    )
+
+    // A missing name is not evidence of the general agent, so the neutral fallback is shown.
+    expect(screen.getByTestId('agent-run-display-name')).toHaveTextContent('AI Agent')
+  })
+
+  it('PERSONA_shows no name tag while no run has been started', () => {
+    render(<AgentRunPanel {...defaultProps} currentRun={null} runDetail={null} />)
+
+    expect(screen.queryByTestId('agent-run-display-name')).not.toBeInTheDocument()
+    expect(screen.getByText('Chưa chạy')).toBeInTheDocument()
+  })
 })

@@ -19,6 +19,15 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.1" />
+    <!--
+      Giai đoạn 14.7 Track B §B3 — pgvector support for EF Core. Needed for the `vector(1536)` column and
+      the cosine-distance query behind Workspace RAG. The package ships only a net8.0 assembly, but its
+      own README states the latest version works with EF Core 9 AND 10, and its only EF dependency floor is
+      Npgsql.EntityFrameworkCore.PostgreSQL >= 9.0.1 (we are on 10.0.1). If a future EF major drops binary
+      compatibility, the migration path is to drop this package and store the vector as text with a
+      ValueConverter plus raw SQL for the cosine operator — recorded as a deliberate fallback.
+    -->
+    <PackageReference Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
   </ItemGroup>
 
 </Project>

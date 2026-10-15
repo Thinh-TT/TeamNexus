@@ -214,7 +214,10 @@ export const useAgentRuns = ({
                 taskId: event.taskId,
                 boardId: event.boardId,
                 agentUserId: '',
-                agentDisplayName: 'TeamNexus Agent',
+                // Phase 14.7 §B: the progress frame carries no name, and a missing name is NOT the general
+                // agent. Leaving it blank lets the UI show its neutral fallback; hard-coding "TeamNexus
+                // Agent" here would relabel a specialist's run as the general agent's.
+                agentDisplayName: '',
                 triggeredByUserId: '',
                 triggeredByName: '',
                 status: event.status,

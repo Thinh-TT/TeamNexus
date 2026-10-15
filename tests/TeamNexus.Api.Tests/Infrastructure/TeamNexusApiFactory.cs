@@ -6,6 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using TeamNexus.Modules.Ai.Services;
 using TeamNexus.Modules.Ai.Services.Integrations;
+using TeamNexus.Modules.Ai.Services.Jev;
+using TeamNexus.Modules.Ai.Services.Knowledge;
 using TeamNexus.Modules.Auth.Options;
 
 namespace TeamNexus.Api.Tests.Infrastructure;
@@ -95,6 +97,13 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
     public IExternalAlertSink? ExternalAlerts { get; init; }
 
     /// <summary>
+    /// When set, replaces the registered <c>IEmbeddingProvider</c> (Giai đoạn 14.7 Track B §B3) for this host,
+    /// so a suite can exercise the embedding pass's two failure branches without any network. Kept on the
+    /// factory rather than the shared host for the same reason as <see cref="ScriptedAi"/>.
+    /// </summary>
+    public IEmbeddingProvider? EmbeddingProvider { get; init; }
+
+    /// <summary>
     /// Overrides <c>Agent:Enabled</c>; the safe off-switch must answer 503 (Phase 7 D18).
     /// </summary>
     public bool AgentEnabled { get; init; } = true;
@@ -126,7 +135,31 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
     /// </summary>
     public bool ObserverJevSeverityRouting { get; init; } = true;
 
-    /// <summary>Overrides <c>Reports:Enabled</c>.</summary>
+    /// <summary>
+    /// Overrides <c>Jev:RagEnabled</c> (Giai đoạn 14.7 Track B §B3). Defaults to the production <c>false</c>, so
+    /// no pre-existing chat suite starts injecting a knowledge block it never expected — and, more importantly,
+    /// so no suite pays for a vector query it did not ask for.
+    /// </summary>
+    public bool RagEnabled { get; init; }
+
+    /// <summary>
+    /// Overrides <c>Embeddings:Enabled</c> (Giai đoạn 14.7 Track B §B3). Defaults to <c>false</c>: with no API
+    /// key the offline provider would answer deterministically, but a suite that does not want the knowledge
+    /// block must not have it appear from configuration. RAG suites opt in to both switches together.
+    /// </summary>
+    public bool EmbeddingsEnabled { get; init; }
+
+    /// <summary>
+    /// When set, replaces the registered <c>IJevDecisionProvider</c> (Giai đoạn 14.7 Track B §B2) for this
+    /// host, so a suite can observe the exact request a Jev-backed tool built. Kept on the factory rather than
+    /// the shared host for the same reason as <see cref="ScriptedAi"/>: the default host must stay free of
+    /// test-only doubles, and a developer's own <c>Jev:ApiKey</c> must never reach a real endpoint.
+    /// </summary>
+    public IJevDecisionProvider? JevProvider { get; init; }
+
+    /// <summary>
+    /// Overrides <c>Reports:Enabled</c>.
+    /// </summary>
     public bool ReportsEnabled { get; init; } = true;
 
     /// <summary>
@@ -244,6 +277,16 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Jev:AutoRecoveryPlanEnabled", AutoRecoveryPlanEnabled ? "true" : "false");
         builder.UseSetting("Jev:ObserverSeverityRouting", ObserverJevSeverityRouting ? "true" : "false");
 
+        // Giai đoạn 14.7 Track B §B3: BOTH switches are stated explicitly, because the knowledge block only
+        // appears when the two agree. A developer's own User Secrets must never be able to switch the RAG path
+        // on for a suite that was written before the feature existed — the same hazard `Email:ApiKey`,
+        // `Jev:ApiKey` and `Digest:Enabled` are already pinned against.
+        builder.UseSetting("Jev:RagEnabled", RagEnabled ? "true" : "false");
+        builder.UseSetting("Embeddings:Enabled", EmbeddingsEnabled ? "true" : "false");
+        // One space, not the empty string, for the same reason as the other four keys: it keeps
+        // `HasApiKey == false`, which selects the deterministic offline embedding provider.
+        builder.UseSetting("Embeddings:ApiKey", " ");
+
         // Phase 13 §3.3 (P4): the digest is the one feature that e-mails people unprompted, so the suite
         // turns it off explicitly. Without this, a developer's own appsettings/User Secrets value would
         // decide whether the integration suites send real mail — the exact hazard `Email:ApiKey` above
@@ -298,6 +341,24 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
             // observe what it would receive without any producer knowing about it.
             builder.ConfigureTestServices(services =>
                 services.AddSingleton<IExternalAlertSink>(ExternalAlerts));
+        }
+
+        if (JevProvider is not null)
+        {
+            // Giai đoạn 14.7 Track B §B2: `ConfigureTestServices` runs AFTER the module's own factory
+            // registration, so this wins — which is the only way a suite can read the request a Jev-backed
+            // tool built (the offline fake answers correctly but keeps no record).
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton<IJevDecisionProvider>(JevProvider));
+        }
+
+        if (EmbeddingProvider is not null)
+        {
+            // Giai đoạn 14.7 Track B §B3: same "runs last" trick, so the embedding pass can be pointed at a
+            // double that returns the wrong dimension or fails outright — the two branches a real provider
+            // cannot be asked to produce on demand.
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton<IEmbeddingProvider>(EmbeddingProvider));
         }
 
         // Phase 14 §2: the chat is ON by default (it is user-initiated and cannot mail anyone), but the

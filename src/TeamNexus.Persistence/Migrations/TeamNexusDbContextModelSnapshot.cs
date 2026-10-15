@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using Pgvector;
 using TeamNexus.Persistence.Data;
 
 #nullable disable
@@ -20,6 +21,7 @@ namespace TeamNexus.Persistence.Migrations
                 .HasAnnotation("ProductVersion", "10.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
@@ -1395,6 +1397,132 @@ namespace TeamNexus.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceKnowledgeChunk", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("ChunkIndex")
+                        .HasColumnType("integer")
+                        .HasColumnName("chunk_index");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("DocumentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("document_id");
+
+                    b.Property<Vector>("Embedding")
+                        .HasColumnType("vector(1536)")
+                        .HasColumnName("embedding");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_workspace_knowledge_chunks");
+
+                    b.HasIndex("Embedding")
+                        .HasDatabaseName("ix_workspace_knowledge_chunks_embedding");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Embedding"), "hnsw");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Embedding"), new[] { "vector_cosine_ops" });
+
+                    b.HasIndex("WorkspaceId")
+                        .HasDatabaseName("ix_workspace_knowledge_chunks_workspace");
+
+                    b.HasIndex("DocumentId", "ChunkIndex")
+                        .IsUnique()
+                        .HasDatabaseName("uq_workspace_knowledge_chunks_position");
+
+                    b.ToTable("workspace_knowledge_chunks", (string)null);
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceKnowledgeDocument", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("ChunkCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("chunk_count");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("error");
+
+                    b.Property<string>("SourceUrl")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("source_url");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_workspace_knowledge_documents");
+
+                    b.HasIndex("CreatedByUserId")
+                        .HasDatabaseName("ix_workspace_knowledge_documents_created_by_user_id");
+
+                    b.HasIndex("WorkspaceId", "CreatedAt")
+                        .HasDatabaseName("ix_workspace_knowledge_documents_lookup");
+
+                    b.ToTable("workspace_knowledge_documents", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_workspace_knowledge_documents_status", "\"status\" IN ('pending', 'ready', 'failed', 'deleted')");
+                        });
+                });
+
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceMember", b =>
                 {
                     b.Property<Guid>("WorkspaceId")
@@ -1434,6 +1562,11 @@ namespace TeamNexus.Persistence.Migrations
                         .HasDefaultValue("human")
                         .HasColumnName("member_type");
 
+                    b.Property<string>("PersonaKey")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("persona_key");
+
                     b.Property<string>("PrimaryRole")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1461,9 +1594,9 @@ namespace TeamNexus.Persistence.Migrations
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_workspace_members_user_id");
 
-                    b.HasIndex("WorkspaceId")
+                    b.HasIndex("WorkspaceId", "PersonaKey")
                         .IsUnique()
-                        .HasDatabaseName("uq_workspace_members_ai_agent")
+                        .HasDatabaseName("uq_workspace_members_ai_persona")
                         .HasFilter("\"member_type\" = 'ai_agent'");
 
                     b.ToTable("workspace_members", null, t =>
@@ -1473,6 +1606,10 @@ namespace TeamNexus.Persistence.Migrations
                             t.HasCheckConstraint("ck_workspace_members_max_wip_limit", "\"max_wip_limit\" >= 0");
 
                             t.HasCheckConstraint("ck_workspace_members_member_type", "\"member_type\" IN ('human', 'ai_agent')");
+
+                            t.HasCheckConstraint("ck_workspace_members_persona_human", "\"member_type\" <> 'human' OR \"persona_key\" IS NULL");
+
+                            t.HasCheckConstraint("ck_workspace_members_persona_key", "\"persona_key\" IS NULL OR \"persona_key\" IN ('general', 'scrum_master', 'tech_lead', 'qa_security')");
 
                             t.HasCheckConstraint("ck_workspace_members_role", "\"role\" IN ('Admin', 'Manager', 'Member')");
                         });
@@ -1971,6 +2108,39 @@ namespace TeamNexus.Persistence.Migrations
                     b.Navigation("Workspace");
                 });
 
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceKnowledgeChunk", b =>
+                {
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.WorkspaceKnowledgeDocument", "Document")
+                        .WithMany("Chunks")
+                        .HasForeignKey("DocumentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_workspace_knowledge_chunks_workspace_knowledge_documents_do");
+
+                    b.Navigation("Document");
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceKnowledgeDocument", b =>
+                {
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_workspace_knowledge_documents_users_created_by_user_id");
+
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_workspace_knowledge_documents_workspaces_workspace_id");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Workspace");
+                });
+
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceMember", b =>
                 {
                     b.HasOne("TeamNexus.Persistence.Data.Entities.ApplicationUser", "User")
@@ -2002,6 +2172,11 @@ namespace TeamNexus.Persistence.Migrations
                         .HasConstraintName("fk_workspace_taxonomies_workspaces_workspace_id");
 
                     b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceKnowledgeDocument", b =>
+                {
+                    b.Navigation("Chunks");
                 });
 #pragma warning restore 612, 618
         }

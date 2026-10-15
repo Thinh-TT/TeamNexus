@@ -10,6 +10,7 @@ import {
   Flex,
   Input,
   Popover,
+  Select,
   Space,
   Tag,
   Tooltip,
@@ -91,6 +92,9 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
     attachments,
     proposal,
     model,
+    personas,
+    persona,
+    setPersona,
     status,
     error,
     httpStatus,
@@ -107,6 +111,15 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
 
   const isStreaming = status === 'streaming'
   const isBusy = isStreaming || status === 'saving' || status === 'confirming'
+
+  // Phase 14.7 §B: a picker with one choice is a control, not a choice — with no alternative to offer it is
+  // hidden rather than shown disabled.
+  const showPersonaPicker = personas.length >= 2
+
+  /** The role a turn was answered as, in the server's own words. Falls back to the raw key if the catalogue
+   * no longer contains it (a persona removed between the answer and this render). */
+  const personaLabel = (key: string): string =>
+    personas.find((p) => p.key === key)?.displayName ?? key
 
   // Keep the newest turn in view while text arrives. Guarded because `Element.scrollTo` does not exist in
   // jsdom — without the guard every component test for this panel fails on a missing DOM method.
@@ -241,6 +254,36 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         />
       </Flex>
 
+      {/* Persona picker (Phase 14.7 §B). Its own row rather than inside the header line: the label must stay
+          readable next to the model name on a panel this narrow. */}
+      {showPersonaPicker && (
+        <Flex
+          align="center"
+          gap={8}
+          data-testid="agent-chat-persona-row"
+          style={{ padding: '8px 14px', borderBottom: '1px solid #f1f5f9' }}
+        >
+          <Text type="secondary" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+            Vai trò
+          </Text>
+          <Select
+            size="small"
+            allowClear
+            value={persona ?? undefined}
+            onChange={(value) => setPersona(value ?? null)}
+            onClear={() => setPersona(null)}
+            // Clearing is a real choice here: it hands the turn back to the server's own default, and the
+            // request then carries no `persona` parameter at all.
+            placeholder="Mặc định của hệ thống"
+            options={personas.map((p) => ({ value: p.key, label: p.displayName }))}
+            disabled={isBusy}
+            style={{ minWidth: 180, flex: 1 }}
+            data-testid="agent-chat-persona-select"
+            aria-label="Vai trò trả lời"
+          />
+        </Flex>
+      )}
+
       {/* Attached tasks: the drop target */}
       <div
         ref={setNodeRef}
@@ -364,6 +407,21 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                   lineHeight: 1.5,
                 }}
               >
+                {/* Phase 14.7 §B: the role this answer was produced as. Only a turn produced by this
+                    session has one — history loaded from the server shows no tag, because the server does
+                    not record which persona answered it. */}
+                {!isUser && msg.personaKey && (
+                  <div style={{ marginBottom: 4 }}>
+                    <Tag
+                      color="purple"
+                      data-testid="agent-chat-persona-tag"
+                      style={{ margin: 0, fontSize: 10.5, lineHeight: '18px', borderRadius: 4 }}
+                    >
+                      <RobotOutlined style={{ marginRight: 4 }} />
+                      {personaLabel(msg.personaKey)}
+                    </Tag>
+                  </div>
+                )}
                 {msg.content}
               </div>
             </Flex>
