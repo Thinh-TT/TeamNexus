@@ -1,5 +1,14 @@
 import React, { useState } from 'react'
 import {
+  Alert,
+  Button,
+  Card,
+  Flex,
+  Space,
+  Tag,
+  Typography,
+} from 'antd'
+import {
   ThunderboltOutlined,
   UserOutlined,
   WarningOutlined,
@@ -13,7 +22,7 @@ import { jevApi } from '../services/jevApi'
 import type { AssigneeSuggestionResponse } from '../types/jev.types'
 import {
   formatConfidencePercent,
-  getAdviceBadgeClass,
+  getAdviceTagColor,
   isDirectAssign,
   isManualRequired,
   isOfferChoices,
@@ -26,6 +35,15 @@ interface AssigneeSuggestionProps {
   onSelectAssignee: (userId: string) => void
 }
 
+/**
+ * Smart Assignee Dispatching panel powered by Jev System 1 (Giai đoạn 14.7 §A4).
+ *
+ * ⚠️ **ISSUE-03 — written in PURE Ant Design on purpose.**
+ *
+ * Replaced the previous Tailwind utility classes (`space-y-2`, `inline-flex`, `bg-indigo-500/10`...)
+ * which caused text run-together defects on production (`Đánh giá phân côngCần phân công thủ công`, etc.)
+ * because TeamNexus does not have Tailwind CSS compiled or configured.
+ */
 export const AssigneeSuggestion: React.FC<AssigneeSuggestionProps> = ({
   boardId,
   taskId,
@@ -59,170 +77,238 @@ export const AssigneeSuggestion: React.FC<AssigneeSuggestionProps> = ({
   }
 
   return (
-    <div className="space-y-2" data-testid="assignee-suggestion">
-      <button
-        type="button"
+    <div data-testid="assignee-suggestion">
+      <Button
+        size="small"
+        icon={<ThunderboltOutlined style={{ color: '#4f46e5' }} />}
         onClick={handleFetchSuggestions}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 transition-all duration-150"
+        style={{
+          borderRadius: 6,
+          borderColor: '#c7d2fe',
+          backgroundColor: '#eef2ff',
+          color: '#4338ca',
+          fontWeight: 500,
+          fontSize: 12,
+        }}
       >
-        <ThunderboltOutlined style={{ fontSize: 14 }} className="text-indigo-400" />
         <span>Gợi ý người làm (Jev)</span>
         {isOpen ? (
-          <UpOutlined style={{ fontSize: 10 }} className="ml-0.5" />
+          <UpOutlined style={{ fontSize: 10, marginLeft: 4 }} />
         ) : (
-          <DownOutlined style={{ fontSize: 10 }} className="ml-0.5" />
+          <DownOutlined style={{ fontSize: 10, marginLeft: 4 }} />
         )}
-      </button>
+      </Button>
 
       {isOpen && (
-        <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 shadow-lg backdrop-blur-md space-y-3 animate-in fade-in slide-in-from-top-1 duration-200">
+        <Card
+          size="small"
+          style={{
+            marginTop: 8,
+            borderRadius: 8,
+            borderColor: '#e2e8f0',
+            backgroundColor: '#ffffff',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+          }}
+          styles={{ body: { padding: 12 } }}
+        >
           {isLoading && (
-            <div className="flex items-center gap-2 py-3 justify-center text-xs text-indigo-300">
-              <LoadingOutlined style={{ fontSize: 16 }} className="text-indigo-400" />
-              <span>Jev đang đối soát hồ sơ kỹ năng và tải việc...</span>
-            </div>
+            <Flex align="center" justify="center" gap={8} style={{ padding: '12px 0' }}>
+              <LoadingOutlined style={{ fontSize: 16, color: '#1677ff' }} />
+              <Typography.Text style={{ fontSize: 12, color: '#1d39c4' }}>
+                Jev đang đối soát hồ sơ kỹ năng và tải việc...
+              </Typography.Text>
+            </Flex>
           )}
 
           {error && !isLoading && (
-            <div className="flex items-center gap-2 p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs">
-              <WarningOutlined style={{ fontSize: 16 }} className="text-rose-400 shrink-0" />
-              <span>{error}</span>
-            </div>
+            <Alert
+              type="error"
+              showIcon
+              icon={<WarningOutlined />}
+              title={error}
+              style={{ borderRadius: 6 }}
+            />
           )}
 
           {data && !isLoading && (
-            <>
-              <div className="flex items-center justify-between text-xs pb-2 border-b border-slate-800">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-slate-300">Đánh giá phân công</span>
-                  <span
-                    className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${getAdviceBadgeClass(
-                      data.routingAdvice
-                    )}`}
+            <Flex vertical gap={10}>
+              {/* Header: Status, Advice Tag & Latency */}
+              <Flex
+                align="center"
+                justify="space-between"
+                gap={8}
+                style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: 8 }}
+              >
+                <Flex align="center" gap={8}>
+                  <Typography.Text strong style={{ fontSize: 12.5 }}>
+                    Đánh giá phân công
+                  </Typography.Text>
+                  <Tag
+                    color={getAdviceTagColor(data.routingAdvice)}
+                    style={{ margin: 0, fontSize: 11 }}
                   >
                     {isDirectAssign(data.routingAdvice)
                       ? `Tự tin ${formatConfidencePercent(data.confidenceScore)}`
                       : isOfferChoices(data.routingAdvice)
                       ? `Lựa chọn (${formatConfidencePercent(data.confidenceScore)})`
                       : 'Cần phân công thủ công'}
-                  </span>
-                </div>
+                  </Tag>
+                </Flex>
 
                 {data.latencyMs > 0 && (
-                  <div className="flex items-center gap-1 text-[11px] text-slate-400 font-mono">
-                    <ClockCircleOutlined style={{ fontSize: 12 }} className="text-slate-400" />
-                    <span>{data.latencyMs}ms</span>
-                  </div>
+                  <Space size={4}>
+                    <ClockCircleOutlined style={{ fontSize: 11, color: '#8c8c8c' }} />
+                    <Typography.Text
+                      type="secondary"
+                      style={{ fontSize: 11, fontFamily: 'monospace' }}
+                    >
+                      {data.latencyMs}ms
+                    </Typography.Text>
+                  </Space>
                 )}
-              </div>
+              </Flex>
 
               {data.degraded && (
-                <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
-                  <WarningOutlined style={{ fontSize: 14 }} className="text-amber-400 shrink-0" />
-                  <span>Dịch vụ AI tạm không khả dụng. Bạn hãy phân công thủ công.</span>
-                </div>
+                <Alert
+                  type="warning"
+                  showIcon
+                  icon={<WarningOutlined />}
+                  title="Dịch vụ AI tạm không khả dụng. Bạn hãy phân công thủ công."
+                  style={{ borderRadius: 6 }}
+                />
               )}
 
-              {/* Nhánh 1: DirectAssign */}
+              {/* Nhánh 1: DirectAssign (Tự tin cao >= 85%) */}
               {isDirectAssign(data.routingAdvice) && data.recommendedUserId && (
-                <div className="space-y-2">
+                <Flex vertical gap={8}>
                   {data.candidates
                     .filter((c) => c.userId === data.recommendedUserId)
                     .map((candidate) => (
-                      <div
+                      <Card
                         key={candidate.userId}
-                        className="p-2.5 rounded-lg bg-emerald-950/20 border border-emerald-500/30 flex items-center justify-between gap-3"
+                        size="small"
+                        style={{
+                          borderRadius: 6,
+                          borderColor: '#b7eb8f',
+                          backgroundColor: '#f6ffed',
+                        }}
+                        styles={{ body: { padding: '10px 12px' } }}
                       >
-                        <div className="space-y-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-xs text-emerald-300 truncate">
-                              {candidate.displayName}
-                            </span>
-                            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-medium">
-                              {Math.round(candidate.probability * 100)}% phù hợp
-                            </span>
-                          </div>
-                          {candidate.reason && (
-                            <p className="text-[11px] text-slate-400 line-clamp-2">
-                              {candidate.reason}
-                            </p>
-                          )}
-                        </div>
+                        <Flex align="center" justify="space-between" gap={8}>
+                          <Flex vertical gap={2} style={{ minWidth: 0, flex: 1 }}>
+                            <Flex align="center" gap={6}>
+                              <Typography.Text
+                                strong
+                                style={{ fontSize: 12.5, color: '#237804' }}
+                              >
+                                {candidate.displayName}
+                              </Typography.Text>
+                              <Tag color="success" style={{ margin: 0, fontSize: 10.5 }}>
+                                {Math.round(candidate.probability * 100)}% phù hợp
+                              </Tag>
+                            </Flex>
+                            {candidate.reason && (
+                              <Typography.Text
+                                type="secondary"
+                                style={{ fontSize: 11 }}
+                              >
+                                {candidate.reason}
+                              </Typography.Text>
+                            )}
+                          </Flex>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onSelectAssignee(candidate.userId)
-                            setIsOpen(false)
-                          }}
-                          disabled={candidate.userId === currentAssigneeId}
-                          className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-medium transition-colors"
-                        >
-                          <UserOutlined style={{ fontSize: 14 }} />
-                          <span>{candidate.userId === currentAssigneeId ? 'Đang gán' : 'Gán ngay'}</span>
-                        </button>
-                      </div>
+                          <Button
+                            type="primary"
+                            size="small"
+                            icon={<UserOutlined />}
+                            onClick={() => {
+                              onSelectAssignee(candidate.userId)
+                              setIsOpen(false)
+                            }}
+                            disabled={candidate.userId === currentAssigneeId}
+                            style={{ borderRadius: 6 }}
+                          >
+                            {candidate.userId === currentAssigneeId ? 'Đang gán' : 'Gán ngay'}
+                          </Button>
+                        </Flex>
+                      </Card>
                     ))}
-                </div>
+                </Flex>
               )}
 
-              {/* Nhánh 2: OfferChoices */}
+              {/* Nhánh 2: OfferChoices (50% <= Tự tin < 85%) */}
               {isOfferChoices(data.routingAdvice) && data.candidates.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-[11px] text-slate-400">
+                <Flex vertical gap={6}>
+                  <Typography.Text type="secondary" style={{ fontSize: 11.5 }}>
                     Jev đề xuất danh sách ứng viên phù hợp kỹ năng và khối lượng việc:
-                  </p>
-                  <div className="space-y-1.5">
+                  </Typography.Text>
+                  <Flex vertical gap={6}>
                     {data.candidates.map((cand) => (
-                      <div
+                      <Card
                         key={cand.userId}
-                        className="p-2 rounded-lg bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/50 flex items-center justify-between gap-2 transition-colors"
+                        size="small"
+                        style={{
+                          borderRadius: 6,
+                          borderColor: '#e2e8f0',
+                          backgroundColor: '#fafafa',
+                        }}
+                        styles={{ body: { padding: '8px 10px' } }}
                       >
-                        <div className="min-w-0 space-y-0.5">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-xs text-slate-200 truncate">
-                              {cand.displayName}
-                            </span>
-                            <span className="text-[10px] font-mono text-indigo-400 bg-indigo-950/40 px-1 rounded">
-                              {Math.round(cand.probability * 100)}%
-                            </span>
-                          </div>
-                          {cand.reason && (
-                            <div className="flex items-center gap-1 text-[11px] text-slate-400 truncate">
-                              <InfoCircleOutlined style={{ fontSize: 12 }} className="text-slate-400 shrink-0" />
-                              <span className="truncate">{cand.reason}</span>
-                            </div>
-                          )}
-                        </div>
+                        <Flex align="center" justify="space-between" gap={8}>
+                          <Flex vertical gap={2} style={{ minWidth: 0, flex: 1 }}>
+                            <Flex align="center" gap={6}>
+                              <Typography.Text strong style={{ fontSize: 12 }}>
+                                {cand.displayName}
+                              </Typography.Text>
+                              <Tag color="processing" style={{ margin: 0, fontSize: 10.5 }}>
+                                {Math.round(cand.probability * 100)}%
+                              </Tag>
+                            </Flex>
+                            {cand.reason && (
+                              <Space size={4}>
+                                <InfoCircleOutlined
+                                  style={{ fontSize: 11, color: '#8c8c8c' }}
+                                />
+                                <Typography.Text
+                                  type="secondary"
+                                  style={{ fontSize: 11 }}
+                                >
+                                  {cand.reason}
+                                </Typography.Text>
+                              </Space>
+                            )}
+                          </Flex>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onSelectAssignee(cand.userId)
-                            setIsOpen(false)
-                          }}
-                          disabled={cand.userId === currentAssigneeId}
-                          className="shrink-0 px-2.5 py-1 text-xs rounded-md bg-slate-700 hover:bg-indigo-600 text-slate-200 hover:text-white disabled:opacity-40 transition-colors"
-                        >
-                          {cand.userId === currentAssigneeId ? 'Đang gán' : 'Chọn'}
-                        </button>
-                      </div>
+                          <Button
+                            size="small"
+                            onClick={() => {
+                              onSelectAssignee(cand.userId)
+                              setIsOpen(false)
+                            }}
+                            disabled={cand.userId === currentAssigneeId}
+                            style={{ borderRadius: 6 }}
+                          >
+                            {cand.userId === currentAssigneeId ? 'Đang gán' : 'Chọn'}
+                          </Button>
+                        </Flex>
+                      </Card>
                     ))}
-                  </div>
-                </div>
+                  </Flex>
+                </Flex>
               )}
 
-              {/* Nhánh 3: ManualRequired */}
+              {/* Nhánh 3: ManualRequired (Tự tin < 50%) */}
               {isManualRequired(data.routingAdvice) && (
-                <div className="p-2.5 rounded-lg bg-slate-800/30 border border-slate-700/40 text-xs text-slate-400">
-                  <span>
-                    Chưa có ứng viên đạt độ tương thích cao. Vui lòng tự chọn thành viên từ danh sách.
-                  </span>
-                </div>
+                <Alert
+                  type="info"
+                  showIcon
+                  title="Chưa có ứng viên đạt độ tương thích cao. Vui lòng tự chọn thành viên từ danh sách."
+                  style={{ borderRadius: 6 }}
+                />
               )}
-            </>
+            </Flex>
           )}
-        </div>
+        </Card>
       )}
     </div>
   )

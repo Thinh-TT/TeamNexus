@@ -56,10 +56,34 @@ public sealed class ScriptedAiProvider : IAiProvider, IAiToolCallingProvider, IA
     /// <summary>Request of the last streamed call, so a suite can assert the guardrails that were applied.</summary>
     public AiStreamRequest? LastStreamRequest { get; private set; }
 
+    /// <summary>
+    /// When true, <see cref="CompleteAsync"/> throws instead of answering — the NON-streaming failure path.
+    /// <para>
+    /// Added for Giai đoạn 14.7 Track A / ISSUE-01: the Observer's System 2 (prose) step goes through
+    /// <see cref="IAiProvider.CompleteAsync"/>, so <see cref="ThrowOnStream"/> could never reproduce the
+    /// "DeepSeek không phản hồi trong 60s" failure that broke a live scan. Without this the degrade path
+    /// would be untestable and the fix unverifiable.
+    /// </para>
+    /// </summary>
+    public bool ThrowOnComplete { get; init; }
+
+    /// <summary>Message carried by the thrown completion <see cref="AiProviderException"/> (asserted verbatim).</summary>
+    public string CompleteErrorMessage { get; init; } =
+        "DeepSeek không phản hồi trong 60s (timeout).";
+
+    /// <summary>How many times the completion port was called (0 proves a guard short-circuited).</summary>
+    public int CompleteCallCount { get; private set; }
+
     public Task<AiCompletionResult> CompleteAsync(AiCompletionRequest request, CancellationToken ct = default)
     {
         CallCount++;
+        CompleteCallCount++;
         LastRequest = request;
+
+        if (ThrowOnComplete)
+        {
+            throw new AiProviderException(CompleteErrorMessage);
+        }
 
         return Task.FromResult(new AiCompletionResult(Content, PromptTokens: 10, CompletionTokens: 20));
     }

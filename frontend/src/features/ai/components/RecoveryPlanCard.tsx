@@ -1,5 +1,15 @@
 import React, { useState } from 'react'
 import {
+  Alert,
+  Button,
+  Card,
+  Flex,
+  List,
+  Space,
+  Tag,
+  Typography,
+} from 'antd'
+import {
   ToolOutlined,
   WarningOutlined,
   UserOutlined,
@@ -9,7 +19,6 @@ import {
   CheckOutlined,
   CloseOutlined,
   UndoOutlined,
-  LoadingOutlined,
 } from '@ant-design/icons'
 import { aiActionApi } from '../services/aiActionApi'
 import type { AiActionLog, AiActionLogDetail } from '../types/aiAction.types'
@@ -21,6 +30,14 @@ interface RecoveryPlanCardProps {
   onActionSuccess?: (updated: AiActionLogDetail) => void
 }
 
+/**
+ * AI Observer Recovery Plan card component (Giai đoạn 14.7 §A5 Phần B).
+ *
+ * ⚠️ **ISSUE-04 — written in PURE Ant Design on purpose.**
+ *
+ * Replaced the previous Tailwind utility classes (`p-3.5 bg-slate-900/70 border border-slate-800 space-y-3`...)
+ * to ensure consistent, premium styling and prevent text run-together defects.
+ */
 export const RecoveryPlanCard: React.FC<RecoveryPlanCardProps> = ({
   actionLog,
   detail,
@@ -93,14 +110,14 @@ export const RecoveryPlanCard: React.FC<RecoveryPlanCardProps> = ({
   const renderKindIcon = () => {
     switch (kind) {
       case 'ReassignTask':
-        return <UserOutlined style={{ fontSize: 16 }} className="text-sky-400" />
+        return <UserOutlined style={{ fontSize: 16, color: '#1677ff' }} />
       case 'ExtendDeadline':
-        return <CalendarOutlined style={{ fontSize: 16 }} className="text-emerald-400" />
+        return <CalendarOutlined style={{ fontSize: 16, color: '#52c41a' }} />
       case 'SplitSubtasks':
-        return <BranchesOutlined style={{ fontSize: 16 }} className="text-purple-400" />
+        return <BranchesOutlined style={{ fontSize: 16, color: '#722ed1' }} />
       case 'EscalateManager':
       default:
-        return <ExclamationCircleOutlined style={{ fontSize: 16 }} className="text-amber-400" />
+        return <ExclamationCircleOutlined style={{ fontSize: 16, color: '#faad14' }} />
     }
   }
 
@@ -120,131 +137,173 @@ export const RecoveryPlanCard: React.FC<RecoveryPlanCardProps> = ({
   }
 
   return (
-    <div
+    <Card
       data-testid="recovery-plan-card"
-      className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 space-y-3"
+      size="small"
+      style={{
+        borderRadius: 8,
+        borderColor: '#e2e8f0',
+        backgroundColor: '#ffffff',
+        marginBottom: 8,
+      }}
+      styles={{ body: { padding: 12 } }}
     >
-      <div className="flex items-center justify-between gap-2 border-b border-slate-800 pb-2">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-            <ToolOutlined style={{ fontSize: 16 }} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-slate-200">
-                AI Observer: {getKindTitle()}
-              </span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                {kind}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          {renderKindIcon()}
-        </div>
-      </div>
-
-      {isEscalate && (
-        <div
-          data-testid="escalate-manager-warning"
-          className="flex items-start gap-2.5 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs"
+      <Flex vertical gap={10}>
+        {/* Header: Title, Kind Tag & Icon */}
+        <Flex
+          align="center"
+          justify="space-between"
+          gap={8}
+          style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: 8 }}
         >
-          <WarningOutlined style={{ fontSize: 16 }} className="text-amber-400 shrink-0 mt-0.5" />
-          <div className="space-y-0.5">
-            <p className="font-semibold text-amber-200">Cần họp khẩn cấp</p>
-            <p className="text-[11px] text-amber-300/90">
-              Cần họp khẩn — không có thay đổi dữ liệu nào được áp dụng.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {snapshot?.subtasks && snapshot.subtasks.length > 0 && (
-        <div className="space-y-1.5 text-xs">
-          <span className="text-[11px] text-slate-400 uppercase tracking-wider">
-            Các subtasks đề xuất:
-          </span>
-          <ul className="list-disc list-inside space-y-0.5 text-slate-300">
-            {snapshot.subtasks.map((st, idx) => (
-              <li key={idx} className="truncate">
-                {st}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {snapshot?.newDueDate && (
-        <div className="text-xs text-slate-300 flex items-center gap-1.5">
-          <CalendarOutlined style={{ fontSize: 14 }} className="text-emerald-400" />
-          <span>Hạn mới đề xuất: {new Date(snapshot.newDueDate).toLocaleDateString()}</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs">
-          {error}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
-        <span className="text-[11px] text-slate-400">
-          Trạng thái:{' '}
-          <strong className="text-slate-200">{actionLog.status}</strong>
-        </span>
-
-        <div className="flex items-center gap-1.5">
-          {actionLog.status === 'Pending' && (
-            <>
-              <button
-                type="button"
-                onClick={handleReject}
-                disabled={isActing}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 disabled:opacity-50 transition-colors"
-              >
-                {isActing ? (
-                  <LoadingOutlined style={{ fontSize: 12 }} />
-                ) : (
-                  <CloseOutlined style={{ fontSize: 12 }} className="text-rose-400" />
-                )}
-                <span>Từ chối</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={handleApprove}
-                disabled={isActing}
-                className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50 transition-colors"
-              >
-                {isActing ? (
-                  <LoadingOutlined style={{ fontSize: 12 }} />
-                ) : (
-                  <CheckOutlined style={{ fontSize: 12 }} />
-                )}
-                <span>Phê duyệt giải pháp</span>
-              </button>
-            </>
-          )}
-
-          {actionLog.status === 'Approved' && (
-            <button
-              type="button"
-              onClick={handleUndo}
-              disabled={isActing}
-              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 disabled:opacity-50 transition-colors"
+          <Flex align="center" gap={8}>
+            <div
+              style={{
+                padding: '4px 6px',
+                borderRadius: 6,
+                backgroundColor: '#eef2ff',
+                color: '#4338ca',
+                display: 'flex',
+                alignItems: 'center',
+              }}
             >
-              {isActing ? (
-                <LoadingOutlined style={{ fontSize: 12 }} />
-              ) : (
-                <UndoOutlined style={{ fontSize: 12 }} className="text-indigo-400" />
+              <ToolOutlined style={{ fontSize: 15 }} />
+            </div>
+            <Flex vertical gap={1}>
+              <Typography.Text strong style={{ fontSize: 13 }}>
+                AI Observer: {getKindTitle()}
+              </Typography.Text>
+              <Space size={4}>
+                <Tag color="blue" style={{ margin: 0, fontSize: 10.5, fontFamily: 'monospace' }}>
+                  {kind}
+                </Tag>
+              </Space>
+            </Flex>
+          </Flex>
+
+          <div>{renderKindIcon()}</div>
+        </Flex>
+
+        {isEscalate && (
+          <Alert
+            data-testid="escalate-manager-warning"
+            type="warning"
+            showIcon
+            icon={<WarningOutlined />}
+            title="Cần họp khẩn cấp"
+            description="Cần họp khẩn — không có thay đổi dữ liệu nào được áp dụng."
+            style={{ borderRadius: 6 }}
+          />
+        )}
+
+        {snapshot?.subtasks && snapshot.subtasks.length > 0 && (
+          <Flex vertical gap={4}>
+            <Typography.Text
+              type="secondary"
+              style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}
+            >
+              Các subtasks đề xuất:
+            </Typography.Text>
+            <List
+              size="small"
+              bordered
+              dataSource={snapshot.subtasks}
+              style={{ borderRadius: 6, backgroundColor: '#f8fafc' }}
+              renderItem={(st) => (
+                <List.Item style={{ padding: '6px 10px', fontSize: 12 }}>
+                  <Typography.Text>• {st}</Typography.Text>
+                </List.Item>
               )}
-              <span>Hoàn tác (Undo)</span>
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+            />
+          </Flex>
+        )}
+
+        {snapshot?.newDueDate && (
+          <Flex align="center" gap={6}>
+            <CalendarOutlined style={{ fontSize: 14, color: '#52c41a' }} />
+            <Typography.Text style={{ fontSize: 12 }}>
+              Hạn mới đề xuất:{' '}
+              <strong>{new Date(snapshot.newDueDate).toLocaleDateString()}</strong>
+            </Typography.Text>
+          </Flex>
+        )}
+
+        {error && (
+          <Alert
+            type="error"
+            showIcon
+            title={error}
+            style={{ borderRadius: 6 }}
+          />
+        )}
+
+        {/* Footer: Status and Action Buttons */}
+        <Flex
+          align="center"
+          justify="space-between"
+          gap={8}
+          wrap="wrap"
+          style={{ borderTop: '1px solid #f1f5f9', paddingTop: 8 }}
+        >
+          <Flex align="center" gap={6}>
+            <Typography.Text type="secondary" style={{ fontSize: 11.5 }}>
+              Trạng thái:
+            </Typography.Text>
+            <Tag
+              color={
+                actionLog.status === 'Approved'
+                  ? 'success'
+                  : actionLog.status === 'Pending'
+                  ? 'processing'
+                  : 'default'
+              }
+              style={{ margin: 0, fontSize: 11 }}
+            >
+              {actionLog.status}
+            </Tag>
+          </Flex>
+
+          <Space size={8}>
+            {actionLog.status === 'Pending' && (
+              <>
+                <Button
+                  size="small"
+                  danger
+                  onClick={handleReject}
+                  loading={isActing}
+                  icon={<CloseOutlined />}
+                  style={{ borderRadius: 6 }}
+                >
+                  Từ chối
+                </Button>
+
+                <Button
+                  size="small"
+                  type="primary"
+                  onClick={handleApprove}
+                  loading={isActing}
+                  icon={<CheckOutlined />}
+                  style={{ borderRadius: 6 }}
+                >
+                  Phê duyệt giải pháp
+                </Button>
+              </>
+            )}
+
+            {actionLog.status === 'Approved' && (
+              <Button
+                size="small"
+                onClick={handleUndo}
+                loading={isActing}
+                icon={<UndoOutlined style={{ color: '#4f46e5' }} />}
+                style={{ borderRadius: 6 }}
+              >
+                Hoàn tác (Undo)
+              </Button>
+            )}
+          </Space>
+        </Flex>
+      </Flex>
+    </Card>
   )
 }

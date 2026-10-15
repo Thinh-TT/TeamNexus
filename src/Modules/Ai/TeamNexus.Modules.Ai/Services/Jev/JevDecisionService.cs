@@ -129,7 +129,7 @@ public sealed class JevDecisionService : IJevDecisionService
         if (advice == ConfidenceRouting.ManualRequired)
         {
             LogDegraded("TriageTask", confidence, Stopwatch.GetElapsedTime(start));
-            return EmptyTriageResult(advice, latencyMs);
+            return EmptyTriageResult(advice, latencyMs, ToUsage(decision));
         }
 
         var domain = ResolveChoice(answers, DomainQuestion, domains);
@@ -151,7 +151,8 @@ public sealed class JevDecisionService : IJevDecisionService
             confidence,
             advice,
             options,
-            latencyMs);
+            latencyMs,
+            ToUsage(decision));
 
         _logger.LogDebug(
             "Jev triage: advice={Advice}, confidence={Confidence}, latencyMs={LatencyMs}, "
@@ -202,18 +203,19 @@ public sealed class JevDecisionService : IJevDecisionService
         var confidence = ConfidenceOf(answers, AssigneeQuestion);
         var advice = ConfidenceRouting.For(confidence, _options.Effective);
         var latencyMs = (long)Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+        var usage = ToUsage(decision);
 
         if (advice == ConfidenceRouting.ManualRequired)
         {
             LogDegraded("RecommendAssignee", confidence, Stopwatch.GetElapsedTime(start));
-            return new AssigneeRecommendationResult(null, confidence, [], advice, latencyMs);
+            return new AssigneeRecommendationResult(null, confidence, [], advice, latencyMs, usage);
         }
 
         if (!answers.TryGetValue(AssigneeQuestion, out var answer)
             || !JevDecisionValidator.IsUsable(answer, questions[0]))
         {
             LogDegraded("RecommendAssignee", confidence, Stopwatch.GetElapsedTime(start));
-            return new AssigneeRecommendationResult(null, confidence, [], ConfidenceRouting.ManualRequired, latencyMs);
+            return new AssigneeRecommendationResult(null, confidence, [], ConfidenceRouting.ManualRequired, latencyMs, usage);
         }
 
         var ranked = Rank(answers[AssigneeQuestion], candidates);
@@ -228,12 +230,12 @@ public sealed class JevDecisionService : IJevDecisionService
             _logger.LogWarning(
                 "Jev chọn nhãn '{Label}' không có trong danh sách ứng viên đã gửi.", answers[AssigneeQuestion].Choice);
 
-            return new AssigneeRecommendationResult(null, confidence, [], ConfidenceRouting.ManualRequired, latencyMs);
+            return new AssigneeRecommendationResult(null, confidence, [], ConfidenceRouting.ManualRequired, latencyMs, usage);
         }
 
         // A high-confidence answer still renders its runner-up ranking: the manager keeps the counter-argument
         // without the system forcing a single name (the roadmap's "góc nhìn phản biện").
-        var result = new AssigneeRecommendationResult(found.UserId, confidence, ranked, advice, latencyMs);
+        var result = new AssigneeRecommendationResult(found.UserId, confidence, ranked, advice, latencyMs, usage);
 
         _logger.LogDebug(
             "Jev assignee: advice={Advice}, confidence={Confidence}, latencyMs={LatencyMs}, candidates={Count}.",
@@ -290,7 +292,8 @@ public sealed class JevDecisionService : IJevDecisionService
             advice == ConfidenceRouting.ManualRequired || ResolveNoul(answers, ImmediateAlertQuestion),
             advice != ConfidenceRouting.ManualRequired && ResolveNoul(answers, DominoRiskQuestion),
             confidence,
-            advice);
+            advice,
+            ToUsage(decision));
 
         _logger.LogDebug(
             "Jev observer risk: advice={Advice}, confidence={Confidence}, latencyMs={LatencyMs}, severity={Severity}, "
@@ -335,18 +338,19 @@ public sealed class JevDecisionService : IJevDecisionService
         var answers = JevDecisionValidator.NormalizeAnswers(decision);
         var confidence = ConfidenceOf(answers, RecoveryActionQuestion);
         var advice = ConfidenceRouting.For(confidence, _options.Effective);
+        var usage = ToUsage(decision);
 
         if (advice == ConfidenceRouting.ManualRequired)
         {
             LogDegraded("DecideRecoveryAction", confidence, Stopwatch.GetElapsedTime(start));
-            return new RecoveryActionDecisionResult(null, null, null, confidence, advice);
+            return new RecoveryActionDecisionResult(null, null, null, confidence, advice, usage);
         }
 
         if (!answers.TryGetValue(RecoveryActionQuestion, out var answer)
             || !JevDecisionValidator.IsUsable(answer, questions[0]))
         {
             LogDegraded("DecideRecoveryAction", confidence, Stopwatch.GetElapsedTime(start));
-            return new RecoveryActionDecisionResult(null, null, null, confidence, ConfidenceRouting.ManualRequired);
+            return new RecoveryActionDecisionResult(null, null, null, confidence, ConfidenceRouting.ManualRequired, usage);
         }
 
         // Only the action KIND comes from Jev. Which row it applies to is decided by our own caller, because
@@ -356,7 +360,7 @@ public sealed class JevDecisionService : IJevDecisionService
             .FirstOrDefault(candidate =>
                 string.Equals(candidate, answer.Choice, StringComparison.OrdinalIgnoreCase));
 
-        return new RecoveryActionDecisionResult(kind, null, null, confidence, advice);
+        return new RecoveryActionDecisionResult(kind, null, null, confidence, advice, usage);
     }
 
     // ---- shared plumbing ----------------------------------------------------------------------
@@ -389,14 +393,32 @@ public sealed class JevDecisionService : IJevDecisionService
         }
     }
 
+    /// <summary>
+    /// The provider's usage block as a domain value (Giai đoạn 14.7 Track A, ISSUE-01/ISSUE-05).
+    /// Returns <c>null</c> when there was no decision at all, so "we never reached the provider" stays
+    /// distinguishable from "the provider reported no usage".
+    /// </summary>
+    private static JevDecisionUsage? ToUsage(JevDecisionResponse? decision)
+        => decision is null
+            ? null
+            : new JevDecisionUsage(
+                decision.Usage.InputTokens,
+                decision.Usage.OutputTokens,
+                decision.Usage.CostUsd);
+
     private void LogDegraded(string operation, double confidence, TimeSpan elapsed)
         => _logger.LogInformation(
             "Jev {Operation}: không có đề xuất dùng được (advice=ManualRequired, confidence={Confidence}, "
             + "latencyMs={LatencyMs}) — người dùng tự quyết định.",
             operation, confidence, elapsed.TotalMilliseconds);
 
-    private static TaskTriageResult EmptyTriageResult(string advice, long latencyMs = 0)
-        => new(null, null, null, false, 0d, advice, [], latencyMs);
+    /// <summary>
+    /// The degraded triage result: nothing offered, and the usage carried through so a caller can still see
+    /// what the failed attempt cost (Jev bills input tokens whether or not the answer was usable).
+    /// </summary>
+    private static TaskTriageResult EmptyTriageResult(
+        string advice, long latencyMs = 0, JevDecisionUsage? usage = null)
+        => new(null, null, null, false, 0d, advice, [], latencyMs, usage);
 
     /// <summary>
     /// Confidence of the decision as a whole. Read from the question that carries the routing weight

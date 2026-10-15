@@ -78,7 +78,19 @@ public sealed record RecoveryActionContext(
 
 // ---------------------------------------------------------------------------------------------
 // Results. Every one carries confidenceScore AND routingAdvice so no caller has to re-derive the branch.
+//
+// Giai đoạn 14.7 Track A (ISSUE-01/ISSUE-05): every result also carries `Usage`, read straight from the
+// provider's own `usage` block. It belongs on the RESULT rather than being recovered later for two reasons:
+// (a) Jev bills per INPUT token with output free, so "what did this decision cost" is genuinely part of the
+// decision; (b) without it the number is computed and then dropped, which is exactly what made it impossible
+// to show a measured cost per Observer scan.
 // ---------------------------------------------------------------------------------------------
+
+/// <summary>
+/// Usage and cost of the decision that produced a result, copied from the provider's <c>usage</c> block.
+/// All members are nullable: not every provider reports them (the offline fake reports synthetic ones).
+/// </summary>
+public sealed record JevDecisionUsage(int? InputTokens, int? OutputTokens, double? CostUsd);
 
 /// <summary>
 /// Triage of one task (Giai đoạn 14.7 §A2.1). All suggestion fields are <b>null</b> outside the
@@ -92,7 +104,8 @@ public sealed record TaskTriageResult(
     double ConfidenceScore,
     string RoutingAdvice,
     IReadOnlyList<TriageOption> Options,
-    long LatencyMs = 0);
+    long LatencyMs = 0,
+    JevDecisionUsage? Usage = null);
 
 /// <summary>One ranked option inside a triage result: which field, which value, how likely.</summary>
 public sealed record TriageOption(string Field, string Value, double Probability);
@@ -110,7 +123,8 @@ public sealed record AssigneeRecommendationResult(
     double ConfidenceScore,
     IReadOnlyList<CandidateScore> CandidateRankings,
     string RoutingAdvice,
-    long LatencyMs = 0);
+    long LatencyMs = 0,
+    JevDecisionUsage? Usage = null);
 
 /// <summary>Observer severity assessment (Giai đoạn 14.7 §A5 Phần A).</summary>
 public sealed record ObserverRiskAssessmentResult(
@@ -118,7 +132,8 @@ public sealed record ObserverRiskAssessmentResult(
     bool RequireImmediateAlert,
     bool HasDominoRisk,
     double ConfidenceScore,
-    string RoutingAdvice);
+    string RoutingAdvice,
+    JevDecisionUsage? Usage = null);
 
 /// <summary>Recovery routing decision (Giai đoạn 14.7 §A5 Phần B).</summary>
 public sealed record RecoveryActionDecisionResult(
@@ -126,4 +141,5 @@ public sealed record RecoveryActionDecisionResult(
     Guid? TargetTaskId,
     Guid? TargetUserId,
     double ConfidenceScore,
-    string RoutingAdvice);
+    string RoutingAdvice,
+    JevDecisionUsage? Usage = null);
