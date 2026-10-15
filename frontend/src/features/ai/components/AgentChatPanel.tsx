@@ -20,6 +20,7 @@ import {
 import {
   CloseOutlined,
   CommentOutlined,
+  DownOutlined,
   LoadingOutlined,
   PlusOutlined,
   RobotOutlined,
@@ -116,18 +117,41 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   // hidden rather than shown disabled.
   const showPersonaPicker = personas.length >= 2
 
+  const [showScrollBottom, setShowScrollBottom] = useState(false)
+  const isUserScrollingRef = useRef(false)
+
   /** The role a turn was answered as, in the server's own words. Falls back to the raw key if the catalogue
    * no longer contains it (a persona removed between the answer and this render). */
   const personaLabel = (key: string): string =>
     personas.find((p) => p.key === key)?.displayName ?? key
 
-  // Keep the newest turn in view while text arrives. Guarded because `Element.scrollTo` does not exist in
-  // jsdom — without the guard every component test for this panel fails on a missing DOM method.
+  const handleScroll = useCallback(() => {
+    const node = scrollRef.current
+    if (!node) return
+    const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight
+    const isFar = distanceFromBottom > 90
+    setShowScrollBottom(isFar)
+    isUserScrollingRef.current = isFar
+  }, [])
+
+  const scrollToBottom = useCallback((smooth = true) => {
+    const node = scrollRef.current
+    if (node && typeof node.scrollTo === 'function') {
+      isUserScrollingRef.current = false
+      setShowScrollBottom(false)
+      node.scrollTo({ top: node.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
+    }
+  }, [])
+
+  // Keep the newest turn in view while text arrives, unless the user scrolled up to read earlier text.
+  // Guarded because `Element.scrollTo` does not exist in jsdom.
   useEffect(() => {
     const node = scrollRef.current
 
     if (node && typeof node.scrollTo === 'function') {
-      node.scrollTo({ top: node.scrollHeight })
+      if (!isUserScrollingRef.current) {
+        node.scrollTo({ top: node.scrollHeight })
+      }
     }
   }, [messages, streamingAnswer])
 
@@ -162,6 +186,8 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
 
     const text = input
     setInput('')
+    isUserScrollingRef.current = false
+    setShowScrollBottom(false)
     await ask(text)
   }, [ask, input, isStreaming])
 
@@ -357,47 +383,88 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
       </div>
 
       {/* Conversation */}
-      <div
-        ref={scrollRef}
-        data-testid="agent-chat-messages"
-        style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}
-      >
-        {messages.length === 0 && !streamingAnswer && (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontWeight: 600, color: '#334155', fontSize: 12 }}>
-                  Hỏi AI về cả bảng này
+      <div style={{ flex: 1, position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          data-testid="agent-chat-messages"
+          style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}
+        >
+          {messages.length === 0 && !streamingAnswer && (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontWeight: 600, color: '#334155', fontSize: 12 }}>
+                    Hỏi AI về cả bảng này
+                  </div>
+                  <Text type="secondary" style={{ fontSize: 11 }}>
+                    Kéo thẻ vào khung phía trên để AI tập trung vào đúng việc bạn đang hỏi.
+                  </Text>
                 </div>
-                <Text type="secondary" style={{ fontSize: 11 }}>
-                  Kéo thẻ vào khung phía trên để AI tập trung vào đúng việc bạn đang hỏi.
-                </Text>
-              </div>
-            }
-            style={{ marginTop: 24 }}
-          />
-        )}
+              }
+              style={{ marginTop: 24 }}
+            />
+          )}
 
-        {messages.map((msg) => {
-          const isUser = msg.role === 'user'
-          return (
-            <Flex
-              key={msg.id}
-              gap={8}
-              align="flex-start"
-              style={{ flexDirection: isUser ? 'row-reverse' : 'row' }}
-            >
-              <Avatar
-                size={26}
-                icon={isUser ? <UserOutlined /> : <RobotOutlined />}
-                style={{ backgroundColor: isUser ? '#3b82f6' : '#7c3aed', flexShrink: 0 }}
-              />
+          {messages.map((msg) => {
+            const isUser = msg.role === 'user'
+            return (
+              <Flex
+                key={msg.id}
+                gap={8}
+                align="flex-start"
+                style={{ flexDirection: isUser ? 'row-reverse' : 'row' }}
+              >
+                <Avatar
+                  size={26}
+                  icon={isUser ? <UserOutlined /> : <RobotOutlined />}
+                  style={{ backgroundColor: isUser ? '#3b82f6' : '#7c3aed', flexShrink: 0 }}
+                />
+                <div
+                  style={{
+                    maxWidth: '85%',
+                    backgroundColor: isUser ? '#eff6ff' : '#f8fafc',
+                    border: `1px solid ${isUser ? '#bfdbfe' : '#e2e8f0'}`,
+                    borderRadius: 8,
+                    padding: '8px 10px',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    fontSize: 12.5,
+                    color: '#1e293b',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {/* Phase 14.7 §B: the role this answer was produced as. Only a turn produced by this
+                      session has one — history loaded from the server shows no tag, because the server does
+                      not record which persona answered it. */}
+                  {!isUser && msg.personaKey && (
+                    <div style={{ marginBottom: 4 }}>
+                      <Tag
+                        color="purple"
+                        data-testid="agent-chat-persona-tag"
+                        style={{ margin: 0, fontSize: 10.5, lineHeight: '18px', borderRadius: 4 }}
+                      >
+                        <RobotOutlined style={{ marginRight: 4 }} />
+                        {personaLabel(msg.personaKey)}
+                      </Tag>
+                    </div>
+                  )}
+                  {msg.content}
+                </div>
+              </Flex>
+            )
+          })}
+
+          {streamingAnswer && (
+            <Flex gap={8} align="flex-start">
+              <Avatar size={26} icon={<RobotOutlined />} style={{ backgroundColor: '#7c3aed', flexShrink: 0 }} />
               <div
+                aria-live="polite"
                 style={{
                   maxWidth: '85%',
-                  backgroundColor: isUser ? '#eff6ff' : '#f8fafc',
-                  border: `1px solid ${isUser ? '#bfdbfe' : '#e2e8f0'}`,
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #c7d2fe',
                   borderRadius: 8,
                   padding: '8px 10px',
                   whiteSpace: 'pre-wrap',
@@ -407,10 +474,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                   lineHeight: 1.5,
                 }}
               >
-                {/* Phase 14.7 §B: the role this answer was produced as. Only a turn produced by this
-                    session has one — history loaded from the server shows no tag, because the server does
-                    not record which persona answered it. */}
-                {!isUser && msg.personaKey && (
+                {persona && (
                   <div style={{ marginBottom: 4 }}>
                     <Tag
                       color="purple"
@@ -418,38 +482,38 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                       style={{ margin: 0, fontSize: 10.5, lineHeight: '18px', borderRadius: 4 }}
                     >
                       <RobotOutlined style={{ marginRight: 4 }} />
-                      {personaLabel(msg.personaKey)}
+                      {personaLabel(persona)}
                     </Tag>
                   </div>
                 )}
-                {msg.content}
+                {streamingAnswer}
+                {isStreaming && <LoadingOutlined style={{ marginLeft: 6, color: '#6366f1' }} spin />}
               </div>
             </Flex>
-          )
-        })}
+          )}
+        </div>
 
-        {streamingAnswer && (
-          <Flex gap={8} align="flex-start">
-            <Avatar size={26} icon={<RobotOutlined />} style={{ backgroundColor: '#7c3aed', flexShrink: 0 }} />
-            <div
-              aria-live="polite"
+        {showScrollBottom && (
+          <Tooltip title="Cuộn xuống mới nhất">
+            <Button
+              shape="circle"
+              size="small"
+              icon={<DownOutlined />}
+              onClick={() => scrollToBottom(true)}
+              aria-label="Cuộn xuống mới nhất"
+              data-testid="agent-chat-scroll-bottom"
               style={{
-                maxWidth: '85%',
-                backgroundColor: '#f8fafc',
-                border: '1px solid #c7d2fe',
-                borderRadius: 8,
-                padding: '8px 10px',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                fontSize: 12.5,
-                color: '#1e293b',
-                lineHeight: 1.5,
+                position: 'absolute',
+                bottom: 12,
+                right: 14,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                zIndex: 10,
+                backgroundColor: '#ffffff',
+                borderColor: '#cbd5e1',
+                color: '#475569',
               }}
-            >
-              {streamingAnswer}
-              {isStreaming && <LoadingOutlined style={{ marginLeft: 6, color: '#6366f1' }} spin />}
-            </div>
-          </Flex>
+            />
+          </Tooltip>
         )}
       </div>
 
