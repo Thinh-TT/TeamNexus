@@ -106,6 +106,23 @@ public interface IAiActionService
         CancellationToken ct = default);
 
     /// <summary>
+    /// Records an accepted knowledge document as a <c>Pending</c> <c>CreateKnowledgeDocument</c> action
+    /// (Giai đoạn 14.7 Track B §B3). Scope is <c>entity_type = 'Workspace'</c>.
+    /// <para>
+    /// <b>Manager+ and only a log row.</b> The document's chunks are written when the action is approved, not
+    /// when it is requested — the same split as the board template, and for the same reason: an AI-feature row
+    /// is a proposal until a human approves it, and the Accountability Layer is the only gateway that may
+    /// create business data.
+    /// </para>
+    /// </summary>
+    Task<AiActionLogResponse> RequestCreateKnowledgeDocumentAsync(
+        Guid workspaceId,
+        Guid userId,
+        string afterSnapshotJson,
+        string basisJson,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Records a board-chat proposal to change a task's fields as a <c>Pending</c>
     /// <c>UpdateTaskFields</c> action (Phase 14.5 §B). Scope is <c>entity_type = 'Task'</c>.
     /// <para>
@@ -427,8 +444,57 @@ public sealed class AiActionService : IAiActionService
         return BuildResponse(log, names.GetValueOrDefault(userId));
     }
 
-    // ---- request (board chat field actions, Phase 14.5 §B) ------------------
+    // ---- request (workspace knowledge document, Track B §B3) ----------------
 
+    public async Task<AiActionLogResponse> RequestCreateKnowledgeDocumentAsync(
+        Guid workspaceId,
+        Guid userId,
+        string afterSnapshotJson,
+        string basisJson,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(afterSnapshotJson))
+        {
+            throw new BadRequestException("Tài liệu kiến thức không có nội dung.");
+        }
+
+        var workspaceExists = await _db.Workspaces
+            .AsNoTracking()
+            .AnyAsync(w => w.Id == workspaceId, ct);
+
+        if (!workspaceExists)
+        {
+            throw new NotFoundException("Workspace not found.");
+        }
+
+        await _access.RequireManagerAsync(workspaceId, userId, ct);
+
+        var log = new AiActionLog
+        {
+            Action = AiActionTypes.CreateKnowledgeDocument,
+            EntityType = AiEntityTypes.Workspace,
+            EntityId = workspaceId,
+            Basis = string.IsNullOrWhiteSpace(basisJson) ? "{}" : basisJson,
+            AfterSnapshot = afterSnapshotJson,
+            Status = AiActionStatus.Pending,
+            RequestedByUserId = userId,
+        };
+
+        // ONLY the log row. Approving it is what writes the document and its chunks — two separate acts, so a
+        // request can be rejected without ever having created data.
+        _db.AiActionLogs.Add(log);
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "Knowledge document requested as Pending (log {LogId}, workspace {WorkspaceId}).",
+            log.Id,
+            workspaceId);
+
+        var names = await LoadUserNamesAsync([userId], ct);
+        return BuildResponse(log, names.GetValueOrDefault(userId));
+    }
+
+    // ---- request (board chat field actions, Phase 14.5 §B) ------------------
     public Task<AiActionLogResponse> RequestUpdateTaskFieldsAsync(
         Guid boardId,
         Guid taskId,
@@ -1107,6 +1173,10 @@ public sealed class AiActionService : IAiActionService
             newAssigneeId = result.NewAssigneeId,
             previousDueDateHadValue = result.PreviousDueDateHadValue,
             previousDueDate = result.PreviousDueDate,
+            // Giai đoạn 14.7 Track B §B3: the knowledge document's id and size — Undo's basis. Optional +
+            // nulls omitted, so no earlier snapshot gains a key.
+            createdDocumentId = result.CreatedDocumentId,
+            createdChunkCount = result.CreatedChunkCount,
             warnings = result.Warnings,
             appliedAt = DateTimeOffset.UtcNow,
         }, Json);

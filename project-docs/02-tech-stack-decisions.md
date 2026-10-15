@@ -93,8 +93,20 @@
 - **Bề mặt alpha ⇒ URL là knob cấu hình:** `Jev:BaseUrl` + `Jev:DecisionsPath`. Bề mặt thay thế tương thích schema là `/api/v1/systemone`. Đổi bằng biến môi trường, **không cần rebuild**.
 - **Fail-soft bắt buộc:** mọi thất bại của Jev map sang `JevDecisionException` (→ 502) giống tiền lệ `AiProviderException`, **nhưng** mọi **caller** phải suy giảm an toàn (`ManualRequired`, `degraded:true`) chứ không làm hỏng luồng người dùng. **Không retry** (tiền lệ `DeepSeekAiProvider`).
 - **Offline:** `Jev:ApiKey` rỗng ⇒ `FakeJevDecisionProvider` — tất định, **0 mạng, 0 token**, chọn kịch bản bằng sentinel `FAKE:JEV_*` trong `state`. Nhờ đó toàn bộ pipeline (rẽ nhánh confidence, Observer routing, Recovery Plan) verify được ngoại tuyến.
-- **`Embeddings` (Track B §B3, chưa dùng):** section riêng trỏ `https://openrouter.ai/api/v1/embeddings`. **Cố ý tách khỏi `Jev`** vì endpoint khác và nhà cung cấp có thể không phải OpenRouter. `Enabled=false` mặc định; `Dimensions` **phải** khớp số chiều cột `vector` trong schema.
-- **Lưu ý:** key lưu bằng User Secrets (local) hoặc `Jev__ApiKey` (Render); **không** commit, **không** log. Có test khẳng định key không xuất hiện trong message ngoại lệ.
+- **`Embeddings` (Giai đoạn 14.7 Track B §B3 — ĐÃ DÙNG):** section riêng trỏ `https://openrouter.ai/api/v1/embeddings`, hợp đồng OpenAI-compatible (`POST {BaseUrl}/embeddings`, đọc `data[].index`/`data[].embedding`). **Cố ý tách khỏi `Jev`** vì endpoint khác và nhà cung cấp có thể không phải OpenRouter (đổi `BaseUrl` + `Model` là xong, **0 dòng code**). `Enabled=false` mặc định; `Dimensions = 1536` **phải** khớp số chiều cột `vector` trong schema và được **kiểm tra lúc khởi động** (`ValidateOnStart`) vì lệch số chiều sẽ làm mọi insert lỗi ở runtime. `ApiKey` rỗng ⇒ `FakeEmbeddingProvider` (vector tất định từ SHA-256, cùng chuỗi ⇒ cùng vector, không gọi mạng).
+- **⚠️ Ngoại lệ `noul`:** shape `noul` của Jev **không có** trường `confidence` (chỉ `{ type, noul }`). Độ chắc chắn cho tool `ValidateAcceptanceCriteria` vì vậy được **suy ra** từ khoảng cách của xác suất tới ngưỡng 0.5 và được ghi rõ là suy ra trong code — không được trình bày như một số đo.
+- **Lưu ý:** key lưu bằng User Secrets (local) hoặc `Jev__ApiKey` / `Embeddings__ApiKey` (Render); **không** commit, **không** log. Có test khẳng định key không xuất hiện trong message ngoại lệ.
+
+### 2.11. pgvector + `Pgvector.EntityFrameworkCore` (Giai đoạn 14.7 Track B §B3)
+- **Công nghệ:** [pgvector](https://github.com/pgvector/pgvector) là **extension bên thứ ba** của PostgreSQL (⚠️ **không phải** contrib module ⇒ image `postgres:18` chính thức **không** có nó).
+- **Phía .NET:** package **`Pgvector.EntityFrameworkCore` 0.3.0** (+ `Pgvector` 0.3.2) trong `TeamNexus.Persistence`.
+  - Đăng ký **bắt buộc**: `options.UseNpgsql(connectionString, npgsql => npgsql.UseVector())` trong `AddTeamNexusPersistence` — thiếu dòng này thì provider từ chối kiểu CLR `Vector?` ngay khi dựng model.
+  - Lưu ý tương thích: package chỉ phát hành assembly `net8.0` nhưng README ghi rõ bản mới nhất chạy với **EF Core 9 và 10**, và sàn phụ thuộc là `Npgsql.EntityFrameworkCore.PostgreSQL >= 9.0.1` (repo dùng **10.0.1**). Đã build sạch **0 warning / 0 error**.
+  - **Đường lui nếu một bản EF tương lai phá vỡ tương thích nhị phân:** bỏ package, lưu vector bằng `string` + `ValueConverter`, và viết toán tử cosine bằng SQL thô. Ghi ở đây để quyết định đó không phải suy nghĩ lại từ đầu.
+- **Cột có số chiều cố định `vector(1536)`** (không phải `vector` không chiều): cột không chiều đẩy việc kiểm tra số chiều sang tầng ứng dụng ⇒ dễ sinh lỗi im lặng khi đổi model embedding. Đánh đổi: đổi sang model khác số chiều cần `ALTER COLUMN … TYPE vector(N)` **+ re-embed toàn bộ**.
+- **Truy vấn:** EF `.CosineDistance(...)` sinh toán tử `<=>` (cosine). Index **HNSW** phải khai báo đúng **operator class `vector_cosine_ops`** — index dựng cho `vector_l2_ops` vẫn tồn tại, vẫn đúng cú pháp, nhưng **không bao giờ được dùng** cho truy vấn cosine.
+- **Index biểu thức cho persona:** `CREATE UNIQUE INDEX uq_workspace_members_ai_persona ON workspace_members (workspace_id, COALESCE(persona_key, 'general')) WHERE member_type = 'ai_agent'` — viết bằng **SQL thô trong migration** vì EF Core không có API cho expression index, và vì unique index trên `(workspace_id, persona_key)` **không** chặn được nhiều row `NULL` (PostgreSQL coi mọi `NULL` là khác nhau).
+- **`CREATE EXTENSION IF NOT EXISTS vector;` cũng viết tay trong migration**, đặt **trước** mọi cột `vector`: `modelBuilder.HasPostgresExtension("vector")` chỉ được EF ghi thành **annotation** trên `AlterDatabase()` và **không** phát ra câu lệnh.
 
 ## 3. Database, Hosting & Phân Bổ Tên Miền (teamnexus.cloud)
 
@@ -114,8 +126,11 @@ Toàn bộ hệ thống production được quản lý định danh và bảo m�
 - **CI/CD:** GitHub Actions (miễn phí cho repository) — pipeline build/test → deploy.
 - **Testing Backend:** xUnit.
 - **Testing Frontend:** Vitest + React Testing Library.
-- **⚠️ PostgreSQL cho CI:** image hiện tại là **`postgres:18`** (khớp major version đã verify từ Phase 7). Khi làm **Track B §B3 (pgvector)** phải đổi sang **`pgvector/pgvector:pg18`** — image chính thức của PostgreSQL **không** kèm extension `vector` (nó là extension bên thứ ba, không phải contrib module). Cách dùng **y hệt**: cùng ENV `POSTGRES_PASSWORD`, cùng `ports`, cùng healthcheck `pg_isready` (cùng base image). Vẫn phải chạy `CREATE EXTENSION vector;` một lần cho mỗi database — việc đó nằm trong migration.
-  - Máy dev local cũng phải dùng image pgvector, nếu không nhóm test RAG sẽ **skip** (có thông điệp hướng dẫn) trong khi các nhóm khác vẫn chạy.
+- **⚠️ PostgreSQL cho CI:** image hiện tại là **`pgvector/pgvector:pg18`** (Giai đoạn 14.7 Track B §B3 đã đổi từ `postgres:18`). Image chính thức của PostgreSQL **không** kèm extension `vector` (extension bên thứ ba, không phải contrib module). Cách dùng **y hệt**: cùng ENV `POSTGRES_PASSWORD`, cùng `ports`, cùng healthcheck `pg_isready` (cùng base image). Việc tạo extension nằm **trong migration** (`CREATE EXTENSION IF NOT EXISTS vector;`), không phải bước thủ công.
+  - **Máy dev local cũng phải dùng image pgvector**, và phải chạy **đúng major version 18** để khớp CI:
+    `docker run --name teamnexus-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d pgvector/pgvector:pg18`
+    (`postgres:18` **không** dùng được: migration `Phase147KnowledgeBase` sẽ dừng với `0A000`/`58P01`.)
+  - ⚠️ **Khác kế hoạch ban đầu (L10 của 14.7):** khi thiếu extension, `DatabaseFixture` **skip CẢ NHÓM test DB** kèm thông điệp hướng dẫn — **không** chỉ skip riêng nhóm RAG như dự định. Lý do: `CREATE EXTENSION` nằm ở **đầu** migration cuối, nên migration dừng **giữa chuỗi** (migration persona đã commit) và database rơi vào trạng thái nửa vời. Probe được đặt **trước** `MigrateAsync` để biến nó thành **một** thông điệp nói rõ cách sửa. Không try/catch quanh migration: nuốt lỗi migration sẽ che bug schema thật.
 
 ## 5. Nguyên tắc chung khi phát triển
 

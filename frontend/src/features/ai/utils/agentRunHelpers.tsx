@@ -16,6 +16,29 @@ export const formatBytes = (bytes: number): string => {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
 }
 
+/**
+ * The name shown when a run carries none.
+ *
+ * <p>Deliberately neutral. Before Phase 14.7 the only AI identity was the general agent, so a missing name
+ * could be filled in with "TeamNexus Agent" and nobody noticed; now that a run may belong to any persona,
+ * inventing that label would credit a specialist's work to the general agent.</p>
+ */
+export const AGENT_FALLBACK_DISPLAY_NAME = 'AI Agent'
+
+/**
+ * Phase 14.7 §B: the persona a run was executed as, exactly as the server named it.
+ *
+ * <p>The server already resolves the persona key (or the general agent's configured name) into
+ * `agentDisplayName` on every run, so the client must not map a key to a label of its own — a local mapping
+ * would go stale the moment a persona is renamed, and would show "TeamNexus Agent" for every specialist.</p>
+ */
+export const getAgentDisplayName = (
+  run: { agentDisplayName?: string | null } | null | undefined
+): string => {
+  const name = run?.agentDisplayName?.trim()
+  return name ? name : AGENT_FALLBACK_DISPLAY_NAME
+}
+
 export const getStatusTag = (status: AgentRunStatus) => {
   switch (status) {
     case 'Running':

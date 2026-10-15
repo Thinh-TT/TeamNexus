@@ -5,6 +5,7 @@ import {
   PlayCircleOutlined,
   QuestionCircleOutlined,
   RedoOutlined,
+  RobotOutlined,
   StopOutlined,
 } from '@ant-design/icons'
 import {
@@ -27,7 +28,7 @@ import type {
   AgentRunDetailResponse,
   AgentRunResponse,
 } from '../types/agentRun.types'
-import { getStatusTag, getStopReasonMessage } from '../utils/agentRunHelpers'
+import { getAgentDisplayName, getStatusTag, getStopReasonMessage } from '../utils/agentRunHelpers'
 import { AgentDraftApproval } from './AgentDraftApproval'
 
 interface AgentRunPanelProps {
@@ -84,6 +85,19 @@ export const AgentRunPanel: React.FC<AgentRunPanelProps> = ({
             <Typography.Text strong style={{ fontSize: 14 }}>
               AI Agent Executor:
             </Typography.Text>
+            {currentRun && (
+              // Phase 14.7 §B: the persona THIS run was executed as, straight from the server. Without it
+              // every run read as the same "AI Agent Executor", so a QA/Security run was indistinguishable
+              // from the general agent's.
+              <Tag
+                color="purple"
+                icon={<RobotOutlined />}
+                data-testid="agent-run-display-name"
+                style={{ margin: 0, fontWeight: 600 }}
+              >
+                {getAgentDisplayName(currentRun)}
+              </Tag>
+            )}
             {currentRun ? (
               getStatusTag(currentRun.status)
             ) : (

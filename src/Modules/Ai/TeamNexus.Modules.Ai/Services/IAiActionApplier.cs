@@ -100,4 +100,12 @@ public sealed record AiActionAppliedResult(
     /// in the column, so the flag is what makes Undo able to restore the ABSENCE of a deadline.
     /// </summary>
     bool? PreviousDueDateHadValue = null,
-    DateTimeOffset? PreviousDueDate = null);
+    DateTimeOffset? PreviousDueDate = null,
+    // ---- Giai đoạn 14.7 Track B §B3: the knowledge-document undo basis -------------------------
+    /// <summary>
+    /// The <c>workspace_knowledge_documents</c> row this action created. Optional and null-omitted by the
+    /// snapshot writer for the same reason as every field above: no earlier snapshot gains a key.
+    /// </summary>
+    Guid? CreatedDocumentId = null,
+    /// <summary>How many chunks were written, so the history shows the size of what was indexed.</summary>
+    int? CreatedChunkCount = null);

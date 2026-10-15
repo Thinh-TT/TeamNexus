@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 using TeamNexus.Modules.Ai.DTOs;
 using TeamNexus.Modules.Ai.Services;
+using TeamNexus.Modules.Ai.Services.Jev;
 using TeamNexus.Modules.Board.Endpoints;
 using TeamNexus.Shared.Endpoints;
 
@@ -65,17 +67,24 @@ public static class AgentChatEndpoints
         Guid boardId,
         HttpContext http,
         IAgentChatService chat,
+        Microsoft.Extensions.Options.IOptions<Options.AgentChatOptions> options,
         CancellationToken ct)
     {
         // Reading the (empty or populated) transcript is the cheapest membership probe, and it is the exact
         // call the UI needs anyway — so no dedicated "does this board exist" endpoint is required.
         var messages = await chat.ListMessagesAsync(boardId, null, 1, http.RequireUserId(), ct);
 
+        // Giai đoạn 14.7 Track B §B1: the persona picker is populated from the server's own catalogue, so the
+        // UI can never offer a value the endpoint would reject with 400. Both fields are APPENDED to an
+        // existing response, which is why no client breaks.
         return Results.Ok(new
         {
             boardId,
             hasMessages = messages.Count > 0,
             model = chat.ModelName,
+            personas = PersonaCatalog.All
+                .Select(persona => new { key = persona.Key, displayName = persona.DisplayName }),
+            defaultPersona = options.Value.Effective.DefaultPersona,
         });
     }
 
@@ -95,6 +104,7 @@ public static class AgentChatEndpoints
 
     private static async Task<IResult> StreamAsync(
         Guid boardId,
+        [FromQuery] string? persona,
         AgentChatSendRequest request,
         HttpContext http,
         IAgentChatService chat,
@@ -105,7 +115,11 @@ public static class AgentChatEndpoints
 
         // AWAITED on purpose: every guard lives here, so 503/404/403/400 still become real status codes
         // through DomainExceptionFilter instead of a stream that has already claimed 200.
-        var prepared = await chat.PrepareAsync(boardId, request, userId, ct);
+        //
+        // Giai đoạn 14.7 Track B §B1: `persona` arrives as a query param rather than in the body so the
+        // documented Flutter contract (`?persona=`) and the Web client agree, and so a missing parameter is
+        // unambiguously "use the default" — the body already has a stable shape that Phase 14.5 clients send.
+        var prepared = await chat.PrepareAsync(boardId, request, persona, userId, ct);
 
         return new SseStreamResult(
             chat.StreamPreparedAsync(prepared, http.RequestAborted),

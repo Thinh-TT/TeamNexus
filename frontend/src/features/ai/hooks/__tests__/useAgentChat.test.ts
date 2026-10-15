@@ -418,4 +418,148 @@ describe('useAgentChat', () => {
     expect(result.current.proposalJson).toContain(columnId)
     expect(result.current.proposal).toMatchObject({ kind: 'MoveTaskToColumn' })
   })
+
+  // ---- Phase 14.7 §B: the persona the turn is answered as -------------------
+
+  const personaSession = {
+    boardId: 'b1',
+    hasMessages: false,
+    model: 'deepseek-chat',
+    personas: [
+      { key: 'general', displayName: 'TeamNexus Agent' },
+      { key: 'scrum_master', displayName: 'AI Scrum Master' },
+      { key: 'qa_security', displayName: 'AI QA & Security' },
+    ],
+    defaultPersona: 'general',
+  }
+
+  it('loads the persona catalogue and adopts the server default', async () => {
+    mocked.getSession.mockResolvedValue(personaSession)
+
+    const { result } = renderHook(() => useAgentChat('b1'))
+
+    await waitFor(() => expect(result.current.personas).toHaveLength(3))
+    expect(result.current.persona).toBe('general')
+  })
+
+  it('sends the current persona on every turn, including one chosen after the first turn', async () => {
+    mocked.getSession.mockResolvedValue(personaSession)
+    mocked.stream.mockImplementation(async () => {})
+
+    const { result } = renderHook(() => useAgentChat('b1'))
+    await waitFor(() => expect(result.current.persona).toBe('general'))
+
+    await act(async () => {
+      await result.current.ask('Câu hỏi 1')
+    })
+
+    act(() => {
+      result.current.setPersona('qa_security')
+    })
+
+    await act(async () => {
+      await result.current.ask('Câu hỏi 2')
+    })
+
+    // Turn 1 answered as the server default; turn 2 as the role the user picked — never a stale one.
+    expect(mocked.stream.mock.calls[0][2].persona).toBe('general')
+    expect(mocked.stream.mock.calls[1][2].persona).toBe('qa_security')
+  })
+
+  it('sends no persona when the session offers none, so the server default still applies', async () => {
+    // No catalogue at all (the shape every pre-14.7 session had): the request must be unchanged.
+    mocked.getSession.mockResolvedValue({ boardId: 'b1', hasMessages: false, model: 'deepseek-chat' })
+    mocked.stream.mockImplementation(async () => {})
+
+    const { result } = renderHook(() => useAgentChat('b1'))
+    await waitFor(() => expect(mocked.getSession).toHaveBeenCalled())
+
+    expect(result.current.personas).toEqual([])
+    expect(result.current.persona).toBeNull()
+
+    await act(async () => {
+      await result.current.ask('Hỏi')
+    })
+
+    expect(mocked.stream.mock.calls[0][2].persona).toBeNull()
+  })
+
+  it('does not adopt a defaultPersona the catalogue does not contain', async () => {
+    // A key the server would refuse: sending it back would turn every question into a 400.
+    mocked.getSession.mockResolvedValue({ ...personaSession, defaultPersona: 'da_bi_xoa' })
+
+    const { result } = renderHook(() => useAgentChat('b1'))
+
+    await waitFor(() => expect(result.current.personas).toHaveLength(3))
+    expect(result.current.persona).toBeNull()
+  })
+
+  it('labels only the turn it answered as, and never a turn reloaded from the server', async () => {
+    mocked.getSession.mockResolvedValue(personaSession)
+    mocked.listMessages.mockResolvedValue([
+      {
+        id: 'm-old',
+        role: 'assistant',
+        content: 'Câu trả lời cũ',
+        attachments: [],
+        createdAt: '2026-01-01T00:00:00Z',
+      },
+    ])
+    mocked.stream.mockImplementation(async (_boardId, _request, options) => {
+      options.onEvent({ event: 'done', data: { answer: 'Câu trả lời mới' } })
+    })
+
+    const { result } = renderHook(() => useAgentChat('b1'))
+    await waitFor(() => expect(result.current.messages).toHaveLength(1))
+
+    // History: no persona, because the stored transcript does not record one.
+    expect(result.current.messages[0].personaKey).toBeUndefined()
+
+    act(() => {
+      result.current.setPersona('scrum_master')
+    })
+
+    await act(async () => {
+      await result.current.ask('Hỏi')
+    })
+
+    const assistant = result.current.messages.find((m) => m.content === 'Câu trả lời mới')
+    expect(assistant?.personaKey).toBe('scrum_master')
+  })
+
+  it('labels the turn with the persona it STARTED with, even if the user switches mid-stream', async () => {
+    mocked.getSession.mockResolvedValue(personaSession)
+
+    let release: (() => void) | undefined
+    mocked.stream.mockImplementation(
+      async (_boardId, _request, options) =>
+        new Promise<void>((resolve) => {
+          release = () => {
+            options.onEvent({ event: 'done', data: { answer: 'Trả lời xong' } })
+            resolve()
+          }
+        })
+    )
+
+    const { result } = renderHook(() => useAgentChat('b1'))
+    await waitFor(() => expect(result.current.persona).toBe('general'))
+
+    let pending: Promise<void> | undefined
+    act(() => {
+      pending = result.current.ask('Hỏi')
+    })
+
+    // The user changes their mind while the answer is still arriving.
+    act(() => {
+      result.current.setPersona('qa_security')
+    })
+
+    await act(async () => {
+      release?.()
+      await pending
+    })
+
+    const assistant = result.current.messages.find((m) => m.role === 'assistant')
+    expect(assistant?.personaKey).toBe('general')
+  })
 })

@@ -137,7 +137,10 @@ public sealed class WorkspaceMemberService : IWorkspaceMemberService
                 wm.Skills.ToList(),
                 wm.PrimaryRole,
                 wm.CapacityWeight,
-                wm.MaxWipLimit))
+                wm.MaxWipLimit,
+                // Giai đoạn 14.7 Track B §B1: which persona an agent row is. Null for humans — the schema
+                // CHECK enforces that, so the UI can read this as "is a specialised agent".
+                wm.PersonaKey))
             .ToList();
     }
 

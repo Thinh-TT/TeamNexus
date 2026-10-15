@@ -58,10 +58,11 @@
 
 ## 2. Track B — Nâng cấp Năng lực AI Agent (Autonomous Platform)
 
-> **📌 TRẠNG THÁI (cập nhật sau Giai đoạn 14.7 Track A):** **CHƯA THI HÀNH.** Toàn bộ Track B (B1–B4) đã được **hợp nhất và nâng tầm vào Giai đoạn 14.7 Track B** — xem `tasks/phase-14-7-autonomous-agent-jev.md` §5 (§B1 Personas · §B2 Tool-calling · §B3 RAG pgvector).
-> **Lưu ý khi đọc:** Giai đoạn 14.7 **Track A đã xong** (§A1–§A5: client Jev, taxonomy, hồ sơ kỹ năng, triage, assignee dispatching, Observer severity + Recovery Plan). Track B **vẫn còn nguyên** vì hai hạng mục của nó cần thay đổi schema mà Track A cố ý không làm:
-> - **§B1 (Personas)** cần nới index `uq_workspace_members_ai_agent` thành `(workspace_id, persona_key)`.
-> - **§B3 (pgvector)** cần `CREATE EXTENSION vector` + cột `vector(1536)` + index HNSW + đổi image CI sang `pgvector/pgvector:pg18`.
+> **📌 TRẠNG THÁI (cập nhật sau khi Giai đoạn 14.7 hoàn tất):** **ĐÃ THI HÀNH — nhưng không ở đây.** Toàn bộ Track B (B1–B4) đã được **hợp nhất và nâng tầm vào Giai đoạn 14.7**, và **14.7 đã xong cả hai Track**: xem `tasks/phase-14-7-autonomous-agent-jev.md` §5 (kế hoạch §B1 Personas · §B2 Tool-calling · §B3 RAG pgvector) và **§12** (nhật ký thi hành Track B, gồm 9 quyết định kiến trúc **K1–K9** và 6 lệch kế hoạch **L7–L12**).
+> **Lưu ý khi đọc:** Giai đoạn 14.7 **Track A** (§A1–§A5: client Jev, taxonomy, hồ sơ kỹ năng, triage, assignee dispatching, Observer severity + Recovery Plan) và **Track B** (§B1 personas · §B2 ba tool ReAct · §B3 pgvector RAG) **đều đã thi hành xong**. Hai hạng mục cần đổi schema thì nay **đã đổi**:
+> - **§B1 (Personas)** — index `uq_workspace_members_ai_agent` đã được **thay** bằng `uq_workspace_members_ai_persona` trên `(workspace_id, COALESCE(persona_key,'general')) WHERE member_type='ai_agent'`, kèm backfill `persona_key = 'general'` nên hành vi Phase 7 không đổi (migration `Phase147AgentPersonas`).
+> - **§B3 (pgvector)** — đã có `CREATE EXTENSION vector` + `vector(1536)` + index HNSW `vector_cosine_ops`, và image CI/dev đã là `pgvector/pgvector:pg18` (migration `Phase147KnowledgeBase`).
+> - **Lệch so với bản gốc dưới đây:** tool thứ tư (`SearchProjectContext`, mục B3) **không** được làm — `SearchSystemData` (Phase 7) đã phủ chức năng, ghi thành nợ kỹ thuật có chủ ý (L5 của 14.7).
 >
 > Tài liệu dưới đây giữ nguyên như bản gốc để làm hồ sơ thiết kế.
 

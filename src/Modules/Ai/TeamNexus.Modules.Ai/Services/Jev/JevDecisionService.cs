@@ -36,6 +36,21 @@ public interface IJevDecisionService
     /// <summary>Choose which recovery action to propose for a High/Critical signal.</summary>
     Task<RecoveryActionDecisionResult> DecideRecoveryActionAsync(
         RecoveryActionContext context, CancellationToken ct = default);
+
+    /// <summary>
+    /// Giai đoạn 14.7 Track B §B2 — one <c>noul</c> question: does this draft satisfy the task?
+    /// <para>
+    /// <paramref name="stateJson"/> is built by the caller (the tool owns the contract with the model, exactly
+    /// as the four methods above keep their own state builders) and must already be truncated.
+    /// </para>
+    /// <para>
+    /// <b>Returns <c>null</c> when there is no verdict to give</b> — Jev disabled, or the provider failed —
+    /// instead of throwing. The caller is an agent tool: an optional second opinion must never be able to fail
+    /// a run that has already produced its work.
+    /// </para>
+    /// </summary>
+    Task<AcceptanceValidationResult?> ValidateAcceptanceCriteriaAsync(
+        string stateJson, CancellationToken ct = default);
 }
 
 /// <inheritdoc cref="IJevDecisionService" />
@@ -52,6 +67,9 @@ public sealed class JevDecisionService : IJevDecisionService
     internal const string ImmediateAlertQuestion = "immediateAlert";
     internal const string DominoRiskQuestion = "dominoRisk";
     internal const string RecoveryActionQuestion = "recoveryAction";
+
+    /// <summary>Giai đoạn 14.7 Track B §B2 — the acceptance-criteria verdict asked by the agent tool.</summary>
+    internal const string ValidationQuestion = "acceptanceSatisfied";
 
     /// <summary>
     /// Priority scale, ascending. Its <b>array position</b> is the score Jev returns, so the order here is
@@ -361,6 +379,70 @@ public sealed class JevDecisionService : IJevDecisionService
                 string.Equals(candidate, answer.Choice, StringComparison.OrdinalIgnoreCase));
 
         return new RecoveryActionDecisionResult(kind, null, null, confidence, advice, usage);
+    }
+
+    // ---- 5. acceptance validation (Track B §B2) -----------------------------------------------
+
+    /// <summary>
+    /// One <c>noul</c> question. Returns <c>null</c> rather than throwing when Jev is off or the provider
+    /// fails, because the caller is an agent tool whose failure would abort a run that is otherwise fine.
+    /// <para>
+    /// The question carries no ids and the state is the caller's: this method buys a verdict, nothing more.
+    /// </para>
+    /// </summary>
+    public async Task<AcceptanceValidationResult?> ValidateAcceptanceCriteriaAsync(
+        string stateJson, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(stateJson);
+
+        // Unlike the four decision points above, "Jev is off" is a normal outcome here, not an error: the
+        // tool reports "không xác minh được" and the run continues.
+        if (!_options.Enabled)
+        {
+            _logger.LogDebug("Jev đang tắt; ValidateAcceptanceCriteria trả về 'không xác minh được'.");
+            return null;
+        }
+
+        var questions = new List<JevQuestion>
+        {
+            new(ValidationQuestion, JevQuestionType.Noul,
+                "Bản nháp kết quả có đáp ứng đầy đủ yêu cầu và tiêu chí nghiệm thu của task không?",
+                NoulCriteria: new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["true"] = "Bản nháp đã bao quát đủ yêu cầu và tiêu chí nghiệm thu.",
+                    ["false"] = "Bản nháp còn thiếu hoặc lệch so với yêu cầu/tiêu chí nghiệm thu.",
+                }),
+        };
+
+        var decision = await RunAsync(questions, stateJson, ct);
+
+        if (decision is null)
+        {
+            return null;
+        }
+
+        var answers = JevDecisionValidator.NormalizeAnswers(decision);
+
+        if (!answers.TryGetValue(ValidationQuestion, out var answer)
+            || answer.Noul is not { } probability
+            || !double.IsFinite(probability))
+        {
+            // No usable `noul`: the caller must not receive a `false` it never earned.
+            _logger.LogDebug("Jev không trả về câu trả lời `noul` dùng được cho ValidateAcceptanceCriteria.");
+            return null;
+        }
+
+        var confidence = Math.Clamp(Math.Abs(probability - NoulTrueThreshold) * 2 + NoulTrueThreshold, 0d, 1d);
+
+        // The provider's own confidence is unavailable for `noul` (the shape has no confidence field), so it is
+        // DERIVED from how far the probability sits from the 0.5 decision boundary: 0.96 ⇒ ~0.92, 0.55 ⇒ ~0.6.
+        // Deriving is stated here rather than presented as a measurement — a fabricated provider confidence
+        // would be indistinguishable from a real one downstream.
+        return new AcceptanceValidationResult(
+            probability >= NoulTrueThreshold,
+            confidence,
+            ConfidenceRouting.For(confidence, _options.Effective),
+            ToUsage(decision));
     }
 
     // ---- shared plumbing ----------------------------------------------------------------------

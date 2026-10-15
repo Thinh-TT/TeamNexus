@@ -27,11 +27,17 @@ namespace TeamNexus.Modules.Board.DTOs;
 /// <param name="PrimaryRole">Giai đoạn 14.7 §A2 — <c>Tech Lead</c>, <c>Backend Dev</c>, … (<c>Member</c> by default).</param>
 /// <param name="CapacityWeight">Giai đoạn 14.7 §A2 — relative capacity, 1.0 = full time.</param>
 /// <param name="MaxWipLimit">Giai đoạn 14.7 §A2 — how many tasks may be in progress at once (0 = no limit).</param>
+/// <param name="PersonaKey">
+/// Giai đoạn 14.7 Track B §B1 — which virtual co-worker an agent row is (<c>general</c>,
+/// <c>scrum_master</c>, <c>tech_lead</c>, <c>qa_security</c>), or <c>null</c> for every human member. Lets
+/// the UI label an agent by role instead of showing several identical "TeamNexus Agent" rows.
+/// </param>
 /// <remarks>
 /// The first eight fields keep their exact names and order: <c>useWorkspaceMembers</c> and the
 /// assignee dropdown (KanbanColumn, TaskDetailModal, Smart Setup) parse them. The Phase 14.7 capacity
 /// fields are <b>appended</b> — the same append-only rule Phase 10 §4.2 used for
-/// <c>WorkspaceSummaryResponse</c> and Phase 11 used for the fields above.
+/// <c>WorkspaceSummaryResponse</c> and Phase 11 used for the fields above. <c>PersonaKey</c> is appended
+/// after them for the same reason.
 /// </remarks>
 public sealed record WorkspaceMemberResponse(
     Guid UserId,
@@ -45,7 +51,8 @@ public sealed record WorkspaceMemberResponse(
     IReadOnlyList<string> Skills,
     string PrimaryRole,
     double CapacityWeight,
-    int MaxWipLimit);
+    int MaxWipLimit,
+    string? PersonaKey);
 
 /// <summary>Phase 11 — change a member's workspace role (Admin only).</summary>
 public sealed record UpdateMemberRoleRequest(string Role);

@@ -39,14 +39,19 @@ env:
 
 jobs:
   build-and-test:
-    name: Build & test (.NET 10 + PostgreSQL 18)
+    name: Build & test (.NET 10 + PostgreSQL 18 + pgvector)
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     services:
       postgres:
-        # Khớp đúng major version đã verify ở Phase 7 và trên máy dev (PostgreSQL 18).
-        image: postgres:18
+        # Giai đoạn 14.7 Track B §B3: PHẢI là image pgvector, KHÔNG phải `postgres:18`. `vector` là extension
+        # bên thứ ba (không phải contrib module) nên image chính thức của PostgreSQL không kèm nó; migration
+        # `Phase147KnowledgeBase` chạy `CREATE EXTENSION vector` + tạo cột `vector(1536)` nên sẽ dừng với
+        # 0A000/58P01 nếu dùng sai image. Image này cùng base/entrypoint/healthcheck nên không cần đổi gì khác.
+        # (DatabaseFixture có preflight: thiếu extension ⇒ SKIP kèm hướng dẫn, và bước chống "xanh giả" bên dưới
+        # sẽ bắt được việc đó vì nó đòi skipped = 0.)
+        image: pgvector/pgvector:pg18
         env:
           POSTGRES_PASSWORD: postgres
         ports:
@@ -104,7 +109,7 @@ jobs:
       # DatabaseFixture cố tình bỏ qua cả nhóm test cần DB (Phase 8 D4) — trên CI điều đó KHÔNG
       # bao giờ được phép xảy ra, vì service container ở trên là để bảo đảm có DB thật.
       # Lần chạy CI đầu tiên đã lọt lưới đúng kiểu này: job xanh nhưng chỉ 111/172 test thực sự chạy.
-      # Con số kỳ vọng: 171 (Giai đoạn 9) → 189 (Giai đoạn 10 §1) → 226 (Giai đoạn 10 §2) → 371 (Giai đoạn 11) → 423 (Giai đoạn 12) → 480 (Giai đoạn 13) → 584 (Giai đoạn 14) → 643 (Giai đoạn 14.5) → 665 (Giai đoạn 14.6 Track A) → 912 (Giai đoạn 14.7 §A1–§A5 backend) → 913 (frontend §A2–§A5 handover) → 925 (sửa ISSUE-01: 9 test suy giảm Observer + 3 test chốt cấu hình provider).
+      # Con số kỳ vọng: 171 (Giai đoạn 9) → 189 (Giai đoạn 10 §1) → 226 (Giai đoạn 10 §2) → 371 (Giai đoạn 11) → 423 (Giai đoạn 12) → 480 (Giai đoạn 13) → 584 (Giai đoạn 14) → 643 (Giai đoạn 14.5) → 665 (Giai đoạn 14.6 Track A) → 912 (Giai đoạn 14.7 §A1–§A5 backend) → 913 (frontend §A2–§A5 handover) → 925 (sửa ISSUE-01: 9 test suy giảm Observer + 3 test chốt cấu hình provider) → 1167 (Giai đoạn 14.7 Track B: personas + 3 tool ReAct + pgvector RAG).
       - name: Assert no test was skipped
         shell: pwsh
         run: |
@@ -120,8 +125,11 @@ jobs:
           if ($skipped -gt 0) {
             throw "Có $skipped test bị SKIP trên CI — DB test không sẵn sàng? Job này chỉ xanh khi MỌI test thực sự chạy."
           }
-          if ($total -ne 925) {
-            throw "Số test backend đã đổi: $total (kỳ vọng 925). Nếu là chủ ý, cập nhật con số này và tài liệu."
+          # Cận dưới, không phải bằng đúng (giống ci-web.yml): điều cần chặn là ai đó XOÁ BỚT test. Ghim một con
+          # số tuyệt đối biến mọi lần thêm test hợp lệ thành một lần sửa CI, và làm người ta có xu hướng hạ con số
+          # thay vì điều tra lý do nó tụt.
+          if ($total -lt 1167) {
+            throw "Số test backend đã tụt: $total (baseline hiện tại là 1167). Nếu là chủ ý, cập nhật con số này và tài liệu."
           }
 
       - name: Upload test results

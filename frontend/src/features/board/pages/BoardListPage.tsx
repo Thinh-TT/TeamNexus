@@ -3,6 +3,7 @@ import {
   ArrowLeftOutlined,
   BarChartOutlined,
   DashboardOutlined,
+  DatabaseOutlined,
   DeleteOutlined,
   EditOutlined,
   FolderOpenOutlined,
@@ -186,6 +187,16 @@ export const BoardListPage: React.FC = () => {
                 data-testid="nav-members-toolbar-btn"
               >
                 Thành viên
+              </Button>
+              {/* Phase 14.7 §B: the knowledge base is workspace-scoped and Member+ to read, so it sits next
+                  to "Thành viên" — the other page reachable without Manager rights. */}
+              <Button
+                icon={<DatabaseOutlined />}
+                style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}
+                onClick={() => navigate(`/workspaces/${workspaceId}/knowledge`)}
+                data-testid="nav-knowledge-toolbar-btn"
+              >
+                Kho tri thức
               </Button>
               <Button
                 icon={<BarChartOutlined />}

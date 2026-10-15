@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using TeamNexus.Modules.Ai.Services.Integrations;
+using TeamNexus.Modules.Ai.Services.Jev;
+using TeamNexus.Modules.Ai.Services.Knowledge;
 using TeamNexus.Persistence.Data;
 
 namespace TeamNexus.Api.Tests.Infrastructure;
@@ -31,7 +33,13 @@ namespace TeamNexus.Api.Tests.Infrastructure;
 /// <para>
 /// <b>No PostgreSQL reachable ⇒ the class skips, it does not fail (D4).</b> A machine without a
 /// database stays useful for the priority-1 pure suites, while CI — which always has the
-/// <c>postgres:18</c> service — fails loudly if anything is really broken.
+/// <c>pgvector/pgvector:pg18</c> service — fails loudly if anything is really broken.
+/// <para>
+/// <b>The image matters since Giai đoạn 14.7 Track B §B3.</b> The migration chain now contains
+/// <c>CREATE EXTENSION vector</c> and a <c>vector(1536)</c> column, and the official <c>postgres:18</c> image does
+/// not ship pgvector ⇒ <see cref="EnsureVectorExtensionAvailable"/> turns that into an explicit skip instead of a
+/// half-applied migration.
+/// </para>
 /// </para>
 /// </summary>
 public sealed class DatabaseFixture : IAsyncLifetime
@@ -100,6 +108,14 @@ public sealed class DatabaseFixture : IAsyncLifetime
         {
             await WaitForServerAsync();
             EnsureDatabaseCreated();
+
+            // Giai đoạn 14.7 Track B §B3: the `vector` extension is checked BEFORE the migration chain, because
+            // the chain now contains `CREATE EXTENSION vector` and a `vector(1536)` column. On an image without
+            // pgvector that migration fails (SQLSTATE 0A000/58P01), which would either turn every DB-backed test
+            // red for a reason that has nothing to do with the code, or — worse — hide behind a cached
+            // "unavailable" decision and skip silently. Deciding it explicitly here produces one actionable
+            // message naming the image to use.
+            EnsureVectorExtensionAvailable();
             EnsureFactory();
             await EnsureMigratedAsync();
 
@@ -129,15 +145,21 @@ public sealed class DatabaseFixture : IAsyncLifetime
         if (!IsAvailable)
         {
             Assert.Skip(
-                "PostgreSQL cho test không kết nối được → bỏ qua nhóm test cần DB (Phase 8 D4)."
+                "PostgreSQL cho test không dùng được → bỏ qua nhóm test cần DB (Phase 8 D4)."
                 + Environment.NewLine
                 + $"Chuỗi kết nối: {ConnectionString}"
                 + Environment.NewLine
                 + $"Lý do: {UnavailableReason}"
                 + Environment.NewLine
-                + "Cách chạy: `docker run --name teamnexus-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres:18`"
-                + " rồi trỏ TEAMNEXUS_TEST_DB vào đó (ví dụ "
-                + "`Host=localhost;Port=5432;Database=TeamNexus_Test;Username=postgres;Password=postgres`).");
+                // Giai đoạn 14.7 Track B §B3: the image is `pgvector/pgvector:pg18`, NOT `postgres:18`. The
+                // schema now contains `CREATE EXTENSION vector` and a `vector(1536)` column, and the official
+                // PostgreSQL image does not ship pgvector — a wrong image is one of the two most likely causes.
+                + "Cách chạy: `docker run --name teamnexus-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d "
+                + "pgvector/pgvector:pg18` rồi trỏ TEAMNEXUS_TEST_DB vào đó (ví dụ "
+                + "`Host=localhost;Port=5432;Database=TeamNexus_Test;Username=postgres;Password=postgres`)."
+                + Environment.NewLine
+                + "⚠️ Dùng `postgres:18` (image chính thức) sẽ KHÔNG chạy được: extension `vector` là extension "
+                + "bên thứ ba, không nằm trong image đó.");
         }
     }
 
@@ -195,7 +217,11 @@ public sealed class DatabaseFixture : IAsyncLifetime
         bool? jevEnabled = null,
         bool? autoRecoveryPlanEnabled = null,
         bool? observerJevSeverityRouting = null,
-        string? jevApiKey = null)
+        string? jevApiKey = null,
+        bool? ragEnabled = null,
+        bool? embeddingsEnabled = null,
+        IJevDecisionProvider? jevProvider = null,
+        IEmbeddingProvider? embeddingProvider = null)
     {
         Require();
 
@@ -206,8 +232,9 @@ public sealed class DatabaseFixture : IAsyncLifetime
         {
             // The shared host is reused for every ordinary scenario. A DI override (scripted AI, a
             // fixed clock, the chat's off switch, a recording alert sink, the Jev off switch, the recovery-plan
-            // opt-in) cannot be applied to it, so those cases build their own host — the cost is a real
-            // ASP.NET Core host build, which is why it is opt-in rather than the default.
+            // opt-in, either RAG switch, a recording Jev provider, a failing embedder) cannot be applied to it, so
+            // those cases build their own host — the cost is a real ASP.NET Core host build, which is why it is
+            // opt-in rather than the default.
             var needsOwnHost = scriptedAi is not null
                                || clock is not null
                                || aiChatEnabled.HasValue
@@ -215,6 +242,10 @@ public sealed class DatabaseFixture : IAsyncLifetime
                                || jevEnabled.HasValue
                                || autoRecoveryPlanEnabled.HasValue
                                || observerJevSeverityRouting.HasValue
+                               || ragEnabled.HasValue
+                               || embeddingsEnabled.HasValue
+                               || jevProvider is not null
+                               || embeddingProvider is not null
                                || !string.IsNullOrWhiteSpace(jevApiKey);
 
             var factory = needsOwnHost
@@ -227,8 +258,12 @@ public sealed class DatabaseFixture : IAsyncLifetime
                     ExternalAlerts = externalAlerts,
                     JevEnabled = jevEnabled ?? true,
                     JevApiKey = jevApiKey,
+                    JevProvider = jevProvider,
+                    EmbeddingProvider = embeddingProvider,
                     AutoRecoveryPlanEnabled = autoRecoveryPlanEnabled ?? false,
                     ObserverJevSeverityRouting = observerJevSeverityRouting ?? true,
+                    RagEnabled = ragEnabled ?? false,
+                    EmbeddingsEnabled = embeddingsEnabled ?? false,
                 }
                 : Factory;
 
@@ -458,6 +493,50 @@ public sealed class DatabaseFixture : IAsyncLifetime
 
             _databaseReady = true;
         }
+    }
+
+    /// <summary>
+    /// Fails the fixture (which becomes a skip, not a red suite) when this PostgreSQL cannot provide the
+    /// <c>vector</c> extension the schema now requires (Giai đoạn 14.7 Track B §B3).
+    /// <para>
+    /// <b>Why a probe instead of letting the migration fail.</b> The failure it prevents is the worst kind for a
+    /// test suite: a half-applied migration. <c>CREATE EXTENSION</c> sits at the top of the knowledge-base
+    /// migration, so an image without pgvector aborts there — after the persona migration has already committed.
+    /// The database is then in a state no test expects, and subsequent runs fail with confusing FK/table errors.
+    /// Checking availability first keeps the failure at "your image is missing the extension", which names its own
+    /// fix:
+    /// <c>docker run --name teamnexus-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d pgvector/pgvector:pg18</c>.
+    /// </para>
+    /// <para>
+    /// This is the same philosophy as <see cref="Require"/> (D4): an environment that cannot host the schema
+    /// skips, while a real defect fails loudly. It is deliberately NOT a try/catch around the migration, because
+    /// swallowing a migration error would hide genuine schema bugs behind an infrastructure excuse.
+    /// </para>
+    /// </summary>
+    private void EnsureVectorExtensionAvailable()
+    {
+        using var connection = new NpgsqlConnection(ConnectionString);
+        connection.Open();
+
+        // Two ways to have it: already installed (pg_extension), or available to install (pg_available_extensions,
+        // which is what matters because the migration runs CREATE EXTENSION itself).
+        using var command = new NpgsqlCommand(
+            """
+            select exists (select 1 from pg_extension where extname = 'vector')
+                or exists (select 1 from pg_available_extensions where name = 'vector')
+            """,
+            connection);
+
+        if ((bool)(command.ExecuteScalar() ?? false))
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            "PostgreSQL này KHÔNG có extension 'vector' (pgvector) — schema Giai đoạn 14.7 Track B cần nó. "
+            + "Dùng image chính thức có sẵn pgvector: `docker run --name teamnexus-pg "
+            + "-e POSTGRES_PASSWORD=postgres -p 5432:5432 -d pgvector/pgvector:pg18`. "
+            + "`postgres:18` của PostgreSQL KHÔNG kèm extension này vì `vector` là extension bên thứ ba.");
     }
 
     private async Task<bool> HasAppliedMigrationsAsync()

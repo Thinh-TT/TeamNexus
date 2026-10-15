@@ -14,6 +14,7 @@ import { Avatar, Button, Card, Dropdown, Flex, type MenuProps, Space, Tag, Toolt
 import dayjs from 'dayjs'
 import type { TaskResponse } from '../types/board.types'
 import { agentApi } from '../../ai/services/agentApi'
+import { AGENT_FALLBACK_DISPLAY_NAME } from '../../ai/utils/agentRunHelpers'
 import { isOverdue, isTaskCompleted, overdueDays } from '../utils/taskDueDate'
 import { getPriorityConfig } from '../utils/taskPriority'
 
@@ -93,6 +94,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   }
 
   const [clarificationQuestion, setClarificationQuestion] = React.useState<string | null>(null)
+  /**
+   * Phase 14.7 §B: the persona the latest run executed as, as the server named it. The card's own
+   * `assigneeName` is the workspace member's configured name, which is not always filled in for the AI
+   * agent — and when it is missing, "AI Agent" said nothing about WHICH agent was working on the card.
+   */
+  const [agentRunDisplayName, setAgentRunDisplayName] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     let ignore = false
@@ -101,7 +108,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         .listRuns(task.id, 1)
         .then((runs) => {
           if (!ignore) {
-            setClarificationQuestion(runs.length > 0 ? runs[0].clarificationQuestion || null : null)
+            const latest = runs.length > 0 ? runs[0] : null
+            setClarificationQuestion(latest?.clarificationQuestion || null)
+            setAgentRunDisplayName(latest?.agentDisplayName || null)
           }
         })
         .catch(() => {})
@@ -109,6 +118,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       Promise.resolve().then(() => {
         if (!ignore) {
           setClarificationQuestion(null)
+          setAgentRunDisplayName(null)
         }
       })
     }
@@ -116,6 +126,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       ignore = true
     }
   }, [task.id, task.activeAgentRunId])
+
+  // The assignee's own name wins when it exists (it is what the avatar depicts); the run's name is the
+  // honest fallback, and the shared constant keeps ONE definition of what to show when neither has a name.
+  const aiAgentLabel = task.assigneeName || agentRunDisplayName || AGENT_FALLBACK_DISPLAY_NAME
 
   const visibleLabels = task.labels?.slice(0, 2) || []
   const extraLabels = task.labels && task.labels.length > 2 ? task.labels.slice(2) : []
@@ -361,7 +375,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             </Space>
 
             {task.assigneeIsAiAgent ? (
-              <Tooltip title={`Người phụ trách: ${task.assigneeName || 'AI Agent'}`}>
+              <Tooltip title={`Người phụ trách: ${aiAgentLabel}`}>
                 <Avatar
                   size={22}
                   icon={<RobotOutlined />}
@@ -370,6 +384,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     color: '#ffffff',
                     fontSize: 11,
                   }}
+                  // The name is also the avatar's accessible name: a tooltip alone is unreachable for a
+                  // screen reader (and for a test), and "which agent?" is the question this answers.
+                  aria-label={`Người phụ trách: ${aiAgentLabel}`}
                   data-testid="agent-assignee-avatar"
                 />
               </Tooltip>

@@ -40,14 +40,29 @@ export const agentChatApi = {
   stream: async (
     boardId: string,
     request: AgentChatSendRequest,
-    options: { signal?: AbortSignal; onEvent: (event: { event: string; data: any }) => void }
-  ): Promise<void> =>
-    streamSse({
-      path: `/boards/${boardId}/agent-chat/stream`,
+    options: {
+      signal?: AbortSignal
+      onEvent: (event: { event: string; data: any }) => void
+      /**
+       * Phase 14.7 §B: the persona to answer as, as a QUERY parameter. `null`/`undefined`/blank means "let
+       * the server pick", which is why the parameter is omitted entirely rather than sent empty.
+       */
+      persona?: string | null
+    }
+  ): Promise<void> => {
+    const persona = options.persona?.trim()
+
+    return streamSse({
+      // Appended only when a persona was actually chosen: with none, the URL stays byte-identical to the
+      // pre-14.7 one, so "server default" keeps meaning exactly that.
+      path: `/boards/${boardId}/agent-chat/stream${
+        persona ? `?persona=${encodeURIComponent(persona)}` : ''
+      }`,
       body: request,
       signal: options.signal,
       onEvent: options.onEvent,
-    }),
+    })
+  },
 
   /** `POST .../agent-chat/message` — records the answer as a Pending comment on an attached task. */
   saveAnswer: async (

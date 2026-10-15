@@ -5,6 +5,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TeamNexus.Modules.Ai.DTOs;
 using TeamNexus.Modules.Ai.Options;
+using TeamNexus.Modules.Ai.Services.Jev;
+using TeamNexus.Modules.Ai.Services.Knowledge;
 using TeamNexus.Modules.Board.Services;
 using TeamNexus.Persistence.Data;
 using TeamNexus.Persistence.Data.Entities;
@@ -34,13 +36,20 @@ public interface IAgentChatService
     string ModelName { get; }
 
     /// <summary>
-    /// Runs <b>every</b> guard eagerly (503 disabled · 404 unknown board or non-member · 400 bad
-    /// transcript or bad attachment list) and returns the prepared prompt. Awaited before the HTTP
+    /// Runs <b>every</b> guard eagerly (503 disabled · 400 bad persona · 404 unknown board or non-member ·
+    /// 400 bad transcript or bad attachment list) and returns the prepared prompt. Awaited before the HTTP
     /// response starts, so those failures are real status codes rather than frames.
     /// </summary>
+    /// <param name="persona">
+    /// Giai đoạn 14.7 Track B §B1 — the requested persona, or <c>null</c>/blank to use
+    /// <c>AgentChat:DefaultPersona</c>. An unknown value is a <b>400</b>, never a silent fallback: the
+    /// difference between "the picker sent a stale key" and "the default persona was used" matters, and a
+    /// silent fallback would render the first as the second.
+    /// </param>
     Task<AgentChatPreparedRequest> PrepareAsync(
         Guid boardId,
         AgentChatSendRequest request,
+        string? persona,
         Guid userId,
         CancellationToken ct = default);
 
@@ -97,6 +106,12 @@ public interface IAgentChatService
 /// Splitting validation from streaming is what lets 503/404/403/400 answer with a real status code while
 /// the success path stays a lazily-produced stream — the Phase 14 D4 shape, reused unchanged.
 /// </summary>
+/// <param name="PersonaKey">
+/// Giai đoạn 14.7 Track B §B1 — the canonical persona this turn answers as. Carried on the prepared request
+/// (rather than re-read from configuration later) so the prompt, the log line and any future storage all
+/// describe the same turn; the transcript itself deliberately does NOT persist it (see §B1: that would need a
+/// third migration, and inferring a persona onto historical turns would be a fabrication).
+/// </param>
 public sealed record AgentChatPreparedRequest(
     Guid BoardId,
     Guid WorkspaceId,
@@ -105,7 +120,8 @@ public sealed record AgentChatPreparedRequest(
     string SystemPrompt,
     IReadOnlyList<AiChatMessage> Messages,
     double Temperature,
-    int MaxOutputTokens);
+    int MaxOutputTokens,
+    string PersonaKey = Jev.PersonaCatalog.GeneralKey);
 
 /// <summary>Body of <c>POST /api/boards/{boardId}/agent-chat/proposal/confirm</c>.</summary>
 /// <param name="ProposalJson">The raw JSON block, exactly as the client received it.</param>
@@ -133,6 +149,10 @@ public sealed class AgentChatService : IAgentChatService
     private readonly IAiActionService _actions;
     private readonly AgentChatOptions _options;
     private readonly DeepSeekOptions _aiOptions;
+    private readonly IWorkspaceKnowledgeStore _knowledge;
+    private readonly IEmbeddingProvider _embeddings;
+    private readonly JevOptions _jev;
+    private readonly EmbeddingOptions _embeddingOptions;
     private readonly ILogger<AgentChatService> _logger;
 
     public AgentChatService(
@@ -140,16 +160,24 @@ public sealed class AgentChatService : IAgentChatService
         IWorkspaceAccess access,
         IAiStreamingProvider provider,
         IAiActionService actions,
+        IWorkspaceKnowledgeStore knowledge,
+        IEmbeddingProvider embeddings,
         IOptions<AgentChatOptions> options,
         IOptions<DeepSeekOptions> aiOptions,
+        IOptions<JevOptions> jev,
+        IOptions<EmbeddingOptions> embeddingOptions,
         ILogger<AgentChatService> logger)
     {
         _db = db;
         _access = access;
         _provider = provider;
         _actions = actions;
+        _knowledge = knowledge;
+        _embeddings = embeddings;
         _options = options.Value;
         _aiOptions = aiOptions.Value;
+        _jev = jev.Value;
+        _embeddingOptions = embeddingOptions.Value;
         _logger = logger;
     }
 
@@ -164,6 +192,7 @@ public sealed class AgentChatService : IAgentChatService
     public async Task<AgentChatPreparedRequest> PrepareAsync(
         Guid boardId,
         AgentChatSendRequest request,
+        string? persona,
         Guid userId,
         CancellationToken ct = default)
     {
@@ -175,6 +204,10 @@ public sealed class AgentChatService : IAgentChatService
         }
 
         var effective = Effective;
+
+        // Giai đoạn 14.7 Track B §B1. Resolved before the database work so a bad persona is a 400 that costs
+        // nothing, and validated strictly rather than defaulted (see the method's XML doc).
+        var personaKey = ResolvePersona(persona);
 
         var board = await _db.Boards
             .AsNoTracking()
@@ -194,17 +227,45 @@ public sealed class AgentChatService : IAgentChatService
         var attached = await LoadAttachedTasksAsync(
             board.Id, board.WorkspaceId, request.AttachedTaskIds, effective, ct);
 
-        var context = await LoadBoardContextAsync(board, attached, effective, ct);
-
+        var context = await LoadBoardContextAsync(board, attached, effective, messages, ct);
         return new AgentChatPreparedRequest(
             board.Id,
             board.WorkspaceId,
             attached,
             messages.Count,
-            AgentChatPrompts.BuildSystemPrompt(AgentChatPrompts.BuildContextBlock(context)),
+            AgentChatPrompts.BuildSystemPrompt(
+                AgentChatPrompts.BuildContextBlock(context), personaKey),
             messages,
             effective.Temperature,
-            effective.MaxOutputTokens);
+            effective.MaxOutputTokens,
+            personaKey);
+    }
+
+    /// <summary>
+    /// Turns the optional <c>?persona=</c> value into a canonical key, defaulting to
+    /// <c>AgentChat:DefaultPersona</c> when absent. An unknown key is refused.
+    /// <para>
+    /// Blank and absent are treated identically on purpose: a client that always sends the parameter must be
+    /// able to send an empty one, and "no persona chosen" is exactly the default case.
+    /// </para>
+    /// </summary>
+    private string ResolvePersona(string? persona)
+    {
+        if (string.IsNullOrWhiteSpace(persona))
+        {
+            return Effective.DefaultPersona;
+        }
+
+        var canonical = Jev.PersonaCatalog.Canonical(persona);
+
+        if (canonical is not null)
+        {
+            return canonical;
+        }
+
+        throw new BadRequestException(
+            $"Persona '{persona}' không hợp lệ. Chỉ nhận: "
+            + string.Join(", ", Jev.PersonaCatalog.All.Select(p => p.Key)) + ".");
     }
 
     // =====================================================================
@@ -318,9 +379,10 @@ public sealed class AgentChatService : IAgentChatService
         await PersistTranscriptBestEffortAsync(prepared, fullAnswer, ct);
 
         _logger.LogInformation(
-            "Agent chat answered board {BoardId} with {Tasks} attached task(s), {Messages} history message(s), "
-            + "{Chars} char(s), {PromptTokens}/{CompletionTokens} token(s).",
+            "Agent chat answered board {BoardId} as persona '{Persona}' with {Tasks} attached task(s), "
+            + "{Messages} history message(s), {Chars} char(s), {PromptTokens}/{CompletionTokens} token(s).",
             prepared.BoardId,
+            prepared.PersonaKey,
             prepared.AttachedTasks.Count,
             prepared.HistoryMessages,
             answer.Length,
@@ -749,6 +811,7 @@ public sealed class AgentChatService : IAgentChatService
         Persistence.Data.Entities.Board board,
         IReadOnlyList<AgentChatContextTask> attached,
         AgentChatEffectiveOptions effective,
+        IReadOnlyList<AiChatMessage> messages,
         CancellationToken ct)
     {
         var columns = await _db.BoardColumns
@@ -779,13 +842,92 @@ public sealed class AgentChatService : IAgentChatService
             ? await LoadDigestAsync(board.Id, columns, effective, ct)
             : null;
 
+        // Giai đoạn 14.7 Track B §B3: project knowledge, retrieved with the user's own words as the query (the
+        // last user turn), which is the only text that describes what they are actually asking about. The
+        // rendering happens here because the character budget (`Jev:RagMaxContextChars`) is configuration this
+        // service owns — the prompt builder stays pure and simply positions the block.
+        var knowledge = await LoadKnowledgeBlockAsync(
+            board.WorkspaceId, LastUserText(messages), ct);
+
         return new AgentChatBoardContext(
             board.Name,
             Cap(board.Description, Math.Min(effective.MaxTotalContextChars, 1000)),
             columns,
             attached,
             members,
-            digest);
+            digest,
+            knowledge);
+    }
+
+    /// <summary>The text of the last user turn: the retrieval query, and the only text that is known to be the question.</summary>
+    private static string? LastUserText(IReadOnlyList<AiChatMessage> messages)
+        => messages
+            .LastOrDefault(message => string.Equals(message.Role, "user", StringComparison.OrdinalIgnoreCase))
+            ?.Content;
+
+    /// <summary>
+    /// Retrieves the workspace's most relevant knowledge and renders it into a bounded prompt section
+    /// (Giai đoạn 14.7 Track B §B3).
+    /// <para>
+    /// <b>Returns <c>null</c> in every degraded case</b> — RAG off, embeddings off, no query text, provider
+    /// failure, nothing retrieved. The knowledge block is an enhancement, so every failure is absorbed rather
+    /// than surfaced: the chat must still answer with whatever else it has.
+    /// </para>
+    /// </summary>
+    private async Task<string?> LoadKnowledgeBlockAsync(
+        Guid workspaceId, string? query, CancellationToken ct)
+    {
+        // Both switches are checked before any work: embedding a query costs money, and a disabled feature must
+        // not spend a token to discover it is disabled (the same rule the triage endpoint follows).
+        if (!_jev.RagEnabled || !_embeddingOptions.Enabled)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return null;
+        }
+
+        try
+        {
+            var vectors = await _embeddings.EmbedAsync([query.Trim()], ct);
+
+            if (vectors.Count == 0)
+            {
+                return null;
+            }
+
+            var chunks = await _knowledge.GetTopChunksAsync(
+                workspaceId,
+                vectors[0],
+                onlyReady: true,
+                maxDocuments: RagMaxDocuments,
+                maxChunks: RagMaxChunks,
+                ct);
+
+            if (chunks.Count == 0)
+            {
+                return null;
+            }
+
+            var block = KnowledgeChunking.BuildContextBlock(
+                chunks.Select(chunk => new KnowledgeSnippet(chunk.DocumentTitle, chunk.Content)).ToList(),
+                _jev.Effective.RagMaxContextChars);
+
+            return string.IsNullOrWhiteSpace(block) ? null : block;
+        }
+        catch (EmbeddingProviderException ex)
+        {
+            // Warn, never fail: a chat answer without the knowledge section is a degraded answer, whereas an
+            // error frame is a broken one.
+            _logger.LogWarning(
+                ex,
+                "Không sinh được vector cho câu hỏi của board trong workspace {WorkspaceId}; bỏ qua khối kiến thức.",
+                workspaceId);
+
+            return null;
+        }
     }
 
     /// <summary>
@@ -879,12 +1021,20 @@ public sealed class AgentChatService : IAgentChatService
         return new AgentChatDigest(digestColumns, topTasks, total, effective.MaxDigestChars);
     }
 
-    /// <summary>
-    /// How many cards the digest considers before ranking. Bounded so a board with thousands of cards costs
+    /// <summary>How many cards the digest considers before ranking. Bounded so a board with thousands of cards costs
     /// one page, not the whole table; a card outside the page can only be missing from the "top" list, never
-    /// from the per-column counts.
-    /// </summary>
+    /// from the per-column counts.</summary>
     private const int DigestCandidateLimit = 200;
+
+    /// <summary>
+    /// Documents the knowledge retrieval may draw from (Giai đoạn 14.7 Track B §B3). Small on purpose: the point
+    /// of the block is a handful of the most relevant passages, and a wide net only spends tokens on context the
+    /// model has to ignore.
+    /// </summary>
+    private const int RagMaxDocuments = 5;
+
+    /// <summary>Retrieved passages injected into the prompt, before the character budget is applied.</summary>
+    private const int RagMaxChunks = 5;
 
     private static int PriorityRank(TaskPriority? priority) => priority switch
     {

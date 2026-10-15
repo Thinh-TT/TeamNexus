@@ -183,7 +183,7 @@ Nhằm bảo đảm tính ổn định, mạch lạc và tích hợp sâu kiến
 
 ## 5. THIẾT KẾ DỮ LIỆU & HỢP ĐỒNG API (DATA MODEL & CONTRACTS)
 
-> **📌 CẬP NHẬT SAU KHI THI HÀNH (Giai đoạn 14.7 Track A):** §5.1 và §5.2 dưới đây là **thiết kế dự kiến ban đầu**. Hợp đồng **thật đã hiện thực** khác ở vài điểm quan trọng — xem **§5.3** ngay sau §5.2 để biết chính xác cái gì đã được build. Đừng code theo §5.1/§5.2 mà không đọc §5.3.
+> **📌 CẬP NHẬT SAU KHI THI HÀNH (Giai đoạn 14.7 Track A **và** Track B):** §5.1 và §5.2 dưới đây là **thiết kế dự kiến ban đầu**. Hợp đồng **thật đã hiện thực** khác ở vài điểm quan trọng — xem **§5.3** (Track A) và **§5.4** (Track B) để biết chính xác cái gì đã được build. Đừng code theo §5.1/§5.2 mà không đọc §5.3/§5.4. Giai đoạn 14.7 nay **đã xong cả hai Track** (§A1–§A5 + §B1–§B3); nhật ký thi hành đầy đủ ở `tasks/phase-14-7-autonomous-agent-jev.md` §11–§12.
 
 ### 5.3. Hợp đồng THẬT đã hiện thực (Giai đoạn 14.7 Track A)
 
@@ -229,6 +229,51 @@ Cấu hình ngược (`High < Medium`) bị **clamp** để nhánh giữa không
 **G. Recovery Plan (Phần B) — thật:** action type **`RecoveryPlan`** (`entity_type='Workspace'`), `kind` nằm **trong payload** (4 giá trị). `RecoveryPlanApplier` **KHÔNG mở transaction** (bẫy P2 Phase 14.5). `SplitSubtasks` **uỷ quyền** `CreateSubtasksApplier` **và phải mang `createdTaskIds` lên** `applied_snapshot`, nếu không Undo xoá 0 thẻ mà báo thành công. `EscalateManager` **không ghi gì** + trả warning. Requester = **Admin/Manager thật** (không có system principal). `AutoRecoveryPlanEnabled = false` **mặc định**.
 
 **H. `FakeJevDecisionProvider` (offline, 0 token):** chọn kịch bản bằng sentinel `FAKE:JEV_HIGH|MED|LOW|ERROR|SLOW` **quét trong toàn bộ `state`** (không chỉ một field — vì ba context đặt tiêu đề ở ba chỗ khác nhau). Luôn **đọc lại chính các nhãn `criteria` mà caller gửi** ⇒ câu trả lời fake không bao giờ lệch khỏi hợp lệ.
+
+### 5.4. Hợp đồng THẬT đã hiện thực (Giai đoạn 14.7 **Track B** — §B1–§B3)
+
+> **Trạng thái:** **ĐÃ XONG.** Nhật ký thi hành đầy đủ (9 quyết định **K1–K9**, 6 lệch **L7–L12**) ở `tasks/phase-14-7-autonomous-agent-jev.md` §12. Dưới đây chỉ là phần **khác so với thiết kế dự kiến của tài liệu này**.
+
+**A. Schema thật (2 migration mới: `Phase147AgentPersonas` `12 → 13`, `Phase147KnowledgeBase` `13 → 14`):**
+- `workspace_members.persona_key varchar(40) NULL` + CHECK `persona_key IS NULL OR persona_key IN ('general','scrum_master','tech_lead','qa_security')` + CHECK `member_type <> 'human' OR persona_key IS NULL`.
+- **Backfill bắt buộc, chạy TRƯỚC khi tạo index:** `UPDATE workspace_members SET persona_key = 'general' WHERE member_type = 'ai_agent' AND persona_key IS NULL;` ⇒ row agent cũ trở thành persona `general` và **hành vi Phase 7 không đổi**.
+- **Index được THAY** (khác mô tả cũ "nới thành `(workspace_id, persona_key)`"):
+  `CREATE UNIQUE INDEX uq_workspace_members_ai_persona ON workspace_members (workspace_id, COALESCE(persona_key, 'general')) WHERE member_type = 'ai_agent';`
+  rồi mới `DROP INDEX uq_workspace_members_ai_agent`. **Lý do `COALESCE`:** PostgreSQL coi mọi `NULL` là khác nhau, nên unique index trên `(workspace_id, persona_key)` sẽ **không** chặn được nhiều row `persona_key IS NULL` ⇒ mất luôn tính "mỗi persona tối đa 1 row". EF Core **không có** API cho expression index ⇒ viết **SQL thô** trong migration.
+- `workspace_knowledge_documents`: `id · workspace_id (RESTRICT) · title (300) · source_url (1000 NULL) · content (text) · status ('pending'|'ready'|'failed'|'deleted') · error (500 NULL) · chunk_count · created_by_user_id (RESTRICT) · created_at · updated_at`; index `(workspace_id, created_at)`. **KHÁC thiết kế:** `ON DELETE RESTRICT` chứ không phải CASCADE, vì cả schema **soft-delete** workspace (`workspaces.deleted_at`) nên cascade vật lý không bao giờ chạy; và `deleted` **dùng lại cột `status`** thay vì thêm `deleted_at`.
+- `workspace_knowledge_chunks`: `id · document_id (CASCADE) · workspace_id (denormalize) · chunk_index · content · embedding vector(1536) NULL · created_at · updated_at`; UNIQUE `(document_id, chunk_index)`; index **HNSW** `USING hnsw (embedding vector_cosine_ops)`.
+- **`CREATE EXTENSION IF NOT EXISTS vector;` viết tay, đặt đầu migration 2:** `modelBuilder.HasPostgresExtension("vector")` chỉ được EF ghi thành **annotation** trên `AlterDatabase()` và **KHÔNG** phát ra câu lệnh. Vì vậy **không** dùng khai báo đó (xem lệch **L9**).
+- **Thư viện .NET:** `Pgvector.EntityFrameworkCore` **0.3.0** (+ `Pgvector` 0.3.2) trong `TeamNexus.Persistence`, và **bắt buộc** `options.UseNpgsql(cs, npgsql => npgsql.UseVector())` — thiếu dòng đó provider **từ chối kiểu CLR `Vector?`** ngay khi dựng model.
+
+**B. Hợp đồng `IJevDecisionService` thật — 4 → 5 method:** thêm
+`Task<AcceptanceValidationResult?> ValidateAcceptanceCriteriaAsync(string stateJson, CancellationToken)`
+trả **`null`** (không ném) khi Jev tắt hoặc provider lỗi. `AcceptanceValidationResult(bool? Verified, double ConfidenceScore, string RoutingAdvice, JevDecisionUsage? Usage)`. ⚠️ Shape `noul` **không có** `confidence` ⇒ `ConfidenceScore` là con số **SUY RA** từ khoảng cách của xác suất tới ngưỡng 0.5, và điều đó được ghi rõ trong code.
+
+**C. Persona — hợp đồng thật:**
+- `IAiAgentResolver` thêm **đúng 1** method: `EnsurePersonaAgentAsync(Guid workspaceId, string personaKey, CancellationToken)`; 3 method cũ **không đổi** về chữ ký. `NullAiAgentResolver` **ném** `NotSupportedException` (không trả `Guid.Empty`).
+- `PersonaCatalog` là **hàm thuần**: `general` → `TeamNexus Agent`, skill **`[]`** (tương thích ngược Phase 7); `scrum_master` → `AI Scrum Master` (`user-story`, `acceptance-criteria`, `sprint-planning`); `tech_lead` → `AI Tech Lead` (`architecture`, `code-review`, `api-design`); `qa_security` → `AI QA & Security` (`test-cases`, `security-audit`, `threat-modeling`).
+- `AgentUserName`: persona `general` **giữ nguyên** `ai-agent-{workspaceId:N}` (không thêm đoạn persona) — đổi nó là thay đổi định danh dữ liệu im lặng. Persona khác: `ai-agent-{personaKey}-{workspaceId:N}`.
+- `IsAiAgentAsync` **KHÔNG ĐỔI** ⇒ mọi persona là agent ở mọi module mà không phải sửa file nào của các module đó.
+- **Persona trong Agent Chat:** `?persona=` (vắng/rỗng ⇒ `AgentChat:DefaultPersona` = `general`; **sai ⇒ 400**). Khối `VAI TRÒ:` chỉ được **PREPEND** cho persona khác `general`; **`AgentChatPrompts.Marker` giữ nguyên từng byte** (bộ chọn nhánh của `FakeAiProvider`). Shape SSE **không đổi**. `agent_chat_messages` **không** thêm cột persona.
+
+**D. Ba tool ReAct mới — hợp đồng thật:** `InspectMemberWorkload` (`{ userId }`), `MatchSkills` (`{ skills[], limit }`, **không** gọi model), `ValidateAcceptanceCriteria` (`{ draft, criteria }`). Whitelist **4 → 7**. Guardrail **không đổi** (15 / 300 s / 50 000 token / 20 lượt LLM). `InspectMemberWorkload` **dùng chung** `IMemberWorkloadReader` với §A4.
+
+**E. Endpoint HTTP thật (Track B) — bổ sung vào bảng §5.3.E:**
+| Method | Route | Quyền | Ghi chú |
+|---|---|---|---|
+| `GET` | `/api/workspaces/{id}/knowledge/documents` | Member+ | `Jev:RagEnabled=false` ⇒ `{ enabled:false, items:[] }` |
+| `POST` | `/api/workspaces/{id}/knowledge/documents` | Manager+ | **201 kèm action `Pending`**, KHÔNG trả document; RAG off ⇒ 400 |
+| `DELETE` | `/api/workspaces/{id}/knowledge/documents/{docId}` | Manager+ | **201 kèm action `Pending`** |
+| `?persona=` | `POST /api/boards/{id}/agent-chat/stream` | Member+ | **Chỉ append query param**; shape SSE **không đổi** |
+| *(append)* | `GET /api/boards/{id}/agent-chat/session` | Member+ | thêm `personas[]` + `defaultPersona` |
+| *(append)* | `WorkspaceMemberResponse` | — | thêm `personaKey` (field thứ 13, `null` cho người thật) |
+
+**F. Accountability Layer — đường ghi kiến thức:** action type **`CreateKnowledgeDocument`** (một type, `kind` trong payload: vắng ⇒ tạo, `"Delete"` ⇒ xoá), scope `entity_type='Workspace'`. Applier **KHÔNG mở transaction** (`ApproveAsync` đã mở — bẫy **P2**). Undo = soft-delete (`status='deleted'`); khôi phục về `ready` **chỉ khi** mọi chunk đã có vector, ngược lại `pending`.
+
+**G. Embedding:** port **`IEmbeddingProvider`** + `OpenRouterEmbeddingProvider` (OpenAI-compatible `POST {BaseUrl}/embeddings`, đọc `data[].index` để **sắp đúng thứ tự**) + `FakeEmbeddingProvider` (**tất định** từ SHA-256, cùng chuỗi ⇒ cùng vector, không gọi mạng). Section cấu hình **`Embeddings`** (tách khỏi `Jev`); `Enabled=false` mặc định; `Dimensions` **bắt buộc = 1536** và **kiểm tra lúc khởi động** (`ValidateOnStart`) vì cột `vector(1536)` cố định trong schema. `KnowledgeEmbeddingRunner` (scoped, gọi trực tiếp được từ test) + `KnowledgeEmbeddingBackgroundService`. **Embedding KHÔNG chạy trong đường duyệt** — duyệt phải thành công kể cả khi nhà cung cấp embedding chết.
+
+**H. Hạ tầng:** CI + dev dùng **`pgvector/pgvector:pg18`** (⚠️ `postgres:18` chính thức **không** có extension `vector`). `DatabaseFixture` **probe extension TRƯỚC `MigrateAsync`**; thiếu ⇒ **skip CẢ NHÓM test DB** kèm hướng dẫn (khác kế hoạch "chỉ skip nhóm RAG" — xem lệch **L10**).
+
 
 ### 5.1. Mở rộng Database Schema (thiết kế DỰ KIẾN ban đầu — xem §5.3.A/B cho bản thật)
 ```sql

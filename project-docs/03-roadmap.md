@@ -2,11 +2,11 @@
 
 > Roadmap ở mức giai đoạn lớn (chưa chia task chi tiết). Mỗi giai đoạn kèm các yêu cầu hoàn thiện để coi là "xong" trước khi chuyển sang giai đoạn kế tiếp.
 
-> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (✅)** → **8 (✅)** → **9 (✅)** → **10 (✅)** → **11 (✅)** → **12 (✅)** → **13 (✅)** → **14 (✅)** → **14.5 (✅)** → **14.6 (✅ Track A)** → **14.7 (🟡 Track A ✅ · Track B 📋)** → 15 → 16.
+> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (✅)** → **8 (✅)** → **9 (✅)** → **10 (✅)** → **11 (✅)** → **12 (✅)** → **13 (✅)** → **14 (✅)** → **14.5 (✅)** → **14.6 (✅ Track A)** → **14.7 (✅ Track A + ✅ Track B)** → 15 → 16.
 >
 > Số giai đoạn đã được **đánh lại** (lần 2 — sau Giai đoạn 12): **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Đơn giản hóa Role**, **10 = Nâng cao Task & Workspace UX**, **11 = Quản lý Member & Profile**, **12 = Dashboard & Tìm kiếm**, **13 = Trực quan hóa & Thông báo**, **14 = Nâng cao AI**, **14.5 = Củng cố nền + AI Agent Chat cấp Board**, **14.6 = Hoàn thiện Trải nghiệm (Track A)**, **14.7 = Autonomous Agent & Tối ưu hóa Ra Quyết định với Jev (Hybrid AI)**, **15 = Tích hợp bên ngoài**, **16 = Mobile (Flutter)**. `01-system-specification.md` và `02-tech-stack-decisions.md` sẽ cập nhật khi mỗi giai đoạn bắt đầu.
 >
-> **Giai đoạn 14.5, 14.6 và 14.7 là các giai đoạn NỐI TIẾP của 14:** Giai đoạn 14.5 hoàn thiện chat board; Giai đoạn 14.6 giải quyết triệt để ma sát thực chiến UX (Track A); Giai đoạn 14.7 kế thừa và mở rộng Track B, hợp nhất mô hình Jev (Non-Generative Decision AI) để hoàn thiện nền tảng Autonomous AI Agent trước khi mở rộng ra Phase 15 (Tích hợp ngoài) và 16 (Mobile). Chi tiết kiến trúc Jev lưu tại `project-docs/06-adjust-and-upgrade-with-jev.md`.
+> **Giai đoạn 14.5, 14.6 và 14.7 là các giai đoạn NỐI TIẾP của 14:** Giai đoạn 14.5 hoàn thiện chat board; Giai đoạn 14.6 giải quyết triệt để ma sát thực chiến UX (Track A); Giai đoạn 14.7 kế thừa và mở rộng Track B của 14.6, hợp nhất mô hình Jev (Non-Generative Decision AI) để hoàn thiện nền tảng Autonomous AI Agent trước khi mở rộng ra Phase 15 (Tích hợp ngoài) và 16 (Mobile). **Cả hai Track của 14.7 nay đã xong:** Track A = client Jev + taxonomy + hồ sơ kỹ năng + triage + assignee dispatching + Observer (severity & Recovery Plan); Track B = **đội ngũ AI theo persona + 3 tool ReAct + bộ nhớ dự án ngữ nghĩa pgvector**. Chi tiết kiến trúc Jev lưu tại `project-docs/06-adjust-and-upgrade-with-jev.md`; nhật ký thi hành (7 bug thật, 13 lệch kế hoạch) tại `tasks/phase-14-7-autonomous-agent-jev.md` §11–§12.
 >
 > **Lưu ý khi đọc tài liệu cũ:** các tài liệu đã đóng băng của giai đoạn 4/5/6 (`tasks/phase-4..6-*.md`, `report/phase-5-*`, `report/phase-6-*`) vẫn dùng cách đánh số cũ — Giai đoạn 9 (cũ) = Mobile, nay là **Giai đoạn 16**.
 
@@ -391,25 +391,26 @@ và mở rộng Smart Setup thành **AI Board Template**.
 
 ---
 
-## Giai đoạn 14.7: Autonomous Agent & Tối ưu hóa Ra Quyết định với Jev (Hybrid AI Platform) — 🟡 TRACK A XONG (§A1–§A5), TRACK B 📋 KẾ HOẠCH
+## Giai đoạn 14.7: Autonomous Agent & Tối ưu hóa Ra Quyết định với Jev (Hybrid AI Platform) — ✅ XONG (Track A §A1–§A5 + Track B §B1–§B3)
 
 > **Mục tiêu:** Hợp nhất năng lực Autonomous AI Agent (kế thừa Track B của 14.6) với mô hình **Jev (Non-Generative Decision AI)** theo kiến trúc **Hybrid AI: System 1 (Jev - Ra quyết định có cấu trúc siêu tốc) + System 2 (DeepSeek - Tư duy ngôn ngữ & Giải thích sâu)**.
 > **Tài liệu kiến trúc chi tiết:** `project-docs/06-adjust-and-upgrade-with-jev.md`.
-> **Kế hoạch chia task + NHẬT KÝ THI HÀNH (5 bug thật + 6 lệch kế hoạch):** `tasks/phase-14-7-autonomous-agent-jev.md` §11.
+> **Kế hoạch chia task + NHẬT KÝ THI HÀNH (6 bug thật + 13 lệch kế hoạch):** `tasks/phase-14-7-autonomous-agent-jev.md` §11 (Track A) và §12 (Track B).
 > **Nguyên tắc bất biến:** Accountability Layer giữ nguyên 100% (mọi tác động ghi dữ liệu phải qua `Pending` → `Approve` → `Undo`); tuân thủ trần token & guardrail.
 >
-> **📊 SỐ ĐO THẬT (Track A hoàn thiện):** backend `dotnet build --no-incremental` **0 warning / 0 error** ·
-> `dotnet test` **Failed 0 / Passed 913 / Skipped 0** (baseline 665 ⇒ **+248**) ·
-> `dotnet ef migrations list` **11 → 12** (`20261014163751_Phase147AgentPlatform`) · `has-pending-model-changes` **sạch** ·
-> frontend **680 / 117 file** (thêm 23 tests cho Track A) · `oxlint` **0/0** · `tsc -b` exit 0 · `npm run build` OK ·
-> cổng CI: `ci-backend.yml` `665 → 913`; `ci-web.yml` `657 → 680`.
+> **📊 SỐ ĐO THẬT (Track A + Track B):** backend `dotnet build --no-incremental` **0 warning / 0 error** ·
+> `dotnet test` **Failed 0 / Passed 1167 / Skipped 0** (baseline 665 ⇒ **+502**) ·
+> `dotnet ef migrations list` **11 → 14** (`Phase147AgentPlatform`, `Phase147AgentPersonas`, `Phase147KnowledgeBase`) · `has-pending-model-changes` **sạch** ·
+> frontend **738 / 123 file** · `oxlint` **0/0** · `tsc -b` exit 0 · `npm run build` OK ·
+> cổng CI: `ci-backend.yml` `665 → 1167`; `ci-web.yml` `657 → 738`.
 > **⚡ KẾT QUẢ ĐO LIVE JEV (OpenRouter key thật, 20 lượt):** 100% thành công (0 degraded), server latency P50 **773 ms**, client round-trip P50 **782 ms**.
 >
-> **⚠️ 4 LỆCH có chủ ý so với bản roadmap bên dưới (chi tiết ở §11.3 của tài liệu chia task):**
-> 1. **1 migration** (`Phase147AgentPlatform`) — không phải 2 như dự định: phần pgvector thuộc **Track B §B3** và chưa thi hành.
-> 2. **KHÔNG đổi image CI** sang `pgvector/pgvector:pg18` — chỉ cần khi có cột `vector`; để lại cho §B3.
-> 3. **KHÔNG nới index `uq_workspace_members_ai_agent`** — nhiều agent row theo persona là **Track B §B1**; Track A giữ nguyên "đúng 1 agent/workspace" và **toàn bộ test Phase 7 xanh không sửa assertion nào**.
-> 4. **Sửa ĐÚNG 1 assertion của test cũ** (`WorkspaceMemberApiTests`): §A2 **append** 4 field vào `WorkspaceMemberResponse` theo luật append-only từ Phase 10 §4.2. Là ngoại lệ **duy nhất** của Track A.
+> **⚠️ LỆCH có chủ ý so với bản roadmap bên dưới (chi tiết ở §11.3 + §12.2 của tài liệu chia task):**
+> 1. **3 migration** (`Phase147AgentPlatform` + `Phase147AgentPersonas` + `Phase147KnowledgeBase`) — không phải 2 như dự định: phần persona được tách khỏi phần pgvector để migration pgvector (đụng `CREATE EXTENSION`) có ranh giới rõ ràng, và vì Track A đã lấy luôn phần cột kỹ năng/taxonomy.
+> 2. **Đổi image CI** `postgres:18` → `pgvector/pgvector:pg18` (chỉ cần khi có cột `vector`).
+> 3. **Nới index agent**: thay `uq_workspace_members_ai_agent` ("đúng 1 agent/workspace") bằng `uq_workspace_members_ai_persona` trên `(workspace_id, COALESCE(persona_key,'general'))` — kèm backfill `persona_key = 'general'` nên hành vi Phase 7 **không đổi**.
+> 4. **Sửa 2 assertion của test cũ** (đều là append field vào `WorkspaceMemberResponse` theo luật append-only Phase 10 §4.2): `WorkspaceMemberApiTests` nhận thêm 4 field §A2 (Track A), rồi thêm `personaKey` (Track B). Không assertion nào khác bị sửa.
+> 5. **Bỏ tool `SearchProjectContext`** (dự định ở 14.6 §B3) — `SearchSystemData` (Phase 7) đã phủ chức năng; ghi thành nợ kỹ thuật có chủ ý thay vì thêm tool trùng.
 
 ### 1. Nâng cấp Tiền đề Bắt buộc (Foundational Prerequisites)
 - **1.1. Quản lý Nhãn Cố định & Taxonomy Chuẩn hóa:** ✅ **XONG** — bảng `workspace_taxonomies` (`domain`/`work_type`, UNIQUE `(workspace_id, kind, key)`), seed mặc định **lazy + idempotent bằng `INSERT … ON CONFLICT DO NOTHING`**, `GET/PUT /api/workspaces/{id}/taxonomies` (Member+ / Manager+). Frontend `TaxonomySettings` trong Workspace Settings.
@@ -423,10 +424,10 @@ và mở rộng Smart Setup thành **AI Board Template**.
   - **Phần A** ✅ **XONG** — Jev chấm `severity` + cờ khẩn + rủi ro domino **trước**; verdict tự tin dưới ngưỡng ⇒ **chặn luôn lời gọi LLM** (đây là phần tiết kiệm token); verdict được truyền xuống **system prompt** để LLM giải thích đúng mức. `ObserverFindingValidator` **vẫn** là thứ quyết định finding nào được ghi. Cờ rollback: `Jev:ObserverSeverityRouting=false` ⇒ về đúng đường Phase 5/14 bằng 1 dòng config.
   - **Phần B** ✅ **XONG toàn diện (BE + FE)** — `RecoveryPlan` (`Pending`, scope `entity_type='Workspace'`) + `RecoveryPlanApplier` cho 4 kind; `EscalateManager` **không ghi gì** (có test riêng); `AutoRecoveryPlanEnabled = false` **mặc định**. Frontend: `RecoveryPlanCard` trong `AiActionLogItem` với cảnh báo họp khẩn cấp và nút Duyệt/Từ chối/Undo.
 
-### 3. Nâng cấp Autonomous Agent Platform (Kế thừa Track B 14.6) — 📋 CHƯA THI HÀNH
-- **3.1. Đội ngũ AI Chuyên Gia (Multi-Agent Personas):** 📋 Track B §B1 — cần nới `uq_workspace_members_ai_agent` thành `(workspace_id, persona_key)`.
-- **3.2. Mở rộng Tool-Calling (ReAct Loop):** 📋 Track B §B2 — `InspectMemberWorkload`, `MatchSkills`, `ValidateAcceptanceCriteria`.
-- **3.3. Bộ nhớ Dự án Ngữ nghĩa (Workspace RAG với pgvector):** 📋 Track B §B3 — cần `CREATE EXTENSION vector` + cột `vector(1536)` + index HNSW + đổi image CI.
+### 3. Nâng cấp Autonomous Agent Platform (Kế thừa Track B 14.6) — ✅ XONG
+- **3.1. Đội ngũ AI Chuyên Gia (Multi-Agent Personas):** ✅ Track B §B1 — `persona_key` + CHECK whitelist (`general`/`scrum_master`/`tech_lead`/`qa_security`); index `uq_workspace_members_ai_persona` trên `(workspace_id, COALESCE(persona_key,'general')) WHERE member_type='ai_agent'` **thay** `uq_workspace_members_ai_agent`; `IAiAgentResolver.EnsurePersonaAgentAsync` tạo row agent theo persona (lazy + race-guard); `?persona=` trên Agent Chat (vắng ⇒ `AgentChat:DefaultPersona`, sai ⇒ 400); prompt chỉ **prepend** khối `VAI TRÒ:` cho persona khác `general` (marker `FakeAiProvider` giữ nguyên); `WorkspaceMemberResponse` append `personaKey`. `IsAiAgentAsync` **không đổi** nên mọi persona được nhận diện là agent ở mọi module mà không sửa file nào.
+- **3.2. Mở rộng Tool-Calling (ReAct Loop):** ✅ Track B §B2 — 3 tool mới `InspectMemberWorkload` (dùng **chung** truy vấn tải việc với §A4 qua `IMemberWorkloadReader`), `MatchSkills` (thuần EF, không gọi model), `ValidateAcceptanceCriteria` (Jev `noul`; Jev tắt/lỗi ⇒ `verified: null` **không** ném lỗi). Whitelist **4 → 7** tool; guardrail `MaxToolCalls 15`/`RunTimeoutSeconds 300`/`MaxRunTokens 50000`/`MaxRunLlmCalls 20` **không đổi** (có test).
+- **3.3. Bộ nhớ Dự án Ngữ nghĩa (Workspace RAG với pgvector):** ✅ Track B §B3 — `CREATE EXTENSION vector` + `workspace_knowledge_documents` + `workspace_knowledge_chunks` (cột `vector(1536)` + index **HNSW `vector_cosine_ops`**, thư viện `Pgvector.EntityFrameworkCore` 0.3.0); 3 endpoint `/api/workspaces/{id}/knowledge/documents` (đọc Member+, ghi Manager+ ⇒ **`Pending`** action `CreateKnowledgeDocument`); `CreateKnowledgeDocumentApplier` (một action type, `kind` trong payload: vắng ⇒ tạo, `"Delete"` ⇒ soft-delete); `KnowledgeEmbeddingRunner` chạy nền (scope + gọi trực tiếp được từ test), chỉ chuyển `ready` khi **không còn** chunk thiếu vector; khối `KIẾN THỨC DỰ ÁN` chèn **trước** khối digest, trần `Jev:RagMaxContextChars`, **không chứa GUID**. Image CI & dev = **`pgvector/pgvector:pg18`**.
 
 **Yêu cầu hoàn thiện (DoD):**
 - [x] Interface `IJevDecisionService` và mock `FakeJevDecisionProvider` hoạt động ổn định với kiểm thử đơn vị độc lập.
@@ -434,8 +435,11 @@ và mở rộng Smart Setup thành **AI Board Template**.
 - [x] Tự động gợi ý phân loại và độ khẩn cấp của task (`latencyMs` trả về trong response — **đã đo thật 20 runs, P50 773 ms**).
 - [x] Gợi ý assignee tuân thủ nghiêm ngặt logic rẽ nhánh theo ngưỡng confidence.
 - [x] AI Observer phát hiện rủi ro sinh Recovery Plan Proposal ở trạng thái `Pending`, Quản lý có thể Approve/Reject/Undo thành công.
-- [x] Toàn bộ test suite backend và frontend tiếp tục pass 100%, không vi phạm bất biến của Accountability Layer (**913/0/0** + **680/0/0**).
-- [x] **Frontend của §A2–§A5** (triage panel, nút gợi ý người làm, màn hình taxonomy + hồ sơ kỹ năng, action card Recovery Plan) — ✅ **HOÀN THÀNH 100%**.
+- [x] Toàn bộ test suite backend và frontend tiếp tục pass 100%, không vi phạm bất biến của Accountability Layer (**1167/0/0** + **738/0/0**).
+- [x] **Frontend của §A2–§A5** (triage panel, nút gợi ý người làm, màn hình taxonomy + hồ sơ kỹ năng, action card Recovery Plan).
+- [x] **§B1 Multi-Agent Personas** — nhiều row agent theo persona, chat chọn được persona, tên persona hiển thị trên lịch sử chạy.
+- [x] **§B2 Ba tool ReAct mới** — dùng chung ngân sách guardrail, `ValidateAcceptanceCriteria` không làm chết lượt chạy khi Jev tắt.
+- [x] **§B3 Workspace RAG (pgvector)** — tài liệu chỉ được ghi sau khi Manager duyệt, tìm kiếm ngữ nghĩa bằng cosine trên index HNSW, mọi lỗi embedding đều suy giảm an toàn (chunk ở `pending`, chat vẫn trả lời).
 
 ---
 

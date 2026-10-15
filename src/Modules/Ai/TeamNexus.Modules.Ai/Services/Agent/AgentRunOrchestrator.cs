@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TeamNexus.Modules.Ai.DTOs;
 using TeamNexus.Modules.Ai.Options;
+using TeamNexus.Modules.Ai.Services.Jev;
 using TeamNexus.Modules.Board.DTOs;
 using TeamNexus.Modules.Board.Services;
 using TeamNexus.Persistence.Data;
@@ -999,7 +1000,17 @@ public sealed class AgentRunOrchestrator : IAgentRunService
             resolutionContent);
     }
 
-    /// <summary>The agent of this workspace, asserted to be the task's assignee (400 otherwise).</summary>
+    /// <summary>
+    /// The agent of this workspace, asserted to be the task's assignee (400 otherwise).
+    /// <para>
+    /// <b>Giai đoạn 14.7 Track B §B1:</b> several personas can exist per workspace, so the message names the
+    /// persona of the task's assignee instead of saying "the AI Agent". The executor is still matched
+    /// exactly — a run always acts as the identity the task is assigned to (which is what
+    /// <c>IsTaskStillEligibleAsync</c> re-checks before delivering), so "run this task as a different
+    /// persona" must stay impossible. The message exists so that case is diagnosable from the response
+    /// alone rather than requiring a look at <c>workspace_members</c>.
+    /// </para>
+    /// </summary>
     private async Task<Guid> ResolveAgentAssigneeAsync(
         Guid workspaceId, Guid? assigneeId, CancellationToken ct)
     {
@@ -1007,6 +1018,20 @@ public sealed class AgentRunOrchestrator : IAgentRunService
         {
             throw new BadRequestException("Task is not assigned to the AI Agent.");
         }
+
+        var persona = await _db.WorkspaceMembers
+            .AsNoTracking()
+            .Where(wm => wm.WorkspaceId == workspaceId
+                         && wm.UserId == assigneeId.Value
+                         && wm.MemberType == MemberType.AiAgent)
+            .Select(wm => wm.PersonaKey ?? PersonaCatalog.GeneralKey)
+            .FirstOrDefaultAsync(ct);
+
+        _logger.LogDebug(
+            "Agent run for workspace {WorkspaceId} will execute as persona '{Persona}' (userId {AgentUserId}).",
+            workspaceId,
+            persona ?? PersonaCatalog.GeneralKey,
+            assigneeId.Value);
 
         return assigneeId.Value;
     }

@@ -14,6 +14,7 @@ using TeamNexus.Modules.Ai.Services.Appliers;
 using TeamNexus.Modules.Ai.Services.Email;
 using TeamNexus.Modules.Ai.Services.Integrations;
 using TeamNexus.Modules.Ai.Services.Jev;
+using TeamNexus.Modules.Ai.Services.Knowledge;
 using TeamNexus.Modules.Board.Endpoints;
 using TeamNexus.Modules.Board.Services;
 using TeamNexus.Shared.Endpoints;
@@ -327,7 +328,19 @@ public static class AiModule
         services.AddScoped<IAgentTool, WebSearchTool>();
         services.AddScoped<IAgentTool, DraftOutputTool>();
         services.AddScoped<IAgentTool, RequestClarificationTool>();
+
+        // Giai đoạn 14.7 Track B §B2: three more tools on the SAME budget. The registry counts calls against
+        // Agent:MaxToolCalls/RunTimeoutSeconds/MaxRunTokens/MaxRunLlmCalls, none of which this widens — there is
+        // a test asserting exactly that, because "one more tool" is how a cost ceiling quietly moves.
+        services.AddScoped<IAgentTool, InspectMemberWorkloadTool>();
+        services.AddScoped<IAgentTool, MatchSkillsTool>();
+        services.AddScoped<IAgentTool, ValidateAcceptanceCriteriaTool>();
+
         services.AddScoped<IAgentToolRegistry, AgentToolRegistry>();
+
+        // The single "how loaded is each member" query shared by §A4 dispatching and the
+        // InspectMemberWorkload tool. Scoped because it reads the database.
+        services.AddScoped<IMemberWorkloadReader, MemberWorkloadReader>();
 
         // Agent output → Accountability Layer, and the two appliers that apply it once approved.
         services.AddScoped<IAgentOutputService, AgentOutputService>();
@@ -348,6 +361,54 @@ public static class AiModule
         // rules can be exercised directly by a test instead of by waiting for a BackgroundService to wake up.
         services.AddScoped<AgentRunReaperRunner>();
         services.AddHostedService<AgentRunReaper>();
+
+        // ---- Workspace RAG / semantic knowledge base (Giai đoạn 14.7 Track B §B3) ------------------
+        // Embeddings live in their OWN section, deliberately separate from `Jev`: a different endpoint
+        // (/api/v1/embeddings vs the Decisions surface) and a provider that need not be OpenRouter at all.
+        // `Enabled` defaults to false, so a fresh clone, CI and a dev machine never spend money on embedding.
+        //
+        // Dimensions is validated because the schema pins the column at vector(1536): a mismatch would fail on
+        // every insert with a provider-side error, so failing fast at boot is the only useful behaviour.
+        services.AddOptions<EmbeddingOptions>()
+            .Bind(configuration.GetSection(EmbeddingOptions.SectionName))
+            .Validate(
+                options => options.Dimensions == EmbeddingOptions.SchemaDimension,
+                $"Embeddings:Dimensions phải bằng {EmbeddingOptions.SchemaDimension} (số chiều của cột vector "
+                + "trong schema). Đổi model embedding sang số chiều khác cần migration ALTER COLUMN + re-embed "
+                + "toàn bộ.")
+            .ValidateOnStart();
+
+        services.AddHttpClient(KnowledgeBaseService.HttpClientName, (provider, client) =>
+        {
+            var options = provider.GetRequiredService<IOptions<EmbeddingOptions>>().Value;
+            client.Timeout = options.Timeout;
+        });
+
+        // The same three-tier switch as DeepSeek/Jev/Tavily: no key ⇒ the deterministic offline provider, so the
+        // whole RAG path is exercisable with zero network and zero cost.
+        services.AddSingleton<IEmbeddingProvider>(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<EmbeddingOptions>>().Value;
+
+            return options.HasApiKey
+                ? ActivatorUtilities.CreateInstance<OpenRouterEmbeddingProvider>(provider)
+                : ActivatorUtilities.CreateInstance<FakeEmbeddingProvider>(provider);
+        });
+
+        services.AddScoped<IKnowledgeBaseService, KnowledgeBaseService>();
+
+        // The embedding pass is scoped and directly callable from a test (the DailyDigestRunner precedent); the
+        // hosted service only decides WHEN to ask for it.
+        services.AddScoped<IKnowledgeEmbeddingRunner, KnowledgeEmbeddingRunner>();
+        services.AddHostedService<KnowledgeEmbeddingBackgroundService>();
+
+        // Giai đoạn 14.7 Track B §B3 (the write path): registered next to every other applier so
+        // AiActionService stays the single gateway — one class + one line is the whole cost of a new action.
+        services.AddScoped<IAiActionApplier, CreateKnowledgeDocumentApplier>();
+
+        // Board's knowledge port (declared + defaulted to "no knowledge" there). This line MUST stay after
+        // AddBoardModule in Program.cs to win the resolve, exactly like IActivityLogWriter / IAiAgentResolver.
+        services.AddScoped<IWorkspaceKnowledgeStore, WorkspaceKnowledgeStore>();
 
         // ---- Endpoint filters (resolved from DI) -----------------------------
         // DomainExceptionFilter (Board) maps BoardModuleException → { error, status }
@@ -382,6 +443,8 @@ public static class AiModule
         endpoints.MapAgentChatEndpoints();
         // Giai đoạn 14.7 §A3/§A4: Jev-backed triage (no writes) and assignee dispatching (no writes).
         endpoints.MapTaskTriageEndpoints();
+        // Giai đoạn 14.7 Track B §B3: the workspace knowledge base (writes go through Pending actions).
+        endpoints.MapKnowledgeEndpoints();
 
         return endpoints;
     }
@@ -511,14 +574,15 @@ public static class AiModule
         logger.LogInformation(
             "Ai module: AgentChat enabled={Enabled}, maxHistoryMessages={MaxMessages}, "
             + "maxHistoryChars={MaxChars}, maxOutputTokens={MaxOutputTokens}, maxAttachedTasks={MaxTasks}, "
-            + "maxTotalContextChars={MaxContext}, retentionDays={RetentionDays}.",
+            + "maxTotalContextChars={MaxContext}, retentionDays={RetentionDays}, defaultPersona={Persona}.",
             agentChat.Enabled,
             effectiveAgentChat.MaxHistoryMessages,
             effectiveAgentChat.MaxHistoryChars,
             effectiveAgentChat.MaxOutputTokens,
             effectiveAgentChat.MaxAttachedTasks,
             effectiveAgentChat.MaxTotalContextChars,
-            effectiveAgentChat.RetentionDays);
+            effectiveAgentChat.RetentionDays,
+            effectiveAgentChat.DefaultPersona);
 
         // Jev / System One (Giai đoạn 14.7 §A1). Exactly ONE line, and it deliberately reports the HOST and
         // PATH rather than the key: the Decisions route is an alpha surface, so an operator must be able to
@@ -543,5 +607,20 @@ public static class AiModule
             jev.AutoRecoveryPlanEnabled,
             jev.RagEnabled,
             effectiveJev.RagEmbeddingDimension);
+
+        // Workspace RAG / embeddings (Giai đoạn 14.7 Track B §B3). ONE line, reporting the MODEL and the
+        // DIMENSION but never the key: the dimension is the value that has to match the schema, so an operator
+        // must be able to confirm it from the startup log without reading appsettings. Contains no secret.
+        var embeddings = configuration.GetSection(EmbeddingOptions.SectionName).Get<EmbeddingOptions>()
+                         ?? new EmbeddingOptions();
+
+        logger.LogInformation(
+            "Ai module: Embeddings enabled={Enabled}, provider={Provider}, model={Model}, dimensions={Dimensions}, "
+            + "timeout={TimeoutSeconds}s.",
+            embeddings.Enabled,
+            embeddings.HasApiKey ? nameof(OpenRouterEmbeddingProvider) : nameof(FakeEmbeddingProvider),
+            embeddings.EffectiveModel,
+            embeddings.Dimensions,
+            embeddings.TimeoutSeconds);
     }
 }

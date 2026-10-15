@@ -47,13 +47,11 @@ public sealed class TaskTriageService : ITaskTriageService
     /// <summary>Matches <c>tasks.description</c>'s validation in <c>TaskService</c>.</summary>
     public const int MaxDescriptionLength = 4_000;
 
-    /// <summary>Tasks already finished are not counted as load.</summary>
-    private const int LoadCandidateLimit = 500;
-
     private readonly TeamNexusDbContext _db;
     private readonly IWorkspaceAccess _access;
     private readonly ITaxonomyService _taxonomies;
     private readonly IJevDecisionService _jev;
+    private readonly IMemberWorkloadReader _workloads;
     private readonly Jev.JevOptions _options;
     private readonly ILogger<TaskTriageService> _logger;
 
@@ -62,6 +60,7 @@ public sealed class TaskTriageService : ITaskTriageService
         IWorkspaceAccess access,
         ITaxonomyService taxonomies,
         IJevDecisionService jev,
+        IMemberWorkloadReader workloads,
         Microsoft.Extensions.Options.IOptions<Jev.JevOptions> options,
         ILogger<TaskTriageService> logger)
     {
@@ -69,6 +68,7 @@ public sealed class TaskTriageService : ITaskTriageService
         _access = access;
         _taxonomies = taxonomies;
         _jev = jev;
+        _workloads = workloads;
         _options = options.Value;
         _logger = logger;
     }
@@ -213,81 +213,39 @@ public sealed class TaskTriageService : ITaskTriageService
     /// 0 % identifier leakage structurally rather than by filtering afterwards.
     /// </para>
     /// <para>
-    /// The workspace's own AI Agent is a legitimate candidate — dispatching work to it is the point of
-    /// Phase 7 — and it is identified by <c>MemberType</c>, never by name.
+    /// The workspace's own AI Agent rows are legitimate candidates — dispatching work to an agent is the point
+    /// of Phase 7 — and they are identified by <c>MemberType</c>, never by name.
+    /// </para>
+    /// <para>
+    /// <b>Giai đoạn 14.7 Track B §B2:</b> the load figures come from <see cref="IMemberWorkloadReader"/>, the
+    /// same query the <c>InspectMemberWorkload</c> agent tool reads. A private copy of this query here would
+    /// let the tool and the dispatcher disagree about how many cards a person is holding, and neither answer
+    /// would look wrong.
     /// </para>
     /// </summary>
     private async Task<List<Candidate>> LoadCandidatesAsync(Guid workspaceId, CancellationToken ct)
     {
-        var members = await _db.WorkspaceMembers
-            .AsNoTracking()
-            .Where(wm => wm.WorkspaceId == workspaceId)
-            .Include(wm => wm.User)
-            .OrderBy(wm => wm.JoinedAt)
-            .ToListAsync(ct);
+        var workloads = await _workloads.LoadAsync(
+            workspaceId, _options.Effective.MaxCandidates, ct);
 
-        var candidateMembers = members
-            .Where(wm => wm.User is not null)
-            .Take(Math.Max(1, _options.Effective.MaxCandidates))
-            .ToList();
+        var candidates = new List<Candidate>(workloads.Count);
 
-        if (candidateMembers.Count == 0)
+        for (var index = 0; index < workloads.Count; index++)
         {
-            return [];
-        }
-
-        var userIds = candidateMembers.Select(wm => wm.UserId).ToList();
-        var now = DateTimeOffset.UtcNow;
-
-        // One bounded read for the whole load picture, ranked in memory afterwards: `tasks.priority` is text
-        // and the "is done" test lives on the column, so a per-member aggregate query would be several
-        // round-trips for a number this small.
-        var openTasks = await _db.Tasks
-            .AsNoTracking()
-            .Where(t => t.Board!.WorkspaceId == workspaceId
-                        && t.AssigneeId != null
-                        && userIds.Contains(t.AssigneeId.Value)
-                        && (t.Column == null || !t.Column.IsDone)
-                        && t.CompletedAt == null)
-            .Select(t => new
-            {
-                AssigneeId = t.AssigneeId!.Value,
-                t.DueDate,
-                InProgress = t.Column != null && !t.Column.IsDone && !t.Column.IsClarification,
-            })
-            .Take(LoadCandidateLimit)
-            .ToListAsync(ct);
-
-        var load = openTasks
-            .GroupBy(t => t.AssigneeId)
-            .ToDictionary(
-                group => group.Key,
-                group => new
-                {
-                    Open = group.Count(),
-                    Overdue = group.Count(t => t.DueDate.HasValue && t.DueDate.Value < now),
-                    InProgress = group.Count(t => t.InProgress),
-                });
-
-        var candidates = new List<Candidate>(candidateMembers.Count);
-
-        for (var index = 0; index < candidateMembers.Count; index++)
-        {
-            var member = candidateMembers[index];
-            var stats = load.GetValueOrDefault(member.UserId);
+            var workload = workloads[index];
 
             candidates.Add(new Candidate(
                 // 1-based so the label reads as "candidate #1" in a log or a prompt.
                 Label: $"cand-{index + 1}",
-                UserId: member.UserId,
-                DisplayName: member.User!.DisplayName,
-                PrimaryRole: member.PrimaryRole,
-                Skills: member.Skills.ToList(),
-                CapacityWeight: member.CapacityWeight,
-                MaxWipLimit: member.MaxWipLimit,
-                OpenTaskCount: stats?.Open ?? 0,
-                OverdueCount: stats?.Overdue ?? 0,
-                InProgressCount: stats?.InProgress ?? 0));
+                UserId: workload.UserId,
+                DisplayName: workload.DisplayName,
+                PrimaryRole: workload.PrimaryRole ?? "Member",
+                Skills: [.. workload.Skills],
+                CapacityWeight: workload.CapacityWeight,
+                MaxWipLimit: workload.MaxWipLimit,
+                OpenTaskCount: workload.OpenTaskCount,
+                OverdueCount: workload.OverdueCount,
+                InProgressCount: workload.InProgressCount));
         }
 
         return candidates;

@@ -143,3 +143,18 @@ public sealed record RecoveryActionDecisionResult(
     double ConfidenceScore,
     string RoutingAdvice,
     JevDecisionUsage? Usage = null);
+
+/// <summary>
+/// Verdict of one "does this draft satisfy the task?" question (Giai đoạn 14.7 Track B §B2), used by the
+/// agent tool <c>ValidateAcceptanceCriteria</c>.
+/// <para>
+/// <see cref="Verified"/> is <b>nullable and never fabricated</b>: the caller distinguishes "Jev says no"
+/// (<c>false</c>) from "we could not ask" (<c>null</c>), because the two lead to opposite actions — the first
+/// means rework, the second means proceed on your own judgement.
+/// </para>
+/// </summary>
+public sealed record AcceptanceValidationResult(
+    bool? Verified,
+    double ConfidenceScore,
+    string RoutingAdvice,
+    JevDecisionUsage? Usage = null);

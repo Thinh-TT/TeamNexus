@@ -712,6 +712,60 @@ Một row = một lượt (một câu hỏi **hoặc** một câu trả lời) c
 
 ---
 
+### 3.11 Module AI — Multi-Agent Personas & Bộ nhớ Ngữ nghĩa (Giai đoạn 14.7 Track B)
+
+> **Lệch DoD có chủ ý:** Track B có **2 migration** (`Phase147AgentPersonas`, `Phase147KnowledgeBase` ⇒ `12 → 14`). Kế hoạch §3 ghi `11 → 13` nhưng con số đó viết **trước** khi Track A thi hành; Track A đã tạo `workspace_taxonomies` + 4 cột hồ sơ kỹ năng (lệch **L7**).
+
+#### `workspace_members.persona_key` (migration `Phase147AgentPersonas`)
+| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
+|---|---|---|---|---|
+| `persona_key` | varchar(40) | **null** | CHECK `persona_key IS NULL OR persona_key IN ('general','scrum_master','tech_lead','qa_security')` · CHECK `member_type <> 'human' OR persona_key IS NULL` | `NULL` cho người thật (ràng buộc thứ hai). Migration **backfill `'general'` cho mọi row `ai_agent`** ⇒ hành vi Phase 7 không đổi |
+
+**Index được THAY (không phải thêm):**
+```sql
+-- Migration tạo index MỚI trước khi bỏ index CŨ ⇒ không có khoảnh khắc nào thiếu ràng buộc.
+CREATE UNIQUE INDEX uq_workspace_members_ai_persona
+  ON workspace_members (workspace_id, COALESCE(persona_key, 'general'))
+  WHERE member_type = 'ai_agent';
+DROP INDEX uq_workspace_members_ai_agent;   -- "đúng 1 agent/workspace" của Phase 7
+```
+> ⚠️ **`COALESCE` là bắt buộc, không phải cho đẹp.** PostgreSQL coi **mọi `NULL` là khác nhau**, nên unique index trên `(workspace_id, persona_key)` sẽ chấp nhận **không giới hạn** row agent có `persona_key IS NULL` ⇒ mất luôn tính "mỗi persona tối đa 1 row". EF Core **không có** API cho expression index ⇒ index này viết bằng **SQL thô trong migration** (model vẫn khai báo tên index để snapshot phản ánh đúng).
+> ⚠️ **Thứ tự lệnh trong migration là một phần của tính đúng:** `ADD COLUMN` → **backfill** → `CREATE INDEX mới` → `DROP INDEX cũ` → `ADD CHECK`.
+
+#### `workspace_knowledge_documents` (migration `Phase147KnowledgeBase`)
+| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
+|---|---|---|---|---|
+| `id` | uuid | — | PK | |
+| `workspace_id` | uuid | — | FK→`workspaces` (**Restrict**), IX `(workspace_id, created_at)` | **Restrict**, không CASCADE: workspace là **soft-delete** (`deleted_at`) nên cascade vật lý không bao giờ chạy — cùng quy ước `workspace_members`/`workspace_taxonomies` |
+| `title` | varchar(300) | — | | |
+| `source_url` | varchar(1000) | null | | |
+| `content` | text | — | | app layer cap **400 000** ký tự (gồm cả applier) |
+| `status` | varchar(20) | — | CHECK `status IN ('pending','ready','failed','deleted')` | **`deleted` là soft-delete dùng lại cột này** (không có `deleted_at`) ⇒ không cần migration thứ ba; `ready` **chỉ** được set khi **không còn** chunk nào thiếu vector |
+| `error` | varchar(500) | null | | lý do nhúng vector thất bại |
+| `chunk_count` | int | — | DEFAULT 0 | số chunk đã ghi (cache cho list view) |
+| `created_by_user_id` | uuid | — | FK→`users` (Restrict) | Manager **yêu cầu** (không phải người duyệt) |
+| `created_at`/`updated_at` | timestamptz | — | | `IAuditableEntity` |
+
+Query filter soft-delete theo `workspace.deleted_at` (cùng `WorkspaceTaxonomy`).
+
+#### `workspace_knowledge_chunks`
+| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
+|---|---|---|---|---|
+| `id` | uuid | — | PK | |
+| `document_id` | uuid | — | FK→`workspace_knowledge_documents` (**CASCADE**) | chunk vô nghĩa nếu thiếu document |
+| `workspace_id` | uuid | — | IX `(workspace_id)` | **denormalize** từ document để truy vấn RAG là **một bảng**, không join |
+| `chunk_index` | int | — | UNIQUE `(document_id, chunk_index)` | idempotency guard khi cùng tài liệu được nộp hai lần |
+| `content` | text | — | | trần `Jev:RagChunkChars` (**1200**) / chunk, số chunk `Jev:RagMaxChunksPerDocument` (**200**) |
+| `embedding` | **`vector(1536)`** | **null** | IX **HNSW** `USING hnsw (embedding vector_cosine_ops)` | `NULL` = **chưa nhúng** — chính predicate mà runner quét, nên **không** cần cột cờ `pending` |
+| `created_at`/`updated_at` | timestamptz | — | | `IAuditableEntity` |
+
+> ⚠️ **Cột cố định số chiều.** `vector(1536)` (không phải `vector` không chiều) để lệch số chiều **thất bại trong database** thay vì âm thầm ghi những vector không bao giờ so sánh được. Đổi model embedding sang số chiều khác ⇒ `ALTER COLUMN … TYPE vector(N)` **+ re-embed toàn bộ**; `Embeddings:Dimensions` bị **kiểm tra lúc khởi động** (`ValidateOnStart`) nên lệch cấu hình là fail-fast chứ không phải lỗi runtime.
+> ⚠️ **Operator class phải khớp toán tử truy vấn.** Retrieval xếp hạng bằng cosine (`<=>` / `CosineDistance`) nên index phải là **`vector_cosine_ops`**; index dựng cho `vector_l2_ops` vẫn tồn tại, vẫn đúng cú pháp, và **không bao giờ được dùng**.
+> ⚠️ **`CREATE EXTENSION IF NOT EXISTS vector;` viết tay, đặt ĐẦU migration** — `modelBuilder.HasPostgresExtension("vector")` chỉ được EF ghi thành **annotation** trên `AlterDatabase()` và **không** phát ra câu lệnh. `vector` là extension **bên thứ ba** ⇒ image `postgres:18` chính thức **không** có; CI/dev dùng **`pgvector/pgvector:pg18`**.
+> ⚠️ **Query filter khớp document là BẮT BUỘC, không phải trang trí.** Document có filter soft-delete và là **đầu bắt buộc** của quan hệ ⇒ thiếu filter phía chunk thì EF cảnh báo `10622` và có thể nạp chunk mà document đã bị ẩn. Filter đi **qua document** (không qua `workspace_id` denormalize) để chỉ có **một** nguồn sự thật về khả năng hiển thị.
+
+---
+
 ## 7. Toàn vẹn dữ liệu, edge cases & failure modes
 
 - **Giai đoạn 14 — KHÔNG thêm bảng/cột/index nào (cố ý, không phải bỏ sót).** Ba lý do cụ thể:

@@ -35,6 +35,20 @@ public sealed class WorkspaceMemberConfiguration : IEntityTypeConfiguration<Work
                 "ck_workspace_members_max_wip_limit",
                 "\"max_wip_limit\" >= 0"));
 
+        // Giai đoạn 14.7 Track B §B1: the persona vocabulary is a closed set, and only an agent row may
+        // carry one. Two constraints rather than one because they fail for different reasons and an operator
+        // should be able to tell "typo in the persona key" from "somebody gave a human a persona".
+        builder.ToTable("workspace_members", table => table
+            .HasCheckConstraint(
+                "ck_workspace_members_persona_key",
+                "\"persona_key\" IS NULL OR \"persona_key\" IN "
+                + "('general', 'scrum_master', 'tech_lead', 'qa_security')"));
+
+        builder.ToTable("workspace_members", table => table
+            .HasCheckConstraint(
+                "ck_workspace_members_persona_human",
+                "\"member_type\" <> 'human' OR \"persona_key\" IS NULL"));
+
         // One user has exactly one role per workspace.
         builder.HasKey(wm => new { wm.WorkspaceId, wm.UserId });
 
@@ -76,12 +90,28 @@ public sealed class WorkspaceMemberConfiguration : IEntityTypeConfiguration<Work
             .HasDefaultValue(5)
             .IsRequired();
 
-        // Exactly ONE AI Agent per workspace (Phase 7 §2.1 / DB design §5). Always locate the agent
-        // through member_type — AiAgentName is display data and may be renamed.
-        builder.HasIndex(wm => wm.WorkspaceId)
+        // ---- Giai đoạn 14.7 Track B §B1: persona ------------------------------------------------
+        // Free text (not an enum) for the same reason PrimaryRole is: the persona vocabulary lives in
+        // PersonaCatalog on the Ai side, and Board must not reference Ai to learn it.
+        builder.Property(wm => wm.PersonaKey)
+            .HasMaxLength(40);
+
+        // One AI Agent row per persona. The index is built on COALESCE(persona_key, 'general') because
+        // PostgreSQL considers every NULL distinct: without the COALESCE, two rows with persona_key NULL
+        // would both be accepted and the "one row per persona" rule would be unenforceable.
+        //
+        // This REPLACES uq_workspace_members_ai_agent ("exactly one agent per workspace", Phase 7 D1).
+        // The migration backfills persona_key = 'general' for every existing agent row FIRST, so the
+        // Phase 7 lookup (WHERE member_type = 'ai_agent') keeps resolving to the same row.
+        //
+        // The expression itself is written as raw SQL in the migration (`Npgsql:IndexExpression` is not a
+        // real EF Core annotation, and EF cannot express an expression index). The model therefore declares
+        // the columns and the predicate only — enough for EF to track the index by name and for the shape
+        // to be reviewable — and the generated migration is edited to use the COALESCE expression.
+        builder.HasIndex(wm => new { wm.WorkspaceId, wm.PersonaKey })
             .IsUnique()
             .HasFilter("\"member_type\" = 'ai_agent'")
-            .HasDatabaseName("uq_workspace_members_ai_agent");
+            .HasDatabaseName("uq_workspace_members_ai_persona");
 
         builder.HasOne(wm => wm.Workspace)
             .WithMany()

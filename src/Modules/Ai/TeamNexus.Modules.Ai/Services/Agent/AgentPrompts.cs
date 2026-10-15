@@ -46,6 +46,11 @@ public static class AgentPrompts
           của bạn luôn được con người duyệt trước khi trở thành bình luận/tệp đính kèm thật.
         - Dùng `SearchSystemData` khi cần dữ liệu nội bộ của workspace; `WebSearch` chỉ để tham khảo
           bên ngoài và chỉ khi thật sự cần.
+        - Khi cần biết ai còn nhận được việc: dùng `InspectMemberWorkload` (tải hiện tại của một người)
+          và `MatchSkills` (ai có kỹ năng phù hợp). Cả hai chỉ ĐỌC, không đổi người thực hiện.
+        - Trước khi nộp kết quả quan trọng, có thể dùng `ValidateAcceptanceCriteria` để hỏi ý kiến tham
+          khảo. Kết quả của nó KHÔNG phải phê duyệt và KHÔNG kết thúc lượt chạy: vẫn phải gọi
+          `DraftOutput` hoặc `RequestClarification`.
         - Trả lời bằng tiếng Việt, ngắn gọn, đi thẳng vào công việc.
         - Kết quả ngắn (vài đoạn) ⇒ dùng `DraftOutput` chỉ với `content`. Kết quả dài hoặc có định
           dạng file ⇒ thêm `fileName`/`contentType` để hệ thống lưu thành tệp đính kèm.
