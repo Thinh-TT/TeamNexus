@@ -108,6 +108,11 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
     public bool JevEnabled { get; init; } = true;
 
     /// <summary>
+    /// When set, overrides Jev:ApiKey for measuring live performance against OpenRouter.
+    /// </summary>
+    public string? JevApiKey { get; init; }
+
+    /// <summary>
     /// Overrides <c>Jev:AutoRecoveryPlanEnabled</c> (Giai đoạn 14.7 §A5 Phần B). Defaults to <c>false</c> —
     /// the production default — so no existing Observer suite can start drafting data-affecting proposals by
     /// accident. Only the recovery-plan suite opts in.
@@ -220,6 +225,10 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
         // another. Note there is deliberately NO `Jev:ApiKey` here: an absent key is the offline fake, and
         // setting it (even to a space) is not needed because the factory's settings cannot supply a real one.
         builder.UseSetting("Jev:Enabled", JevEnabled ? "true" : "false");
+        if (!string.IsNullOrWhiteSpace(JevApiKey))
+        {
+            builder.UseSetting("Jev:ApiKey", JevApiKey);
+        }
         builder.UseSetting("Jev:AutoRecoveryPlanEnabled", AutoRecoveryPlanEnabled ? "true" : "false");
         builder.UseSetting("Jev:ObserverSeverityRouting", ObserverJevSeverityRouting ? "true" : "false");
 

@@ -34,3 +34,12 @@ export * from './hooks/useAiChat'
 export * from './hooks/useBoardTemplate'
 export * from './components/AiChatPanel'
 export * from './components/BoardTemplateModal'
+
+// Phase 14.7 - Autonomous Agent Jev (Track A)
+export * from './types/jev.types'
+export * from './services/jevApi'
+export * from './utils/confidenceHelpers'
+export * from './hooks/useJevTriage'
+export * from './components/JevTriagePanel'
+export * from './components/AssigneeSuggestion'
+export * from './components/RecoveryPlanCard'

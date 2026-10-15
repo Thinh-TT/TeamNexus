@@ -9,6 +9,11 @@ export interface WorkspaceMemberResponse {
   email: string | null
   joinedAt: string
   isOwner: boolean
+  skills?: string[]
+  primaryRole?: string
+  capacityWeight?: number
+  maxWipLimit?: number
+  personaKey?: string | null
 }
 
 export type InvitationStatus = 'Pending' | 'Accepted' | 'Cancelled' | 'Expired'

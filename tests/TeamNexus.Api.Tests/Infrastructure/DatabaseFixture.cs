@@ -194,7 +194,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
         IExternalAlertSink? externalAlerts = null,
         bool? jevEnabled = null,
         bool? autoRecoveryPlanEnabled = null,
-        bool? observerJevSeverityRouting = null)
+        bool? observerJevSeverityRouting = null,
+        string? jevApiKey = null)
     {
         Require();
 
@@ -213,7 +214,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
                                || externalAlerts is not null
                                || jevEnabled.HasValue
                                || autoRecoveryPlanEnabled.HasValue
-                               || observerJevSeverityRouting.HasValue;
+                               || observerJevSeverityRouting.HasValue
+                               || !string.IsNullOrWhiteSpace(jevApiKey);
 
             var factory = needsOwnHost
                 ? new TeamNexusApiFactory
@@ -224,6 +226,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
                     AiChatEnabled = aiChatEnabled ?? true,
                     ExternalAlerts = externalAlerts,
                     JevEnabled = jevEnabled ?? true,
+                    JevApiKey = jevApiKey,
                     AutoRecoveryPlanEnabled = autoRecoveryPlanEnabled ?? false,
                     ObserverJevSeverityRouting = observerJevSeverityRouting ?? true,
                 }

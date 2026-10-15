@@ -124,11 +124,12 @@ public sealed class JevDecisionService : IJevDecisionService
         var answers = JevDecisionValidator.NormalizeAnswers(decision);
         var confidence = ConfidenceOf(answers, DomainQuestion);
         var advice = ConfidenceRouting.For(confidence, _options.Effective);
+        var latencyMs = (long)Stopwatch.GetElapsedTime(start).TotalMilliseconds;
 
         if (advice == ConfidenceRouting.ManualRequired)
         {
             LogDegraded("TriageTask", confidence, Stopwatch.GetElapsedTime(start));
-            return EmptyTriageResult(advice);
+            return EmptyTriageResult(advice, latencyMs);
         }
 
         var domain = ResolveChoice(answers, DomainQuestion, domains);
@@ -149,12 +150,13 @@ public sealed class JevDecisionService : IJevDecisionService
             needsSecurity,
             confidence,
             advice,
-            options);
+            options,
+            latencyMs);
 
         _logger.LogDebug(
             "Jev triage: advice={Advice}, confidence={Confidence}, latencyMs={LatencyMs}, "
             + "domain={Domain}, workType={WorkType}, priority={Priority}, security={Security}.",
-            advice, confidence, Stopwatch.GetElapsedTime(start).TotalMilliseconds,
+            advice, confidence, latencyMs,
             result.SuggestedDomain, result.SuggestedWorkType, result.SuggestedPriority, needsSecurity);
 
         return result;
@@ -199,18 +201,19 @@ public sealed class JevDecisionService : IJevDecisionService
         var answers = JevDecisionValidator.NormalizeAnswers(decision);
         var confidence = ConfidenceOf(answers, AssigneeQuestion);
         var advice = ConfidenceRouting.For(confidence, _options.Effective);
+        var latencyMs = (long)Stopwatch.GetElapsedTime(start).TotalMilliseconds;
 
         if (advice == ConfidenceRouting.ManualRequired)
         {
             LogDegraded("RecommendAssignee", confidence, Stopwatch.GetElapsedTime(start));
-            return new AssigneeRecommendationResult(null, confidence, [], advice);
+            return new AssigneeRecommendationResult(null, confidence, [], advice, latencyMs);
         }
 
         if (!answers.TryGetValue(AssigneeQuestion, out var answer)
             || !JevDecisionValidator.IsUsable(answer, questions[0]))
         {
             LogDegraded("RecommendAssignee", confidence, Stopwatch.GetElapsedTime(start));
-            return new AssigneeRecommendationResult(null, confidence, [], ConfidenceRouting.ManualRequired);
+            return new AssigneeRecommendationResult(null, confidence, [], ConfidenceRouting.ManualRequired, latencyMs);
         }
 
         var ranked = Rank(answers[AssigneeQuestion], candidates);
@@ -225,16 +228,16 @@ public sealed class JevDecisionService : IJevDecisionService
             _logger.LogWarning(
                 "Jev chọn nhãn '{Label}' không có trong danh sách ứng viên đã gửi.", answers[AssigneeQuestion].Choice);
 
-            return new AssigneeRecommendationResult(null, confidence, [], ConfidenceRouting.ManualRequired);
+            return new AssigneeRecommendationResult(null, confidence, [], ConfidenceRouting.ManualRequired, latencyMs);
         }
 
         // A high-confidence answer still renders its runner-up ranking: the manager keeps the counter-argument
         // without the system forcing a single name (the roadmap's "góc nhìn phản biện").
-        var result = new AssigneeRecommendationResult(found.UserId, confidence, ranked, advice);
+        var result = new AssigneeRecommendationResult(found.UserId, confidence, ranked, advice, latencyMs);
 
         _logger.LogDebug(
             "Jev assignee: advice={Advice}, confidence={Confidence}, latencyMs={LatencyMs}, candidates={Count}.",
-            advice, confidence, Stopwatch.GetElapsedTime(start).TotalMilliseconds, ranked.Count);
+            advice, confidence, latencyMs, ranked.Count);
 
         return result;
     }
@@ -392,8 +395,8 @@ public sealed class JevDecisionService : IJevDecisionService
             + "latencyMs={LatencyMs}) — người dùng tự quyết định.",
             operation, confidence, elapsed.TotalMilliseconds);
 
-    private static TaskTriageResult EmptyTriageResult(string advice)
-        => new(null, null, null, false, 0d, advice, []);
+    private static TaskTriageResult EmptyTriageResult(string advice, long latencyMs = 0)
+        => new(null, null, null, false, 0d, advice, [], latencyMs);
 
     /// <summary>
     /// Confidence of the decision as a whole. Read from the question that carries the routing weight

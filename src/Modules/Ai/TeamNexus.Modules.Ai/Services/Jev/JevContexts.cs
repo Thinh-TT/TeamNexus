@@ -91,7 +91,8 @@ public sealed record TaskTriageResult(
     bool NeedsSecurityReview,
     double ConfidenceScore,
     string RoutingAdvice,
-    IReadOnlyList<TriageOption> Options);
+    IReadOnlyList<TriageOption> Options,
+    long LatencyMs = 0);
 
 /// <summary>One ranked option inside a triage result: which field, which value, how likely.</summary>
 public sealed record TriageOption(string Field, string Value, double Probability);
@@ -108,7 +109,8 @@ public sealed record AssigneeRecommendationResult(
     Guid? RecommendedUserId,
     double ConfidenceScore,
     IReadOnlyList<CandidateScore> CandidateRankings,
-    string RoutingAdvice);
+    string RoutingAdvice,
+    long LatencyMs = 0);
 
 /// <summary>Observer severity assessment (Giai đoạn 14.7 §A5 Phần A).</summary>
 public sealed record ObserverRiskAssessmentResult(

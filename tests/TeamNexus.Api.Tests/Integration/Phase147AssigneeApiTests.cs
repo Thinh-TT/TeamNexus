@@ -335,5 +335,6 @@ public sealed class Phase147AssigneeApiTests : IClassFixture<DatabaseFixture>
         string RoutingAdvice,
         List<CandidateDto> Candidates,
         bool Degraded,
-        string Model);
+        string Model,
+        long LatencyMs = 0);
 }

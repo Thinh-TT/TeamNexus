@@ -398,11 +398,12 @@ và mở rộng Smart Setup thành **AI Board Template**.
 > **Kế hoạch chia task + NHẬT KÝ THI HÀNH (5 bug thật + 6 lệch kế hoạch):** `tasks/phase-14-7-autonomous-agent-jev.md` §11.
 > **Nguyên tắc bất biến:** Accountability Layer giữ nguyên 100% (mọi tác động ghi dữ liệu phải qua `Pending` → `Approve` → `Undo`); tuân thủ trần token & guardrail.
 >
-> **📊 SỐ ĐO THẬT (Track A):** backend `dotnet build --no-incremental` **0 warning / 0 error** ·
-> `dotnet test` **Failed 0 / Passed 912 / Skipped 0** (baseline 665 ⇒ **+247**) ·
+> **📊 SỐ ĐO THẬT (Track A hoàn thiện):** backend `dotnet build --no-incremental` **0 warning / 0 error** ·
+> `dotnet test` **Failed 0 / Passed 913 / Skipped 0** (baseline 665 ⇒ **+248**) ·
 > `dotnet ef migrations list` **11 → 12** (`20261014163751_Phase147AgentPlatform`) · `has-pending-model-changes` **sạch** ·
-> frontend **657 / 110 file** (không đổi) · `oxlint` **0/0** · `tsc -b` exit 0 · `npm run build` OK ·
-> cổng CI: `ci-backend.yml` `665 → 912`; `ci-web.yml` giữ `657`.
+> frontend **680 / 117 file** (thêm 23 tests cho Track A) · `oxlint` **0/0** · `tsc -b` exit 0 · `npm run build` OK ·
+> cổng CI: `ci-backend.yml` `665 → 913`; `ci-web.yml` `657 → 680`.
+> **⚡ KẾT QUẢ ĐO LIVE JEV (OpenRouter key thật, 20 lượt):** 100% thành công (0 degraded), server latency P50 **773 ms**, client round-trip P50 **782 ms**.
 >
 > **⚠️ 4 LỆCH có chủ ý so với bản roadmap bên dưới (chi tiết ở §11.3 của tài liệu chia task):**
 > 1. **1 migration** (`Phase147AgentPlatform`) — không phải 2 như dự định: phần pgvector thuộc **Track B §B3** và chưa thi hành.
@@ -411,16 +412,16 @@ và mở rộng Smart Setup thành **AI Board Template**.
 > 4. **Sửa ĐÚNG 1 assertion của test cũ** (`WorkspaceMemberApiTests`): §A2 **append** 4 field vào `WorkspaceMemberResponse` theo luật append-only từ Phase 10 §4.2. Là ngoại lệ **duy nhất** của Track A.
 
 ### 1. Nâng cấp Tiền đề Bắt buộc (Foundational Prerequisites)
-- **1.1. Quản lý Nhãn Cố định & Taxonomy Chuẩn hóa:** ✅ **XONG** — bảng `workspace_taxonomies` (`domain`/`work_type`, UNIQUE `(workspace_id, kind, key)`), seed mặc định **lazy + idempotent bằng `INSERT … ON CONFLICT DO NOTHING`**, `GET/PUT /api/workspaces/{id}/taxonomies` (Member+ / Manager+).
-- **1.2. Hồ sơ Kỹ năng (Skills) & Vai trò (Roles) Thành viên:** ✅ **XONG** — `workspace_members` thêm `skills` (jsonb), `primary_role`, `capacity_weight`, `max_wip_limit`; `PUT /api/workspaces/{id}/members/{userId}/profile` (**Admin**, từ chối AI Agent, field vắng ⇒ giữ nguyên).
-- **1.3. Cấu trúc Logic Rẽ nhánh theo "Xác suất Tin cậy" (Confidence Threshold Branching):** ✅ **XONG** — `ConfidenceRouting` + `JevDecisionValidator` (hàm thuần); ngưỡng **cưỡng chế trong code, không tin provider**; test ở **đúng biên** 0.85/0.50 + `NaN`/`∞`.
+- **1.1. Quản lý Nhãn Cố định & Taxonomy Chuẩn hóa:** ✅ **XONG** — bảng `workspace_taxonomies` (`domain`/`work_type`, UNIQUE `(workspace_id, kind, key)`), seed mặc định **lazy + idempotent bằng `INSERT … ON CONFLICT DO NOTHING`**, `GET/PUT /api/workspaces/{id}/taxonomies` (Member+ / Manager+). Frontend `TaxonomySettings` trong Workspace Settings.
+- **1.2. Hồ sơ Kỹ năng (Skills) & Vai trò (Roles) Thành viên:** ✅ **XONG** — `workspace_members` thêm `skills` (jsonb), `primary_role`, `capacity_weight`, `max_wip_limit`; `PUT /api/workspaces/{id}/members/{userId}/profile` (**Admin**, từ chối AI Agent, field vắng ⇒ giữ nguyên). Frontend `MemberSkillsForm` trong Members Table.
+- **1.3. Cấu trúc Logic Rẽ nhánh theo "Xác suất Tin cậy" (Confidence Threshold Branching):** ✅ **XONG** — `ConfidenceRouting` + `JevDecisionValidator` (hàm thuần); ngưỡng **cưỡng chế trong code, không tin provider**; test ở **đúng biên** 0.85/0.50 + `NaN`/`∞`. Frontend `confidenceHelpers`.
 
 ### 2. Tích hợp Mô hình Jev & Tối ưu Hóa Ra Quyết Định (System 1)
-- **2.1. Phân loại Task & Đánh giá Mức độ Gấp (Auto-Triage & Smart Priority):** ✅ **XONG backend** — `POST /api/boards/{id}/tasks/triage` (Member+, **không ghi gì**, `Jev:Enabled=false` ⇒ 503, provider lỗi ⇒ **200 + `degraded:true`** thay vì 502). Trả `latencyMs` để đo DoD. **Frontend chưa làm.**
-- **2.2. Gợi ý Người Thực hiện Phù hợp (Smart Assignee Dispatching):** ✅ **XONG backend** — `POST /api/boards/{id}/tasks/{taskId}/assignee-suggestions`; Jev chỉ thấy nhãn `cand-N` (không bao giờ thấy `Guid`, không thấy `email`). **Frontend chưa làm.**
+- **2.1. Phân loại Task & Đánh giá Mức độ Gấp (Auto-Triage & Smart Priority):** ✅ **XONG toàn diện (BE + FE)** — `POST /api/boards/{id}/tasks/triage` (Member+, **không ghi gì**, `Jev:Enabled=false` ⇒ 503, provider lỗi ⇒ **200 + `degraded:true`** thay vì 502). Trả `latencyMs`. Frontend: `useJevTriage` debounce 400ms + `JevTriagePanel` 3 nhánh, degraded warning, security badge.
+- **2.2. Gợi ý Người Thực hiện Phù hợp (Smart Assignee Dispatching):** ✅ **XONG toàn diện (BE + FE)** — `POST /api/boards/{id}/tasks/{taskId}/assignee-suggestions`; Jev chỉ thấy nhãn `cand-N`. Frontend: `AssigneeSuggestion` hiển thị độ phù hợp %, lý do và nút gán nhanh.
 - **2.3. AI Observer Toàn diện (Bộ đôi A + B):**
   - **Phần A** ✅ **XONG** — Jev chấm `severity` + cờ khẩn + rủi ro domino **trước**; verdict tự tin dưới ngưỡng ⇒ **chặn luôn lời gọi LLM** (đây là phần tiết kiệm token); verdict được truyền xuống **system prompt** để LLM giải thích đúng mức. `ObserverFindingValidator` **vẫn** là thứ quyết định finding nào được ghi. Cờ rollback: `Jev:ObserverSeverityRouting=false` ⇒ về đúng đường Phase 5/14 bằng 1 dòng config.
-  - **Phần B** ✅ **XONG** — `RecoveryPlan` (`Pending`, scope `entity_type='Workspace'`) + `RecoveryPlanApplier` cho 4 kind; `EscalateManager` **không ghi gì** (có test riêng); `AutoRecoveryPlanEnabled = false` **mặc định**.
+  - **Phần B** ✅ **XONG toàn diện (BE + FE)** — `RecoveryPlan` (`Pending`, scope `entity_type='Workspace'`) + `RecoveryPlanApplier` cho 4 kind; `EscalateManager` **không ghi gì** (có test riêng); `AutoRecoveryPlanEnabled = false` **mặc định**. Frontend: `RecoveryPlanCard` trong `AiActionLogItem` với cảnh báo họp khẩn cấp và nút Duyệt/Từ chối/Undo.
 
 ### 3. Nâng cấp Autonomous Agent Platform (Kế thừa Track B 14.6) — 📋 CHƯA THI HÀNH
 - **3.1. Đội ngũ AI Chuyên Gia (Multi-Agent Personas):** 📋 Track B §B1 — cần nới `uq_workspace_members_ai_agent` thành `(workspace_id, persona_key)`.
@@ -430,11 +431,11 @@ và mở rộng Smart Setup thành **AI Board Template**.
 **Yêu cầu hoàn thiện (DoD):**
 - [x] Interface `IJevDecisionService` và mock `FakeJevDecisionProvider` hoạt động ổn định với kiểm thử đơn vị độc lập.
 - [x] Bổ sung schema `workspace_taxonomies` và các cột `skills`/`primary_role` trên `workspace_members` (kèm migration EF Core sạch).
-- [x] Tự động gợi ý phân loại và độ khẩn cấp của task (`latencyMs` trả về trong response — **đo thật với key thật vẫn còn nợ**, xem §11.5).
+- [x] Tự động gợi ý phân loại và độ khẩn cấp của task (`latencyMs` trả về trong response — **đã đo thật 20 runs, P50 773 ms**).
 - [x] Gợi ý assignee tuân thủ nghiêm ngặt logic rẽ nhánh theo ngưỡng confidence.
 - [x] AI Observer phát hiện rủi ro sinh Recovery Plan Proposal ở trạng thái `Pending`, Quản lý có thể Approve/Reject/Undo thành công.
-- [x] Toàn bộ test suite backend và frontend tiếp tục pass 100%, không vi phạm bất biến của Accountability Layer (**912/0/0** + **657/0/0**).
-- [ ] **Frontend của §A2–§A5** (triage panel, nút gợi ý người làm, màn hình taxonomy + hồ sơ kỹ năng, action card Recovery Plan) — 📋 còn nợ.
+- [x] Toàn bộ test suite backend và frontend tiếp tục pass 100%, không vi phạm bất biến của Accountability Layer (**913/0/0** + **680/0/0**).
+- [x] **Frontend của §A2–§A5** (triage panel, nút gợi ý người làm, màn hình taxonomy + hồ sơ kỹ năng, action card Recovery Plan) — ✅ **HOÀN THÀNH 100%**.
 
 ---
 

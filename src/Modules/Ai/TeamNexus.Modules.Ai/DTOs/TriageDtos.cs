@@ -35,7 +35,8 @@ public sealed record TaskTriageResponse(
     string RoutingAdvice,
     IReadOnlyList<TriageOptionResponse> Options,
     bool Degraded,
-    string Model);
+    string Model,
+    long LatencyMs = 0);
 
 /// <summary>One scored assignee candidate (Giai đoạn 14.7 §A4).</summary>
 /// <param name="Reason">
@@ -58,4 +59,5 @@ public sealed record AssigneeSuggestionResponse(
     string RoutingAdvice,
     IReadOnlyList<CandidateSuggestionResponse> Candidates,
     bool Degraded,
-    string Model);
+    string Model,
+    long LatencyMs = 0);

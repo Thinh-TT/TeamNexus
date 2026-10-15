@@ -65,6 +65,8 @@ jobs:
       #   seam IExternalAlertSink, bỏ fetch trùng badge (Track A).
       # Giai đoạn 14.6 Track A = 657 (110 file): card picker + "Gửi vào AI Chat" (§A1), lọc GUID hai đầu
       #   (§A2), transcript task chat đọc/ghi DB (§A3), Lightweight Board Digest (§A4).
+      # Giai đoạn 14.7 Track A = 680 (117 file): Jev Smart Triage (§A3), Assignee Suggestion (§A4),
+      #   Recovery Plan Card (§A5), Taxonomy Settings (§A2), Member Skills Profile (§A2).
       - name: Assert test count did not regress
         shell: pwsh
         run: |
@@ -73,7 +75,7 @@ jobs:
           $failed = [int]$report.numFailedTests
           Write-Host "vitest: total=$total failed=$failed"
           if ($failed -ne 0) { throw "vitest reported $failed failing tests" }
-          if ($total -lt 657) { throw "Số test đã tụt: $total (baseline hiện tại là 657)" }
+          if ($total -lt 680) { throw "Số test đã tụt: $total (baseline hiện tại là 680)" }
 
       - name: Build (vite)
         run: npm run build

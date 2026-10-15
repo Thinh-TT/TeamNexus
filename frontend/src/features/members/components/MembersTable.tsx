@@ -16,6 +16,7 @@ import {
   CrownOutlined,
   DeleteOutlined,
   RobotOutlined,
+  SolutionOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -26,12 +27,15 @@ import {
   getRoleTagColor,
   isMemberActionDisabled,
 } from '../utils/memberRoleLabels'
+import { MemberSkillsForm } from './MemberSkillsForm'
 
 interface MembersTableProps {
   members: WorkspaceMemberResponse[]
   loading?: boolean
   canManage: boolean
   currentUserId?: string
+  workspaceId?: string
+  onRefresh?: () => void
   onRoleChange: (userId: string, newRole: WorkspaceRole) => Promise<void> | void
   onRemoveMember: (userId: string) => Promise<void> | void
 }
@@ -41,9 +45,14 @@ export const MembersTable: React.FC<MembersTableProps> = ({
   loading = false,
   canManage,
   currentUserId,
+  workspaceId,
+  onRefresh,
   onRoleChange,
   onRemoveMember,
 }) => {
+  const [selectedMemberForSkills, setSelectedMemberForSkills] =
+    React.useState<WorkspaceMemberResponse | null>(null)
+  const [skillsModalOpen, setSkillsModalOpen] = React.useState(false)
   const columns: ColumnsType<WorkspaceMemberResponse> = [
     {
       title: 'Thành viên',
@@ -137,10 +146,46 @@ export const MembersTable: React.FC<MembersTableProps> = ({
       },
     },
     {
+      title: 'Hồ sơ năng lực',
+      key: 'skills',
+      render: (_, record) => {
+        if (record.memberType === 'ai_agent') {
+          return <Tag color="purple">Hệ thống AI</Tag>
+        }
+        return (
+          <Space direction="vertical" size={2}>
+            {record.primaryRole && (
+              <Typography.Text strong style={{ fontSize: 12 }}>
+                {record.primaryRole}
+              </Typography.Text>
+            )}
+            <Space size={2} wrap>
+              {record.skills && record.skills.length > 0 ? (
+                record.skills.slice(0, 3).map((s) => (
+                  <Tag key={s} style={{ margin: 0, fontSize: 11 }}>
+                    {s}
+                  </Tag>
+                ))
+              ) : (
+                <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                  Chưa thiết lập
+                </Typography.Text>
+              )}
+              {record.skills && record.skills.length > 3 && (
+                <Tag style={{ margin: 0, fontSize: 11 }}>
+                  +{record.skills.length - 3}
+                </Tag>
+              )}
+            </Space>
+          </Space>
+        )
+      },
+    },
+    {
       title: 'Ngày tham gia',
       dataIndex: 'joinedAt',
       key: 'joinedAt',
-      width: 150,
+      width: 130,
       render: (date: string) => (date ? dayjs(date).format('DD/MM/YYYY') : '—'),
     },
   ]
@@ -149,61 +194,86 @@ export const MembersTable: React.FC<MembersTableProps> = ({
     columns.push({
       title: 'Hành động',
       key: 'actions',
-      width: 110,
+      width: 130,
       align: 'center',
       render: (_, record) => {
         const perm = isMemberActionDisabled(record, currentUserId)
 
-        if (perm.disabled) {
-          return (
-            <Tooltip title={perm.reason}>
-              <Button
-                danger
-                type="text"
-                size="small"
-                icon={<DeleteOutlined />}
-                disabled
-              />
-            </Tooltip>
-          )
-        }
-
         return (
-          <Popconfirm
-            title="Xoá thành viên"
-            description={`Bạn có chắc muốn xoá ${record.displayName} khỏi workspace này?`}
-            okText="Xác nhận"
-            cancelText="Huỷ"
-            okButtonProps={{ danger: true }}
-            onConfirm={() => onRemoveMember(record.userId)}
-          >
-            <Button
-              danger
-              type="text"
-              size="small"
-              icon={<DeleteOutlined />}
-              aria-label={`Xoá ${record.displayName}`}
-            >
-              Xoá
-            </Button>
-          </Popconfirm>
+          <Space size={4}>
+            {canManage && record.memberType !== 'ai_agent' && (
+              <Tooltip title="Chỉnh sửa hồ sơ năng lực & kỹ năng">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<SolutionOutlined style={{ color: '#6366f1' }} />}
+                  onClick={() => {
+                    setSelectedMemberForSkills(record)
+                    setSkillsModalOpen(true)
+                  }}
+                  data-testid={`edit-skills-btn-${record.userId}`}
+                />
+              </Tooltip>
+            )}
+
+            {perm.disabled ? (
+              <Tooltip title={perm.reason}>
+                <Button
+                  danger
+                  type="text"
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  disabled
+                />
+              </Tooltip>
+            ) : (
+              <Popconfirm
+                title="Xoá thành viên"
+                description={`Bạn có chắc muốn xoá ${record.displayName} khỏi workspace này?`}
+                okText="Xác nhận"
+                cancelText="Huỷ"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => onRemoveMember(record.userId)}
+              >
+                <Button
+                  danger
+                  type="text"
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  aria-label={`Xoá ${record.displayName}`}
+                >
+                  Xoá
+                </Button>
+              </Popconfirm>
+            )}
+          </Space>
         )
       },
     })
   }
 
   return (
-    <Table<WorkspaceMemberResponse>
-      dataSource={members}
-      columns={columns}
-      rowKey="userId"
-      loading={loading}
-      pagination={false}
-      style={{
-        borderRadius: 8,
-        overflow: 'hidden',
-        border: '1px solid #e2e8f0',
-      }}
-    />
+    <>
+      <Table<WorkspaceMemberResponse>
+        dataSource={members}
+        columns={columns}
+        rowKey="userId"
+        loading={loading}
+        pagination={false}
+        style={{
+          borderRadius: 8,
+          overflow: 'hidden',
+          border: '1px solid #e2e8f0',
+        }}
+      />
+
+      <MemberSkillsForm
+        open={skillsModalOpen}
+        onClose={() => setSkillsModalOpen(false)}
+        workspaceId={workspaceId || ''}
+        member={selectedMemberForSkills}
+        onSuccess={onRefresh}
+      />
+    </>
   )
 }

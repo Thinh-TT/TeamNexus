@@ -129,7 +129,8 @@ public sealed class TaskTriageService : ITaskTriageService
             // exists so the UI can say "AI tạm không khả dụng" instead of implying the AI looked and found
             // nothing, which are very different messages to a user.
             Degraded: result.RoutingAdvice == Jev.ConfidenceRouting.ManualRequired,
-            Model: _options.EffectiveModel);
+            Model: _options.EffectiveModel,
+            LatencyMs: result.LatencyMs);
 
         _logger.LogDebug(
             "Triage for board {BoardId}: advice={Advice}, confidence={Confidence}, degraded={Degraded}.",
@@ -173,7 +174,7 @@ public sealed class TaskTriageService : ITaskTriageService
         {
             // No candidates means no `Choice` options, and a question with no options is unanswerable. Report
             // it honestly instead of spending a call the provider can only fail.
-            return new AssigneeSuggestionResponse(null, 0d, Jev.ConfidenceRouting.ManualRequired, [], false, _options.EffectiveModel);
+            return new AssigneeSuggestionResponse(null, 0d, Jev.ConfidenceRouting.ManualRequired, [], false, _options.EffectiveModel, 0);
         }
 
         var context = new AssigneeDispatchContext(
@@ -194,7 +195,8 @@ public sealed class TaskTriageService : ITaskTriageService
                     rank.UserId, rank.DisplayName, rank.Probability, rank.Reason))
                 .ToList(),
             Degraded: result.RoutingAdvice == Jev.ConfidenceRouting.ManualRequired,
-            Model: _options.EffectiveModel);
+            Model: _options.EffectiveModel,
+            LatencyMs: result.LatencyMs);
 
         _logger.LogDebug(
             "Assignee suggestion for task {TaskId}: advice={Advice}, confidence={Confidence}, candidates={CandidateCount}.",

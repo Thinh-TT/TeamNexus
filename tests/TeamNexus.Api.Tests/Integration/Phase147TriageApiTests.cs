@@ -54,6 +54,7 @@ public sealed class Phase147TriageApiTests : IClassFixture<DatabaseFixture>
 
         var body = await response.Content.ReadFromJsonAsync<TriageDto>();
         Assert.NotNull(body);
+        Assert.True(body!.LatencyMs >= 0);
 
         return body!;
     }
@@ -304,5 +305,6 @@ public sealed class Phase147TriageApiTests : IClassFixture<DatabaseFixture>
         string RoutingAdvice,
         List<TriageOptionDto> Options,
         bool Degraded,
-        string Model);
+        string Model,
+        long LatencyMs = 0);
 }
