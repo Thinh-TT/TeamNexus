@@ -120,4 +120,121 @@ describe('AssigneeSuggestion', () => {
 
     expect(onSelectAssignee).toHaveBeenCalledWith('u-1')
   })
+
+  it('renders ManualRequired alert when confidence is low', async () => {
+    const mockData: AssigneeSuggestionResponse = {
+      taskId: 't-3',
+      recommendedUserId: null,
+      confidenceScore: 0.35,
+      routingAdvice: 'ManualRequired',
+      candidates: [],
+      degraded: false,
+      latencyMs: 140,
+    }
+
+    vi.mocked(jevApi.suggestAssignees).mockResolvedValue(mockData)
+
+    render(
+      <AssigneeSuggestion
+        boardId="b-1"
+        taskId="t-3"
+        onSelectAssignee={onSelectAssignee}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Gợi ý người làm \(Jev\)/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Chưa có ứng viên đạt độ tương thích cao/i)
+      ).toBeInTheDocument()
+    })
+  })
+
+  it('renders degraded alert when service is degraded', async () => {
+    const mockData: AssigneeSuggestionResponse = {
+      taskId: 't-4',
+      recommendedUserId: null,
+      confidenceScore: 0,
+      routingAdvice: 'ManualRequired',
+      candidates: [],
+      degraded: true,
+      latencyMs: 461,
+    }
+
+    vi.mocked(jevApi.suggestAssignees).mockResolvedValue(mockData)
+
+    render(
+      <AssigneeSuggestion
+        boardId="b-1"
+        taskId="t-4"
+        onSelectAssignee={onSelectAssignee}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Gợi ý người làm \(Jev\)/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Dịch vụ AI tạm không khả dụng/i)
+      ).toBeInTheDocument()
+    })
+  })
+
+  /**
+   * ISSUE-03 regression guard: no Tailwind classes, real Ant Design structure.
+   */
+  describe('ISSUE-03: no Tailwind, real Ant Design structure', () => {
+    it('never emits a Tailwind utility class anywhere in the tree', async () => {
+      const mockData: AssigneeSuggestionResponse = {
+        taskId: 't-guard',
+        recommendedUserId: 'u-1',
+        confidenceScore: 0.9,
+        routingAdvice: 'DirectAssign',
+        candidates: [
+          {
+            userId: 'u-1',
+            displayName: 'Dev Alpha',
+            probability: 0.9,
+            reason: 'Phù hợp kỹ năng',
+          },
+        ],
+        degraded: false,
+        latencyMs: 150,
+      }
+
+      vi.mocked(jevApi.suggestAssignees).mockResolvedValue(mockData)
+
+      const { container } = render(
+        <AssigneeSuggestion
+          boardId="b-1"
+          taskId="t-guard"
+          onSelectAssignee={onSelectAssignee}
+        />
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: /Gợi ý người làm \(Jev\)/i }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Dev Alpha')).toBeInTheDocument()
+      })
+
+      const tailwindish =
+        /(^|\s)(bg-|text-\[|border-|space-[xy]-|grid-cols-|gap-\d|p-\d|px-\d|py-\d|rounded-|flex-wrap|backdrop-|animate-|shrink-0)/
+
+      const offenders: string[] = []
+      container.querySelectorAll('*').forEach((el) => {
+        const cls = el.getAttribute('class') || ''
+        if (cls.split(/\s+/).some((token) => tailwindish.test(token))) {
+          offenders.push(`<${el.tagName.toLowerCase()} class="${cls}">`)
+        }
+      })
+
+      expect(
+        offenders,
+        `Found Tailwind classes in AssigneeSuggestion — project uses pure Ant Design:\n${offenders.join('\n')}`
+      ).toEqual([])
+    })
+  })
 })
+

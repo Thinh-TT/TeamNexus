@@ -184,6 +184,11 @@ public sealed class ObserverService : IObserverService
         var aiCalled = false;
         var findings = new List<ObserverFinding>();
         string? error = null;
+
+        // Giai đoạn 14.7 Track A / ISSUE-01: a failure of the System 2 (prose) step is recorded HERE and not
+        // in `error`. See the remarks on the LLM block below for why that distinction is the whole fix.
+        string? detailError = null;
+        var usedDetectorFallback = false;
         var skippedReason = (string?)null;
         string? model = null;
         int? promptTokens = null;
@@ -194,22 +199,22 @@ public sealed class ObserverService : IObserverService
         ObserverRiskAssessmentResult? jevRisk = null;
         var jevUsed = false;
 
-        try
+        if (signals.Signals.Count == 0)
         {
-            if (signals.Signals.Count == 0)
+            // 5) Nothing to interpret ⇒ never spend a token (roadmap requirement).
+            skippedReason = "NoSignals";
+        }
+        else
+        {
+            // 5a) Giai đoạn 14.7 §A5 Phần A — ask Jev FIRST, when the flag is on.
+            //
+            // Deliberately gated by its own setting rather than by Jev:Enabled: the Observer runs on a
+            // timer, so a global off-switch must not make every tick throw. With the flag on and Jev
+            // unreachable, the assessment degrades to ManualRequired and the LLM path below runs unchanged —
+            // which is exactly the "Jev is an optimisation, not a dependency" contract.
+            if (_jevOptions.ObserverSeverityRouting)
             {
-                // 5) Nothing to interpret ⇒ never spend a token (roadmap requirement).
-                skippedReason = "NoSignals";
-            }
-            else
-            {
-                // 5a) Giai đoạn 14.7 §A5 Phần A — ask Jev FIRST, when the flag is on.
-                //
-                // Deliberately gated by its own setting rather than by Jev:Enabled: the Observer runs on a
-                // timer, so a global off-switch must not make every tick throw. With the flag on and Jev
-                // unreachable, DecideAsync degrades to ManualRequired and the LLM path below runs unchanged —
-                // which is exactly the "Jev is an optimisation, not a dependency" contract.
-                if (_jevOptions.ObserverSeverityRouting)
+                try
                 {
                     // The workspace NAME, never its id: see BuildRiskContext.
                     var workspaceName = await LoadWorkspaceNameAsync(workspaceId, ct);
@@ -217,40 +222,68 @@ public sealed class ObserverService : IObserverService
                     jevRisk = await _jev.AssessObserverSignalsAsync(
                         BuildRiskContext(snapshot, signals, workspaceName), ct);
                     jevUsed = true;
-
-                    // 5b) Severity gating. A *confident* judgment that the situation is below the alert floor
-                    // skips the LLM entirely — that is the token/cost win the phase claims, and it is only
-                    // taken when the confidence is high enough to act on. A low-confidence verdict falls
-                    // through to the LLM, which is the System 2 fallback the roadmap describes.
-                    if (jevRisk.RoutingAdvice == Jev.ConfidenceRouting.DirectAssign
-                        && !NotificationSeverities.AtLeast(jevRisk.EvaluatedSeverity, _options.MinSeverityToNotify))
-                    {
-                        skippedReason = "JevBelowThreshold";
-                    }
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // `AssessObserverSignalsAsync` already absorbs provider failures, so reaching here means
+                    // something unexpected. Degrade to "no verdict" rather than failing the scan: the detector
+                    // output below is still a perfectly good alert set.
+                    _logger.LogWarning(
+                        ex,
+                        "Jev severity assessment failed for workspace {WorkspaceId}; continuing without it.",
+                        workspaceId);
                 }
 
-                if (skippedReason is null)
+                // 5b) Severity gating. A *confident* judgment that the situation is below the alert floor
+                // skips the LLM entirely — that is the token/cost win the phase claims, and it is only
+                // taken when the confidence is high enough to act on. A low-confidence verdict falls
+                // through to the LLM, which is the System 2 fallback the roadmap describes.
+                if (jevRisk is not null
+                    && jevRisk.RoutingAdvice == Jev.ConfidenceRouting.DirectAssign
+                    && !NotificationSeverities.AtLeast(jevRisk.EvaluatedSeverity, _options.MinSeverityToNotify))
                 {
-                    // 6–7) Summarize, then one non-retrying completion call. The Jev verdict is handed down as
-                    // a directive so the model explains at the severity our own code already decided.
-                    var directive = jevRisk is null
-                        ? null
-                        : ObserverPrompts.BuildJevSeverityDirective(
-                            jevRisk.EvaluatedSeverity, jevRisk.RequireImmediateAlert, jevRisk.HasDominoRisk);
+                    skippedReason = "JevBelowThreshold";
+                }
+            }
 
-                    var request = ObserverSummarizer.BuildRequest(snapshot, signals, _options, directive);
-                    truncatedByPrompt = Math.Max(
-                        0,
-                        signals.Signals.Count - ObserverSummarizer.CountSignalsInPayload(request.UserPrompt));
+            if (skippedReason is null)
+            {
+                // 6–7) Summarize, then one non-retrying completion call. The Jev verdict is handed down as
+                // a directive so the model explains at the severity our own code already decided.
+                var directive = jevRisk is null
+                    ? null
+                    : ObserverPrompts.BuildJevSeverityDirective(
+                        jevRisk.EvaluatedSeverity, jevRisk.RequireImmediateAlert, jevRisk.HasDominoRisk);
 
-                    _logger.LogDebug(
-                        "Observer prompt for workspace {WorkspaceId}: {Length} ký tự, {Signals} tín hiệu (jev={Jev}).",
-                        workspaceId,
-                        request.UserPrompt.Length,
-                        signals.Signals.Count,
-                        jevUsed);
+                var request = ObserverSummarizer.BuildRequest(snapshot, signals, _options, directive);
+                truncatedByPrompt = Math.Max(
+                    0,
+                    signals.Signals.Count - ObserverSummarizer.CountSignalsInPayload(request.UserPrompt));
 
-                    aiCalled = true;
+                _logger.LogDebug(
+                    "Observer prompt for workspace {WorkspaceId}: {Length} ký tự, {Signals} tín hiệu (jev={Jev}).",
+                    workspaceId,
+                    request.UserPrompt.Length,
+                    signals.Signals.Count,
+                    jevUsed);
+
+                aiCalled = true;
+
+                // ⚠️ **ISSUE-01 fix — the prose step is now its own failure domain.**
+                //
+                // Before this, an `AiProviderException` from here was caught by an OUTER handler that set
+                // `error`, which (a) marked the whole run `Failed`, (b) discarded Jev's severity verdict that
+                // had ALREADY been computed successfully, and (c) skipped the notification block, so a
+                // DeepSeek timeout produced "no signals, no alerts" for a workspace that genuinely had
+                // overdue tasks. A provider outage in the *explanation* step must not erase the *detection*
+                // step, which needs no AI at all.
+                //
+                // The detector's own output is therefore used as the alert set when the model is unavailable:
+                // each signal already carries a type, a severity and a human-readable summary composed from
+                // real data, so the alert is honest — and `detailError` records that the richer explanation
+                // never arrived.
+                try
+                {
                     var completion = await _aiProvider.CompleteAsync(request, ct);
                     promptTokens = completion.PromptTokens;
                     completionTokens = completion.CompletionTokens;
@@ -262,19 +295,38 @@ public sealed class ObserverService : IObserverService
                     // to the prompt, never a bypass of the validator that decides which findings are written.
                     findings = ObserverFindingValidator.Validate(output, signals.Signals, _options).ToList();
                 }
+                catch (AiProviderException ex)
+                {
+                    detailError = Cap(ex.Message, 500);
+                    findings = BuildDetectorFindings(signals.Signals, jevRisk);
+                    usedDetectorFallback = true;
+
+                    _logger.LogWarning(
+                        ex,
+                        "Observer detail step failed for workspace {WorkspaceId}; falling back to detector-derived "
+                        + "findings ({Findings}).",
+                        workspaceId,
+                        findings.Count);
+                }
+                catch (JsonException ex)
+                {
+                    detailError = Cap(ex.Message, 500);
+                    findings = BuildDetectorFindings(signals.Signals, jevRisk);
+                    usedDetectorFallback = true;
+
+                    _logger.LogWarning(
+                        ex,
+                        "Observer detail step returned unparsable output for workspace {WorkspaceId}; falling back "
+                        + "to detector-derived findings ({Findings}).",
+                        workspaceId,
+                        findings.Count);
+                }
             }
         }
-        catch (AiProviderException ex)
-        {
-            error = Cap(ex.Message, 500);
-            _logger.LogWarning(ex, "Observer scan failed for workspace {WorkspaceId} (AI provider).", workspaceId);
-        }
-        catch (JsonException ex)
-        {
-            error = Cap(ex.Message, 500);
-            _logger.LogWarning(ex, "Observer scan failed for workspace {WorkspaceId} (unparsable AI output).", workspaceId);
-        }
 
+        // The run only counts as Failed when we produced NOTHING usable. A completed scan with a degraded
+        // explanation is still a successful scan: the manager gets real alerts, and the run summary says the
+        // prose step did not happen.
         var status = error is not null ? ObserverRunStatus.Failed : ObserverRunStatus.Completed;
 
         // 9) Notify (only on a successful run), then record the run + prune old activity.
@@ -300,7 +352,7 @@ public sealed class ObserverService : IObserverService
             workspaceId, runId, startedAt, status, signals, signalsByType, findings, notificationsCreated,
             aiCalled, model, promptTokens, completionTokens, truncatedByPrompt, skippedReason, error,
             stopwatch.ElapsedMilliseconds, ct,
-            jevUsed, jevRisk, recoveryPlanLogId);
+            jevUsed, jevRisk, recoveryPlanLogId, detailError, usedDetectorFallback);
 
         if (status == ObserverRunStatus.Completed)
         {
@@ -309,7 +361,8 @@ public sealed class ObserverService : IObserverService
 
         _logger.LogInformation(
             "Observer run {RunId} for workspace {WorkspaceId}: status={Status}, signals={Signals}, "
-            + "findings={Findings}, notifications={Notifications}, aiCalled={AiCalled}, durationMs={DurationMs}.",
+            + "findings={Findings}, notifications={Notifications}, aiCalled={AiCalled}, durationMs={DurationMs}, "
+            + "detailError={HasDetailError}, detectorFallback={Fallback}.",
             runId,
             workspaceId,
             status,
@@ -317,11 +370,14 @@ public sealed class ObserverService : IObserverService
             findings.Count,
             notificationsCreated,
             aiCalled,
-            stopwatch.ElapsedMilliseconds);
+            stopwatch.ElapsedMilliseconds,
+            detailError is not null,
+            usedDetectorFallback);
 
         return new ObserverScanOutcome(
             runId, workspaceId, status.ToString(), signals.Signals.Count, findings.Count,
-            notificationsCreated, aiCalled, skippedReason, error);
+            notificationsCreated, aiCalled, skippedReason, error,
+            detailError, usedDetectorFallback);
     }
 
     // ---- run history -------------------------------------------------------
@@ -697,6 +753,62 @@ public sealed class ObserverService : IObserverService
         int DaysRemaining,
         int AssigneeOpenTaskCount);
 
+    /// <summary>
+    /// Builds an alert set from the detector's own signals — the fallback used when the System 2 (prose) step
+    /// is unavailable (Giai đoạn 14.7 Track A, **ISSUE-01**).
+    /// <para>
+    /// <b>Why this is not "inventing findings".</b> Every field comes from the detector, which is plain
+    /// deterministic C# over real rows: the <c>Type</c> is the signal's type, <c>TaskIds</c>/<c>UserIds</c> are
+    /// the evidence ids the detector already capped, and the message is composed from the signal's own
+    /// summary. Nothing here is model output, which is why no validator pass is needed — and why the
+    /// anti-hallucination guarantee is not weakened: there is no model in this path to hallucinate.
+    /// </para>
+    /// <para>
+    /// <b>Why not simply write no alert at all.</b> That was the old behaviour and it is the actual harm of
+    /// the issue: a DeepSeek timeout produced "0 signals, 0 alerts" for a workspace that genuinely had four
+    /// overdue tasks, so an outage of the *explanation* step silently disabled *detection*.
+    /// </para>
+    /// <para>
+    /// <b>Severity:</b> each finding keeps its OWN signal's severity rather than the run-level verdict from
+    /// Jev. A single assessed severity describes the whole situation, so copying it onto every signal would
+    /// relabel a Medium bottleneck as Critical — a worse outcome than losing the aggregate.
+    /// </para>
+    /// <para>
+    /// Public for the same reason the other pure helpers are: the fallback's shape is the interesting part,
+    /// and a test must be able to pin it without a database or a failing provider.
+    /// </para>
+    /// </summary>
+    public static List<ObserverFinding> BuildDetectorFindings(
+        IReadOnlyList<ObserverSignal> signals, ObserverRiskAssessmentResult? jevRisk)
+    {
+        var findings = new List<ObserverFinding>(signals.Count);
+
+        foreach (var signal in signals)
+        {
+            // A signal whose severity is somehow unknown is skipped rather than forced to Medium: the
+            // persistence layer relies on this value being one of the four canonical words.
+            if (!NotificationSeverities.IsKnown(signal.Severity))
+            {
+                continue;
+            }
+
+            var dominoNote = jevRisk?.HasDominoRisk == true
+                ? " Mô hình đánh giá có nguy cơ đổ vỡ dây chuyền."
+                : string.Empty;
+
+            findings.Add(new ObserverFinding(
+                Type: signal.Type,
+                Severity: signal.Severity,
+                Title: $"Cảnh báo tiến độ: {signal.Type}",
+                Message: $"{signal.Summary} Hệ thống phát hiện tín hiệu này trực tiếp từ dữ liệu bảng."
+                         + $" Phần giải thích chi tiết của AI tạm thời không khả dụng.{dominoNote}",
+                TaskIds: signal.TaskIds,
+                UserIds: signal.UserIds));
+        }
+
+        return findings;
+    }
+
     // ---- data loading ------------------------------------------------------
 
     /// <summary>
@@ -848,7 +960,9 @@ public sealed class ObserverService : IObserverService
         CancellationToken ct,
         bool jevUsed = false,
         ObserverRiskAssessmentResult? jevRisk = null,
-        Guid? recoveryPlanLogId = null)
+        Guid? recoveryPlanLogId = null,
+        string? detailError = null,
+        bool usedDetectorFallback = false)
     {
         var summary = JsonSerializer.Serialize(new
         {
@@ -875,9 +989,21 @@ public sealed class ObserverService : IObserverService
             jevConfidence = jevRisk?.ConfidenceScore,
             jevRequireImmediateAlert = jevRisk?.RequireImmediateAlert,
             jevHasDominoRisk = jevRisk?.HasDominoRisk,
+            // Giai đoạn 14.7 Track A (ISSUE-05): the cost evidence. Jev bills per INPUT token with output
+            // free, so `jevInputTokens` + `jevCostUsd` are what make "System 1 is ~90% cheaper" a measurement
+            // instead of a claim. Read from the result's own usage block, which is why the usage is carried on
+            // the result rather than dropped inside the decision service.
+            jevInputTokens = jevRisk?.Usage?.InputTokens,
+            jevOutputTokens = jevRisk?.Usage?.OutputTokens,
+            jevCostUsd = jevRisk?.Usage?.CostUsd,
             // The id of the Pending plan this run drafted, if any — the audit link from an alert to the
             // proposal it produced.
             recoveryPlanLogId,
+            // Giai đoạn 14.7 Track A / ISSUE-01: kept SEPARATE from `error` on purpose. `error` means the run
+            // failed; this means the run succeeded but its prose step did not, which is a warning the UI shows
+            // rather than a red failure state.
+            detailError,
+            usedDetectorFallback,
             durationMs,
             skippedReason,
             error,
@@ -1007,7 +1133,18 @@ public sealed class ObserverService : IObserverService
             ReadInt(summary, "signalsDetected"),
             ReadInt(summary, "findingsWritten"),
             ReadInt(summary, "notificationsCreated"),
-            ReadBool(summary, "aiCalled"));
+            ReadBool(summary, "aiCalled"))
+        {
+            // Giai đoạn 14.7: projected from the run summary. Every one of these tolerates absence, so a run
+            // recorded before this phase simply reads false/null instead of failing the whole list.
+            UsedDetectorFallback = ReadBool(summary, "usedDetectorFallback"),
+            DetailError = ReadString(summary, "detailError"),
+            JevUsed = ReadBool(summary, "jevUsed"),
+            JevSeverity = ReadString(summary, "jevSeverity"),
+            JevConfidence = ReadDouble(summary, "jevConfidence"),
+            JevCostUsd = ReadDouble(summary, "jevCostUsd"),
+            JevInputTokens = ReadNullableInt(summary, "jevInputTokens"),
+        };
     }
 
     private static int ReadInt(JsonElement? element, string propertyName)
@@ -1017,6 +1154,32 @@ public sealed class ObserverService : IObserverService
            && value.TryGetInt32(out var result)
             ? result
             : 0;
+
+    /// <summary>Nullable int read: absent/non-numeric ⇒ <c>null</c> (never <c>0</c>, which would be a real value).</summary>
+    private static int? ReadNullableInt(JsonElement? element, string propertyName)
+        => element is { ValueKind: JsonValueKind.Object } root
+           && root.TryGetProperty(propertyName, out var value)
+           && value.ValueKind == JsonValueKind.Number
+           && value.TryGetInt32(out var result)
+            ? result
+            : null;
+
+    /// <summary>Nullable double read; absent/non-numeric ⇒ <c>null</c>.</summary>
+    private static double? ReadDouble(JsonElement? element, string propertyName)
+        => element is { ValueKind: JsonValueKind.Object } root
+           && root.TryGetProperty(propertyName, out var value)
+           && value.ValueKind == JsonValueKind.Number
+           && value.TryGetDouble(out var result)
+            ? result
+            : null;
+
+    /// <summary>Nullable string read; absent/non-string/blank ⇒ <c>null</c>.</summary>
+    private static string? ReadString(JsonElement? element, string propertyName)
+        => element is { ValueKind: JsonValueKind.Object } root
+           && root.TryGetProperty(propertyName, out var value)
+           && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     private static bool ReadBool(JsonElement? element, string propertyName)
         => element is { ValueKind: JsonValueKind.Object } root

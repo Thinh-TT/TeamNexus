@@ -58,6 +58,13 @@ export interface ObserverRunResponse {
   findingsWritten: number
   notificationsCreated: number
   aiCalled: boolean
+  usedDetectorFallback?: boolean
+  detailError?: string | null
+  jevUsed?: boolean
+  jevSeverity?: string | null
+  jevConfidence?: number | null
+  jevCostUsd?: number | null
+  jevInputTokens?: number | null
 }
 
 export interface ObserverRunFinding {
@@ -84,6 +91,13 @@ export interface ObserverRunSummary {
   durationMs?: number
   skippedReason?: string | null
   error?: string | null
+  detailError?: string | null
+  usedDetectorFallback?: boolean
+  jevUsed?: boolean
+  jevSeverity?: string | null
+  jevConfidence?: number | null
+  jevCostUsd?: number | null
+  jevInputTokens?: number | null
   findings?: ObserverRunFinding[]
   [key: string]: unknown
 }
@@ -101,4 +115,6 @@ export interface ObserverScanResponse {
   findingsWritten: number
   notificationsCreated: number
   aiCalled: boolean
+  usedDetectorFallback?: boolean
+  detailError?: string | null
 }

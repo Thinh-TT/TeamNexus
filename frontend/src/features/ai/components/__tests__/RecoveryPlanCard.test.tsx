@@ -117,4 +117,44 @@ describe('RecoveryPlanCard', () => {
       expect(onActionSuccess).toHaveBeenCalled()
     })
   })
+
+  /**
+   * ISSUE-04 regression guard: no Tailwind classes, real Ant Design structure.
+   */
+  describe('ISSUE-04: no Tailwind, real Ant Design structure', () => {
+    it('never emits a Tailwind utility class anywhere in the tree', () => {
+      const actionLog: AiActionLog = {
+        id: 'log-guard',
+        workspaceId: 'ws-1',
+        actionType: 'RecoveryPlan',
+        status: 'Pending',
+        basisJson: JSON.stringify({
+          kind: 'EscalateManager',
+          reason: 'Báo cáo họp khẩn',
+        }),
+        createdAt: '2026-10-15T08:00:00Z',
+      }
+
+      const { container } = render(
+        <RecoveryPlanCard actionLog={actionLog} onActionSuccess={onActionSuccess} />
+      )
+
+      const tailwindish =
+        /(^|\s)(bg-|text-\[|border-|space-[xy]-|grid-cols-|gap-\d|p-\d|px-\d|py-\d|rounded-|flex-wrap|backdrop-|animate-|shrink-0)/
+
+      const offenders: string[] = []
+      container.querySelectorAll('*').forEach((el) => {
+        const cls = el.getAttribute('class') || ''
+        if (cls.split(/\s+/).some((token) => tailwindish.test(token))) {
+          offenders.push(`<${el.tagName.toLowerCase()} class="${cls}">`)
+        }
+      })
+
+      expect(
+        offenders,
+        `Found Tailwind classes in RecoveryPlanCard — project uses pure Ant Design:\n${offenders.join('\n')}`
+      ).toEqual([])
+    })
+  })
 })
+

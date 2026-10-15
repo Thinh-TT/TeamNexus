@@ -216,17 +216,29 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
         // Phase 11 §2: one space, not the empty string — same trick as the two above. Without it a
         // developer's User Secrets key would make the suite send REAL email on every invitation test.
         builder.UseSetting("Email:ApiKey", " ");
+        // Giai đoạn 14.7 Track A — **the Jev key needs the SAME guard, and originally did not have it.**
+        //
+        // ⚠️ `WebApplicationFactory` appends `appsettings.Development.json` and **User Secrets** to the
+        // configuration AFTER `UseSetting`, so those sources win over everything below. A developer with
+        // `Jev:ApiKey` in secrets (which is exactly how the phase documents setting it up) therefore ran the
+        // Jev integration suites against the LIVE OpenRouter endpoint: real tokens, real money, and
+        // non-deterministic assertions that failed for reasons the fixtures never chose. Setting one space
+        // keeps `JevOptions.HasApiKey` false, which selects `FakeJevDecisionProvider`.
+        //
+        // The `if` below is the deliberate escape hatch for a suite that WANTS the real provider: it is applied
+        // after this line, so an explicit key still wins.
+        builder.UseSetting("Jev:ApiKey", " ");
         builder.UseSetting("Agent:Enabled", AgentEnabled ? "true" : "false");
         builder.UseSetting("Reports:Enabled", ReportsEnabled ? "true" : "false");
         builder.UseSetting("Observer:Enabled", "false");
 
         // Giai đoạn 14.7 §A3: the Jev switch is stated explicitly for the same reason every other switch is —
         // a developer's own User Secrets must never decide whether an integration suite behaves one way or
-        // another. Note there is deliberately NO `Jev:ApiKey` here: an absent key is the offline fake, and
-        // setting it (even to a space) is not needed because the factory's settings cannot supply a real one.
+        // another.
         builder.UseSetting("Jev:Enabled", JevEnabled ? "true" : "false");
         if (!string.IsNullOrWhiteSpace(JevApiKey))
         {
+            // Only ever set by a fixture that explicitly opts in to the real provider.
             builder.UseSetting("Jev:ApiKey", JevApiKey);
         }
         builder.UseSetting("Jev:AutoRecoveryPlanEnabled", AutoRecoveryPlanEnabled ? "true" : "false");

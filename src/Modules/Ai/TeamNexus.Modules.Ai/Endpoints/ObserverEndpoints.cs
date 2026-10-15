@@ -58,6 +58,11 @@ public static class ObserverEndpoints
 
         // A Failed run is already persisted (with summary.error); the HTTP contract exposes it as a
         // 502 via the shared domain filter, so the UI can show "AI is unavailable" and reload.
+        //
+        // Giai đoạn 14.7 Track A / ISSUE-01: only a run that produced NOTHING usable is a 502. A run whose
+        // System 2 (prose) step failed but whose detector output and Jev verdict survived is `Completed` with
+        // a `detailError`, so the client shows a warning NEXT TO real alerts instead of a red failure that
+        // hides them. That distinction is the whole point of the issue.
         if (string.Equals(outcome.Status, nameof(ObserverRunStatus.Failed), StringComparison.Ordinal))
         {
             throw new AiProviderException(outcome.Error ?? "Observer scan failed.");

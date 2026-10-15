@@ -152,6 +152,19 @@ export const ObserverRunsDrawer: React.FC<ObserverRunsDrawerProps> = ({
         {/* View 1: Selected Run Detail */}
         {selectedRun ? (
           <div style={{ flex: 1, overflowY: 'auto' }}>
+            {(selectedRun.usedDetectorFallback ?? selectedRun.summary?.usedDetectorFallback) && (
+              <Alert
+                type="warning"
+                showIcon
+                title="Hoạt động ở chế độ Suy giảm (Detector Fallback)"
+                description={
+                  selectedRun.detailError ||
+                  (selectedRun.summary?.detailError as string) ||
+                  'Các cảnh báo được tạo từ tín hiệu trực tiếp do bước diễn giải LLM gặp sự cố.'
+                }
+                style={{ marginBottom: 12, borderRadius: 8 }}
+              />
+            )}
             <Card
               size="small"
               style={{
@@ -184,6 +197,16 @@ export const ObserverRunsDrawer: React.FC<ObserverRunsDrawerProps> = ({
                 <Descriptions.Item label="Gọi DeepSeek AI">
                   {selectedRun.aiCalled ? <Tag color="purple">Có</Tag> : <Tag>Không</Tag>}
                 </Descriptions.Item>
+                {(selectedRun.jevUsed ?? selectedRun.summary?.jevUsed) && (
+                  <Descriptions.Item label="Jev System 1">
+                    <Tag color="cyan">
+                      {selectedRun.jevSeverity ?? selectedRun.summary?.jevSeverity ?? 'Đã kích hoạt'}
+                      {(selectedRun.jevConfidence ?? selectedRun.summary?.jevConfidence) !== undefined &&
+                        (selectedRun.jevConfidence ?? selectedRun.summary?.jevConfidence) !== null &&
+                        ` (${Math.round(Number(selectedRun.jevConfidence ?? selectedRun.summary?.jevConfidence) * 100)}%)`}
+                    </Tag>
+                  </Descriptions.Item>
+                )}
                 {selectedRun.summary && (
                   <>
                     {(selectedRun.summary as { durationMs?: number }).durationMs !== undefined && (
@@ -200,6 +223,17 @@ export const ObserverRunsDrawer: React.FC<ObserverRunsDrawerProps> = ({
                       )}
                   </>
                 )}
+                {(selectedRun.jevCostUsd ?? selectedRun.summary?.jevCostUsd) !== undefined &&
+                  (selectedRun.jevCostUsd ?? selectedRun.summary?.jevCostUsd) !== null && (
+                    <Descriptions.Item label="Chi phí Jev">
+                      <Typography.Text style={{ fontFamily: 'monospace', fontSize: 11.5 }}>
+                        ${Number(selectedRun.jevCostUsd ?? selectedRun.summary?.jevCostUsd).toFixed(6)} USD
+                        {(selectedRun.jevInputTokens ?? selectedRun.summary?.jevInputTokens)
+                          ? ` (${selectedRun.jevInputTokens ?? selectedRun.summary?.jevInputTokens} tokens)`
+                          : ''}
+                      </Typography.Text>
+                    </Descriptions.Item>
+                  )}
               </Descriptions>
             </Card>
 
@@ -256,6 +290,8 @@ export const ObserverRunsDrawer: React.FC<ObserverRunsDrawerProps> = ({
                       <Flex vertical gap={4}>
                         <Flex align="center" gap={6}>
                           {getStatusTag(run.status)}
+                          {run.jevUsed && <Tag color="cyan" style={{ margin: 0, fontSize: 10 }}>Jev</Tag>}
+                          {run.usedDetectorFallback && <Tag color="warning" style={{ margin: 0, fontSize: 10 }}>Fallback</Tag>}
                           <Typography.Text strong style={{ fontSize: 13 }}>
                             {dayjs(run.startedAt).format('HH:mm:ss DD/MM/YYYY')}
                           </Typography.Text>

@@ -133,4 +133,36 @@ describe('ObserverRunsDrawer', () => {
 
     expect(observerApi.triggerObserverScan).toHaveBeenCalledWith('ws-1')
   })
+
+  it('renders Jev metrics and detector fallback warning in detail view', async () => {
+    const degradedDetail: ObserverRunDetailResponse = {
+      ...mockRunDetail,
+      usedDetectorFallback: true,
+      detailError: 'DeepSeek không phản hồi trong 60s (timeout)',
+      jevUsed: true,
+      jevSeverity: 'High',
+      jevConfidence: 0.92,
+      jevCostUsd: 0.000025,
+      jevInputTokens: 450,
+    }
+
+    vi.mocked(observerApi.getObserverRun).mockResolvedValueOnce(degradedDetail)
+
+    renderComponent(true)
+
+    const detailBtns = await screen.findAllByText('Xem chi tiết →')
+    fireEvent.click(detailBtns[0])
+
+    expect(
+      await screen.findByText('Hoạt động ở chế độ Suy giảm (Detector Fallback)')
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/DeepSeek không phản hồi trong 60s/i)
+    ).toBeInTheDocument()
+    expect(screen.getByText('Jev System 1')).toBeInTheDocument()
+    expect(screen.getByText('High (92%)')).toBeInTheDocument()
+    expect(screen.getByText('Chi phí Jev')).toBeInTheDocument()
+    expect(screen.getByText(/0.000025 USD/)).toBeInTheDocument()
+  })
 })
+
