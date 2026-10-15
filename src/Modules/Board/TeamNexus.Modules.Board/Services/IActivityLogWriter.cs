@@ -54,6 +54,12 @@ public static class ObserverActivityActions
 
     /// <summary>A member left the workspace on their own initiative.</summary>
     public const string MemberLeft = "MemberLeft";
+
+    /// <summary>
+    /// A member's capacity profile changed — skills, primary role, capacity weight or WIP limit
+    /// (Giai đoạn 14.7 §A2, Admin only). The payload names the fields that moved rather than the values.
+    /// </summary>
+    public const string MemberSkillsChanged = "MemberSkillsChanged";
 }
 
 /// <summary>Entity types written to <c>activity_logs.entity_type</c>.</summary>

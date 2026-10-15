@@ -24,6 +24,7 @@ import type {
   UpdateWorkspaceRequest,
   WorkspaceDetail,
 } from '../types/workspace.types'
+import { TaxonomySettings } from './TaxonomySettings'
 
 interface WorkspaceSettingsModalProps {
   open: boolean
@@ -172,6 +173,20 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
         </Form>
       ),
     },
+    ...(isManagerOrAdmin
+      ? [
+          {
+            key: 'taxonomy',
+            label: 'Phân loại (Taxonomy)',
+            children: (
+              <TaxonomySettings
+                workspaceId={detail.id}
+                isManagerOrAdmin={isManagerOrAdmin}
+              />
+            ),
+          },
+        ]
+      : []),
     ...(isAdminOrOwner
       ? [
           {

@@ -43,6 +43,54 @@ public static class AiActionTypes
     /// moves the card back to the column recorded in <c>applied_snapshot.fromColumnId</c>.
     /// </summary>
     public const string MoveTaskToColumn = "MoveTaskToColumn";
+
+    /// <summary>
+    /// The AI Observer's proactive recovery plan (Giai đoạn 14.7 §A5 Phần B). Scope is
+    /// <c>entity_type = 'Workspace'</c> because a signal can span boards.
+    /// <para>
+    /// <b>Deliberately ONE action type with the plan kind inside the payload</b>, not four
+    /// (<c>ReassignTask</c>/<c>SplitSubtasks</c>/<c>ExtendDeadline</c>/<c>EscalateManager</c>). The column is
+    /// free text, so four types would "work" — but the AI history list, the <c>?action=</c> filter and the
+    /// single "approve this proposal" UI all read better with one entry whose <c>after_snapshot.kind</c> says
+    /// what it will do. Splitting them would fragment the audit trail for no gain.
+    /// </para>
+    /// </summary>
+    public const string RecoveryPlan = "RecoveryPlan";
+}
+
+/// <summary>
+/// The recovery actions a plan may carry (Giai đoạn 14.7 §A5 Phần B). These strings are the <c>Choice</c>
+/// option keys handed to Jev, so they are a contract with the model — and they are also what
+/// <c>RecoveryPlanApplier</c> switches on.
+/// </summary>
+public static class RecoveryPlanKinds
+{
+    /// <summary>Move the task to a member with capacity.</summary>
+    public const string ReassignTask = "ReassignTask";
+
+    /// <summary>Keep the task and break the remaining work into sub-tasks for the next sprint.</summary>
+    public const string SplitSubtasks = "SplitSubtasks";
+
+    /// <summary>Extend the deadline to something achievable at the observed velocity.</summary>
+    public const string ExtendDeadline = "ExtendDeadline";
+
+    /// <summary>Nothing can be fixed automatically — the manager has to convene.</summary>
+    public const string EscalateManager = "EscalateManager";
+
+    /// <summary>All kinds, in the order they are offered to the model.</summary>
+    public static IReadOnlyList<string> All { get; } =
+        [ReassignTask, SplitSubtasks, ExtendDeadline, EscalateManager];
+
+    /// <summary>Case-insensitive membership test (the model's answer is untrusted input).</summary>
+    public static bool IsKnown(string? kind)
+        => !string.IsNullOrWhiteSpace(kind)
+           && All.Any(known => string.Equals(known, kind.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Canonical casing for a known kind, or <c>null</c>.</summary>
+    public static string? Canonical(string? kind)
+        => string.IsNullOrWhiteSpace(kind)
+            ? null
+            : All.FirstOrDefault(known => string.Equals(known, kind.Trim(), StringComparison.OrdinalIgnoreCase));
 }
 
 /// <summary>Entity types stored in <c>ai_action_logs.entity_type</c>.</summary>

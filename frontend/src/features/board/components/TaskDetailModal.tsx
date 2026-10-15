@@ -57,6 +57,9 @@ import type {
 import { useWorkspaceMembers } from '../hooks/useWorkspaceMembers'
 import { AgentRunPanel, AttachmentList, useAgentRuns } from '../../ai'
 import { AiChatPanel } from '../../ai/components/AiChatPanel'
+import { JevTriagePanel } from '../../ai/components/JevTriagePanel'
+import { AssigneeSuggestion } from '../../ai/components/AssigneeSuggestion'
+import { useJevTriage } from '../../ai/hooks/useJevTriage'
 
 interface TaskDetailModalProps {
   task: TaskResponse | null
@@ -155,7 +158,19 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
   // Description tab mode (Soạn vs Xem trước)
   const [descMode, setDescMode] = useState<'write' | 'preview'>('write')
+  const titleWatch = Form.useWatch('title', form)
   const descriptionWatch = Form.useWatch('description', form)
+
+  const {
+    triageData,
+    isLoading: isTriageLoading,
+    isDegraded: isTriageDegraded,
+  } = useJevTriage({
+    boardId: task?.boardId || '',
+    title: titleWatch || task?.title || '',
+    description: descriptionWatch || task?.description,
+    enabled: open && Boolean(task?.boardId),
+  })
 
   // Sync task data into form and fetch comments
   useEffect(() => {
@@ -498,6 +513,29 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
               )}
             </div>
 
+            {/* Jev Triage Panel */}
+            <div style={{ marginBottom: 16 }}>
+              <JevTriagePanel
+                triageData={triageData}
+                isLoading={isTriageLoading}
+                isDegraded={isTriageDegraded}
+                onApplyDirect={async (sug) => {
+                  if (sug.priority) {
+                    form.setFieldValue('priority', sug.priority)
+                    await handleSaveMetadata()
+                    message.success('Đã áp dụng mức ưu tiên từ AI.')
+                  }
+                }}
+                onSelectOption={async (opt) => {
+                  if (opt.field === 'priority') {
+                    form.setFieldValue('priority', opt.value)
+                    await handleSaveMetadata()
+                    message.success(`Đã chọn mức ưu tiên: ${opt.value}`)
+                  }
+                }}
+              />
+            </div>
+
             <Divider style={{ margin: '16px 0' }} />
 
             {/* Tabs (Comments & Activity) */}
@@ -820,6 +858,17 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     ),
                   }))}
                 />
+
+                <div style={{ marginTop: 8 }}>
+                  <AssigneeSuggestion
+                    boardId={task.boardId}
+                    taskId={task.id}
+                    currentAssigneeId={task.assigneeId}
+                    onSelectAssignee={(userId) => {
+                      void handleAssigneeChange(userId)
+                    }}
+                  />
+                </div>
               </div>
 
               {/* Status info */}

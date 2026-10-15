@@ -1410,9 +1410,21 @@ namespace TeamNexus.Persistence.Migrations
                         .HasColumnType("character varying(120)")
                         .HasColumnName("ai_agent_name");
 
+                    b.Property<double>("CapacityWeight")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("double precision")
+                        .HasDefaultValue(1.0)
+                        .HasColumnName("capacity_weight");
+
                     b.Property<DateTimeOffset>("JoinedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("joined_at");
+
+                    b.Property<int>("MaxWipLimit")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(5)
+                        .HasColumnName("max_wip_limit");
 
                     b.Property<string>("MemberType")
                         .IsRequired()
@@ -1422,11 +1434,26 @@ namespace TeamNexus.Persistence.Migrations
                         .HasDefaultValue("human")
                         .HasColumnName("member_type");
 
+                    b.Property<string>("PrimaryRole")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Member")
+                        .HasColumnName("primary_role");
+
                     b.Property<string>("Role")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)")
                         .HasColumnName("role");
+
+                    b.PrimitiveCollection<string>("Skills")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("skills")
+                        .HasDefaultValueSql("'[]'::jsonb");
 
                     b.HasKey("WorkspaceId", "UserId")
                         .HasName("pk_workspace_members");
@@ -1441,9 +1468,75 @@ namespace TeamNexus.Persistence.Migrations
 
                     b.ToTable("workspace_members", null, t =>
                         {
+                            t.HasCheckConstraint("ck_workspace_members_capacity_weight", "\"capacity_weight\" > 0");
+
+                            t.HasCheckConstraint("ck_workspace_members_max_wip_limit", "\"max_wip_limit\" >= 0");
+
                             t.HasCheckConstraint("ck_workspace_members_member_type", "\"member_type\" IN ('human', 'ai_agent')");
 
                             t.HasCheckConstraint("ck_workspace_members_role", "\"role\" IN ('Admin', 'Manager', 'Member')");
+                        });
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceTaxonomy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ColorHex")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("color_hex");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("key");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("label");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasColumnName("position");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_workspace_taxonomies");
+
+                    b.HasIndex("WorkspaceId", "Kind", "Key")
+                        .IsUnique()
+                        .HasDatabaseName("uq_workspace_taxonomies_key");
+
+                    b.HasIndex("WorkspaceId", "Kind", "Position")
+                        .HasDatabaseName("ix_workspace_taxonomies_lookup");
+
+                    b.ToTable("workspace_taxonomies", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_workspace_taxonomies_kind", "\"kind\" IN ('domain', 'work_type')");
                         });
                 });
 
@@ -1895,6 +1988,18 @@ namespace TeamNexus.Persistence.Migrations
                         .HasConstraintName("fk_workspace_members_workspaces_workspace_id");
 
                     b.Navigation("User");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceTaxonomy", b =>
+                {
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_workspace_taxonomies_workspaces_workspace_id");
 
                     b.Navigation("Workspace");
                 });

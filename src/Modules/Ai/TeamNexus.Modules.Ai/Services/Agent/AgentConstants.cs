@@ -68,4 +68,15 @@ public static class AgentNotificationTypes
 
     /// <summary>A draft is waiting for human approval in the Accountability drawer.</summary>
     public const string OutputPending = "AgentOutputPending";
+
+    /// <summary>
+    /// The Observer drafted a recovery plan that is waiting for approval (Giai đoạn 14.7 §A5 Phần B).
+    /// <para>
+    /// Placed in the agent family rather than <c>NotificationTypes.All</c> for the same reason the three
+    /// above are: that list is the Observer's <b>anti-hallucination whitelist</b>, and adding a
+    /// human-approval alert to it would let the model emit "RecoveryPlanPending" and pass validation.
+    /// This type is only ever written by our own code.
+    /// </para>
+    /// </summary>
+    public const string RecoveryPlanPending = "RecoveryPlanPending";
 }

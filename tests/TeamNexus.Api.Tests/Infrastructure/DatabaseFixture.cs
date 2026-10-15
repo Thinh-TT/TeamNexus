@@ -191,7 +191,11 @@ public sealed class DatabaseFixture : IAsyncLifetime
         ScriptedAiProvider? scriptedAi = null,
         TimeProvider? clock = null,
         bool? aiChatEnabled = null,
-        IExternalAlertSink? externalAlerts = null)
+        IExternalAlertSink? externalAlerts = null,
+        bool? jevEnabled = null,
+        bool? autoRecoveryPlanEnabled = null,
+        bool? observerJevSeverityRouting = null,
+        string? jevApiKey = null)
     {
         Require();
 
@@ -201,13 +205,17 @@ public sealed class DatabaseFixture : IAsyncLifetime
         try
         {
             // The shared host is reused for every ordinary scenario. A DI override (scripted AI, a
-            // fixed clock, the chat's off switch, a recording alert sink) cannot be applied to it, so
-            // those cases build their own host — the cost is a real ASP.NET Core host build, which is why
-            // it is opt-in rather than the default.
+            // fixed clock, the chat's off switch, a recording alert sink, the Jev off switch, the recovery-plan
+            // opt-in) cannot be applied to it, so those cases build their own host — the cost is a real
+            // ASP.NET Core host build, which is why it is opt-in rather than the default.
             var needsOwnHost = scriptedAi is not null
                                || clock is not null
                                || aiChatEnabled.HasValue
-                               || externalAlerts is not null;
+                               || externalAlerts is not null
+                               || jevEnabled.HasValue
+                               || autoRecoveryPlanEnabled.HasValue
+                               || observerJevSeverityRouting.HasValue
+                               || !string.IsNullOrWhiteSpace(jevApiKey);
 
             var factory = needsOwnHost
                 ? new TeamNexusApiFactory
@@ -217,6 +225,10 @@ public sealed class DatabaseFixture : IAsyncLifetime
                     Clock = clock,
                     AiChatEnabled = aiChatEnabled ?? true,
                     ExternalAlerts = externalAlerts,
+                    JevEnabled = jevEnabled ?? true,
+                    JevApiKey = jevApiKey,
+                    AutoRecoveryPlanEnabled = autoRecoveryPlanEnabled ?? false,
+                    ObserverJevSeverityRouting = observerJevSeverityRouting ?? true,
                 }
                 : Factory;
 

@@ -13,6 +13,7 @@ using TeamNexus.Modules.Ai.Services.Agent.Agents;
 using TeamNexus.Modules.Ai.Services.Appliers;
 using TeamNexus.Modules.Ai.Services.Email;
 using TeamNexus.Modules.Ai.Services.Integrations;
+using TeamNexus.Modules.Ai.Services.Jev;
 using TeamNexus.Modules.Board.Endpoints;
 using TeamNexus.Modules.Board.Services;
 using TeamNexus.Shared.Endpoints;
@@ -39,6 +40,13 @@ public static class AiModule
 
     /// <summary>Name of the <see cref="IHttpClientFactory"/> client used for Resend email (Phase 11 §2).</summary>
     public const string EmailHttpClientName = "Resend";
+
+    /// <summary>
+    /// Name of the <see cref="IHttpClientFactory"/> client used for Jev decisions (Giai đoạn 14.7 §A1).
+    /// Separate from <see cref="HttpClientName"/> on purpose: Jev has its own host, its own (much shorter)
+    /// timeout and a different route, so sharing the DeepSeek client would couple two unrelated budgets.
+    /// </summary>
+    public const string JevHttpClientName = "Jev";
 
     public static IServiceCollection AddAiModule(
         this IServiceCollection services,
@@ -72,6 +80,40 @@ public static class AiModule
                 ? ActivatorUtilities.CreateInstance<DeepSeekAiProvider>(provider)
                 : ActivatorUtilities.CreateInstance<FakeAiProvider>(provider);
         });
+
+        // ---- Jev decision client (Giai đoạn 14.7 §A1) ---------------------------
+        // Jev is TypeSafe's System One model, reached through OpenRouter's Decisions API. It is NOT reachable
+        // over /chat/completions, so it gets its own options section, its own named HttpClient and its own
+        // port — see the remarks on IJevDecisionProvider for why it is not a fourth method on IAiProvider.
+        //
+        // The same HasApiKey switch as every other provider: no key ⇒ FakeJevDecisionProvider, so a fresh
+        // clone, a dev machine and the CI run all exercise the whole Jev pipeline offline at zero cost.
+        services.AddOptions<JevOptions>()
+            .Bind(configuration.GetSection(JevOptions.SectionName));
+
+        services.AddHttpClient(JevHttpClientName, (provider, client) =>
+        {
+            var options = provider.GetRequiredService<IOptions<JevOptions>>().Value;
+            client.Timeout = options.Timeout;
+        });
+
+        services.AddSingleton<IJevDecisionProvider>(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<JevOptions>>().Value;
+
+            return options.HasApiKey
+                ? ActivatorUtilities.CreateInstance<JevDecisionHttpProvider>(provider)
+                : ActivatorUtilities.CreateInstance<FakeJevDecisionProvider>(provider);
+        });
+
+        // Singleton for the same reason the providers are: it holds only configuration, a stateless
+        // transport and the clock (TimeProvider is registered by AddBoardModule, which runs first).
+        services.AddSingleton<IJevDecisionService, JevDecisionService>();
+
+        // Giai đoạn 14.7 §A3/§A4: the seam that turns a workspace's stored taxonomy, skills and load into the
+        // typed state/questions Jev needs, and maps its opaque labels back onto real rows. Scoped because it
+        // reads the database.
+        services.AddScoped<ITaskTriageService, TaskTriageService>();
 
         // ---- Smart Setup service (Phase 3 §3.2/§4) ---------------------------
         // Registered here so the endpoint (and its filters) can resolve it; the generation
@@ -108,6 +150,13 @@ public static class AiModule
         services.AddScoped<INotificationWriter, NotificationWriter>();
         services.AddScoped<IObserverService, ObserverService>();
         services.AddHostedService<ObserverBackgroundService>();
+
+        // Giai đoạn 14.7 §A5 Phần B: the Observer's proactive recovery plan. Registered next to every other
+        // applier so AiActionService stays the single gateway — one class + one line is the whole cost.
+        // It depends on CreateSubtasksApplier to delegate the SplitSubtasks kind, so that registration must
+        // already be present (it is, from Phase 4 at the top of this method).
+        services.AddScoped<CreateSubtasksApplier>();
+        services.AddScoped<IAiActionApplier, RecoveryPlanApplier>();
 
         // ---- Transactional email (Phase 11 §2) --------------------------------
         // Same switch shape as DeepSeek/Tavily: no key ⇒ the offline NullEmailSender, so invitations
@@ -331,6 +380,8 @@ public static class AiModule
         endpoints.MapBoardTemplateEndpoints();
         // Phase 14.5 §B: the board-scoped AI Agent Chat (own budget, stored transcript, proposals).
         endpoints.MapAgentChatEndpoints();
+        // Giai đoạn 14.7 §A3/§A4: Jev-backed triage (no writes) and assignee dispatching (no writes).
+        endpoints.MapTaskTriageEndpoints();
 
         return endpoints;
     }
@@ -468,5 +519,29 @@ public static class AiModule
             effectiveAgentChat.MaxAttachedTasks,
             effectiveAgentChat.MaxTotalContextChars,
             effectiveAgentChat.RetentionDays);
+
+        // Jev / System One (Giai đoạn 14.7 §A1). Exactly ONE line, and it deliberately reports the HOST and
+        // PATH rather than the key: the Decisions route is an alpha surface, so an operator must be able to
+        // see at a glance which URL the deployment is actually calling without ever exposing the secret.
+        var jev = configuration.GetSection(JevOptions.SectionName).Get<JevOptions>()
+                  ?? new JevOptions();
+        var effectiveJev = jev.Effective;
+
+        logger.LogInformation(
+            "Ai module: Jev enabled={Enabled}, provider={Provider}, model={Model}, url={Url}, "
+            + "timeout={TimeoutSeconds}s, highConfidence={High}, mediumConfidence={Medium}, "
+            + "observerSeverityRouting={ObserverRouting}, autoRecoveryPlan={RecoveryPlan}, rag={Rag} "
+            + "(dimension={Dimension}).",
+            jev.Enabled,
+            jev.HasApiKey ? nameof(JevDecisionHttpProvider) : nameof(FakeJevDecisionProvider),
+            jev.EffectiveModel,
+            jev.DecisionsUri,
+            effectiveJev.TimeoutSeconds,
+            effectiveJev.HighConfidenceThreshold,
+            effectiveJev.MediumConfidenceThreshold,
+            jev.ObserverSeverityRouting,
+            jev.AutoRecoveryPlanEnabled,
+            jev.RagEnabled,
+            effectiveJev.RagEmbeddingDimension);
     }
 }

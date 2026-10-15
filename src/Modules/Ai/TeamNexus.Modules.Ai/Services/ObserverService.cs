@@ -7,6 +7,9 @@ using Npgsql;
 using TeamNexus.Modules.Ai.Contracts;
 using TeamNexus.Modules.Ai.DTOs;
 using TeamNexus.Modules.Ai.Options;
+using TeamNexus.Modules.Ai.Services.Agent;
+using TeamNexus.Modules.Ai.Services.Appliers;
+using TeamNexus.Modules.Ai.Services.Jev;
 using TeamNexus.Modules.Board.Services;
 using TeamNexus.Persistence.Data;
 using TeamNexus.Persistence.Data.Entities;
@@ -61,6 +64,9 @@ public sealed class ObserverService : IObserverService
     private readonly IAiProvider _aiProvider;
     private readonly INotificationService _notifications;
     private readonly ObserverOptions _options;
+    private readonly IJevDecisionService _jev;
+    private readonly Jev.JevOptions _jevOptions;
+    private readonly IAiActionService _actions;
     private readonly ILogger<ObserverService> _logger;
 
     /// <summary>
@@ -77,6 +83,9 @@ public sealed class ObserverService : IObserverService
         INotificationService notifications,
         IOptions<ObserverOptions> options,
         IOptions<DeepSeekOptions> aiOptions,
+        IJevDecisionService jev,
+        IOptions<Jev.JevOptions> jevOptions,
+        IAiActionService actions,
         ILogger<ObserverService> logger)
     {
         _db = db;
@@ -84,6 +93,9 @@ public sealed class ObserverService : IObserverService
         _aiProvider = aiProvider;
         _notifications = notifications;
         _options = options.Value;
+        _jev = jev;
+        _jevOptions = jevOptions.Value;
+        _actions = actions;
         _logger = logger;
         _providerModel = aiOptions.Value.HasApiKey ? aiOptions.Value.Model : aiProvider.GetType().Name;
     }
@@ -178,6 +190,10 @@ public sealed class ObserverService : IObserverService
         int? completionTokens = null;
         var truncatedByPrompt = 0;
 
+        // Giai đoạn 14.7 §A5 Phần A: the System One verdict, when the Jev path is on.
+        ObserverRiskAssessmentResult? jevRisk = null;
+        var jevUsed = false;
+
         try
         {
             if (signals.Signals.Count == 0)
@@ -187,28 +203,65 @@ public sealed class ObserverService : IObserverService
             }
             else
             {
-                // 6–7) Summarize, then one non-retrying completion call.
-                var request = ObserverSummarizer.BuildRequest(snapshot, signals, _options);
-                truncatedByPrompt = Math.Max(
-                    0,
-                    signals.Signals.Count - ObserverSummarizer.CountSignalsInPayload(request.UserPrompt));
+                // 5a) Giai đoạn 14.7 §A5 Phần A — ask Jev FIRST, when the flag is on.
+                //
+                // Deliberately gated by its own setting rather than by Jev:Enabled: the Observer runs on a
+                // timer, so a global off-switch must not make every tick throw. With the flag on and Jev
+                // unreachable, DecideAsync degrades to ManualRequired and the LLM path below runs unchanged —
+                // which is exactly the "Jev is an optimisation, not a dependency" contract.
+                if (_jevOptions.ObserverSeverityRouting)
+                {
+                    // The workspace NAME, never its id: see BuildRiskContext.
+                    var workspaceName = await LoadWorkspaceNameAsync(workspaceId, ct);
 
-                _logger.LogDebug(
-                    "Observer prompt for workspace {WorkspaceId}: {Length} ký tự, {Signals} tín hiệu.",
-                    workspaceId,
-                    request.UserPrompt.Length,
-                    signals.Signals.Count);
+                    jevRisk = await _jev.AssessObserverSignalsAsync(
+                        BuildRiskContext(snapshot, signals, workspaceName), ct);
+                    jevUsed = true;
 
-                aiCalled = true;
-                var completion = await _aiProvider.CompleteAsync(request, ct);
-                promptTokens = completion.PromptTokens;
-                completionTokens = completion.CompletionTokens;
-                model = _providerModel;
+                    // 5b) Severity gating. A *confident* judgment that the situation is below the alert floor
+                    // skips the LLM entirely — that is the token/cost win the phase claims, and it is only
+                    // taken when the confidence is high enough to act on. A low-confidence verdict falls
+                    // through to the LLM, which is the System 2 fallback the roadmap describes.
+                    if (jevRisk.RoutingAdvice == Jev.ConfidenceRouting.DirectAssign
+                        && !NotificationSeverities.AtLeast(jevRisk.EvaluatedSeverity, _options.MinSeverityToNotify))
+                    {
+                        skippedReason = "JevBelowThreshold";
+                    }
+                }
 
-                var output = ParseOutput(completion.Content);
+                if (skippedReason is null)
+                {
+                    // 6–7) Summarize, then one non-retrying completion call. The Jev verdict is handed down as
+                    // a directive so the model explains at the severity our own code already decided.
+                    var directive = jevRisk is null
+                        ? null
+                        : ObserverPrompts.BuildJevSeverityDirective(
+                            jevRisk.EvaluatedSeverity, jevRisk.RequireImmediateAlert, jevRisk.HasDominoRisk);
 
-                // 8) Anti-hallucination boundary.
-                findings = ObserverFindingValidator.Validate(output, signals.Signals, _options).ToList();
+                    var request = ObserverSummarizer.BuildRequest(snapshot, signals, _options, directive);
+                    truncatedByPrompt = Math.Max(
+                        0,
+                        signals.Signals.Count - ObserverSummarizer.CountSignalsInPayload(request.UserPrompt));
+
+                    _logger.LogDebug(
+                        "Observer prompt for workspace {WorkspaceId}: {Length} ký tự, {Signals} tín hiệu (jev={Jev}).",
+                        workspaceId,
+                        request.UserPrompt.Length,
+                        signals.Signals.Count,
+                        jevUsed);
+
+                    aiCalled = true;
+                    var completion = await _aiProvider.CompleteAsync(request, ct);
+                    promptTokens = completion.PromptTokens;
+                    completionTokens = completion.CompletionTokens;
+                    model = _providerModel;
+
+                    var output = ParseOutput(completion.Content);
+
+                    // 8) Anti-hallucination boundary. Unchanged, and deliberately so: Jev's severity is an INPUT
+                    // to the prompt, never a bypass of the validator that decides which findings are written.
+                    findings = ObserverFindingValidator.Validate(output, signals.Signals, _options).ToList();
+                }
             }
         }
         catch (AiProviderException ex)
@@ -232,12 +285,22 @@ public sealed class ObserverService : IObserverService
             notificationsCreated = await _notifications.NotifyManagersAsync(workspaceId, findings, context, ct);
         }
 
+        // 9b) Giai đoạn 14.7 §A5 Phần B — the proactive half. A High/Critical situation gets a concrete
+        // recovery PLAN as a Pending action, so the manager approves a solution instead of reading an alert
+        // and starting from scratch.
+        //
+        // Runs AFTER the notifications: the alert is the primary output and must never be lost because the
+        // optional proposal failed. Any failure here is logged and swallowed for the same reason.
+        var recoveryPlanLogId = await TryDraftRecoveryPlanAsync(
+            workspaceId, snapshot, signals, findings, jevRisk, model, ct);
+
         stopwatch.Stop();
 
         await PersistRunAsync(
             workspaceId, runId, startedAt, status, signals, signalsByType, findings, notificationsCreated,
             aiCalled, model, promptTokens, completionTokens, truncatedByPrompt, skippedReason, error,
-            stopwatch.ElapsedMilliseconds, ct);
+            stopwatch.ElapsedMilliseconds, ct,
+            jevUsed, jevRisk, recoveryPlanLogId);
 
         if (status == ObserverRunStatus.Completed)
         {
@@ -295,6 +358,344 @@ public sealed class ObserverService : IObserverService
             AiActionService.ParseJson(run.Summary),
             ReadFindings(run.Summary).Select(ObserverRunFinding.From).ToList());
     }
+
+    // ---- Jev integration (Giai đoạn 14.7 §A5) ------------------------------
+
+    /// <summary>
+    /// Shapes the detector's output into the typed context Jev sees. Pure.
+    /// <para>
+    /// <b>Evidence ids are deliberately NOT carried</b>, and neither is the workspace id — the caller supplies
+    /// the human-readable <paramref name="workspaceName"/>. A model that receives no identifier cannot echo
+    /// one, which is the structural reason this path can claim 0 % leakage without the filtering the LLM path
+    /// needs. An earlier version of this method passed <c>snapshot.WorkspaceId.ToString()</c> here, which
+    /// would have handed Jev exactly the identifier the design exists to withhold.
+    /// </para>
+    /// </summary>
+    internal static ObserverRiskContext BuildRiskContext(
+        ObserverWorkspaceSnapshot snapshot, ObserverSignalSet signals, string workspaceName)
+    {
+        var open = snapshot.Tasks.Where(t => !t.IsDoneColumn).ToList();
+
+        return new ObserverRiskContext(
+            WorkspaceName: workspaceName,
+            OpenTaskCount: open.Count,
+            OverdueTaskCount: open.Count(t => t.DueDate.HasValue && t.DueDate.Value < snapshot.Now),
+            StalledTaskCount: signals.Signals
+                .Where(s => string.Equals(s.Type, ObserverSignalDetector.StalledTask, StringComparison.Ordinal))
+                .Sum(s => s.TaskIds.Count),
+            AtRiskTaskCount: signals.Signals
+                .Where(s => string.Equals(s.Type, ObserverSignalDetector.AtRiskDeadline, StringComparison.Ordinal))
+                .Sum(s => s.TaskIds.Count),
+            OverloadedMemberCount: signals.Signals
+                .Count(s => string.Equals(s.Type, ObserverSignalDetector.Overload, StringComparison.Ordinal)),
+            BoardCount: snapshot.Columns.Select(c => c.BoardId).Distinct().Count(),
+            Signals: signals.Signals
+                .Select(signal => new ObserverSignalContext(
+                    signal.Type, signal.Severity, signal.Weight, signal.Summary,
+                    signal.TaskIds.Count, signal.UserIds.Count))
+                .ToList());
+    }
+
+    /// <summary>
+    /// Drafts one Pending recovery plan when a confident Jev verdict says the situation is High or Critical
+    /// (Giai đoạn 14.7 §A5 Phần B).
+    /// <para>
+    /// Returns the created log id, or <c>null</c> when no plan was drafted. <b>Never throws</b>: the run's
+    /// alerts are its primary output, so a failed proposal must degrade to "alert only" — the same
+    /// fail-soft rule as <c>IExternalAlertSink</c> and the activity-log writer.
+    /// </para>
+    /// <para>
+    /// <b>The requester is a manager, not "the system".</b> <c>ai_action_logs.requested_by_user_id</c> is a
+    /// required FK to <c>users</c> and there is no system principal, so the draft is attributed to the
+    /// longest-standing Admin/Manager — the person who can actually approve it. Inventing a synthetic system
+    /// user would need a schema change and would make the audit trail lie about who proposed the action.
+    /// </para>
+    /// </summary>
+    private async Task<Guid?> TryDraftRecoveryPlanAsync(
+        Guid workspaceId,
+        ObserverWorkspaceSnapshot snapshot,
+        ObserverSignalSet signals,
+        IReadOnlyList<ObserverFinding> findings,
+        ObserverRiskAssessmentResult? jevRisk,
+        string? model,
+        CancellationToken ct)
+    {
+        if (!_jevOptions.AutoRecoveryPlanEnabled || !_jevOptions.Enabled)
+        {
+            return null;
+        }
+
+        // A confident High/Critical verdict only. An unusable (low-confidence) assessment means our code
+        // cannot claim the situation is severe, and drafting a data-affecting proposal on a guess is exactly
+        // what the confidence floors exist to prevent.
+        if (jevRisk is null || jevRisk.RoutingAdvice == Jev.ConfidenceRouting.ManualRequired)
+        {
+            return null;
+        }
+
+        if (!NotificationSeverities.AtLeast(jevRisk.EvaluatedSeverity, ObserverSeverity.High))
+        {
+            return null;
+        }
+
+        var target = ResolveRecoveryTarget(snapshot, signals);
+        if (target is null)
+        {
+            return null;
+        }
+
+        var requester = await LoadDraftRequesterAsync(workspaceId, ct);
+        if (requester is null)
+        {
+            _logger.LogInformation(
+                "Recovery plan skipped for workspace {WorkspaceId}: no Admin/Manager to attribute it to.",
+                workspaceId);
+            return null;
+        }
+
+        try
+        {
+            var candidateAssigneeCount = await _db.WorkspaceMembers
+                .AsNoTracking()
+                .CountAsync(wm => wm.WorkspaceId == workspaceId, ct);
+
+            var decision = await _jev.DecideRecoveryActionAsync(
+                new RecoveryActionContext(
+                    TaskTitle: target.Title,
+                    TaskDescription: null,
+                    SignalType: target.SignalType,
+                    EvaluatedSeverity: jevRisk.EvaluatedSeverity,
+                    DaysOverdue: target.DaysOverdue,
+                    DaysRemaining: target.DaysRemaining,
+                    OpenTaskCountOfAssignee: target.AssigneeOpenTaskCount,
+                    CandidateAssigneeCount: candidateAssigneeCount,
+                    Options: RecoveryOptions),
+                ct);
+
+            if (decision.ActionType is null || decision.RoutingAdvice == Jev.ConfidenceRouting.ManualRequired)
+            {
+                return null;
+            }
+
+            // Task-scoped kinds need the card; EscalateManager does not, so it may be drafted even when no
+            // single card is the culprit (e.g. a workspace-wide Overload signal).
+            var payload = BuildRecoveryPayload(decision.ActionType, jevRisk, findings, signals, target, model);
+
+            var log = await _actions.RequestRecoveryPlanAsync(
+                workspaceId, requester.Value,
+                JsonSerializer.Serialize(payload, Json),
+                JsonSerializer.Serialize(new
+                {
+                    source = "Observer",
+                    signalType = target.SignalType,
+                    candidateCount = signals.Signals.Count,
+                    findingCount = findings.Count,
+                    jevSeverity = jevRisk.EvaluatedSeverity,
+                    jevConfidence = jevRisk.ConfidenceScore,
+                    requestedAt = DateTimeOffset.UtcNow,
+                }, Json),
+                ct);
+
+            // Tell the managers something is waiting for a decision. Without this the proposal would only be
+            // discoverable by opening the AI history, which is not a notification.
+            await _notifications.NotifyManagersAsync(
+                workspaceId,
+                new AgentNotification(
+                    AgentNotificationTypes.RecoveryPlanPending,
+                    $"Kịch bản phục hồi đang chờ duyệt: {target.Title}",
+                    BuildRecoveryMessage(decision.ActionType, jevRisk, target),
+                    JsonSerializer.Serialize(new
+                    {
+                        aiActionLogId = log.Id,
+                        recoveryKind = decision.ActionType,
+                        severity = jevRisk.EvaluatedSeverity,
+                        confidence = jevRisk.ConfidenceScore,
+                        taskId = target.TaskId,
+                    }, Json)),
+                ct);
+
+            _logger.LogInformation(
+                "Recovery plan drafted for workspace {WorkspaceId}: kind={Kind}, severity={Severity}, log={LogId}.",
+                workspaceId, decision.ActionType, jevRisk.EvaluatedSeverity, log.Id);
+
+            return log.Id;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Fail-soft: the alerts are already written and must stay the run's outcome.
+            _logger.LogWarning(
+                ex,
+                "Could not draft a recovery plan for workspace {WorkspaceId}; the Observer alerts are unaffected.",
+                workspaceId);
+
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The four recovery kinds offered to Jev, with the descriptions the model chooses between
+    /// (Giai đoạn 14.7 §A5 Phần B). Kept here rather than in the prompt so the option keys and the applier's
+    /// switch stay one vocabulary.
+    /// </summary>
+    internal static IReadOnlyList<RecoveryActionOption> RecoveryOptions { get; } =
+    [
+        new(RecoveryPlanKinds.ReassignTask, "Chuyển thẻ sang thành viên còn khả năng nhận việc."),
+        new(RecoveryPlanKinds.SplitSubtasks, "Giữ thẻ nhưng phân rã phần tồn đọng thành các thẻ con nhỏ hơn."),
+        new(RecoveryPlanKinds.ExtendDeadline, "Gia hạn hạn chót tới một mốc khả thi theo tiến độ thực tế."),
+        new(RecoveryPlanKinds.EscalateManager, "Không thể tự giải quyết — cần quản lý họp khẩn."),
+    ];
+
+    /// <summary>
+    /// Picks the card a recovery plan should target, plus the numbers the decision needs. Prefers the most
+    /// overdue card, then the most at-risk one, then the most stalled — the order the detectors rank severity in.
+    /// </summary>
+    private static RecoveryTarget? ResolveRecoveryTarget(
+        ObserverWorkspaceSnapshot snapshot, ObserverSignalSet signals)
+    {
+        var byTaskId = snapshot.Tasks.ToDictionary(t => t.TaskId);
+
+        foreach (var type in new[]
+                 {
+                     ObserverSignalDetector.OverdueTask,
+                     ObserverSignalDetector.AtRiskDeadline,
+                     ObserverSignalDetector.StalledTask,
+                 })
+        {
+            var signal = signals.Signals
+                .FirstOrDefault(s => string.Equals(s.Type, type, StringComparison.Ordinal));
+
+            // Evidence ids arrive already sorted by the detector (worst first), so the head is the best target.
+            var taskId = signal?.TaskIds.FirstOrDefault();
+            if (taskId is null || !byTaskId.TryGetValue(taskId.Value, out var task))
+            {
+                continue;
+            }
+
+            var overdueDays = task.DueDate.HasValue && task.DueDate.Value < snapshot.Now
+                ? (int)(snapshot.Now - task.DueDate.Value).TotalDays
+                : 0;
+
+            var remainingDays = task.DueDate.HasValue && task.DueDate.Value >= snapshot.Now
+                ? (int)(task.DueDate.Value - snapshot.Now).TotalDays
+                : 0;
+
+            var assigneeOpen = task.AssigneeId.HasValue
+                ? snapshot.Tasks.Count(t => t.AssigneeId == task.AssigneeId && !t.IsDoneColumn)
+                : 0;
+
+            return new RecoveryTarget(
+                task.TaskId, task.BoardId, task.Title, type, overdueDays, remainingDays, assigneeOpen);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The stored plan. Task-scoped kinds carry the card; <c>SplitSubtasks</c> carries a single starter
+    /// sub-task so the applier has something valid to create, and <c>EscalateManager</c> carries neither —
+    /// its whole meaning is that no automatic change is appropriate.
+    /// </summary>
+    private static RecoveryPlanPayload BuildRecoveryPayload(
+        string kind,
+        ObserverRiskAssessmentResult risk,
+        IReadOnlyList<ObserverFinding> findings,
+        ObserverSignalSet signals,
+        RecoveryTarget target,
+        string? model)
+    {
+        var summary = $"[{risk.EvaluatedSeverity}] {target.SignalType} — {target.Title}";
+
+        if (string.Equals(kind, RecoveryPlanKinds.EscalateManager, StringComparison.Ordinal))
+        {
+            return new RecoveryPlanPayload(kind, summary, BoardId: target.BoardId);
+        }
+
+        if (string.Equals(kind, RecoveryPlanKinds.SplitSubtasks, StringComparison.Ordinal))
+        {
+            // One sub-task, deliberately minimal: the manager edits the proposal before approving it, and
+            // generating a whole breakdown here would mean a second model call for a plan nobody has
+            // confirmed. The task's own title is the honest basis for the split.
+            return new RecoveryPlanPayload(
+                kind,
+                summary,
+                TaskId: target.TaskId,
+                BoardId: target.BoardId,
+                ExtensionDays: null,
+                Tasks:
+                [
+                    new SmartSetupTaskProposal(
+                        Title: $"Xử lý phần tồn đọng: {Cap(target.Title, 120)}",
+                        Description: $"Tách từ thẻ \"{target.Title}\" do tín hiệu {target.SignalType} "
+                                     + $"(mức {risk.EvaluatedSeverity}).",
+                        Priority: "High",
+                        Labels: [],
+                        Assignee: null),
+                ]);
+        }
+
+        if (string.Equals(kind, RecoveryPlanKinds.ExtendDeadline, StringComparison.Ordinal))
+        {
+            // A bounded, honest extension: two weeks is the smallest window that gives a stalled card room to
+            // move, and the applier clamps whatever arrives.
+            return new RecoveryPlanPayload(kind, summary, TaskId: target.TaskId, ExtensionDays: 14, BoardId: target.BoardId);
+        }
+
+        return new RecoveryPlanPayload(kind, summary, TaskId: target.TaskId, BoardId: target.BoardId);
+    }
+
+    private static string BuildRecoveryMessage(string kind, ObserverRiskAssessmentResult risk, RecoveryTarget target)
+        => kind switch
+        {
+            RecoveryPlanKinds.ReassignTask =>
+                $"AI đề xuất chuyển thẻ \"{target.Title}\" sang người còn khả năng nhận việc. "
+                + $"Mức {risk.EvaluatedSeverity}, độ tin cậy {risk.ConfidenceScore:P0}.",
+            RecoveryPlanKinds.SplitSubtasks =>
+                $"AI đề xuất phân rã phần tồn đọng của thẻ \"{target.Title}\" thành thẻ con. "
+                + $"Mức {risk.EvaluatedSeverity}, độ tin cậy {risk.ConfidenceScore:P0}.",
+            RecoveryPlanKinds.ExtendDeadline =>
+                $"AI đề xuất gia hạn hạn chót của thẻ \"{target.Title}\". "
+                + $"Mức {risk.EvaluatedSeverity}, độ tin cậy {risk.ConfidenceScore:P0}.",
+            _ =>
+                $"AI đánh giá tình hình ở mức {risk.EvaluatedSeverity} và cho rằng không thể tự giải quyết — "
+                + "cần họp khẩn. Không có thay đổi dữ liệu nào được đề xuất.",
+        };
+
+    /// <summary>
+    /// The workspace's display name for the Jev state. Read once per scan; falls back to a generic word so a
+    /// missing row can never produce a <c>null</c> state field (which would fail the provider's validation).
+    /// </summary>
+    private async Task<string> LoadWorkspaceNameAsync(Guid workspaceId, CancellationToken ct)
+        => await _db.Workspaces
+               .AsNoTracking()
+               .Where(w => w.Id == workspaceId)
+               .Select(w => w.Name)
+               .FirstOrDefaultAsync(ct)
+           ?? "workspace";
+
+    /// <summary>
+    /// The user the draft is attributed to: the longest-standing Admin, else the longest-standing Manager.
+    /// Deterministic (ordered by <c>JoinedAt</c>, then id) so the same workspace always names the same person.
+    /// </summary>
+    private async Task<Guid?> LoadDraftRequesterAsync(Guid workspaceId, CancellationToken ct)
+        => await _db.WorkspaceMembers
+            .AsNoTracking()
+            .Where(wm => wm.WorkspaceId == workspaceId
+                         && (wm.Role == WorkspaceRole.Admin || wm.Role == WorkspaceRole.Manager))
+            .OrderBy(wm => wm.Role == WorkspaceRole.Admin ? 0 : 1)
+            .ThenBy(wm => wm.JoinedAt)
+            .ThenBy(wm => wm.UserId)
+            .Select(wm => (Guid?)wm.UserId)
+            .FirstOrDefaultAsync(ct);
+
+    /// <summary>The card a plan targets, with the numbers the decision needs.</summary>
+    private sealed record RecoveryTarget(
+        Guid TaskId,
+        Guid BoardId,
+        string Title,
+        string SignalType,
+        int DaysOverdue,
+        int DaysRemaining,
+        int AssigneeOpenTaskCount);
 
     // ---- data loading ------------------------------------------------------
 
@@ -444,7 +845,10 @@ public sealed class ObserverService : IObserverService
         string? skippedReason,
         string? error,
         long durationMs,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool jevUsed = false,
+        ObserverRiskAssessmentResult? jevRisk = null,
+        Guid? recoveryPlanLogId = null)
     {
         var summary = JsonSerializer.Serialize(new
         {
@@ -464,6 +868,16 @@ public sealed class ObserverService : IObserverService
             model,
             promptTokens,
             completionTokens,
+            // Giai đoạn 14.7 §A5: the System One evidence. `jevUsed` is false whenever the flag is off OR the
+            // signals were empty, so a run's cost profile stays readable from its own summary.
+            jevUsed,
+            jevSeverity = jevRisk?.EvaluatedSeverity,
+            jevConfidence = jevRisk?.ConfidenceScore,
+            jevRequireImmediateAlert = jevRisk?.RequireImmediateAlert,
+            jevHasDominoRisk = jevRisk?.HasDominoRisk,
+            // The id of the Pending plan this run drafted, if any — the audit link from an alert to the
+            // proposal it produced.
+            recoveryPlanLogId,
             durationMs,
             skippedReason,
             error,

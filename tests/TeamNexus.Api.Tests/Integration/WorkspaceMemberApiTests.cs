@@ -46,11 +46,22 @@ public sealed class WorkspaceMemberApiTests : IClassFixture<DatabaseFixture>
         var keys = human.EnumerateObject().Select(p => p.Name).ToList();
 
         // Phase 10 §4.2's append-only rule: existing names/order first, new fields last.
+        // Giai đoạn 14.7 §A2 appends the four capacity fields at the very end — the ONLY change this phase
+        // makes to this assertion, and the field names/order before them are untouched.
         Assert.Equal(
-            ["userId", "displayName", "role", "avatarUrl", "memberType", "email", "joinedAt", "isOwner"],
+            [
+                "userId", "displayName", "role", "avatarUrl", "memberType", "email", "joinedAt", "isOwner",
+                "skills", "primaryRole", "capacityWeight", "maxWipLimit",
+            ],
             keys);
         Assert.Equal(member.Email, human.GetProperty("email").GetString());
         Assert.False(human.GetProperty("isOwner").GetBoolean());
+
+        // The defaults every pre-14.7 row reads back as, without a backfill.
+        Assert.Empty(human.GetProperty("skills").EnumerateArray());
+        Assert.Equal("Member", human.GetProperty("primaryRole").GetString());
+        Assert.Equal(1.0, human.GetProperty("capacityWeight").GetDouble());
+        Assert.Equal(5, human.GetProperty("maxWipLimit").GetInt32());
     }
 
     [Fact]

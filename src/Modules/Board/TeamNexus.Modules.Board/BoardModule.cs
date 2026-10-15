@@ -37,6 +37,11 @@ public static class BoardModule
         services.AddScoped<ICommentService, CommentService>();
         services.AddScoped<IBoardEventPublisher, BoardEventPublisher>();
 
+        // Giai đoạn 14.7 §A2: the fixed workspace vocabulary that Jev answers `Choice` questions against.
+        // Lives in Board (not Ai) because it is plain workspace configuration that any member may read, and
+        // because Ai must be able to depend on Board — never the other way round.
+        services.AddScoped<ITaxonomyService, TaxonomyService>();
+
         // Clock for the dashboard's time-window buckets (Phase 12 §P2). TryAdd so a test host — or a
         // later module — can swap in a fixed clock without fighting this registration.
         services.TryAddSingleton(TimeProvider.System);

@@ -38,6 +38,18 @@ public interface IWorkspaceMemberService
         Guid memberUserId,
         Guid userId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Updates a member's capacity profile — skills, primary role, capacity weight and WIP limit
+    /// (Giai đoạn 14.7 §A2). <b>Admin only</b>, deliberately the same gate as changing a role: it is the
+    /// same kind of "repackage the team" act. An AI Agent row is refused (it is not manageable).
+    /// </summary>
+    Task UpdateProfileAsync(
+        Guid workspaceId,
+        Guid memberUserId,
+        UpdateMemberProfileRequest request,
+        Guid userId,
+        CancellationToken ct = default);
 }
 
 public sealed class WorkspaceMemberService : IWorkspaceMemberService
@@ -118,7 +130,14 @@ public sealed class WorkspaceMemberService : IWorkspaceMemberService
                 MemberTypeToWire(wm.MemberType),
                 wm.User.Email,
                 wm.JoinedAt,
-                ownerId is not null && ownerId.Value == wm.UserId))
+                ownerId is not null && ownerId.Value == wm.UserId,
+                // Giai đoạn 14.7 §A2. `Skills` is materialised with ToList() rather than handed over as the
+                // tracked list: this response is serialized from a detached read, and sharing the entity's
+                // own list would let a later change to the response object mutate the DbContext entry.
+                wm.Skills.ToList(),
+                wm.PrimaryRole,
+                wm.CapacityWeight,
+                wm.MaxWipLimit))
             .ToList();
     }
 
@@ -206,6 +225,78 @@ public sealed class WorkspaceMemberService : IWorkspaceMemberService
             ct);
     }
 
+    public async Task UpdateProfileAsync(
+        Guid workspaceId,
+        Guid memberUserId,
+        UpdateMemberProfileRequest request,
+        Guid userId,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        await RequireAdminAsync(workspaceId, userId, ct);
+
+        var target = await LoadTargetAsync(workspaceId, memberUserId, ct);
+        var workspace = await _db.Workspaces.FirstAsync(w => w.Id == workspaceId, ct);
+
+        // Same guard as role change / removal: the workspace's virtual co-worker is not a person whose
+        // skills a human should be editing, and the owner row is not touchable.
+        GuardTarget(workspace, target, "sửa hồ sơ");
+
+        var skills = ValidateSkills(request.Skills);
+        var role = ValidatePrimaryRole(request.PrimaryRole);
+        var capacity = ValidateCapacityWeight(request.CapacityWeight);
+        var wip = ValidateWipLimit(request.MaxWipLimit);
+
+        // An ABSENT field means "leave unchanged" (the Phase 13 §P4 precedent): a client editing only skills
+        // must not silently reset a colleague's WIP limit back to the default.
+        var changed = new List<string>();
+
+        if (skills is not null)
+        {
+            target.Skills = skills;
+            changed.Add("skills");
+        }
+
+        if (role is not null)
+        {
+            target.PrimaryRole = role;
+            changed.Add("primaryRole");
+        }
+
+        if (capacity.HasValue)
+        {
+            target.CapacityWeight = capacity.Value;
+            changed.Add("capacityWeight");
+        }
+
+        if (wip.HasValue)
+        {
+            target.MaxWipLimit = wip.Value;
+            changed.Add("maxWipLimit");
+        }
+
+        if (changed.Count == 0)
+        {
+            // Idempotent, like re-sending the same role: an empty patch is a valid no-op, not a 400.
+            return;
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        await _activityLog.RecordAsync(new ActivityLogEntry(
+            workspaceId,
+            BoardId: null,
+            userId,
+            ObserverEntityTypes.Workspace,
+            target.UserId,
+            ObserverActivityActions.MemberSkillsChanged,
+            // The payload records WHICH fields moved, not the whole profile: the activity feed is for
+            // "who changed what", and dumping every skill slug into it would bloat every row.
+            JsonSerializer.Serialize(new { memberUserId = target.UserId, fields = changed }, ActivityJson)),
+            ct);
+    }
+
     // ---- helpers -----------------------------------------------------------
 
     /// <summary>camelCase JSON for activity payloads (Phase 5 §2, decision A6).</summary>
@@ -287,4 +378,109 @@ public sealed class WorkspaceMemberService : IWorkspaceMemberService
     /// </summary>
     private static string MemberTypeToWire(MemberType memberType)
         => memberType == MemberType.AiAgent ? "ai_agent" : "human";
+
+    // ---- capacity-profile validation (Giai đoạn 14.7 §A2) --------------------
+    // All four return null for "field absent" so the caller can implement leave-unchanged semantics.
+    // They are public static (not private) for the same reason ParseRole is: the rules are the interesting
+    // part and a pure test must be able to pin them without a database.
+
+    /// <summary>
+    /// Normalises and validates a skill list. Absent (<c>null</c>) means "leave unchanged"; an EMPTY list is
+    /// a real instruction meaning "clear the skills", which is why the two are not conflated.
+    /// </summary>
+    public static List<string>? ValidateSkills(IReadOnlyList<string>? skills)
+    {
+        if (skills is null)
+        {
+            return null;
+        }
+
+        if (skills.Count > TaxonomyDefaults.MaxSkillsPerMember)
+        {
+            throw new BadRequestException(
+                $"Tối đa {TaxonomyDefaults.MaxSkillsPerMember} kỹ năng mỗi thành viên (nhận {skills.Count}).");
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var normalized = new List<string>(skills.Count);
+
+        foreach (var skill in skills)
+        {
+            // Slugs are stored lowercase so "CSharp" and "csharp" cannot both exist and split the matching.
+            var slug = skill?.Trim().ToLowerInvariant();
+
+            if (!TaxonomyDefaults.IsValidSkillSlug(slug))
+            {
+                throw new BadRequestException(
+                    $"Kỹ năng '{skill}' không hợp lệ. Dùng chữ thường, bắt đầu bằng chữ/số, "
+                    + $"tối đa {TaxonomyDefaults.MaxSkillSlugLength} ký tự (ví dụ: csharp, dotnet, react).");
+            }
+
+            // Silently de-duplicating rather than rejecting: sending the same skill twice is a client
+            // artifact with an unambiguous correct answer.
+            if (seen.Add(slug!))
+            {
+                normalized.Add(slug!);
+            }
+        }
+
+        return normalized;
+    }
+
+    /// <summary>Canonical primary role from the whitelist; absent ⇒ <c>null</c> (leave unchanged).</summary>
+    public static string? ValidatePrimaryRole(string? role)
+    {
+        if (role is null)
+        {
+            return null;
+        }
+
+        var canonical = TaxonomyDefaults.CanonicalRole(role);
+
+        return canonical
+               ?? throw new BadRequestException(
+                   $"Vai trò chuyên môn '{role}' không hợp lệ. Chỉ nhận: "
+                   + string.Join(", ", TaxonomyDefaults.PrimaryRoles) + ".");
+    }
+
+    /// <summary>
+    /// Capacity weight in <c>[0.1, 3.0]</c>. The floor is a real guard as well as a schema CHECK: a zero
+    /// weight makes the member absorb infinite work in the dispatching maths.
+    /// </summary>
+    public static double? ValidateCapacityWeight(double? capacityWeight)
+    {
+        if (capacityWeight is not { } value)
+        {
+            return null;
+        }
+
+        if (!double.IsFinite(value)
+            || value < TaxonomyDefaults.MinCapacityWeight
+            || value > TaxonomyDefaults.MaxCapacityWeight)
+        {
+            throw new BadRequestException(
+                $"capacityWeight phải trong khoảng "
+                + $"[{TaxonomyDefaults.MinCapacityWeight}, {TaxonomyDefaults.MaxCapacityWeight}].");
+        }
+
+        return value;
+    }
+
+    /// <summary>WIP limit in <c>[0, 50]</c>; 0 means "no limit configured". Absent ⇒ <c>null</c>.</summary>
+    public static int? ValidateWipLimit(int? maxWipLimit)
+    {
+        if (maxWipLimit is not { } value)
+        {
+            return null;
+        }
+
+        if (value < TaxonomyDefaults.MinWipLimit || value > TaxonomyDefaults.MaxWipLimit)
+        {
+            throw new BadRequestException(
+                $"maxWipLimit phải trong khoảng "
+                + $"[{TaxonomyDefaults.MinWipLimit}, {TaxonomyDefaults.MaxWipLimit}].");
+        }
+
+        return value;
+    }
 }

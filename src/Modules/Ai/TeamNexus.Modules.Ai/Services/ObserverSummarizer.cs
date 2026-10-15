@@ -123,16 +123,34 @@ public static class ObserverSummarizer
     /// The completion request for one workspace scan: an observer-marked user prompt (marker on
     /// the first line) carrying the summarized payload, in JSON mode with a cost-bounded token cap.
     /// </summary>
+    /// <param name="severityDirective">
+    /// Optional extra instruction appended to the <b>system</b> prompt — used by the Jev path (Giai đoạn 14.7
+    /// §A5) to hand the model a severity verdict it must respect.
+    /// <para>
+    /// ⛔ <b>It must NOT go into the user prompt.</b> That prompt is <c>marker + JSON payload</c>: the marker
+    /// selects the offline provider's branch and the payload is parsed as JSON, so appending prose made
+    /// <c>JsonDocument.Parse</c> fail — the fake then returned zero findings and the Observer alerted nobody.
+    /// The system prompt carries no machine-read structure, which is what makes it the safe place.
+    /// </para>
+    /// </param>
     public static AiCompletionRequest BuildRequest(
         ObserverWorkspaceSnapshot snapshot,
         ObserverSignalSet signals,
-        ObserverOptions options)
+        ObserverOptions options,
+        string? severityDirective = null)
     {
         var payload = BuildPayload(snapshot, signals, options);
         var userPrompt = $"{ObserverPrompts.AgentMarker}\n{payload}";
 
+        var systemPrompt = ObserverPrompts.BuildSystemPrompt();
+
+        if (!string.IsNullOrWhiteSpace(severityDirective))
+        {
+            systemPrompt += severityDirective;
+        }
+
         return new AiCompletionRequest(
-            ObserverPrompts.BuildSystemPrompt(),
+            systemPrompt,
             userPrompt,
             options.Temperature,
             Math.Max(1, options.MaxOutputTokens),

@@ -27,6 +27,7 @@ import type {
   AiActionStatus,
 } from '../types/aiAction.types'
 import { formatDateTime } from '../utils/aiActionHelpers'
+import { RecoveryPlanCard } from './RecoveryPlanCard'
 
 const { Text, Paragraph } = Typography
 
@@ -144,6 +145,8 @@ export const AiActionLogItem: React.FC<AiActionLogItemProps> = ({
                 ? 'Tạo sub-tasks đề xuất'
                 : log.action === 'CreateBoardFromTemplate'
                 ? 'Tạo board từ mẫu AI'
+                : log.action === 'RecoveryPlan'
+                ? 'Kế hoạch phục hồi (AI Observer)'
                 : log.action === 'UpdateTaskFields'
                 ? 'Cập nhật thẻ (AI đề xuất)'
                 : log.action === 'MoveTaskToColumn'
@@ -221,10 +224,22 @@ export const AiActionLogItem: React.FC<AiActionLogItemProps> = ({
                 Đang tải chi tiết snapshot...
               </Text>
             ) : detail ? (
-              <Flex vertical gap={10}>
-                {/* Basis summary */}
-                {detail.basis && (
-                  <div>
+              log.action === 'RecoveryPlan' ? (
+                <RecoveryPlanCard
+                  actionLog={log}
+                  detail={detail}
+                  onActionSuccess={(updated) => {
+                    setDetail(updated)
+                    if (onFetchDetail) {
+                      void onFetchDetail(log.id)
+                    }
+                  }}
+                />
+              ) : (
+                <Flex vertical gap={10}>
+                  {/* Basis summary */}
+                  {detail.basis && (
+                    <div>
                     <Text strong style={{ fontSize: 12.5, color: '#475569' }}>
                       Cơ sở phân tích:
                     </Text>
@@ -335,7 +350,8 @@ export const AiActionLogItem: React.FC<AiActionLogItemProps> = ({
                       style={{ borderRadius: 6, padding: '6px 12px' }}
                     />
                   )}
-              </Flex>
+                </Flex>
+              )
             ) : (
               <Text type="secondary" style={{ fontSize: 12 }}>
                 Không có dữ liệu chi tiết snapshot.

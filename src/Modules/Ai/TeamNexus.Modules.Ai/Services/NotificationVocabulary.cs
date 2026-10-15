@@ -31,9 +31,16 @@ public static class NotificationVocabulary
     /// <summary>The Observer's own signals — exactly <see cref="NotificationTypes.All"/>.</summary>
     public static IReadOnlyList<string> ObserverTypes => NotificationTypes.All;
 
-    /// <summary>The executor's three alerts, as persisted.</summary>
+    /// <summary>The executor's alerts plus the Observer's recovery-plan approval request, as persisted.</summary>
     public static IReadOnlyList<string> AgentTypes { get; } =
-        [AgentNotificationTypes.RunFailed, AgentNotificationTypes.AwaitingClarification, AgentNotificationTypes.OutputPending];
+    [
+        AgentNotificationTypes.RunFailed,
+        AgentNotificationTypes.AwaitingClarification,
+        AgentNotificationTypes.OutputPending,
+        // Giai đoạn 14.7 §A5 Phần B. Grouped with the agent family because it is written by our own code and
+        // is NOT part of the Observer's anti-hallucination whitelist (NotificationTypes.All stays at five).
+        AgentNotificationTypes.RecoveryPlanPending,
+    ];
 
     /// <summary>
     /// The member-facing alerts. Kept as an explicit list rather than discovered by reflection: an

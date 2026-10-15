@@ -16,6 +16,14 @@ export interface WorkspaceMemberResponse {
   role: 'Admin' | 'Manager' | 'Member'
   avatarUrl: string | null
   memberType: MemberType
+  email?: string | null
+  joinedAt?: string
+  isOwner?: boolean
+  skills?: string[]
+  primaryRole?: string
+  capacityWeight?: number
+  maxWipLimit?: number
+  personaKey?: string | null
 }
 
 export interface TaskResponse {
