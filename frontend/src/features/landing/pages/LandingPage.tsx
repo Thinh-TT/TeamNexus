@@ -100,8 +100,19 @@ export const LandingPage: React.FC = () => {
           >
             TeamNexus
           </Title>
-          <Tag color="indigo" style={{ marginLeft: 6, borderRadius: 12 }}>
-            v2.0
+          <Tag
+            style={{
+              marginLeft: 6,
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 600,
+              color: '#7c3aed',
+              backgroundColor: '#f5f3ff',
+              borderColor: '#ddd6fe',
+              fontFamily: "'JetBrains Mono', monospace",
+            }}
+          >
+            v4.2 • Hybrid AI
           </Tag>
         </Flex>
 
@@ -182,7 +193,7 @@ export const LandingPage: React.FC = () => {
               }}
             >
               <FireOutlined style={{ color: '#f59e0b' }} />
-              TeamNexus 2.0 • Quản trị & Điều phối Dự án Thông minh với AI DeepSeek & Real-time SignalR
+              TeamNexus 4.2 • Quản trị & Điều phối Dự án Thông minh với Hybrid AI (Jev 1.13 + DeepSeek) & Real-time SignalR
             </Tag>
 
             <Title
@@ -213,13 +224,13 @@ export const LandingPage: React.FC = () => {
               style={{
                 fontSize: 'clamp(16px, 2vw, 19px)',
                 color: '#475569',
-                maxWidth: 720,
+                maxWidth: 760,
                 margin: '0 auto 36px',
                 lineHeight: 1.6,
               }}
             >
-              Đồng bộ tác vụ tức thì đa người dùng qua SignalR, tự động dự báo rủi ro tắc nghẽn,
-              bóc tách checklist công việc qua AI DeepSeek và bảo đảm trách nhiệm tuyệt đối với AI Accountability Layer.
+              Kiến trúc Dual-Engine kết hợp Jev 1.13 System-1 (&lt;300ms Triage) và DeepSeek System-2 (Reasoning),
+              5 Autonomous AI Agent Personas, pgvector Semantic RAG và AI Accountability Layer minh bạch.
             </Paragraph>
 
             {/* Direct Dual Call To Action */}
@@ -716,9 +727,9 @@ export const LandingPage: React.FC = () => {
                 <Tag icon={<CodeOutlined />} color="blue">.NET 10 LTS</Tag>
                 <Tag icon={<ApartmentOutlined />} color="geekblue">Modular Monolith</Tag>
                 <Tag icon={<ThunderboltOutlined />} color="gold">SignalR WebSockets</Tag>
-                <Tag icon={<LockOutlined />} color="green">PostgreSQL & EF Core</Tag>
-                <Tag icon={<HistoryOutlined />} color="purple">React 19 & Vite</Tag>
-                <Tag icon={<RobotOutlined />} color="magenta">DeepSeek AI Engine</Tag>
+                <Tag icon={<LockOutlined />} color="green">PostgreSQL 16 + pgvector</Tag>
+                <Tag icon={<HistoryOutlined />} color="purple">Jev 1.13 System-1 (&lt;300ms)</Tag>
+                <Tag icon={<RobotOutlined />} color="magenta">DeepSeek System-2 + 5 Personas</Tag>
               </Space>
             </Col>
 
@@ -729,19 +740,19 @@ export const LandingPage: React.FC = () => {
                   padding: 24,
                   borderRadius: 14,
                   border: '1px solid #1e293b',
-                  fontFamily: 'monospace',
+                  fontFamily: "'JetBrains Mono', monospace",
                   fontSize: 13,
                   color: '#94a3b8',
                   boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
                 }}
               >
-                <div style={{ color: '#818cf8', marginBottom: 6 }}>// TeamNexus Modular Architecture</div>
+                <div style={{ color: '#818cf8', marginBottom: 6 }}>// TeamNexus v4.2 Hybrid AI Architecture</div>
                 <div style={{ color: '#e2e8f0' }}>src/</div>
                 <div>├── TeamNexus.Identity/ <span style={{ color: '#64748b' }}>// OAuth Google, GitHub, JWT</span></div>
                 <div>├── TeamNexus.Workspaces/ <span style={{ color: '#64748b' }}>// RBAC, Members, Invitations</span></div>
                 <div>├── TeamNexus.Tasks/ <span style={{ color: '#64748b' }}>// Kanban Columns, Cards, SignalR</span></div>
-                <div>├── TeamNexus.AI/ <span style={{ color: '#34d399' }}>// Copilot, Observer, SSE Streaming</span></div>
-                <div>└── TeamNexus.Reporting/ <span style={{ color: '#64748b' }}>// Metrics, Health Gauge, Logs</span></div>
+                <div>├── TeamNexus.AI/ <span style={{ color: '#34d399' }}>// Jev 1.13 Sys-1, DeepSeek Sys-2, 5 Personas, RAG</span></div>
+                <div>└── TeamNexus.Reporting/ <span style={{ color: '#64748b' }}>// Burndown, Velocity, Health Gauge, Logs</span></div>
               </div>
             </Col>
           </Row>
@@ -819,11 +830,11 @@ export const LandingPage: React.FC = () => {
             © 2026 TeamNexus — Hệ thống Điều phối Không gian làm việc Thông minh.
           </Text>
           <Space size="middle">
-            <Text style={{ color: '#64748b', fontSize: 13 }}>Phiên bản 2.0.0</Text>
+            <Text style={{ color: '#64748b', fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>Phiên bản 4.2.0</Text>
             <Text style={{ color: '#64748b', fontSize: 13 }}>•</Text>
             <Text style={{ color: '#64748b', fontSize: 13 }}>Real-time SignalR</Text>
             <Text style={{ color: '#64748b', fontSize: 13 }}>•</Text>
-            <Text style={{ color: '#64748b', fontSize: 13 }}>DeepSeek AI</Text>
+            <Text style={{ color: '#64748b', fontSize: 13 }}>Jev 1.13 + DeepSeek Hybrid AI</Text>
           </Space>
         </Flex>
       </Footer>

@@ -43,21 +43,8 @@ const fieldLabel = (field: string): string => FIELD_LABELS[field] ?? field
 /**
  * Jev System 1 triage suggestions for a task (Giai đoạn 14.7 §A3).
  *
- * ⚠️ **ISSUE-02 — this component is written in PURE Ant Design on purpose.**
- *
- * The first version used Tailwind utility classes (`grid grid-cols-3 gap-2`, `space-y-3`, `bg-slate-900/60`,
- * `bg-emerald-600`, …). TeamNexus has **no Tailwind**: no `tailwind.config.*`, no PostCSS pipeline, and no
- * Tailwind dependency in `package.json`. Every one of those classes resolved to nothing, so the browser fell
- * back to its defaults and the panel rendered as run-together text with an unstyled HTML button —
- * `Phân loại thông minh (Jev System 1)AI tự tin 96%`, `Miền kỹ thuậtDevOps`, and so on.
- *
- * The rule that follows is worth stating explicitly for the next component: **layout comes from `Flex`/`Space`
- * with a `gap`, colour comes from `Tag`/`Alert`/`Button` props or an explicit `style`, and typography comes
- * from `Typography`.** Never a utility class name, because nothing is generating CSS for it.
- *
- * The three branches mirror the confidence floors enforced server-side (`ConfidenceRouting`):
- * `DirectAssign` ⇒ one suggestion with a 1-click apply; `OfferChoices` ⇒ ranked options to pick from;
- * `ManualRequired` ⇒ nothing offered, deliberately.
+ * Styled with the Luminous Enterprise Workspace AI surface (Electric Violet `#7c3aed` / `#f5f3ff`)
+ * using pure Ant Design components and explicit inline styles (no Tailwind utility classes).
  */
 export const JevTriagePanel: React.FC<JevTriagePanelProps> = ({
   triageData,
@@ -68,10 +55,17 @@ export const JevTriagePanel: React.FC<JevTriagePanelProps> = ({
 }) => {
   if (isLoading) {
     return (
-      <Card size="small" style={{ borderRadius: 8, borderColor: '#d6e4ff', backgroundColor: '#f0f5ff' }}>
+      <Card
+        size="small"
+        style={{
+          borderRadius: 10,
+          borderColor: '#ddd6fe',
+          background: 'linear-gradient(135deg, #f5f3ff 0%, #eef2ff 100%)',
+        }}
+      >
         <Flex align="center" gap={8}>
-          <LoadingOutlined style={{ fontSize: 14, color: '#1677ff' }} />
-          <Typography.Text style={{ fontSize: 12, color: '#1d39c4' }}>
+          <LoadingOutlined style={{ fontSize: 14, color: '#7c3aed' }} />
+          <Typography.Text style={{ fontSize: 12.5, color: '#5b21b6', fontWeight: 500 }}>
             Jev đang phân tích và triage thẻ...
           </Typography.Text>
         </Flex>
@@ -85,12 +79,8 @@ export const JevTriagePanel: React.FC<JevTriagePanelProps> = ({
         type="warning"
         showIcon
         icon={<WarningOutlined />}
-        // `title`, not `message`: antd v6 deprecated `message` on Alert (the switch AgentChatPanel and
-        // MemberSkillsForm already made), and a deprecation warning in the test output is noise that hides
-        // real ones. The whole sentence stays in ONE prop — splitting it across `title` + `description` is
-        // what made the original text read as run-together fragments.
         title="Gợi ý AI tạm không khả dụng — bạn có thể tiếp tục điền thủ công."
-        style={{ borderRadius: 8 }}
+        style={{ borderRadius: 10 }}
       />
     )
   }
@@ -116,18 +106,39 @@ export const JevTriagePanel: React.FC<JevTriagePanelProps> = ({
     <Card
       data-testid="jev-triage-panel"
       size="small"
-      style={{ borderRadius: 8, borderColor: '#e2e8f0', backgroundColor: '#ffffff' }}
-      styles={{ body: { padding: 12 } }}
+      style={{
+        borderRadius: 10,
+        borderColor: '#ddd6fe',
+        background: 'linear-gradient(180deg, #faf5ff 0%, #ffffff 100%)',
+        boxShadow: '0 0 0 1px rgba(124, 58, 237, 0.06), 0 4px 12px rgba(124, 58, 237, 0.05)',
+      }}
+      styles={{ body: { padding: 14 } }}
     >
-      <Flex vertical gap={10}>
+      <Flex vertical gap={12}>
         {/* ---- header: what this is, how sure Jev is, how long it took ---- */}
         <Flex align="center" justify="space-between" gap={8} wrap="wrap">
-          <Flex align="center" gap={8}>
-            <ThunderboltOutlined style={{ fontSize: 16, color: '#1677ff' }} />
-            <Typography.Text strong style={{ fontSize: 13 }}>
+          <Flex align="center" gap={8} wrap="wrap">
+            <div
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 6,
+                backgroundColor: '#7c3aed',
+                color: '#ffffff',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <ThunderboltOutlined style={{ fontSize: 13 }} />
+            </div>
+            <Typography.Text strong style={{ fontSize: 13, color: '#0f172a' }}>
               Phân loại thông minh (Jev System 1)
             </Typography.Text>
-            <Tag color={getAdviceTagColor(routingAdvice)} style={{ margin: 0, fontSize: 11 }}>
+            <Tag
+              color={getAdviceTagColor(routingAdvice)}
+              style={{ margin: 0, fontSize: 11, fontWeight: 600, borderRadius: 9999, padding: '0 8px' }}
+            >
               {isDirectAssign(routingAdvice)
                 ? `AI tự tin ${confidencePct}`
                 : isOfferChoices(routingAdvice)
@@ -137,9 +148,20 @@ export const JevTriagePanel: React.FC<JevTriagePanelProps> = ({
           </Flex>
 
           {latencyMs > 0 && (
-            <Space size={4}>
-              <ClockCircleOutlined style={{ fontSize: 12, color: '#8c8c8c' }} />
-              <Typography.Text type="secondary" style={{ fontSize: 11, fontFamily: 'monospace' }}>
+            <Space
+              size={4}
+              style={{
+                padding: '1px 7px',
+                borderRadius: 6,
+                backgroundColor: '#f8fafc',
+                border: '1px solid #e2e8f0',
+              }}
+            >
+              <ClockCircleOutlined style={{ fontSize: 11, color: '#64748b' }} />
+              <Typography.Text
+                type="secondary"
+                style={{ fontSize: 11, fontFamily: 'var(--tn-font-mono, monospace)', fontWeight: 500 }}
+              >
                 {latencyMs}ms
               </Typography.Text>
             </Space>
@@ -152,7 +174,7 @@ export const JevTriagePanel: React.FC<JevTriagePanelProps> = ({
             showIcon
             icon={<SafetyCertificateOutlined />}
             title="Thẻ này có yếu tố bảo mật/dữ liệu nhạy cảm cần được rà soát."
-            style={{ borderRadius: 6 }}
+            style={{ borderRadius: 8 }}
           />
         )}
 
@@ -163,21 +185,34 @@ export const JevTriagePanel: React.FC<JevTriagePanelProps> = ({
               size="small"
               bordered
               column={3}
+              style={{ backgroundColor: '#ffffff', borderRadius: 8, overflow: 'hidden' }}
               items={[
                 {
                   key: 'domain',
                   label: 'Miền kỹ thuật',
-                  children: suggestedDomain || 'Chung',
+                  children: (
+                    <Typography.Text strong style={{ color: '#4f46e5', fontSize: 12.5 }}>
+                      {suggestedDomain || 'Chung'}
+                    </Typography.Text>
+                  ),
                 },
                 {
                   key: 'workType',
                   label: 'Loại hình',
-                  children: suggestedWorkType || 'Feature',
+                  children: (
+                    <Typography.Text strong style={{ color: '#7c3aed', fontSize: 12.5 }}>
+                      {suggestedWorkType || 'Feature'}
+                    </Typography.Text>
+                  ),
                 },
                 {
                   key: 'priority',
                   label: 'Mức ưu tiên',
-                  children: suggestedPriority || 'Medium',
+                  children: (
+                    <Typography.Text strong style={{ color: '#d97706', fontSize: 12.5 }}>
+                      {suggestedPriority || 'Medium'}
+                    </Typography.Text>
+                  ),
                 },
               ]}
             />
@@ -187,6 +222,13 @@ export const JevTriagePanel: React.FC<JevTriagePanelProps> = ({
                 type="primary"
                 block
                 icon={<CheckCircleOutlined />}
+                style={{
+                  backgroundColor: '#7c3aed',
+                  borderColor: '#7c3aed',
+                  borderRadius: 8,
+                  fontWeight: 600,
+                  boxShadow: '0 2px 6px rgba(124, 58, 237, 0.25)',
+                }}
                 onClick={() =>
                   onApplyDirect({
                     domain: suggestedDomain,
@@ -204,11 +246,10 @@ export const JevTriagePanel: React.FC<JevTriagePanelProps> = ({
         {/* ---- branch 2: OfferChoices (0.50 <= confidence < 0.85) ---- */}
         {isOfferChoices(routingAdvice) && (
           <Flex vertical gap={8}>
-            <Typography.Text style={{ fontSize: 12 }}>
+            <Typography.Text style={{ fontSize: 12, color: '#475569' }}>
               Jev đề xuất các lựa chọn tiềm năng nhất. Nhấp để chọn:
             </Typography.Text>
 
-            {/* `Space wrap` rather than a flex-wrap utility class: it produces the same wrapping with no CSS. */}
             <Space size={[6, 6]} wrap>
               {options.map((opt, idx) => {
                 const probPct = Math.round(opt.probability * 100)
@@ -218,20 +259,23 @@ export const JevTriagePanel: React.FC<JevTriagePanelProps> = ({
                   <Tooltip key={`${opt.field}-${opt.value}-${idx}`} title={label}>
                     <Button
                       size="small"
-                      // The accessible name has to stay a single string — the ISSUE-02 symptom was exactly
-                      // this label being glued to its value by missing layout CSS.
                       aria-label={label}
+                      style={{
+                        borderRadius: 6,
+                        borderColor: '#ddd6fe',
+                        backgroundColor: '#ffffff',
+                      }}
                       onClick={() => onSelectOption?.(opt)}
                     >
                       <Space size={4}>
-                        <Typography.Text type="secondary" style={{ fontSize: 10 }}>
+                        <Typography.Text type="secondary" style={{ fontSize: 10.5 }}>
                           {fieldLabel(opt.field)}
                         </Typography.Text>
-                        <Typography.Text strong style={{ fontSize: 12 }}>
+                        <Typography.Text strong style={{ fontSize: 12, color: '#0f172a' }}>
                           {opt.value}
                         </Typography.Text>
                         {probPct > 0 && (
-                          <Tag color="blue" style={{ margin: 0, fontSize: 10 }}>
+                          <Tag color="purple" style={{ margin: 0, fontSize: 10 }}>
                             {probPct}%
                           </Tag>
                         )}

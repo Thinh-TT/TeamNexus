@@ -348,6 +348,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   ]
 
   const isDoneColumn = columns.find((c) => c.id === task.columnId)?.isDone
+  const currentColumnName = columns.find((c) => c.id === task.columnId)?.name ?? 'Kanban'
 
   return (
     <Modal
@@ -356,12 +357,54 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         setDescMode('write')
         onClose()
       }}
-      width={780}
-      style={{ top: 32 }}
+      width={880}
+      style={{ top: 28 }}
       footer={null}
       destroyOnClose
     >
       <Form form={form} layout="vertical" onFinish={handleSaveMetadata}>
+        {/* Top Context Breadcrumb Bar (Stitch Preview 3) */}
+        <Flex
+          align="center"
+          justify="space-between"
+          wrap="wrap"
+          gap={8}
+          style={{
+            paddingBottom: 12,
+            marginBottom: 14,
+            borderBottom: '1px solid #f1f5f9',
+            paddingRight: 28,
+          }}
+        >
+          <Space size={8} wrap>
+            <Tag
+              style={{
+                margin: 0,
+                borderRadius: 6,
+                backgroundColor: '#f1f5f9',
+                borderColor: '#e2e8f0',
+                color: '#475569',
+                fontFamily: 'var(--tn-font-mono, monospace)',
+                fontSize: 11.5,
+                fontWeight: 600,
+              }}
+            >
+              #{task.id.slice(0, 8).toUpperCase()}
+            </Tag>
+            <Tag
+              color={isDoneColumn ? 'success' : 'processing'}
+              style={{ margin: 0, borderRadius: 9999, fontSize: 11.5, fontWeight: 600, padding: '0 10px' }}
+            >
+              Cột: {currentColumnName}
+            </Tag>
+            {task.activeAgentRunId && (
+              <Tag color="purple" icon={<RobotOutlined />} style={{ margin: 0, borderRadius: 9999, fontWeight: 600 }}>
+                AI Agent đang xử lý
+              </Tag>
+            )}
+          </Space>
+        </Flex>
+
         <Row gutter={24}>
           {/* Main Content Area (Left) */}
           <Col xs={24} md={16}>
@@ -376,10 +419,12 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                 placeholder="Tiêu đề thẻ..."
                 style={{
                   fontSize: 18,
-                  fontWeight: 600,
+                  fontWeight: 700,
+                  color: '#0f172a',
                   borderRadius: 8,
-                  border: '1px solid transparent',
-                  paddingLeft: 8,
+                  border: '1px solid #e2e8f0',
+                  backgroundColor: '#f8fafc',
+                  paddingLeft: 12,
                 }}
                 onPressEnter={handleSaveMetadata}
                 onBlur={handleSaveMetadata}
@@ -762,157 +807,199 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
           </Col>
 
           {/* Sidebar Area (Right) */}
-          <Col xs={24} md={8} style={{ borderLeft: '1px solid #f1f5f9' }}>
-            <Flex vertical gap={14}>
-              {/* Column Status */}
-              <div>
-                <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                  Cột trạng thái:
-                </Typography.Text>
-                <Form.Item name="columnId" noStyle>
+          <Col xs={24} md={8}>
+            <div
+              style={{
+                backgroundColor: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: 12,
+                padding: 16,
+              }}
+            >
+              <Typography.Text
+                strong
+                style={{
+                  fontSize: 12,
+                  color: '#475569',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  display: 'block',
+                  marginBottom: 12,
+                }}
+              >
+                Thuộc tính thẻ
+              </Typography.Text>
+
+              <Flex vertical gap={14}>
+                {/* Column Status */}
+                <div>
+                  <Typography.Text
+                    type="secondary"
+                    style={{ fontSize: 11.5, fontWeight: 600, display: 'block', marginBottom: 4 }}
+                  >
+                    Cột trạng thái:
+                  </Typography.Text>
+                  <Form.Item name="columnId" noStyle>
+                    <Select
+                      style={{ width: '100%' }}
+                      onChange={handleSaveMetadata}
+                      options={columns.map((c) => ({
+                        value: c.id,
+                        label: (
+                          <Space>
+                            {c.isDone && <CheckCircleFilled style={{ color: '#10b981' }} />}
+                            <span>{c.name}</span>
+                          </Space>
+                        ),
+                      }))}
+                    />
+                  </Form.Item>
+                </div>
+
+                {/* Priority */}
+                <div>
+                  <Typography.Text
+                    type="secondary"
+                    style={{ fontSize: 11.5, fontWeight: 600, display: 'block', marginBottom: 4 }}
+                  >
+                    <FlagOutlined style={{ marginRight: 4 }} /> Độ ưu tiên:
+                  </Typography.Text>
+                  <Form.Item name="priority" noStyle>
+                    <Select
+                      style={{ width: '100%' }}
+                      allowClear
+                      placeholder="Chọn mức độ ưu tiên"
+                      onChange={handleSaveMetadata}
+                      options={[
+                        { value: 'Urgent', label: <Tag color="error">Khẩn cấp</Tag> },
+                        { value: 'High', label: <Tag color="warning">Cao</Tag> },
+                        { value: 'Medium', label: <Tag color="processing">Trung bình</Tag> },
+                        { value: 'Low', label: <Tag color="default">Thấp</Tag> },
+                      ]}
+                    />
+                  </Form.Item>
+                </div>
+
+                {/* Due Date */}
+                <div>
+                  <Typography.Text
+                    type="secondary"
+                    style={{ fontSize: 11.5, fontWeight: 600, display: 'block', marginBottom: 4 }}
+                  >
+                    <CalendarOutlined style={{ marginRight: 4 }} /> Hạn chót:
+                  </Typography.Text>
+                  <Form.Item name="dueDate" noStyle>
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      format="DD/MM/YYYY"
+                      onChange={handleSaveMetadata}
+                      placeholder="Chọn ngày hạn chót"
+                    />
+                  </Form.Item>
+                </div>
+
+                {/* Assignee */}
+                <div>
+                  <Typography.Text
+                    type="secondary"
+                    style={{ fontSize: 11.5, fontWeight: 600, display: 'block', marginBottom: 4 }}
+                  >
+                    <UserOutlined style={{ marginRight: 4 }} /> Người thực hiện:
+                  </Typography.Text>
                   <Select
+                    allowClear
+                    placeholder="Chọn người thực hiện"
+                    value={task.assigneeId || undefined}
+                    onChange={(val) => handleAssigneeChange(val ?? null)}
                     style={{ width: '100%' }}
-                    onChange={handleSaveMetadata}
-                    options={columns.map((c) => ({
-                      value: c.id,
+                    data-testid="assignee-select"
+                    options={members.map((m) => ({
+                      value: m.userId,
                       label: (
-                        <Space>
-                          {c.isDone && <CheckCircleFilled style={{ color: '#10b981' }} />}
-                          <span>{c.name}</span>
-                        </Space>
+                        <Flex align="center" gap={6}>
+                          <Avatar
+                            size={20}
+                            icon={m.memberType === 'ai_agent' ? <RobotOutlined /> : undefined}
+                            style={{
+                              backgroundColor: m.memberType === 'ai_agent' ? '#7c3aed' : '#4f46e5',
+                              fontSize: 11,
+                            }}
+                          >
+                            {m.memberType !== 'ai_agent' && (m.displayName?.[0]?.toUpperCase() || 'U')}
+                          </Avatar>
+                          <span style={{ fontSize: 13 }}>{m.displayName}</span>
+                          {m.memberType === 'ai_agent' && (
+                            <Tag color="purple" style={{ margin: 0, fontSize: 10, lineHeight: '16px' }}>
+                              AI Agent
+                            </Tag>
+                          )}
+                        </Flex>
                       ),
                     }))}
                   />
-                </Form.Item>
-              </div>
 
-              {/* Priority */}
-              <div>
-                <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                  <FlagOutlined style={{ marginRight: 4 }} /> Độ ưu tiên:
-                </Typography.Text>
-                <Form.Item name="priority" noStyle>
-                  <Select
-                    style={{ width: '100%' }}
-                    allowClear
-                    placeholder="Chọn mức độ ưu tiên"
-                    onChange={handleSaveMetadata}
-                    options={[
-                      { value: 'Urgent', label: <Tag color="error">Khẩn cấp</Tag> },
-                      { value: 'High', label: <Tag color="warning">Cao</Tag> },
-                      { value: 'Medium', label: <Tag color="processing">Trung bình</Tag> },
-                      { value: 'Low', label: <Tag color="default">Thấp</Tag> },
-                    ]}
-                  />
-                </Form.Item>
-              </div>
+                  <div style={{ marginTop: 8 }}>
+                    <AssigneeSuggestion
+                      boardId={task.boardId}
+                      taskId={task.id}
+                      currentAssigneeId={task.assigneeId}
+                      onSelectAssignee={(userId) => {
+                        void handleAssigneeChange(userId)
+                      }}
+                    />
+                  </div>
+                </div>
 
-              {/* Due Date */}
-              <div>
-                <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                  <CalendarOutlined style={{ marginRight: 4 }} /> Hạn chót:
-                </Typography.Text>
-                <Form.Item name="dueDate" noStyle>
-                  <DatePicker
-                    style={{ width: '100%' }}
-                    format="DD/MM/YYYY"
-                    onChange={handleSaveMetadata}
-                    placeholder="Chọn ngày hạn chót"
-                  />
-                </Form.Item>
-              </div>
-
-              {/* Assignee */}
-              <div>
-                <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                  <UserOutlined style={{ marginRight: 4 }} /> Người thực hiện:
-                </Typography.Text>
-                <Select
-                  allowClear
-                  placeholder="Chọn người thực hiện"
-                  value={task.assigneeId || undefined}
-                  onChange={(val) => handleAssigneeChange(val ?? null)}
-                  style={{ width: '100%' }}
-                  data-testid="assignee-select"
-                  options={members.map((m) => ({
-                    value: m.userId,
-                    label: (
-                      <Flex align="center" gap={6}>
-                        <Avatar
-                          size={20}
-                          icon={m.memberType === 'ai_agent' ? <RobotOutlined /> : undefined}
-                          style={{
-                            backgroundColor: m.memberType === 'ai_agent' ? '#7c3aed' : '#6366f1',
-                            fontSize: 11,
-                          }}
-                        >
-                          {m.memberType !== 'ai_agent' && (m.displayName?.[0]?.toUpperCase() || 'U')}
-                        </Avatar>
-                        <span style={{ fontSize: 13 }}>{m.displayName}</span>
-                        {m.memberType === 'ai_agent' && (
-                          <Tag color="purple" style={{ margin: 0, fontSize: 10, lineHeight: '16px' }}>
-                            AI Agent
-                          </Tag>
-                        )}
-                      </Flex>
-                    ),
-                  }))}
-                />
-
-                <div style={{ marginTop: 8 }}>
-                  <AssigneeSuggestion
-                    boardId={task.boardId}
-                    taskId={task.id}
-                    currentAssigneeId={task.assigneeId}
-                    onSelectAssignee={(userId) => {
-                      void handleAssigneeChange(userId)
+                {/* Status info */}
+                {(isDoneColumn || task.completedAt) && (
+                  <div
+                    style={{
+                      padding: '8px 10px',
+                      background: '#ecfdf5',
+                      borderRadius: 8,
+                      border: '1px solid #a7f3d0',
                     }}
-                  />
+                  >
+                    <Flex align="center" gap={6}>
+                      <CheckCircleFilled style={{ color: '#10b981' }} />
+                      <Typography.Text strong style={{ color: '#065f46', fontSize: 12 }}>
+                        Đã hoàn thành
+                      </Typography.Text>
+                    </Flex>
+                    {task.completedAt && (
+                      <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>
+                        Lúc: {dayjs(task.completedAt).format('HH:mm DD/MM/YYYY')}
+                      </Typography.Text>
+                    )}
+                  </div>
+                )}
+
+                <Divider style={{ margin: '6px 0' }} />
+
+                {/* Meta Timestamps */}
+                <div style={{ fontSize: 11, color: '#64748b', fontFamily: 'var(--tn-font-mono, monospace)' }}>
+                  <div>Tạo lúc: {dayjs(task.createdAt).format('HH:mm DD/MM/YYYY')}</div>
+                  <div>Cập nhật: {dayjs(task.updatedAt).format('HH:mm DD/MM/YYYY')}</div>
                 </div>
-              </div>
 
-              {/* Status info */}
-              {(isDoneColumn || task.completedAt) && (
-                <div style={{ padding: '8px 10px', background: '#ecfdf5', borderRadius: 6, border: '1px solid #a7f3d0' }}>
-                  <Flex align="center" gap={6}>
-                    <CheckCircleFilled style={{ color: '#10b981' }} />
-                    <Typography.Text strong style={{ color: '#065f46', fontSize: 12 }}>
-                      Đã hoàn thành
-                    </Typography.Text>
-                  </Flex>
-                  {task.completedAt && (
-                    <Typography.Text type="secondary" style={{ fontSize: 11, display: 'block', marginTop: 2 }}>
-                      Lúc: {dayjs(task.completedAt).format('HH:mm DD/MM/YYYY')}
-                    </Typography.Text>
-                  )}
-                </div>
-              )}
-
-              <Divider style={{ margin: '8px 0' }} />
-
-              {/* Meta Timestamps */}
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>
-                <div>Tạo lúc: {dayjs(task.createdAt).format('HH:mm DD/MM/YYYY')}</div>
-                <div>Cập nhật: {dayjs(task.updatedAt).format('HH:mm DD/MM/YYYY')}</div>
-              </div>
-
-              {/* Delete Button */}
-              <Popconfirm
-                title="Xoá thẻ này?"
-                description="Hành động này sẽ chuyển thẻ vào thùng rác."
-                okText="Xoá thẻ"
-                cancelText="Huỷ"
-                okButtonProps={{ danger: true }}
-                onConfirm={async () => {
-                  await onDeleteTask(task.id)
-                  onClose()
-                }}
-              >
-                <Button danger block icon={<DeleteOutlined />} style={{ marginTop: 8 }}>
-                  Xoá thẻ
-                </Button>
-              </Popconfirm>
-            </Flex>
+                {/* Delete Button */}
+                <Popconfirm
+                  title="Xoá thẻ này?"
+                  description="Hành động này sẽ chuyển thẻ vào thùng rác."
+                  okText="Xoá thẻ"
+                  cancelText="Huỷ"
+                  okButtonProps={{ danger: true }}
+                  onConfirm={async () => {
+                    await onDeleteTask(task.id)
+                    onClose()
+                  }}
+                >
+                  <Button danger block icon={<DeleteOutlined />} style={{ marginTop: 4, borderRadius: 8 }}>
+                    Xoá thẻ
+                  </Button>
+                </Popconfirm>
+              </Flex>
+            </div>
           </Col>
         </Row>
       </Form>

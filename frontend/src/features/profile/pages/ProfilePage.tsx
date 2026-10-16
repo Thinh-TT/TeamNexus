@@ -195,12 +195,32 @@ export const ProfilePage: React.FC = () => {
     <Layout style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
       <AppHeader />
 
-      <Content style={{ padding: '32px 24px', maxWidth: 900, margin: '0 auto', width: '100%' }}>
-        <Typography.Title level={3} style={{ marginBottom: 24, color: '#0f172a' }}>
-          Hồ sơ người dùng
-        </Typography.Title>
+      <Content style={{ padding: '32px 24px', maxWidth: 960, margin: '0 auto', width: '100%' }}>
+        <Flex justify="space-between" align="center" wrap="wrap" gap={12} style={{ marginBottom: 20 }}>
+          <div>
+            <Typography.Title level={3} style={{ margin: 0, color: '#0f172a', fontWeight: 700, letterSpacing: '-0.02em' }}>
+              Hồ sơ người dùng
+            </Typography.Title>
+            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+              Quản lý thông tin định danh, danh sách Workspace tham gia và tuỳ chọn AI Digest hằng ngày
+            </Typography.Text>
+          </div>
+          <Tag
+            style={{
+              margin: 0,
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 600,
+              color: '#4f46e5',
+              backgroundColor: '#eef2ff',
+              borderColor: '#c7d2fe',
+            }}
+          >
+            OAuth 2.0 Verified
+          </Tag>
+        </Flex>
 
-        <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        <Card style={{ borderRadius: 14, border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)' }}>
           <Tabs
             activeKey={activeTab}
             onChange={setActiveTab}
@@ -214,18 +234,28 @@ export const ProfilePage: React.FC = () => {
                   </span>
                 ),
                 children: (
-                  <div style={{ maxWidth: 600, padding: '12px 0' }}>
-                    <Flex align="center" gap={20} style={{ marginBottom: 28 }}>
+                  <div style={{ maxWidth: 620, padding: '12px 0' }}>
+                    <Flex
+                      align="center"
+                      gap={20}
+                      style={{
+                        marginBottom: 28,
+                        padding: '16px 20px',
+                        borderRadius: 12,
+                        background: 'linear-gradient(135deg, #eef2ff 0%, #f5f3ff 60%, #ffffff 100%)',
+                        border: '1px solid #e0e7ff',
+                      }}
+                    >
                       <Avatar
                         size={72}
                         src={avatarPreview}
                         icon={<UserOutlined />}
-                        style={{ backgroundColor: '#6366f1', fontSize: 32 }}
+                        style={{ backgroundColor: '#4f46e5', fontSize: 32, border: '3px solid #ffffff', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)' }}
                       >
                         {!avatarPreview && user?.displayName?.[0]?.toUpperCase()}
                       </Avatar>
                       <div>
-                        <Typography.Title level={4} style={{ margin: 0, color: '#0f172a' }}>
+                        <Typography.Title level={4} style={{ margin: 0, color: '#0f172a', fontWeight: 700 }}>
                           {user?.displayName ?? 'Người dùng'}
                         </Typography.Title>
                         <Typography.Text type="secondary" style={{ fontSize: 13 }}>

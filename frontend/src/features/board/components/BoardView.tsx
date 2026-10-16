@@ -515,13 +515,14 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
         overflow: 'hidden',
       }}
     >
-      {/* Top Bar - Tier 1: Board Info & Main Action Buttons */}
+      {/* Top Bar - Tier 1: Board Info & Main Action Buttons (Luminous Command Surface) */}
       <div
         style={{
-          background: '#ffffff',
-          borderBottom: '1px solid #f1f5f9',
-          padding: '10px 24px',
-          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.02)',
+          background: 'rgba(255, 255, 255, 0.94)',
+          backdropFilter: 'blur(8px)',
+          borderBottom: '1px solid #e2e8f0',
+          padding: '12px 24px',
+          boxShadow: '0 1px 2px rgba(15, 23, 42, 0.03)',
         }}
       >
         <Flex justify="space-between" align="center" wrap="wrap" gap={12}>
@@ -534,8 +535,11 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
               style={{ borderRadius: 8 }}
             />
             <div>
-              <Flex align="center" gap={8}>
-                <Typography.Title level={4} style={{ margin: 0, color: '#0f172a', fontWeight: 600 }}>
+              <Flex align="center" gap={8} wrap="wrap">
+                <Typography.Title
+                  level={4}
+                  style={{ margin: 0, color: '#0f172a', fontWeight: 700, letterSpacing: '-0.02em' }}
+                >
                   {board?.name ?? 'Kanban Board'}
                 </Typography.Title>
                 {renderConnectionStatus(connectionStatus, reconnect, isColdStarting)}
@@ -561,7 +565,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
                   style={{
                     borderRadius: 8,
                     borderColor: '#e2e8f0',
-                    color: '#475569',
+                    color: '#334155',
                     fontSize: 12.5,
                   }}
                 >
@@ -576,7 +580,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
                   style={{
                     borderRadius: 8,
                     borderColor: '#e2e8f0',
-                    color: '#475569',
+                    color: '#334155',
                     fontSize: 12.5,
                   }}
                 >
@@ -591,7 +595,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
                   style={{
                     borderRadius: 8,
                     borderColor: '#e2e8f0',
-                    color: '#475569',
+                    color: '#334155',
                     fontSize: 12.5,
                   }}
                 >
@@ -607,9 +611,11 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
                 onClick={() => setNotificationOpen(true)}
                 style={{
                   borderRadius: 8,
-                  borderColor: '#cbd5e1',
-                  color: '#475569',
+                  borderColor: unreadNotificationCount > 0 ? '#fecaca' : '#e2e8f0',
+                  backgroundColor: unreadNotificationCount > 0 ? '#fef2f2' : '#ffffff',
+                  color: unreadNotificationCount > 0 ? '#b91c1c' : '#334155',
                   fontSize: 12.5,
+                  fontWeight: unreadNotificationCount > 0 ? 600 : 500,
                 }}
               >
                 Cảnh báo AI
@@ -622,9 +628,11 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
                 onClick={() => setAiHistoryOpen(true)}
                 style={{
                   borderRadius: 8,
-                  borderColor: '#cbd5e1',
-                  color: '#475569',
+                  borderColor: pendingAiActionCount > 0 ? '#fde68a' : '#e2e8f0',
+                  backgroundColor: pendingAiActionCount > 0 ? '#fffbeb' : '#ffffff',
+                  color: pendingAiActionCount > 0 ? '#92400e' : '#334155',
                   fontSize: 12.5,
+                  fontWeight: pendingAiActionCount > 0 ? 600 : 500,
                 }}
               >
                 Lịch sử AI
@@ -637,10 +645,10 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
                 onClick={() => setObserverRunsOpen(true)}
                 style={{
                   borderRadius: 8,
-                  borderColor: '#818cf8',
-                  color: '#4338ca',
-                  fontWeight: 500,
-                  backgroundColor: '#eef2ff',
+                  borderColor: '#ddd6fe',
+                  color: '#5b21b6',
+                  fontWeight: 600,
+                  backgroundColor: '#f5f3ff',
                   fontSize: 12.5,
                 }}
               >
@@ -653,10 +661,11 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
               onClick={() => setSmartSetupModalOpen(true)}
               style={{
                 borderRadius: 8,
-                borderColor: '#818cf8',
-                color: '#4f46e5',
-                fontWeight: 500,
-                backgroundColor: '#f5f3ff',
+                borderColor: '#7c3aed',
+                color: '#ffffff',
+                fontWeight: 600,
+                backgroundColor: '#7c3aed',
+                boxShadow: '0 2px 6px rgba(124, 58, 237, 0.22)',
                 fontSize: 12.5,
               }}
             >
@@ -684,10 +693,11 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
                 setColumnModalOpen(true)
               }}
               style={{
-                backgroundColor: '#6366f1',
+                backgroundColor: '#4f46e5',
+                borderColor: '#4f46e5',
                 borderRadius: 8,
-                fontWeight: 500,
-                boxShadow: '0 2px 4px rgba(99, 102, 241, 0.25)',
+                fontWeight: 600,
+                boxShadow: '0 2px 4px rgba(79, 70, 229, 0.22)',
               }}
             >
               Thêm cột
@@ -710,14 +720,14 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
         }}
       >
         {/* Left: Search & Workspace Search Link */}
-        <Flex align="center" gap={10} style={{ flex: '1 1 320px', maxWidth: 520 }}>
+        <Flex align="center" gap={10} style={{ flex: '1 1 320px', maxWidth: 540 }}>
           <Input
             prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
             placeholder="Tìm kiếm thẻ, nhãn, người..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             allowClear
-            style={{ width: 260, borderRadius: 8 }}
+            style={{ width: 270, borderRadius: 8, backgroundColor: '#f8fafc' }}
           />
 
           <Button
@@ -728,7 +738,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
               navigate(`/workspaces/${workspaceId}/search?boardId=${boardId}${qParam}`)
             }}
             data-testid="board-search-workspace-btn"
-            style={{ padding: '0 4px', fontSize: 13, color: '#6366f1' }}
+            style={{ padding: '0 4px', fontSize: 12.5, fontWeight: 500, color: '#4f46e5' }}
           >
             Tìm trong workspace →
           </Button>
@@ -736,16 +746,26 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
 
         {/* Right: Filter & Quick Summary */}
         <Flex align="center" gap={10}>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          <Tag
+            style={{
+              margin: 0,
+              borderRadius: 9999,
+              backgroundColor: '#f8fafc',
+              borderColor: '#e2e8f0',
+              color: '#475569',
+              fontSize: 11.5,
+              fontFamily: 'var(--tn-font-mono, monospace)',
+            }}
+          >
             {searchQuery || priorityFilter !== 'ALL'
               ? `Hiển thị ${filteredTaskCount}/${totalTaskCount} thẻ (${columns.length} cột)`
               : `${columns.length} cột · ${totalTaskCount} thẻ`}
-          </Typography.Text>
+          </Tag>
 
           <Select
             value={priorityFilter}
             onChange={setPriorityFilter}
-            style={{ width: 140 }}
+            style={{ width: 145 }}
             options={[
               { value: 'ALL', label: 'Tất cả mức độ' },
               { value: 'Urgent', label: '🔴 Khẩn cấp' },

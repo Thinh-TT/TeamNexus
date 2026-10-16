@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import {
   ArrowLeftOutlined,
+  BarChartOutlined,
   DownloadOutlined,
   ReloadOutlined,
 } from '@ant-design/icons'
@@ -13,6 +14,7 @@ import {
   Result,
   Space,
   Spin,
+  Tag,
   Tooltip,
   Typography,
 } from 'antd'
@@ -126,9 +128,25 @@ export const ReportsPage: React.FC = () => {
                 onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
               />
               <div>
-                <Typography.Title level={3} style={{ margin: 0, color: '#0f172a' }}>
-                  Báo Cáo & Xuất Dữ Liệu
-                </Typography.Title>
+                <Flex align="center" gap={8} wrap="wrap">
+                  <Typography.Title level={3} style={{ margin: 0, color: '#0f172a', fontWeight: 700, letterSpacing: '-0.02em' }}>
+                    <BarChartOutlined style={{ marginRight: 8, color: '#4f46e5' }} />
+                    Báo Cáo & Xuất Dữ Liệu
+                  </Typography.Title>
+                  <Tag
+                    style={{
+                      margin: 0,
+                      borderRadius: 999,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: '#4f46e5',
+                      backgroundColor: '#eef2ff',
+                      borderColor: '#c7d2fe',
+                    }}
+                  >
+                    Burndown + Velocity + CSV/PDF
+                  </Tag>
+                </Flex>
                 <Typography.Text type="secondary" style={{ fontSize: 13 }}>
                   {report ? `${report.workspaceName} ${report.scope.boardName ? `› ${report.scope.boardName}` : ''}` : `Workspace: ${workspaceId}`}
                 </Typography.Text>
@@ -137,12 +155,12 @@ export const ReportsPage: React.FC = () => {
 
             <Space wrap>
               <Tooltip title="Tải lại dữ liệu">
-                <Button icon={<ReloadOutlined />} onClick={() => reload()} loading={status === 'loading'} />
+                <Button icon={<ReloadOutlined />} onClick={() => reload()} loading={status === 'loading'} style={{ borderRadius: 8 }} />
               </Tooltip>
               <Button
                 type="primary"
                 icon={<DownloadOutlined />}
-                style={{ backgroundColor: '#6366f1', borderRadius: 8 }}
+                style={{ backgroundColor: '#4f46e5', borderColor: '#4f46e5', borderRadius: 8, fontWeight: 600 }}
                 onClick={() => setExportDrawerOpen(true)}
               >
                 Xuất Báo Cáo

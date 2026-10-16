@@ -33,10 +33,7 @@ interface RecoveryPlanCardProps {
 /**
  * AI Observer Recovery Plan card component (Giai đoạn 14.7 §A5 Phần B).
  *
- * ⚠️ **ISSUE-04 — written in PURE Ant Design on purpose.**
- *
- * Replaced the previous Tailwind utility classes (`p-3.5 bg-slate-900/70 border border-slate-800 space-y-3`...)
- * to ensure consistent, premium styling and prevent text run-together defects.
+ * Pure Ant Design + Luminous Enterprise Workspace Accountability styling.
  */
 export const RecoveryPlanCard: React.FC<RecoveryPlanCardProps> = ({
   actionLog,
@@ -110,14 +107,14 @@ export const RecoveryPlanCard: React.FC<RecoveryPlanCardProps> = ({
   const renderKindIcon = () => {
     switch (kind) {
       case 'ReassignTask':
-        return <UserOutlined style={{ fontSize: 16, color: '#1677ff' }} />
+        return <UserOutlined style={{ fontSize: 16, color: '#4f46e5' }} />
       case 'ExtendDeadline':
-        return <CalendarOutlined style={{ fontSize: 16, color: '#52c41a' }} />
+        return <CalendarOutlined style={{ fontSize: 16, color: '#10b981' }} />
       case 'SplitSubtasks':
-        return <BranchesOutlined style={{ fontSize: 16, color: '#722ed1' }} />
+        return <BranchesOutlined style={{ fontSize: 16, color: '#7c3aed' }} />
       case 'EscalateManager':
       default:
-        return <ExclamationCircleOutlined style={{ fontSize: 16, color: '#faad14' }} />
+        return <ExclamationCircleOutlined style={{ fontSize: 16, color: '#f59e0b' }} />
     }
   }
 
@@ -141,12 +138,13 @@ export const RecoveryPlanCard: React.FC<RecoveryPlanCardProps> = ({
       data-testid="recovery-plan-card"
       size="small"
       style={{
-        borderRadius: 8,
-        borderColor: '#e2e8f0',
-        backgroundColor: '#ffffff',
+        borderRadius: 10,
+        borderColor: '#ddd6fe',
+        background: 'linear-gradient(180deg, #faf5ff 0%, #ffffff 100%)',
+        boxShadow: '0 2px 8px rgba(124, 58, 237, 0.06)',
         marginBottom: 8,
       }}
-      styles={{ body: { padding: 12 } }}
+      styles={{ body: { padding: 14 } }}
     >
       <Flex vertical gap={10}>
         {/* Header: Title, Kind Tag & Icon */}
@@ -159,22 +157,31 @@ export const RecoveryPlanCard: React.FC<RecoveryPlanCardProps> = ({
           <Flex align="center" gap={8}>
             <div
               style={{
-                padding: '4px 6px',
-                borderRadius: 6,
-                backgroundColor: '#eef2ff',
-                color: '#4338ca',
+                padding: '5px 7px',
+                borderRadius: 8,
+                backgroundColor: '#f5f3ff',
+                border: '1px solid #ddd6fe',
+                color: '#7c3aed',
                 display: 'flex',
                 alignItems: 'center',
               }}
             >
               <ToolOutlined style={{ fontSize: 15 }} />
             </div>
-            <Flex vertical gap={1}>
-              <Typography.Text strong style={{ fontSize: 13 }}>
+            <Flex vertical gap={2}>
+              <Typography.Text strong style={{ fontSize: 13, color: '#0f172a' }}>
                 AI Observer: {getKindTitle()}
               </Typography.Text>
               <Space size={4}>
-                <Tag color="blue" style={{ margin: 0, fontSize: 10.5, fontFamily: 'monospace' }}>
+                <Tag
+                  color="purple"
+                  style={{
+                    margin: 0,
+                    fontSize: 10.5,
+                    fontFamily: 'var(--tn-font-mono, monospace)',
+                    borderRadius: 4,
+                  }}
+                >
                   {kind}
                 </Tag>
               </Space>
@@ -192,7 +199,7 @@ export const RecoveryPlanCard: React.FC<RecoveryPlanCardProps> = ({
             icon={<WarningOutlined />}
             title="Cần họp khẩn cấp"
             description="Cần họp khẩn — không có thay đổi dữ liệu nào được áp dụng."
-            style={{ borderRadius: 6 }}
+            style={{ borderRadius: 8 }}
           />
         )}
 
@@ -200,7 +207,7 @@ export const RecoveryPlanCard: React.FC<RecoveryPlanCardProps> = ({
           <Flex vertical gap={4}>
             <Typography.Text
               type="secondary"
-              style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}
+              style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}
             >
               Các subtasks đề xuất:
             </Typography.Text>
@@ -208,9 +215,9 @@ export const RecoveryPlanCard: React.FC<RecoveryPlanCardProps> = ({
               size="small"
               bordered
               dataSource={snapshot.subtasks}
-              style={{ borderRadius: 6, backgroundColor: '#f8fafc' }}
+              style={{ borderRadius: 8, backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}
               renderItem={(st) => (
-                <List.Item style={{ padding: '6px 10px', fontSize: 12 }}>
+                <List.Item style={{ padding: '6px 10px', fontSize: 12.5 }}>
                   <Typography.Text>• {st}</Typography.Text>
                 </List.Item>
               )}
@@ -220,8 +227,8 @@ export const RecoveryPlanCard: React.FC<RecoveryPlanCardProps> = ({
 
         {snapshot?.newDueDate && (
           <Flex align="center" gap={6}>
-            <CalendarOutlined style={{ fontSize: 14, color: '#52c41a' }} />
-            <Typography.Text style={{ fontSize: 12 }}>
+            <CalendarOutlined style={{ fontSize: 14, color: '#10b981' }} />
+            <Typography.Text style={{ fontSize: 12.5 }}>
               Hạn mới đề xuất:{' '}
               <strong>{new Date(snapshot.newDueDate).toLocaleDateString()}</strong>
             </Typography.Text>
@@ -233,7 +240,7 @@ export const RecoveryPlanCard: React.FC<RecoveryPlanCardProps> = ({
             type="error"
             showIcon
             title={error}
-            style={{ borderRadius: 6 }}
+            style={{ borderRadius: 8 }}
           />
         )}
 
@@ -254,10 +261,10 @@ export const RecoveryPlanCard: React.FC<RecoveryPlanCardProps> = ({
                 actionLog.status === 'Approved'
                   ? 'success'
                   : actionLog.status === 'Pending'
-                  ? 'processing'
-                  : 'default'
+                    ? 'processing'
+                    : 'default'
               }
-              style={{ margin: 0, fontSize: 11 }}
+              style={{ margin: 0, fontSize: 11, fontWeight: 600, borderRadius: 9999 }}
             >
               {actionLog.status}
             </Tag>
@@ -283,7 +290,12 @@ export const RecoveryPlanCard: React.FC<RecoveryPlanCardProps> = ({
                   onClick={handleApprove}
                   loading={isActing}
                   icon={<CheckOutlined />}
-                  style={{ borderRadius: 6 }}
+                  style={{
+                    borderRadius: 6,
+                    backgroundColor: '#059669',
+                    borderColor: '#059669',
+                    fontWeight: 600,
+                  }}
                 >
                   Phê duyệt giải pháp
                 </Button>

@@ -31,7 +31,6 @@ interface TaskCardProps {
   onSendToAiChat?: (task: TaskResponse) => void
 }
 
-
 export const TaskCard: React.FC<TaskCardProps> = ({
   task,
   isDoneColumn = false,
@@ -59,6 +58,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   const isCompleted = isTaskCompleted(task, isDoneColumn)
   const taskIsOverdue = isOverdue(task, new Date(), isDoneColumn)
   const daysOverdue = overdueDays(task, new Date(), isDoneColumn)
+  const hasActiveAgent = Boolean(task.activeAgentRunId)
 
   const [isHovered, setIsHovered] = React.useState(false)
 
@@ -71,34 +71,37 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     cursor: 'grab',
     userSelect: 'none',
     boxShadow: isDragOverlay
-      ? '0 16px 32px -4px rgba(0, 0, 0, 0.18), 0 8px 16px -4px rgba(0, 0, 0, 0.1)'
-      : isHovered && !isDragging
-      ? '0 6px 14px -2px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04)'
-      : '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
+      ? '0 16px 32px -4px rgba(15, 23, 42, 0.18), 0 8px 16px -4px rgba(15, 23, 42, 0.1)'
+      : hasActiveAgent
+        ? '0 0 0 1px rgba(124, 58, 237, 0.12), 0 6px 14px -2px rgba(124, 58, 237, 0.08)'
+        : isHovered && !isDragging
+          ? '0 6px 14px -2px rgba(15, 23, 42, 0.07), 0 2px 4px -1px rgba(15, 23, 42, 0.04)'
+          : '0 1px 2px 0 rgba(15, 23, 42, 0.04)',
     border: isDragOverlay
-      ? '1.5px solid #6366f1'
-      : isHovered && !isDragging
-      ? '1px solid #cbd5e1'
-      : '1px solid #e2e8f0',
+      ? '1.5px solid #4f46e5'
+      : hasActiveAgent
+        ? '1px solid #c4b5fd'
+        : isHovered && !isDragging
+          ? '1px solid #cbd5e1'
+          : '1px solid #e2e8f0',
     borderLeft: taskIsOverdue
       ? '3px solid #ef4444'
-      : isDragOverlay
-      ? '1.5px solid #6366f1'
-      : isHovered && !isDragging
-      ? '1px solid #cbd5e1'
-      : '1px solid #e2e8f0',
+      : hasActiveAgent
+        ? '3px solid #7c3aed'
+        : isDragOverlay
+          ? '1.5px solid #4f46e5'
+          : isHovered && !isDragging
+            ? '1px solid #cbd5e1'
+            : '1px solid #e2e8f0',
     borderRadius: 10,
-    background: '#ffffff',
+    background: hasActiveAgent
+      ? 'linear-gradient(180deg, #faf5ff 0%, #ffffff 42%)'
+      : '#ffffff',
     transformOrigin: '50% 50%',
     rotate: isDragOverlay ? '2deg' : '0deg',
   }
 
   const [clarificationQuestion, setClarificationQuestion] = React.useState<string | null>(null)
-  /**
-   * Phase 14.7 §B: the persona the latest run executed as, as the server named it. The card's own
-   * `assigneeName` is the workspace member's configured name, which is not always filled in for the AI
-   * agent — and when it is missing, "AI Agent" said nothing about WHICH agent was working on the card.
-   */
   const [agentRunDisplayName, setAgentRunDisplayName] = React.useState<string | null>(null)
 
   React.useEffect(() => {
@@ -127,25 +130,18 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     }
   }, [task.id, task.activeAgentRunId])
 
-  // The assignee's own name wins when it exists (it is what the avatar depicts); the run's name is the
-  // honest fallback, and the shared constant keeps ONE definition of what to show when neither has a name.
   const aiAgentLabel = task.assigneeName || agentRunDisplayName || AGENT_FALLBACK_DISPLAY_NAME
 
   const visibleLabels = task.labels?.slice(0, 2) || []
   const extraLabels = task.labels && task.labels.length > 2 ? task.labels.slice(2) : []
 
-  // The drag overlay draws the same component; an interactive menu there would be a control the user can
-  // never reach (the ghost follows the pointer), so it is suppressed rather than merely unused.
   const showActionsMenu = Boolean(onSendToAiChat) && !isDragOverlay
 
   const cardMenuItems: MenuProps['items'] = [
     {
       key: 'send-to-ai-chat',
-      icon: <RobotOutlined />,
+      icon: <RobotOutlined style={{ color: '#7c3aed' }} />,
       label: 'Gửi vào AI Chat',
-      // `domEvent.stopPropagation()`, not a plain DOM handler: React bubbles synthetic events through the
-      // COMPONENT tree even across a portal, so the dropdown's menu is still a "click inside the card" as far
-      // as the root div is concerned — without this, choosing an action would also open the task modal.
       onClick: (info) => {
         info.domEvent.stopPropagation()
         onSendToAiChat?.(task)
@@ -166,17 +162,23 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       <Card
         size="small"
         variant="borderless"
-        style={{ background: 'transparent' }}
-        styles={{ body: { padding: '11px 12px' } }}
+        style={{ background: 'transparent', boxShadow: 'none' }}
+        styles={{ body: { padding: '12px 13px' } }}
       >
-        <Flex vertical gap={7}>
-          {/* Top meta: Priority + Labels + Overdue badge */}
+        <Flex vertical gap={8}>
+          {/* Top meta: Priority + Labels + Overdue badge + Active Agent badge */}
           {(priorityConfig || (task.labels && task.labels.length > 0) || taskIsOverdue || task.activeAgentRunId) && (
             <Flex wrap="wrap" gap={4} align="center">
               {taskIsOverdue && (
                 <Tag
                   color="error"
-                  style={{ margin: 0, fontSize: 10.5, lineHeight: '18px', borderRadius: 4, fontWeight: 500 }}
+                  style={{
+                    margin: 0,
+                    fontSize: 10.5,
+                    lineHeight: '18px',
+                    borderRadius: 5,
+                    fontWeight: 600,
+                  }}
                   data-testid="task-card-overdue-badge"
                 >
                   {`Quá hạn ${daysOverdue} ngày`}
@@ -189,11 +191,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     alignItems: 'center',
                     gap: 4,
                     fontSize: 11,
-                    fontWeight: 500,
+                    fontWeight: 600,
                     color: priorityConfig.color,
                     backgroundColor: priorityConfig.bg,
                     border: `1px solid ${priorityConfig.border}`,
-                    borderRadius: 4,
+                    borderRadius: 5,
                     padding: '0 6px',
                     lineHeight: '18px',
                   }}
@@ -217,11 +219,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     margin: 0,
                     fontSize: 10.5,
                     lineHeight: '18px',
-                    borderRadius: 4,
+                    borderRadius: 5,
                     backgroundColor: `${label.color}14`,
-                    borderColor: `${label.color}35`,
+                    borderColor: `${label.color}38`,
                     color: label.color,
-                    fontWeight: 500,
+                    fontWeight: 600,
                   }}
                 >
                   {label.name}
@@ -232,7 +234,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   title={
                     <Flex vertical gap={2} style={{ padding: '2px 0' }}>
                       {extraLabels.map((l) => (
-                        <span key={l.id} style={{ fontSize: 11.5 }}>{l.name}</span>
+                        <span key={l.id} style={{ fontSize: 11.5 }}>
+                          {l.name}
+                        </span>
                       ))}
                     </Flex>
                   }
@@ -242,7 +246,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                       margin: 0,
                       fontSize: 10,
                       lineHeight: '18px',
-                      borderRadius: 4,
+                      borderRadius: 5,
                       backgroundColor: '#f1f5f9',
                       borderColor: '#cbd5e1',
                       color: '#475569',
@@ -258,7 +262,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 <Tag
                   color="purple"
                   icon={<RobotOutlined />}
-                  style={{ margin: 0, fontSize: 10.5, lineHeight: '18px', borderRadius: 4 }}
+                  style={{
+                    margin: 0,
+                    fontSize: 10.5,
+                    lineHeight: '18px',
+                    borderRadius: 5,
+                    fontWeight: 600,
+                  }}
                   data-testid="agent-active-badge"
                 >
                   AI Agent
@@ -277,9 +287,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               delete={isCompleted}
               style={{
                 fontSize: 13.5,
-                lineHeight: 1.4,
-                color: isCompleted ? '#64748b' : '#1e293b',
+                lineHeight: 1.45,
+                color: isCompleted ? '#64748b' : '#0f172a',
                 flex: 1,
+                fontWeight: 600,
               }}
             >
               {task.title}
@@ -293,16 +304,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   icon={<MoreOutlined style={{ fontSize: 14 }} />}
                   aria-label="Hành động khác cho thẻ"
                   data-testid={`task-card-menu-${task.id}`}
-                  // The card opens the detail modal on click and dnd-kit listens for pointer-down on the same
-                  // element, so both are stopped here: "open this menu" must not also mean "open the task" or
-                  // "start dragging the card".
                   onClick={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
                   style={{
                     flexShrink: 0,
                     marginTop: -4,
                     color: '#64748b',
-                    opacity: isHovered ? 1 : 0.5,
+                    opacity: isHovered ? 1 : 0.55,
                   }}
                 />
               </Dropdown>
@@ -319,7 +327,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 backgroundColor: '#fffbeb',
                 border: '1px solid #fde68a',
                 borderRadius: 6,
-                padding: '4px 8px',
+                padding: '5px 8px',
                 marginTop: 2,
               }}
             >
@@ -342,7 +350,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           )}
 
           {/* Bottom info: Due date, comments, assignee */}
-          <Flex justify="space-between" align="center" style={{ marginTop: 2 }}>
+          <Flex
+            justify="space-between"
+            align="center"
+            style={{
+              marginTop: 2,
+              paddingTop: 6,
+              borderTop: '1px solid #f8fafc',
+            }}
+          >
             <Space size={10}>
               {task.dueDate && (
                 <Tooltip
@@ -351,11 +367,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                   }`}
                 >
                   <Space
-                    size={3}
+                    size={4}
                     style={{
                       fontSize: 11.5,
                       color: taskIsOverdue ? '#ef4444' : isCompleted ? '#94a3b8' : '#64748b',
-                      fontWeight: taskIsOverdue ? 600 : 400,
+                      fontWeight: taskIsOverdue ? 600 : 500,
+                      fontFamily: 'var(--tn-font-mono, monospace)',
                     }}
                   >
                     <CalendarOutlined />
@@ -366,7 +383,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
 
               {task.commentCount > 0 && (
                 <Tooltip title={`${task.commentCount} bình luận`}>
-                  <Space size={3} style={{ fontSize: 11.5, color: '#64748b' }}>
+                  <Space size={3} style={{ fontSize: 11.5, color: '#64748b', fontWeight: 500 }}>
                     <MessageOutlined />
                     <span>{task.commentCount}</span>
                   </Space>
@@ -383,9 +400,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     backgroundColor: '#7c3aed',
                     color: '#ffffff',
                     fontSize: 11,
+                    boxShadow: '0 0 0 2px #ede9fe',
                   }}
-                  // The name is also the avatar's accessible name: a tooltip alone is unreachable for a
-                  // screen reader (and for a test), and "which agent?" is the question this answers.
                   aria-label={`Người phụ trách: ${aiAgentLabel}`}
                   data-testid="agent-assignee-avatar"
                 />
@@ -395,8 +411,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 <Avatar
                   size={22}
                   style={{
-                    backgroundColor: '#6366f1',
-                    fontSize: 10,
+                    backgroundColor: '#4f46e5',
+                    fontSize: 10.5,
                     fontWeight: 600,
                   }}
                 >
@@ -408,7 +424,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                 <Avatar
                   size={22}
                   icon={<UserOutlined />}
-                  style={{ backgroundColor: '#e2e8f0', color: '#94a3b8', fontSize: 10 }}
+                  style={{ backgroundColor: '#f1f5f9', color: '#94a3b8', fontSize: 10 }}
                 />
               </Tooltip>
             )}

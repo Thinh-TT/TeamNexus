@@ -256,12 +256,47 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
       <Flex
         justify="space-between"
         align="center"
-        style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}
+        style={{
+          padding: '12px 14px',
+          borderBottom: '1px solid #e2e8f0',
+          background: 'linear-gradient(135deg, #f5f3ff 0%, #eef2ff 100%)',
+        }}
       >
-        <Space size={8}>
-          <RobotOutlined style={{ color: '#7c3aed', fontSize: 16 }} />
+        <Space size={10}>
+          <div
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              backgroundColor: '#7c3aed',
+              color: '#ffffff',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 6px rgba(124, 58, 237, 0.25)',
+            }}
+          >
+            <RobotOutlined style={{ fontSize: 15 }} />
+          </div>
           <div>
-            <Text strong style={{ fontSize: 13 }}>AI Agent Chat</Text>
+            <Flex align="center" gap={6}>
+              <Text strong style={{ fontSize: 13.5, color: '#0f172a' }}>
+                AI Agent Chat
+              </Text>
+              <Tag
+                color="purple"
+                style={{
+                  margin: 0,
+                  fontSize: 10,
+                  lineHeight: '16px',
+                  padding: '0 5px',
+                  borderRadius: 4,
+                  fontWeight: 600,
+                }}
+              >
+                Sys-1 + Sys-2
+              </Tag>
+            </Flex>
             <div>
               <Text type="secondary" style={{ fontSize: 11 }}>
                 {model ? `Toàn bảng · ${model}` : 'Toàn bảng'}
@@ -287,9 +322,13 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
           align="center"
           gap={8}
           data-testid="agent-chat-persona-row"
-          style={{ padding: '8px 14px', borderBottom: '1px solid #f1f5f9' }}
+          style={{
+            padding: '8px 14px',
+            borderBottom: '1px solid #f1f5f9',
+            backgroundColor: '#ffffff',
+          }}
         >
-          <Text type="secondary" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+          <Text type="secondary" style={{ fontSize: 11.5, fontWeight: 500, whiteSpace: 'nowrap' }}>
             Vai trò
           </Text>
           <Select
@@ -298,8 +337,6 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
             value={persona ?? undefined}
             onChange={(value) => setPersona(value ?? null)}
             onClear={() => setPersona(null)}
-            // Clearing is a real choice here: it hands the turn back to the server's own default, and the
-            // request then carries no `persona` parameter at all.
             placeholder="Mặc định của hệ thống"
             options={personas.map((p) => ({ value: p.key, label: p.displayName }))}
             disabled={isBusy}
@@ -327,10 +364,8 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
           </Text>
           <Space size={6}>
             {attachments.length > 0 && (
-              <Badge count={attachments.length} style={{ backgroundColor: '#6366f1' }} />
+              <Badge count={attachments.length} style={{ backgroundColor: '#4f46e5' }} />
             )}
-            {/* Phase 14.6 §A1: the same attachment, without the gesture. Drag & drop stays (it is faster
-                for a card already on screen), but it is no longer the only way in. */}
             <Popover
               trigger="click"
               open={pickerOpen}
@@ -349,7 +384,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                 size="small"
                 icon={<PlusOutlined />}
                 data-testid="agent-chat-attach-picker-button"
-                style={{ fontSize: 11 }}
+                style={{ fontSize: 11, borderRadius: 6 }}
               >
                 Đính kèm thẻ
               </Button>
@@ -373,7 +408,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                   e.preventDefault()
                   detach(task.taskId)
                 }}
-                style={{ margin: 0, fontSize: 11 }}
+                style={{ margin: 0, fontSize: 11, borderRadius: 6, fontWeight: 500 }}
               >
                 {task.title}
               </Tag>
@@ -383,7 +418,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
       </div>
 
       {/* Conversation */}
-      <div style={{ flex: 1, position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, position: 'relative', minHeight: 0, display: 'flex', flexDirection: 'column', backgroundColor: '#fcfdff' }}>
         <div
           ref={scrollRef}
           onScroll={handleScroll}
@@ -395,10 +430,10 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={
                 <div style={{ textAlign: 'left' }}>
-                  <div style={{ fontWeight: 600, color: '#334155', fontSize: 12 }}>
+                  <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 12.5 }}>
                     Hỏi AI về cả bảng này
                   </div>
-                  <Text type="secondary" style={{ fontSize: 11 }}>
+                  <Text type="secondary" style={{ fontSize: 11.5 }}>
                     Kéo thẻ vào khung phía trên để AI tập trung vào đúng việc bạn đang hỏi.
                   </Text>
                 </div>
@@ -419,31 +454,29 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                 <Avatar
                   size={26}
                   icon={isUser ? <UserOutlined /> : <RobotOutlined />}
-                  style={{ backgroundColor: isUser ? '#3b82f6' : '#7c3aed', flexShrink: 0 }}
+                  style={{ backgroundColor: isUser ? '#4f46e5' : '#7c3aed', flexShrink: 0 }}
                 />
                 <div
                   style={{
                     maxWidth: '85%',
-                    backgroundColor: isUser ? '#eff6ff' : '#f8fafc',
-                    border: `1px solid ${isUser ? '#bfdbfe' : '#e2e8f0'}`,
-                    borderRadius: 8,
-                    padding: '8px 10px',
+                    backgroundColor: isUser ? '#4f46e5' : '#ffffff',
+                    border: `1px solid ${isUser ? '#4338ca' : '#e2e8f0'}`,
+                    borderRadius: isUser ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                    padding: '9px 12px',
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
                     fontSize: 12.5,
-                    color: '#1e293b',
+                    color: isUser ? '#ffffff' : '#0f172a',
                     lineHeight: 1.5,
+                    boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
                   }}
                 >
-                  {/* Phase 14.7 §B: the role this answer was produced as. Only a turn produced by this
-                      session has one — history loaded from the server shows no tag, because the server does
-                      not record which persona answered it. */}
                   {!isUser && msg.personaKey && (
                     <div style={{ marginBottom: 4 }}>
                       <Tag
                         color="purple"
                         data-testid="agent-chat-persona-tag"
-                        style={{ margin: 0, fontSize: 10.5, lineHeight: '18px', borderRadius: 4 }}
+                        style={{ margin: 0, fontSize: 10.5, lineHeight: '18px', borderRadius: 4, fontWeight: 600 }}
                       >
                         <RobotOutlined style={{ marginRight: 4 }} />
                         {personaLabel(msg.personaKey)}
@@ -463,15 +496,16 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                 aria-live="polite"
                 style={{
                   maxWidth: '85%',
-                  backgroundColor: '#f8fafc',
-                  border: '1px solid #c7d2fe',
-                  borderRadius: 8,
-                  padding: '8px 10px',
+                  backgroundColor: '#ffffff',
+                  border: '1px solid #c4b5fd',
+                  borderRadius: '12px 12px 12px 2px',
+                  padding: '9px 12px',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
                   fontSize: 12.5,
-                  color: '#1e293b',
+                  color: '#0f172a',
                   lineHeight: 1.5,
+                  boxShadow: '0 2px 8px rgba(124, 58, 237, 0.06)',
                 }}
               >
                 {persona && (
@@ -479,7 +513,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                     <Tag
                       color="purple"
                       data-testid="agent-chat-persona-tag"
-                      style={{ margin: 0, fontSize: 10.5, lineHeight: '18px', borderRadius: 4 }}
+                      style={{ margin: 0, fontSize: 10.5, lineHeight: '18px', borderRadius: 4, fontWeight: 600 }}
                     >
                       <RobotOutlined style={{ marginRight: 4 }} />
                       {personaLabel(persona)}
@@ -487,7 +521,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
                   </div>
                 )}
                 {streamingAnswer}
-                {isStreaming && <LoadingOutlined style={{ marginLeft: 6, color: '#6366f1' }} spin />}
+                {isStreaming && <LoadingOutlined style={{ marginLeft: 6, color: '#7c3aed' }} spin />}
               </div>
             </Flex>
           )}
@@ -522,17 +556,22 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         <Card
           size="small"
           data-testid="agent-chat-proposal-card"
-          style={{ margin: '0 14px 8px', borderColor: '#c7d2fe', backgroundColor: '#f5f3ff' }}
+          style={{
+            margin: '0 14px 8px',
+            borderRadius: 10,
+            borderColor: '#a7f3d0',
+            backgroundColor: '#ecfdf5',
+          }}
           title={
             <Space size={6}>
-              <ThunderboltOutlined style={{ color: '#6366f1' }} />
-              <Text style={{ fontSize: 12 }}>
+              <ThunderboltOutlined style={{ color: '#059669' }} />
+              <Text strong style={{ fontSize: 12, color: '#065f46' }}>
                 Đề xuất: {AGENT_CHAT_PROPOSAL_LABELS[proposal.kind]}
               </Text>
             </Space>
           }
         >
-          <Text style={{ fontSize: 12 }}>{proposal.summary}</Text>
+          <Text style={{ fontSize: 12, color: '#0f172a' }}>{proposal.summary}</Text>
 
           {proposal.kind === 'MoveTaskToColumn' && proposal.payload.columnId && (
             <div style={{ marginTop: 6 }}>
@@ -551,7 +590,12 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
               disabled={isBusy && status !== 'confirming'}
               onClick={handleSubmitProposal}
               data-testid="agent-chat-submit-proposal"
-              style={{ backgroundColor: '#6366f1' }}
+              style={{
+                backgroundColor: '#059669',
+                borderColor: '#059669',
+                borderRadius: 6,
+                fontWeight: 600,
+              }}
             >
               Gửi đề xuất
             </Button>

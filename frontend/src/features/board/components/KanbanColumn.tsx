@@ -135,17 +135,17 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
     <div
       ref={setNodeRef}
       style={{
-        width: 300,
-        minWidth: 300,
-        maxWidth: 300,
+        width: 306,
+        minWidth: 306,
+        maxWidth: 306,
         display: 'flex',
         flexDirection: 'column',
-        borderRadius: 14,
-        backgroundColor: isOver ? '#eef2ff' : '#f8fafc',
-        border: isOver ? '1.5px dashed #6366f1' : '1px solid #e2e8f0',
+        borderRadius: 12,
+        backgroundColor: isOver ? '#eef2ff' : '#f1f5f9',
+        border: isOver ? '1.5px dashed #4f46e5' : '1px solid #e2e8f0',
         transition: 'all 0.18s ease-in-out',
         maxHeight: 'calc(100vh - 175px)',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.02)',
+        boxShadow: '0 1px 2px 0 rgba(15, 23, 42, 0.03)',
       }}
     >
       {/* Column Header */}
@@ -154,31 +154,45 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
         align="center"
         style={{
           padding: '12px 14px 10px 14px',
-          borderBottom: '1px solid #f1f5f9',
+          borderBottom: '1px solid #e2e8f0',
+          backgroundColor: 'rgba(255, 255, 255, 0.55)',
+          borderTopLeftRadius: 12,
+          borderTopRightRadius: 12,
         }}
       >
         <Flex align="center" gap={8} style={{ overflow: 'hidden' }}>
-          {column.isDone && (
+          {column.isDone ? (
             <Tooltip title="Cột hoàn thành (Done)">
               <CheckCircleOutlined style={{ color: '#10b981', fontSize: 14 }} />
             </Tooltip>
-          )}
-          {column.isClarification && (
+          ) : column.isClarification ? (
             <Tooltip title="Cột chờ làm rõ (Clarification)">
               <QuestionCircleOutlined
                 style={{ color: '#f59e0b', fontSize: 14 }}
                 data-testid="clarification-col-icon"
               />
             </Tooltip>
+          ) : (
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: '#4f46e5',
+                display: 'inline-block',
+                flexShrink: 0,
+              }}
+            />
           )}
           <Typography.Text
             strong
             style={{
-              fontSize: 14,
+              fontSize: 13.5,
               color: '#0f172a',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
+              letterSpacing: '-0.01em',
             }}
           >
             {column.name}
@@ -187,13 +201,15 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
             count={tasks.length}
             showZero
             style={{
-              backgroundColor: '#e2e8f0',
+              backgroundColor: '#ffffff',
               color: '#475569',
+              border: '1px solid #cbd5e1',
               boxShadow: 'none',
               fontWeight: 600,
               fontSize: 11,
-              borderRadius: 10,
-              padding: '0 4px',
+              fontFamily: 'var(--tn-font-mono, monospace)',
+              borderRadius: 9999,
+              padding: '0 5px',
             }}
           />
         </Flex>
