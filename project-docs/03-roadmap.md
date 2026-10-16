@@ -445,18 +445,30 @@ và mở rộng Smart Setup thành **AI Board Template**.
 
 ## Giai đoạn 15: Tích hợp bên ngoài
 
-> **Chưa bắt đầu — dự kiến sau Giai đoạn 14.5.**
-> **Độ phức tạp kỹ thuật: 🔴 Cao** — webhook, OAuth của bên thứ ba, lưu trữ token bảo mật, xử lý eventual consistency.
+> **Đã có thiết kế kỹ thuật — chưa hiện thực.** Chi tiết: `project-docs/07-external-integrations-design.md`. Chưa chia tasks.
+> **Độ phức tạp kỹ thuật: 🔴 Cao** — webhook, lưu secret bên thứ ba, eventual consistency, độ bền gửi ra ngoài (outbox + retry).
 > **Đã có sẵn seam:** `IExternalAlertSink` (Giai đoạn 14.5 A1.2) là điểm cắm thông báo ra ngoài — Phase 15 đăng ký
 > implementation thật và **không** phải sửa Observer/Agent/member path.
 
-Kết nối TeamNexus với hệ sinh thái công cụ phát triển phổ biến: thông báo sang Slack/Discord, liên kết task với GitHub PR/Issue.
+Kết nối TeamNexus với hệ sinh thái công cụ phát triển: thông báo sang Slack/Discord, liên kết task với GitHub PR/Issue và tự cập nhật task từ webhook.
+
+**Quyết định đã chốt (tóm tắt, chi tiết ở tài liệu 07):**
+- Kênh thông báo: **Slack + Discord qua Incoming Webhook URL** (provider-registry, mở rộng Teams/Telegram/DM bot về sau). Manager bật/tắt **theo loại sự kiện**.
+- GitHub: mỗi workspace gắn 1..n repo; PAT **tuỳ chọn** (chỉ đọc); webhook secret **do hệ thống sinh**; đồng bộ comment **một chiều** GitHub → TeamNexus.
+- Mã task `TN-123` (thêm `tasks.task_number` theo workspace) để tự nhận diện PR; cột **In Review** = cờ `is_in_review` trên `board_columns`.
+- Issue mới → task vào board/cột mặc định theo repo, người tạo là bot "GitHub", có Jev triage fail-soft.
+- PR merge tự chuyển Done (khi không còn PR liên kết đang mở) kèm activity log, notify assignee và **hoàn tác**.
+- Secret mã hoá bằng Data Protection (key ring lưu DB); idempotency theo `X-GitHub-Delivery`; outbox + retry cho Slack/Discord; host VPS 24/7 là định hướng.
+
+**Phạm vi (chia phase con dự kiến, xem §16 tài liệu 07):**
+- 15.1 Nền (module `Integrations`, mã hoá secret, chống SSRF, migration, bot, `ITaskAutomation`) · 15.2 Outbound Slack/Discord · 15.3 GitHub inbound lõi (HMAC, deliveries, link, PR→In Review/Done, hoàn tác) · 15.4 Issue→task + comment sync · 15.5 UI & nghiệm thu.
 
 **Yêu cầu hoàn thiện:**
-- [ ] **Slack / Discord Notification**: Workspace Settings → nhập Webhook URL; `SlackNotificationGateway : IExternalNotificationGateway` (adapter pattern, đúng tiền lệ `EmailGateway`); gửi khi AI Observer phát hiện tín hiệu, task overdue, member mới join
-- [ ] **GitHub Integration**: Workspace Settings → nhập repo + Personal Access Token (mã hóa); task có thể gắn GitHub Issue/PR URL; webhook `POST /api/webhooks/github` → khi PR merge tự động move task sang cột `is_done`; chip "PR #123" trong `TaskCard` với link ngoài
-- [ ] Webhook endpoint xác thực chữ ký HMAC-SHA256 (GitHub secret); token bên thứ ba được mã hóa khi lưu DB
-- [ ] Hoạt động khi workspace không cấu hình tích hợp (graceful degradation)
+- [ ] **Slack / Discord Notification**: Workspace Settings → thêm channel (Webhook URL, chọn loại sự kiện, gửi thử); `IChatProvider` (Slack/Discord) sau `IExternalAlertSink`; gửi khi Observer phát hiện tín hiệu, task overdue, member mới join, agent failed; outbox + retry + dead-letter
+- [ ] **GitHub Integration**: Workspace Settings → thêm repo (+PAT tuỳ chọn, mã hoá) → nhận Payload URL + secret; task gắn Issue/PR bằng URL hoặc tự nhận diện mã `TN-123`; webhook `POST /api/webhooks/github/{publicId}` → PR opened/ready ⇒ In Review, PR merge ⇒ Done (kèm hoàn tác), Issue mới ⇒ tạo task, Issue closed ⇒ đóng task, comment ⇒ comment task; chip "PR #123" (theo trạng thái) trên `TaskCard`
+- [ ] Webhook endpoint xác thực chữ ký HMAC-SHA256 trên raw body (so sánh hằng thời gian), idempotency theo delivery id; secret/PAT/Webhook URL mã hoá khi lưu DB và không bao giờ trả về qua API
+- [ ] Hoạt động khi workspace không cấu hình tích hợp (graceful degradation): core không đổi hành vi, test cũ vẫn xanh
+- [ ] Cờ `is_in_review` trên cột + `task_number` (backfill) + delivery log trên UI
 
 ---
 
