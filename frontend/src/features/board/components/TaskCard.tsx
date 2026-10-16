@@ -73,21 +73,21 @@ export const TaskCard: React.FC<TaskCardProps> = ({
     boxShadow: isDragOverlay
       ? '0 16px 32px -4px rgba(0, 0, 0, 0.18), 0 8px 16px -4px rgba(0, 0, 0, 0.1)'
       : isHovered && !isDragging
-      ? '0 6px 14px -2px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04)'
+      ? '0 6px 16px -2px rgba(0, 0, 0, 0.06), 0 2px 6px -1px rgba(0, 0, 0, 0.04)'
       : '0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',
     border: isDragOverlay
-      ? '1.5px solid #6366f1'
+      ? '1.5px solid #4f46e5'
       : isHovered && !isDragging
       ? '1px solid #cbd5e1'
       : '1px solid #e2e8f0',
     borderLeft: taskIsOverdue
       ? '3px solid #ef4444'
       : isDragOverlay
-      ? '1.5px solid #6366f1'
+      ? '1.5px solid #4f46e5'
       : isHovered && !isDragging
       ? '1px solid #cbd5e1'
       : '1px solid #e2e8f0',
-    borderRadius: 10,
+    borderRadius: 12,
     background: '#ffffff',
     transformOrigin: '50% 50%',
     rotate: isDragOverlay ? '2deg' : '0deg',

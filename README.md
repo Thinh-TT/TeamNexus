@@ -320,6 +320,7 @@ Hệ thống tài liệu thiết kế chi tiết được tổ chức khoa học
 - 🗄️ [04-database-design.md](file:///e:/TeamNexus/project-docs/04-database-design.md): Sơ đồ quan hệ thực thể (ERD), chiến lược phân vùng, chỉ mục và lịch sử 12 EF migrations.
 - 🎓 [05-capstone-and-itgottalent.md](file:///e:/TeamNexus/project-docs/05-capstone-and-itgottalent.md): Bối cảnh chuyển giao học thuật, định hướng Đồ án Chuyên ngành và bài dự thi IT got Talent.
 - ⚡ [06-adjust-and-upgrade-with-jev.md](file:///e:/TeamNexus/project-docs/06-adjust-and-upgrade-with-jev.md): Kiến trúc chuyên sâu về Hybrid AI: Mô hình ra quyết định không sinh văn bản Jev System 1 kết hợp DeepSeek System 2.
+- 🎨 [07-upgrade-uiux-with-stitch.md](file:///e:/TeamNexus/project-docs/07-upgrade-uiux-with-stitch.md): Định hướng, hệ thống thiết kế Stitch (Intelligent Orchestration) và lộ trình nâng cấp UI/UX toàn diện.
 - 📝 [tasks/](file:///e:/TeamNexus/project-docs/tasks/): Kế hoạch thi hành, checklist nghiệm thu DoD chi tiết của từng giai đoạn phát triển.
 - 📊 [report/](file:///e:/TeamNexus/project-docs/report/): Báo cáo kết quả kiểm thử, ảnh chụp thực tế và số đo hiệu năng qua các đợt phát hành.
 

@@ -256,12 +256,29 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
       <Flex
         justify="space-between"
         align="center"
-        style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}
+        style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}
       >
-        <Space size={8}>
-          <RobotOutlined style={{ color: '#7c3aed', fontSize: 16 }} />
+        <Space size={10}>
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              backgroundColor: '#f5f3ff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <RobotOutlined style={{ color: '#7c3aed', fontSize: 18 }} />
+          </div>
           <div>
-            <Text strong style={{ fontSize: 13 }}>AI Agent Chat</Text>
+            <Flex align="center" gap={6}>
+              <Text strong style={{ fontSize: 13, color: '#0f172a' }}>AI Agent Chat</Text>
+              <Tag color="purple" style={{ margin: 0, borderRadius: 10, fontSize: 10, lineHeight: '16px' }}>
+                ⚡ Fast / 🧠 Deep
+              </Tag>
+            </Flex>
             <div>
               <Text type="secondary" style={{ fontSize: 11 }}>
                 {model ? `Toàn bảng · ${model}` : 'Toàn bảng'}
@@ -522,17 +539,23 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         <Card
           size="small"
           data-testid="agent-chat-proposal-card"
-          style={{ margin: '0 14px 8px', borderColor: '#c7d2fe', backgroundColor: '#f5f3ff' }}
+          style={{
+            margin: '0 14px 8px',
+            borderRadius: 10,
+            borderColor: '#a7f3d0',
+            backgroundColor: '#f0fdf4',
+            boxShadow: '0 1px 3px rgba(16, 185, 129, 0.08)',
+          }}
           title={
             <Space size={6}>
-              <ThunderboltOutlined style={{ color: '#6366f1' }} />
-              <Text style={{ fontSize: 12 }}>
+              <ThunderboltOutlined style={{ color: '#10b981' }} />
+              <Text style={{ fontSize: 12, fontWeight: 600, color: '#065f46' }}>
                 Đề xuất: {AGENT_CHAT_PROPOSAL_LABELS[proposal.kind]}
               </Text>
             </Space>
           }
         >
-          <Text style={{ fontSize: 12 }}>{proposal.summary}</Text>
+          <Text style={{ fontSize: 12, color: '#1e293b' }}>{proposal.summary}</Text>
 
           {proposal.kind === 'MoveTaskToColumn' && proposal.payload.columnId && (
             <div style={{ marginTop: 6 }}>
@@ -551,7 +574,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
               disabled={isBusy && status !== 'confirming'}
               onClick={handleSubmitProposal}
               data-testid="agent-chat-submit-proposal"
-              style={{ backgroundColor: '#6366f1' }}
+              style={{ backgroundColor: '#10b981', borderColor: '#059669', borderRadius: 6, fontWeight: 500 }}
             >
               Gửi đề xuất
             </Button>
@@ -635,7 +658,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
               loading={isStreaming}
               disabled={!input.trim() || isBusy}
               data-testid="agent-chat-send"
-              style={{ backgroundColor: '#6366f1' }}
+              style={{ backgroundColor: '#4f46e5', borderRadius: 6 }}
             >
               Gửi
             </Button>
