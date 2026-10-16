@@ -3,11 +3,14 @@ import {
   Alert,
   Button,
   Card,
+  Col,
   Flex,
   Layout,
   Result,
+  Row,
   Space,
   Tabs,
+  Tag,
   Typography,
   message,
 } from 'antd'
@@ -15,6 +18,7 @@ import {
   ArrowLeftOutlined,
   MailOutlined,
   ReloadOutlined,
+  RobotOutlined,
   TeamOutlined,
   UserAddOutlined,
 } from '@ant-design/icons'
@@ -266,14 +270,27 @@ export const WorkspaceMembersPage: React.FC = () => {
             icon={<ArrowLeftOutlined />}
             onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
           />
-          <Typography.Title level={4} style={{ margin: 0, color: '#0f172a' }}>
-            <TeamOutlined style={{ marginRight: 8, color: '#6366f1' }} />
+          <Typography.Title level={4} style={{ margin: 0, color: '#0f172a', fontWeight: 700 }}>
+            <TeamOutlined style={{ marginRight: 8, color: '#4f46e5' }} />
             Quản lý thành viên
           </Typography.Title>
+          <Tag
+            style={{
+              margin: 0,
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 600,
+              color: '#7c3aed',
+              backgroundColor: '#f5f3ff',
+              borderColor: '#ddd6fe',
+            }}
+          >
+            Human + AI Workforce
+          </Tag>
         </Flex>
 
         <Space>
-          <Button icon={<ReloadOutlined />} onClick={fetchData} loading={loading}>
+          <Button icon={<ReloadOutlined />} onClick={fetchData} loading={loading} style={{ borderRadius: 8 }}>
             Làm mới
           </Button>
 
@@ -283,6 +300,7 @@ export const WorkspaceMembersPage: React.FC = () => {
                 icon={<MailOutlined />}
                 onClick={() => setQuickEmailModalOpen(true)}
                 data-testid="quick-email-btn"
+                style={{ borderRadius: 8 }}
               >
                 Gửi email nhanh
               </Button>
@@ -291,7 +309,7 @@ export const WorkspaceMembersPage: React.FC = () => {
                 icon={<UserAddOutlined />}
                 onClick={() => setInviteModalOpen(true)}
                 data-testid="invite-member-btn"
-                style={{ backgroundColor: '#6366f1' }}
+                style={{ backgroundColor: '#4f46e5', borderColor: '#4f46e5', borderRadius: 8, fontWeight: 600 }}
               >
                 Mời thành viên
               </Button>
@@ -300,7 +318,7 @@ export const WorkspaceMembersPage: React.FC = () => {
         </Space>
       </div>
 
-      <Content style={{ padding: '24px 32px', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+      <Content style={{ padding: '24px 32px', maxWidth: 1180, margin: '0 auto', width: '100%' }}>
         {error && (
           <Alert
             type="error"
@@ -311,6 +329,104 @@ export const WorkspaceMembersPage: React.FC = () => {
             style={{ marginBottom: 16 }}
           />
         )}
+
+        {/* Autonomous AI Agent Personas Showcase */}
+        <Card
+          size="small"
+          style={{
+            marginBottom: 16,
+            borderRadius: 12,
+            border: '1px solid #ddd6fe',
+            background: 'linear-gradient(135deg, #faf5ff 0%, #f5f3ff 55%, #ffffff 100%)',
+          }}
+          styles={{ body: { padding: '14px 18px' } }}
+        >
+          <Flex justify="space-between" align="center" wrap="wrap" gap={12} style={{ marginBottom: 12 }}>
+            <Flex align="center" gap={8}>
+              <div
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 7,
+                  background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#ffffff',
+                }}
+              >
+                <RobotOutlined style={{ fontSize: 13 }} />
+              </div>
+              <Typography.Text strong style={{ fontSize: 13.5, color: '#0f172a' }}>
+                Autonomous AI Agent Personas
+              </Typography.Text>
+              <Tag
+                style={{
+                  margin: 0,
+                  borderRadius: 999,
+                  fontSize: 10.5,
+                  fontWeight: 600,
+                  color: '#6d28d9',
+                  backgroundColor: '#ede9fe',
+                  borderColor: '#ddd6fe',
+                }}
+              >
+                5 Chuyên gia AI sẵn sàng nhận việc
+              </Tag>
+            </Flex>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              Giao việc trực tiếp cho AI Persona trong chi tiết thẻ công việc
+            </Typography.Text>
+          </Flex>
+
+          <Row gutter={[10, 10]}>
+            {[
+              { code: '@Researcher', role: 'Phân tích & RAG Context', color: '#4f46e5', bg: '#eef2ff' },
+              { code: '@Developer', role: 'Thiết kế kỹ thuật & Subtasks', color: '#7c3aed', bg: '#f5f3ff' },
+              { code: '@Tester', role: 'Test Cases & Edge Verification', color: '#0284c7', bg: '#f0f9ff' },
+              { code: '@Reviewer', role: 'Kiểm định chất lượng & DoD', color: '#059669', bg: '#ecfdf5' },
+              { code: '@Writer', role: 'Tài liệu kỹ thuật & Release Notes', color: '#d97706', bg: '#fffbeb' },
+            ].map((persona) => (
+              <Col xs={24} sm={12} md={8} lg={4} key={persona.code} style={{ flex: '1 1 180px' }}>
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 8,
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
+                  }}
+                >
+                  <Flex align="center" justify="space-between">
+                    <span
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: persona.color,
+                        fontFamily: "'JetBrains Mono', monospace",
+                      }}
+                    >
+                      {persona.code}
+                    </span>
+                    <span
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: '50%',
+                        backgroundColor: '#10b981',
+                      }}
+                    />
+                  </Flex>
+                  <Typography.Text type="secondary" style={{ fontSize: 11.5 }}>
+                    {persona.role}
+                  </Typography.Text>
+                </div>
+              </Col>
+            ))}
+          </Row>
+        </Card>
 
         <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0' }}>
           <Tabs defaultActiveKey="members" items={tabItems} />

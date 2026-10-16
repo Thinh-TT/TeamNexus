@@ -3,10 +3,12 @@ import {
   Alert,
   Button,
   Card,
+  Col,
   Empty,
   Flex,
   Layout,
   Popconfirm,
+  Row,
   Space,
   Table,
   Tag,
@@ -236,14 +238,28 @@ export const KnowledgeBasePage: React.FC = () => {
             aria-label="Quay lại danh sách bảng"
             onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
           />
-          <Typography.Title level={4} style={{ margin: 0, color: '#0f172a' }}>
-            <DatabaseOutlined style={{ marginRight: 8, color: '#6366f1' }} />
+          <Typography.Title level={4} style={{ margin: 0, color: '#0f172a', fontWeight: 700 }}>
+            <DatabaseOutlined style={{ marginRight: 8, color: '#4f46e5' }} />
             Kho tri thức
           </Typography.Title>
+          <Tag
+            style={{
+              margin: 0,
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 600,
+              color: '#7c3aed',
+              backgroundColor: '#f5f3ff',
+              borderColor: '#ddd6fe',
+              fontFamily: "'JetBrains Mono', monospace",
+            }}
+          >
+            pgvector 384-dim RAG
+          </Tag>
         </Flex>
 
         <Space wrap>
-          <Button icon={<ReloadOutlined />} onClick={() => void refetch()} loading={loading}>
+          <Button icon={<ReloadOutlined />} onClick={() => void refetch()} loading={loading} style={{ borderRadius: 8 }}>
             Làm mới
           </Button>
           <Tooltip
@@ -261,7 +277,12 @@ export const KnowledgeBasePage: React.FC = () => {
               disabled={!canManage}
               onClick={() => setFormOpen(true)}
               data-testid="knowledge-add-document"
-              style={{ backgroundColor: canManage ? '#6366f1' : undefined }}
+              style={{
+                backgroundColor: canManage ? '#4f46e5' : undefined,
+                borderColor: canManage ? '#4f46e5' : undefined,
+                borderRadius: 8,
+                fontWeight: 600,
+              }}
             >
               Thêm tài liệu
             </Button>
@@ -297,13 +318,72 @@ export const KnowledgeBasePage: React.FC = () => {
         )}
 
         {enabled && (
-          <Alert
-            type="info"
-            showIcon
-            title="Mọi thay đổi tài liệu đều cần Manager duyệt"
-            description="Yêu cầu thêm hoặc xoá tài liệu được ghi thành một đề xuất chờ duyệt trong Lịch sử AI; bộ nhớ chỉ thay đổi sau khi Manager phê duyệt."
-            style={{ marginBottom: 16 }}
-          />
+          <>
+            <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
+              <Col xs={24} sm={8}>
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    borderRadius: 10,
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderTop: '3px solid #4f46e5',
+                  }}
+                >
+                  <Text type="secondary" style={{ fontSize: 11.5, display: 'block' }}>
+                    TỔNG TÀI LIỆU NGỮ NGHĨA
+                  </Text>
+                  <Text strong style={{ fontSize: 18, color: '#0f172a', fontFamily: "'JetBrains Mono', monospace" }}>
+                    {documents.length} tài liệu
+                  </Text>
+                </div>
+              </Col>
+              <Col xs={24} sm={8}>
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    borderRadius: 10,
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderTop: '3px solid #10b981',
+                  }}
+                >
+                  <Text type="secondary" style={{ fontSize: 11.5, display: 'block' }}>
+                    VECTOR CHUNKS ĐÃ LẬP CHỈ MỤC
+                  </Text>
+                  <Text strong style={{ fontSize: 18, color: '#059669', fontFamily: "'JetBrains Mono', monospace" }}>
+                    {documents.reduce((sum, d) => sum + (d.chunkCount || 0), 0)} chunks
+                  </Text>
+                </div>
+              </Col>
+              <Col xs={24} sm={8}>
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    borderRadius: 10,
+                    backgroundColor: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderTop: '3px solid #7c3aed',
+                  }}
+                >
+                  <Text type="secondary" style={{ fontSize: 11.5, display: 'block' }}>
+                    CƠ CHẾ KIỂM SOÁT AI
+                  </Text>
+                  <Text strong style={{ fontSize: 13.5, color: '#6d28d9' }}>
+                    Human-in-the-Loop (Manager Approval)
+                  </Text>
+                </div>
+              </Col>
+            </Row>
+
+            <Alert
+              type="info"
+              showIcon
+              title="Mọi thay đổi tài liệu đều cần Manager duyệt"
+              description="Yêu cầu thêm hoặc xoá tài liệu được ghi thành một đề xuất chờ duyệt trong Lịch sử AI; bộ nhớ chỉ thay đổi sau khi Manager phê duyệt."
+              style={{ marginBottom: 16 }}
+            />
+          </>
         )}
 
         <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0' }}>

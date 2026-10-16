@@ -144,114 +144,133 @@ export const BoardListPage: React.FC = () => {
       {/* Top Header */}
       <AppHeader workspaceId={workspaceId} />
 
-      <Content style={{ padding: '32px 24px', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+      <Content style={{ padding: '28px 24px', maxWidth: 1320, margin: '0 auto', width: '100%' }}>
         <Flex vertical gap="large">
-          {/* Header controls */}
-          <Flex justify="space-between" align="center" wrap="wrap" gap={12}>
-            <Flex align="center" gap={8}>
-              <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/')} />
-              <div>
-                <Typography.Title level={3} style={{ margin: 0, color: '#0f172a' }}>
-                  Danh Sách Bảng Kanban
-                </Typography.Title>
-                <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                  Workspace: {workspaceId}
-                </Typography.Text>
-              </div>
-            </Flex>
+          {/* Header controls — Luminous Command Banner */}
+          <div
+            style={{
+              padding: '18px 20px',
+              borderRadius: 12,
+              backgroundColor: '#ffffff',
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 1px 2px 0 rgba(15, 23, 42, 0.03)',
+            }}
+          >
+            <Flex justify="space-between" align="center" wrap="wrap" gap={12}>
+              <Flex align="center" gap={10}>
+                <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/')} />
+                <div>
+                  <Typography.Title level={3} style={{ margin: 0, color: '#0f172a', fontWeight: 700, letterSpacing: '-0.02em' }}>
+                    Danh Sách Bảng Kanban
+                  </Typography.Title>
+                  <Typography.Text type="secondary" style={{ fontSize: 12.5, fontFamily: 'var(--tn-font-mono, monospace)' }}>
+                    Workspace: {workspaceId}
+                  </Typography.Text>
+                </div>
+              </Flex>
 
-            <Space>
-              <Button
-                icon={<DashboardOutlined />}
-                style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}
-                onClick={() => navigate(`/workspaces/${workspaceId}/dashboard`)}
-                data-testid="nav-dashboard-btn"
-              >
-                Tổng quan
-              </Button>
-              <Button
-                icon={<SearchOutlined />}
-                style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}
-                onClick={() => navigate(`/workspaces/${workspaceId}/search`)}
-                data-testid="nav-search-btn"
-              >
-                Tìm kiếm
-              </Button>
-              <Tooltip title="Làm mới">
-                <Button icon={<ReloadOutlined />} onClick={fetchBoards} />
-              </Tooltip>
-              <Button
-                icon={<TeamOutlined />}
-                style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}
-                onClick={() => navigate(`/workspaces/${workspaceId}/members`)}
-                data-testid="nav-members-toolbar-btn"
-              >
-                Thành viên
-              </Button>
-              {/* Phase 14.7 §B: the knowledge base is workspace-scoped and Member+ to read, so it sits next
-                  to "Thành viên" — the other page reachable without Manager rights. */}
-              <Button
-                icon={<DatabaseOutlined />}
-                style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}
-                onClick={() => navigate(`/workspaces/${workspaceId}/knowledge`)}
-                data-testid="nav-knowledge-toolbar-btn"
-              >
-                Kho tri thức
-              </Button>
-              <Button
-                icon={<BarChartOutlined />}
-                style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}
-                onClick={() => navigate(`/workspaces/${workspaceId}/reports`)}
-              >
-                Báo cáo
-              </Button>
-              {isManagerOrAdmin && (
-                <>
-                  <Button
-                    icon={<HistoryOutlined />}
-                    style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}
-                    onClick={() => navigate(`/workspaces/${workspaceId}/activity`)}
-                  >
-                    Hoạt động
-                  </Button>
-                  <Button
-                    icon={<SettingOutlined />}
-                    style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}
-                    onClick={() => navigate(`/workspaces/${workspaceId}/settings`)}
-                  >
-                    Cài đặt
-                  </Button>
-                  <Button
-                    icon={<RobotOutlined />}
-                    data-testid="board-template-btn"
-                    style={{ borderRadius: 8, borderColor: '#8b5cf6', color: '#7c3aed' }}
-                    onClick={() => setAiTemplateModalOpen(true)}
-                  >
-                    Tạo board bằng AI
-                  </Button>
-                  <Button
-                    icon={<HistoryOutlined />}
-                    data-testid="workspace-ai-history-btn"
-                    style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569' }}
-                    onClick={() => setAiHistoryOpen(true)}
-                  >
-                    Lịch sử AI
-                  </Button>
-                </>
-              )}
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                style={{ backgroundColor: '#6366f1', borderRadius: 8 }}
-                onClick={() => {
-                  setEditingBoard(null)
-                  setModalOpen(true)
-                }}
-              >
-                Tạo Bảng Mới
-              </Button>
-            </Space>
-          </Flex>
+              <Space wrap size={[8, 8]}>
+                <Button
+                  icon={<DashboardOutlined />}
+                  style={{ borderRadius: 8, borderColor: '#e2e8f0', color: '#334155' }}
+                  onClick={() => navigate(`/workspaces/${workspaceId}/dashboard`)}
+                  data-testid="nav-dashboard-btn"
+                >
+                  Tổng quan
+                </Button>
+                <Button
+                  icon={<SearchOutlined />}
+                  style={{ borderRadius: 8, borderColor: '#e2e8f0', color: '#334155' }}
+                  onClick={() => navigate(`/workspaces/${workspaceId}/search`)}
+                  data-testid="nav-search-btn"
+                >
+                  Tìm kiếm
+                </Button>
+                <Tooltip title="Làm mới">
+                  <Button icon={<ReloadOutlined />} onClick={fetchBoards} style={{ borderRadius: 8 }} />
+                </Tooltip>
+                <Button
+                  icon={<TeamOutlined />}
+                  style={{ borderRadius: 8, borderColor: '#e2e8f0', color: '#334155' }}
+                  onClick={() => navigate(`/workspaces/${workspaceId}/members`)}
+                  data-testid="nav-members-toolbar-btn"
+                >
+                  Thành viên
+                </Button>
+                <Button
+                  icon={<DatabaseOutlined />}
+                  style={{ borderRadius: 8, borderColor: '#e2e8f0', color: '#334155' }}
+                  onClick={() => navigate(`/workspaces/${workspaceId}/knowledge`)}
+                  data-testid="nav-knowledge-toolbar-btn"
+                >
+                  Kho tri thức
+                </Button>
+                <Button
+                  icon={<BarChartOutlined />}
+                  style={{ borderRadius: 8, borderColor: '#e2e8f0', color: '#334155' }}
+                  onClick={() => navigate(`/workspaces/${workspaceId}/reports`)}
+                >
+                  Báo cáo
+                </Button>
+                {isManagerOrAdmin && (
+                  <>
+                    <Button
+                      icon={<HistoryOutlined />}
+                      style={{ borderRadius: 8, borderColor: '#e2e8f0', color: '#334155' }}
+                      onClick={() => navigate(`/workspaces/${workspaceId}/activity`)}
+                    >
+                      Hoạt động
+                    </Button>
+                    <Button
+                      icon={<SettingOutlined />}
+                      style={{ borderRadius: 8, borderColor: '#e2e8f0', color: '#334155' }}
+                      onClick={() => navigate(`/workspaces/${workspaceId}/settings`)}
+                    >
+                      Cài đặt
+                    </Button>
+                    <Button
+                      icon={<RobotOutlined />}
+                      data-testid="board-template-btn"
+                      style={{
+                        borderRadius: 8,
+                        borderColor: '#ddd6fe',
+                        backgroundColor: '#f5f3ff',
+                        color: '#7c3aed',
+                        fontWeight: 600,
+                      }}
+                      onClick={() => setAiTemplateModalOpen(true)}
+                    >
+                      Tạo board bằng AI
+                    </Button>
+                    <Button
+                      icon={<HistoryOutlined />}
+                      data-testid="workspace-ai-history-btn"
+                      style={{ borderRadius: 8, borderColor: '#e2e8f0', color: '#334155' }}
+                      onClick={() => setAiHistoryOpen(true)}
+                    >
+                      Lịch sử AI
+                    </Button>
+                  </>
+                )}
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  style={{
+                    backgroundColor: '#4f46e5',
+                    borderColor: '#4f46e5',
+                    borderRadius: 8,
+                    fontWeight: 600,
+                  }}
+                  onClick={() => {
+                    setEditingBoard(null)
+                    setModalOpen(true)
+                  }}
+                >
+                  Tạo Bảng Mới
+                </Button>
+              </Space>
+            </Flex>
+          </div>
 
           {/* Boards Grid */}
           {loading ? (

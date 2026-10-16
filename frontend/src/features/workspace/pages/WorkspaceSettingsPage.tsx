@@ -109,15 +109,28 @@ export const WorkspaceSettingsPage: React.FC = () => {
             icon={<ArrowLeftOutlined />}
             onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
           />
-          <Typography.Title level={4} style={{ margin: 0, color: '#0f172a' }}>
+          <Typography.Title level={4} style={{ margin: 0, color: '#0f172a', fontWeight: 700 }}>
             Cài đặt không gian làm việc
           </Typography.Title>
+          <Tag
+            style={{
+              margin: 0,
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 600,
+              color: '#4f46e5',
+              backgroundColor: '#eef2ff',
+              borderColor: '#c7d2fe',
+            }}
+          >
+            RBAC Governance
+          </Tag>
         </Flex>
 
         <Button
           type="primary"
           icon={<EditOutlined />}
-          style={{ backgroundColor: '#6366f1' }}
+          style={{ backgroundColor: '#4f46e5', borderColor: '#4f46e5', borderRadius: 8, fontWeight: 600 }}
           onClick={() => setModalOpen(true)}
           data-testid="open-settings-modal-btn"
         >
@@ -129,16 +142,16 @@ export const WorkspaceSettingsPage: React.FC = () => {
         <Row gutter={[24, 24]}>
           {/* Quick stats */}
           <Col xs={24} sm={12}>
-            <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0' }}>
+            <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', borderTop: '3px solid #4f46e5' }}>
               <Statistic
                 title="Số thành viên"
                 value={detail.memberCount}
-                prefix={<TeamOutlined style={{ color: '#6366f1' }} />}
+                prefix={<TeamOutlined style={{ color: '#4f46e5' }} />}
               />
             </Card>
           </Col>
           <Col xs={24} sm={12}>
-            <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0' }}>
+            <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', borderTop: '3px solid #0ea5e9' }}>
               <Statistic
                 title="Số bảng Kanban"
                 value={detail.boardCount}

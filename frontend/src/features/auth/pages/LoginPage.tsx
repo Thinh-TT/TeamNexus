@@ -54,38 +54,53 @@ export const LoginPage: React.FC = () => {
       justify="center"
       style={{
         minHeight: '100vh',
-        background: 'linear-gradient(135deg, #f8fafc 0%, #e0e7ff 50%, #fdf4ff 100%)',
+        background: 'radial-gradient(circle at 20% 20%, #eef2ff 0%, #f5f3ff 42%, #f8fafc 100%)',
         padding: 24,
       }}
     >
       <Card
         style={{
           width: '100%',
-          maxWidth: 420,
+          maxWidth: 440,
           borderRadius: 16,
           boxShadow: '0 20px 40px rgba(15, 23, 42, 0.08)',
           background: '#ffffff',
           border: '1px solid #e2e8f0',
+          borderTop: '4px solid #4f46e5',
         }}
       >
-        <div style={{ textAlign: 'left', marginBottom: 12 }}>
+        <Flex justify="space-between" align="center" style={{ marginBottom: 16 }}>
           <Button
             type="link"
             size="small"
             onClick={() => navigate('/')}
-            style={{ padding: 0, color: '#6366f1', fontSize: 13 }}
+            style={{ padding: 0, color: '#4f46e5', fontSize: 13, fontWeight: 500 }}
           >
             ← Quay lại trang chủ
           </Button>
-        </div>
+          <span
+            style={{
+              fontSize: 10.5,
+              fontWeight: 600,
+              color: '#7c3aed',
+              backgroundColor: '#f5f3ff',
+              border: '1px solid #ddd6fe',
+              borderRadius: 999,
+              padding: '2px 9px',
+              fontFamily: "'JetBrains Mono', monospace",
+            }}
+          >
+            Hybrid AI v4.2
+          </span>
+        </Flex>
 
         <Flex vertical align="center" gap="small" style={{ marginBottom: 24 }}>
-          <NexusLogo size={48} style={{ marginBottom: 4 }} />
-          <Typography.Title level={2} style={{ margin: 0, color: '#0f172a' }}>
+          <NexusLogo size={52} style={{ marginBottom: 4 }} />
+          <Typography.Title level={2} style={{ margin: 0, color: '#0f172a', fontWeight: 800, letterSpacing: '-0.02em' }}>
             TeamNexus
           </Typography.Title>
-          <Typography.Text type="secondary" style={{ textAlign: 'center' }}>
-            Trợ lý điều phối không gian làm việc thông minh
+          <Typography.Text type="secondary" style={{ textAlign: 'center', fontSize: 13.5 }}>
+            Trợ lý điều phối không gian làm việc thông minh • Jev Sys-1 & DeepSeek Sys-2
           </Typography.Text>
         </Flex>
 
@@ -107,14 +122,15 @@ export const LoginPage: React.FC = () => {
             onClick={() => loginWithProvider('github')}
             style={{
               height: 48,
-              borderRadius: 8,
-              fontWeight: 500,
-              backgroundColor: '#24292e',
+              borderRadius: 10,
+              fontWeight: 600,
+              backgroundColor: '#0f172a',
               color: '#fff',
               border: 'none',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
+              boxShadow: '0 4px 12px rgba(15, 23, 42, 0.15)',
             }}
           >
             Đăng nhập với GitHub
@@ -127,11 +143,11 @@ export const LoginPage: React.FC = () => {
             onClick={() => loginWithProvider('google')}
             style={{
               height: 48,
-              borderRadius: 8,
-              fontWeight: 500,
+              borderRadius: 10,
+              fontWeight: 600,
               backgroundColor: '#fff',
-              color: '#3c4043',
-              borderColor: '#dadce0',
+              color: '#1e293b',
+              borderColor: '#cbd5e1',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -141,9 +157,24 @@ export const LoginPage: React.FC = () => {
           </Button>
         </Flex>
 
+        <div
+          style={{
+            marginTop: 22,
+            padding: '10px 12px',
+            borderRadius: 8,
+            backgroundColor: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            textAlign: 'center',
+          }}
+        >
+          <Typography.Text style={{ fontSize: 11.5, color: '#475569' }}>
+            Bảo mật chuẩn OAuth 2.0 • Phân quyền RBAC • Human-in-the-Loop AI
+          </Typography.Text>
+        </div>
+
         <Typography.Paragraph
           type="secondary"
-          style={{ fontSize: 12, textAlign: 'center', marginTop: 24, marginBottom: 0 }}
+          style={{ fontSize: 12, textAlign: 'center', marginTop: 16, marginBottom: 0 }}
         >
           Bằng cách đăng nhập, bạn đồng ý với Điều khoản dịch vụ và Chính sách bảo mật của TeamNexus.
         </Typography.Paragraph>

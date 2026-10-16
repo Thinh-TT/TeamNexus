@@ -130,16 +130,32 @@ export const TaskSearchPage: React.FC = () => {
         <Flex vertical gap="large">
           {/* Header controls */}
           <Flex justify="space-between" align="center" wrap="wrap" gap={12}>
-            <Flex align="center" gap={8}>
+            <Flex align="center" gap={10}>
               <Button
                 type="text"
                 icon={<ArrowLeftOutlined />}
                 onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
               />
               <div>
-                <Typography.Title level={3} style={{ margin: 0, color: '#0f172a' }}>
-                  Tìm Kiếm & Lọc Thẻ
-                </Typography.Title>
+                <Flex align="center" gap={8} wrap="wrap">
+                  <Typography.Title level={3} style={{ margin: 0, color: '#0f172a', fontWeight: 700, letterSpacing: '-0.02em' }}>
+                    Tìm Kiếm & Lọc Thẻ
+                  </Typography.Title>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: '#4f46e5',
+                      backgroundColor: '#eef2ff',
+                      border: '1px solid #c7d2fe',
+                      borderRadius: 999,
+                      padding: '2px 9px',
+                      fontFamily: "'JetBrains Mono', monospace",
+                    }}
+                  >
+                    Ctrl + K
+                  </span>
+                </Flex>
                 <Typography.Text type="secondary" style={{ fontSize: 13 }}>
                   Tìm kiếm thông minh trên toàn bộ các bảng trong Workspace
                 </Typography.Text>
@@ -149,6 +165,7 @@ export const TaskSearchPage: React.FC = () => {
             <Space>
               <Button
                 icon={<ProjectOutlined />}
+                style={{ borderRadius: 8, fontWeight: 500 }}
                 onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
               >
                 Danh sách bảng

@@ -120,10 +120,23 @@ export const WorkspaceActivityPage: React.FC = () => {
               }
             }}
           />
-          <Typography.Title level={4} style={{ margin: 0, color: '#0f172a' }}>
-            <HistoryOutlined style={{ marginRight: 8, color: '#6366f1' }} />
+          <Typography.Title level={4} style={{ margin: 0, color: '#0f172a', fontWeight: 700 }}>
+            <HistoryOutlined style={{ marginRight: 8, color: '#4f46e5' }} />
             Lịch sử hoạt động workspace
           </Typography.Title>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              color: '#059669',
+              backgroundColor: '#ecfdf5',
+              border: '1px solid #a7f3d0',
+              borderRadius: 999,
+              padding: '2px 9px',
+            }}
+          >
+            Audit Trail
+          </span>
         </Flex>
 
         <Space>
@@ -131,6 +144,7 @@ export const WorkspaceActivityPage: React.FC = () => {
             icon={<ReloadOutlined />}
             onClick={reload}
             loading={activityLoading && items.length === 0}
+            style={{ borderRadius: 8 }}
           >
             Làm mới
           </Button>

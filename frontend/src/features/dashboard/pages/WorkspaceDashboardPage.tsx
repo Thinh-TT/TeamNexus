@@ -7,6 +7,7 @@ import {
   ProjectOutlined,
   ReloadOutlined,
   TeamOutlined,
+  ThunderboltFilled,
   UserOutlined,
 } from '@ant-design/icons'
 import {
@@ -20,6 +21,7 @@ import {
   Space,
   Spin,
   Statistic,
+  Tag,
   Tooltip,
   Typography,
 } from 'antd'
@@ -81,7 +83,7 @@ export const WorkspaceDashboardPage: React.FC = () => {
         </Button>
       </AppHeader>
 
-      <Content style={{ padding: '32px 24px', maxWidth: 1200, margin: '0 auto', width: '100%' }}>
+      <Content style={{ padding: '28px 24px', maxWidth: 1360, margin: '0 auto', width: '100%' }}>
         {status === 'loading' ? (
           <Flex align="center" justify="center" style={{ height: 350 }}>
             <Spin size="large" tip="Đang tải dữ liệu tổng quan..." />
@@ -110,89 +112,165 @@ export const WorkspaceDashboardPage: React.FC = () => {
           />
         ) : dashboard ? (
           <Flex vertical gap="large">
-            {/* Header controls */}
-            <Flex justify="space-between" align="center" wrap="wrap" gap={12}>
-              <Flex align="center" gap={8}>
-                <Button
-                  type="text"
-                  icon={<ArrowLeftOutlined />}
-                  onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
-                />
-                <div>
-                  <Typography.Title level={3} style={{ margin: 0, color: '#0f172a' }}>
-                    Tổng Quan Workspace: {dashboard.workspaceName}
-                  </Typography.Title>
-                  <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                    Cập nhật theo thời gian thực trên toàn bộ workspace
-                  </Typography.Text>
-                </div>
-              </Flex>
+            {/* Header controls — Luminous Executive Command Banner */}
+            <div
+              style={{
+                padding: '18px 20px',
+                borderRadius: 12,
+                backgroundColor: '#ffffff',
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 1px 2px 0 rgba(15, 23, 42, 0.03)',
+              }}
+            >
+              <Flex justify="space-between" align="center" wrap="wrap" gap={12}>
+                <Flex align="center" gap={10}>
+                  <Button
+                    type="text"
+                    icon={<ArrowLeftOutlined />}
+                    onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
+                    style={{ borderRadius: 8 }}
+                  />
+                  <div>
+                    <Flex align="center" gap={8} wrap="wrap">
+                      <Typography.Title level={3} style={{ margin: 0, color: '#0f172a', fontWeight: 700, letterSpacing: '-0.02em' }}>
+                        Tổng Quan Workspace: {dashboard.workspaceName}
+                      </Typography.Title>
+                      <Tag
+                        color="success"
+                        style={{ margin: 0, borderRadius: 9999, fontWeight: 600, fontSize: 11, padding: '0 8px' }}
+                      >
+                        SignalR Live
+                      </Tag>
+                      <Tag
+                        color="purple"
+                        style={{ margin: 0, borderRadius: 9999, fontWeight: 600, fontSize: 11, padding: '0 8px' }}
+                      >
+                        <ThunderboltFilled style={{ fontSize: 10, marginRight: 4 }} />
+                        Jev Sys-1 + DeepSeek Sys-2
+                      </Tag>
+                    </Flex>
+                    <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                      Cập nhật theo thời gian thực trên toàn bộ workspace
+                    </Typography.Text>
+                  </div>
+                </Flex>
 
-              <Space>
-                <Tooltip title="Làm mới">
-                  <Button icon={<ReloadOutlined />} onClick={reload} data-testid="dashboard-reload-btn">
-                    Làm mới
+                <Space>
+                  <Tooltip title="Làm mới">
+                    <Button
+                      icon={<ReloadOutlined />}
+                      onClick={reload}
+                      data-testid="dashboard-reload-btn"
+                      style={{ borderRadius: 8 }}
+                    >
+                      Làm mới
+                    </Button>
+                  </Tooltip>
+                  <Button
+                    type="primary"
+                    icon={<ProjectOutlined />}
+                    style={{
+                      backgroundColor: '#4f46e5',
+                      borderColor: '#4f46e5',
+                      borderRadius: 8,
+                      fontWeight: 600,
+                    }}
+                    onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
+                  >
+                    Xem Bảng Kanban
                   </Button>
-                </Tooltip>
-                <Button
-                  type="primary"
-                  icon={<ProjectOutlined />}
-                  style={{ backgroundColor: '#6366f1', borderRadius: 8 }}
-                  onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
-                >
-                  Xem Bảng Kanban
-                </Button>
-              </Space>
-            </Flex>
+                </Space>
+              </Flex>
+            </div>
 
-            {/* Quick Summary KPI Cards & Project Health */}
+            {/* Quick Summary KPI Cards & Project Health (Bento Row) */}
             <Row gutter={[16, 16]} align="stretch">
               <Col xs={12} sm={8} lg={4}>
-                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0', height: '100%' }}>
+                <Card
+                  style={{
+                    borderRadius: 12,
+                    border: '1px solid #e2e8f0',
+                    borderTop: '3px solid #4f46e5',
+                    height: '100%',
+                  }}
+                >
                   <Statistic
-                    title="Tổng số thẻ"
+                    title={<span style={{ fontWeight: 600, color: '#475569', fontSize: 12 }}>Tổng số thẻ</span>}
                     value={dashboard.summary.totalTasks}
-                    prefix={<ProjectOutlined style={{ color: '#6366f1' }} />}
+                    prefix={<ProjectOutlined style={{ color: '#4f46e5' }} />}
+                    valueStyle={{ color: '#0f172a', fontWeight: 700 }}
                   />
                 </Card>
               </Col>
               <Col xs={12} sm={8} lg={4}>
-                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0', height: '100%' }}>
+                <Card
+                  style={{
+                    borderRadius: 12,
+                    border: '1px solid #e2e8f0',
+                    borderTop: '3px solid #10b981',
+                    height: '100%',
+                  }}
+                >
                   <Statistic
-                    title="Thẻ đã hoàn thành"
+                    title={<span style={{ fontWeight: 600, color: '#475569', fontSize: 12 }}>Thẻ đã hoàn thành</span>}
                     value={dashboard.summary.doneTasks}
                     prefix={<CheckCircleOutlined style={{ color: '#10b981' }} />}
-                    valueStyle={{ color: '#10b981' }}
+                    valueStyle={{ color: '#10b981', fontWeight: 700 }}
                   />
                 </Card>
               </Col>
               <Col xs={12} sm={8} lg={4}>
-                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0', height: '100%' }}>
+                <Card
+                  style={{
+                    borderRadius: 12,
+                    border: '1px solid #e2e8f0',
+                    borderTop: '3px solid #3b82f6',
+                    height: '100%',
+                  }}
+                >
                   <Statistic
-                    title="Thẻ đang mở"
+                    title={<span style={{ fontWeight: 600, color: '#475569', fontSize: 12 }}>Thẻ đang mở</span>}
                     value={dashboard.summary.openTasks}
                     prefix={<ClockCircleOutlined style={{ color: '#3b82f6' }} />}
-                    valueStyle={{ color: '#3b82f6' }}
+                    valueStyle={{ color: '#3b82f6', fontWeight: 700 }}
                   />
                 </Card>
               </Col>
               <Col xs={12} sm={8} lg={4}>
-                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0', height: '100%' }}>
+                <Card
+                  style={{
+                    borderRadius: 12,
+                    border: dashboard.summary.overdueTasks > 0 ? '1px solid #fecaca' : '1px solid #e2e8f0',
+                    borderTop: '3px solid #ef4444',
+                    backgroundColor: dashboard.summary.overdueTasks > 0 ? '#fffafa' : '#ffffff',
+                    height: '100%',
+                  }}
+                >
                   <Statistic
-                    title="Thẻ quá hạn"
+                    title={<span style={{ fontWeight: 600, color: '#475569', fontSize: 12 }}>Thẻ quá hạn</span>}
                     value={dashboard.summary.overdueTasks}
                     prefix={<ExclamationCircleOutlined style={{ color: '#ef4444' }} />}
-                    valueStyle={{ color: dashboard.summary.overdueTasks > 0 ? '#ef4444' : undefined }}
+                    valueStyle={{
+                      color: dashboard.summary.overdueTasks > 0 ? '#ef4444' : '#0f172a',
+                      fontWeight: 700,
+                    }}
                   />
                 </Card>
               </Col>
               <Col xs={12} sm={8} lg={4}>
-                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0', height: '100%' }}>
+                <Card
+                  style={{
+                    borderRadius: 12,
+                    border: '1px solid #e2e8f0',
+                    borderTop: '3px solid #7c3aed',
+                    height: '100%',
+                  }}
+                >
                   <Statistic
-                    title="Thẻ mở của tôi"
+                    title={<span style={{ fontWeight: 600, color: '#475569', fontSize: 12 }}>Thẻ mở của tôi</span>}
                     value={dashboard.summary.myOpenTasks}
-                    prefix={<UserOutlined style={{ color: '#8b5cf6' }} />}
-                    valueStyle={{ color: '#8b5cf6' }}
+                    prefix={<UserOutlined style={{ color: '#7c3aed' }} />}
+                    valueStyle={{ color: '#7c3aed', fontWeight: 700 }}
                   />
                 </Card>
               </Col>

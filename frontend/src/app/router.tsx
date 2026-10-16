@@ -13,8 +13,8 @@ import { ProfilePage } from '../features/profile/pages/ProfilePage'
 import { AcceptInvitationPage } from '../features/invitations/pages/AcceptInvitationPage'
 import { WorkspaceDashboardPage } from '../features/dashboard/pages/WorkspaceDashboardPage'
 import { TaskSearchPage } from '../features/search/pages/TaskSearchPage'
-
 import { RootHomePage } from '../features/landing/pages/RootHomePage'
+import { WorkspaceShell } from '../shared/components/WorkspaceShell'
 
 export const AppRouter: React.FC = () => {
   return (
@@ -24,77 +24,24 @@ export const AppRouter: React.FC = () => {
         <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
         <Route path="/" element={<RootHomePage />} />
         <Route
-          path="/workspaces/:workspaceId/dashboard"
+          path="/workspaces/:workspaceId"
           element={
             <ProtectedRoute>
-              <WorkspaceDashboardPage />
+              <WorkspaceShell />
             </ProtectedRoute>
           }
-        />
-        <Route
-          path="/workspaces/:workspaceId/search"
-          element={
-            <ProtectedRoute>
-              <TaskSearchPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/workspaces/:workspaceId/boards"
-          element={
-            <ProtectedRoute>
-              <BoardListPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/workspaces/:workspaceId/boards/:boardId"
-          element={
-            <ProtectedRoute>
-              <BoardPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/workspaces/:workspaceId/reports"
-          element={
-            <ProtectedRoute>
-              <ReportsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/workspaces/:workspaceId/settings"
-          element={
-            <ProtectedRoute>
-              <WorkspaceSettingsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/workspaces/:workspaceId/activity"
-          element={
-            <ProtectedRoute>
-              <WorkspaceActivityPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/workspaces/:workspaceId/members"
-          element={
-            <ProtectedRoute>
-              <WorkspaceMembersPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/workspaces/:workspaceId/knowledge"
-          element={
-            <ProtectedRoute>
-              <KnowledgeBasePage />
-            </ProtectedRoute>
-          }
-        />
+        >
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<WorkspaceDashboardPage />} />
+          <Route path="search" element={<TaskSearchPage />} />
+          <Route path="boards" element={<BoardListPage />} />
+          <Route path="boards/:boardId" element={<BoardPage />} />
+          <Route path="reports" element={<ReportsPage />} />
+          <Route path="settings" element={<WorkspaceSettingsPage />} />
+          <Route path="activity" element={<WorkspaceActivityPage />} />
+          <Route path="members" element={<WorkspaceMembersPage />} />
+          <Route path="knowledge" element={<KnowledgeBasePage />} />
+        </Route>
         <Route
           path="/profile"
           element={

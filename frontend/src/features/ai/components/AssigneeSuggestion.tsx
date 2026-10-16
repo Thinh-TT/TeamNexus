@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import {
   Alert,
+  Avatar,
   Button,
   Card,
   Flex,
@@ -38,11 +39,7 @@ interface AssigneeSuggestionProps {
 /**
  * Smart Assignee Dispatching panel powered by Jev System 1 (Giai đoạn 14.7 §A4).
  *
- * ⚠️ **ISSUE-03 — written in PURE Ant Design on purpose.**
- *
- * Replaced the previous Tailwind utility classes (`space-y-2`, `inline-flex`, `bg-indigo-500/10`...)
- * which caused text run-together defects on production (`Đánh giá phân côngCần phân công thủ công`, etc.)
- * because TeamNexus does not have Tailwind CSS compiled or configured.
+ * Pure Ant Design + Luminous Enterprise Workspace Electric Violet styling.
  */
 export const AssigneeSuggestion: React.FC<AssigneeSuggestionProps> = ({
   boardId,
@@ -80,15 +77,20 @@ export const AssigneeSuggestion: React.FC<AssigneeSuggestionProps> = ({
     <div data-testid="assignee-suggestion">
       <Button
         size="small"
-        icon={<ThunderboltOutlined style={{ color: '#4f46e5' }} />}
+        block
+        icon={<ThunderboltOutlined style={{ color: '#7c3aed' }} />}
         onClick={handleFetchSuggestions}
         style={{
-          borderRadius: 6,
-          borderColor: '#c7d2fe',
-          backgroundColor: '#eef2ff',
-          color: '#4338ca',
-          fontWeight: 500,
+          borderRadius: 8,
+          borderColor: '#ddd6fe',
+          background: 'linear-gradient(135deg, #f5f3ff 0%, #eef2ff 100%)',
+          color: '#5b21b6',
+          fontWeight: 600,
           fontSize: 12,
+          height: 30,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
         }}
       >
         <span>Gợi ý người làm (Jev)</span>
@@ -104,17 +106,17 @@ export const AssigneeSuggestion: React.FC<AssigneeSuggestionProps> = ({
           size="small"
           style={{
             marginTop: 8,
-            borderRadius: 8,
-            borderColor: '#e2e8f0',
+            borderRadius: 10,
+            borderColor: '#ddd6fe',
             backgroundColor: '#ffffff',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+            boxShadow: '0 4px 12px rgba(124, 58, 237, 0.08)',
           }}
           styles={{ body: { padding: 12 } }}
         >
           {isLoading && (
             <Flex align="center" justify="center" gap={8} style={{ padding: '12px 0' }}>
-              <LoadingOutlined style={{ fontSize: 16, color: '#1677ff' }} />
-              <Typography.Text style={{ fontSize: 12, color: '#1d39c4' }}>
+              <LoadingOutlined style={{ fontSize: 16, color: '#7c3aed' }} />
+              <Typography.Text style={{ fontSize: 12, color: '#5b21b6' }}>
                 Jev đang đối soát hồ sơ kỹ năng và tải việc...
               </Typography.Text>
             </Flex>
@@ -126,7 +128,7 @@ export const AssigneeSuggestion: React.FC<AssigneeSuggestionProps> = ({
               showIcon
               icon={<WarningOutlined />}
               title={error}
-              style={{ borderRadius: 6 }}
+              style={{ borderRadius: 8 }}
             />
           )}
 
@@ -139,28 +141,28 @@ export const AssigneeSuggestion: React.FC<AssigneeSuggestionProps> = ({
                 gap={8}
                 style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: 8 }}
               >
-                <Flex align="center" gap={8}>
-                  <Typography.Text strong style={{ fontSize: 12.5 }}>
+                <Flex align="center" gap={6} wrap="wrap">
+                  <Typography.Text strong style={{ fontSize: 12.5, color: '#0f172a' }}>
                     Đánh giá phân công
                   </Typography.Text>
                   <Tag
                     color={getAdviceTagColor(data.routingAdvice)}
-                    style={{ margin: 0, fontSize: 11 }}
+                    style={{ margin: 0, fontSize: 10.5, fontWeight: 600, borderRadius: 9999 }}
                   >
                     {isDirectAssign(data.routingAdvice)
                       ? `Tự tin ${formatConfidencePercent(data.confidenceScore)}`
                       : isOfferChoices(data.routingAdvice)
-                      ? `Lựa chọn (${formatConfidencePercent(data.confidenceScore)})`
-                      : 'Cần phân công thủ công'}
+                        ? `Lựa chọn (${formatConfidencePercent(data.confidenceScore)})`
+                        : 'Cần phân công thủ công'}
                   </Tag>
                 </Flex>
 
                 {data.latencyMs > 0 && (
                   <Space size={4}>
-                    <ClockCircleOutlined style={{ fontSize: 11, color: '#8c8c8c' }} />
+                    <ClockCircleOutlined style={{ fontSize: 11, color: '#64748b' }} />
                     <Typography.Text
                       type="secondary"
-                      style={{ fontSize: 11, fontFamily: 'monospace' }}
+                      style={{ fontSize: 11, fontFamily: 'var(--tn-font-mono, monospace)' }}
                     >
                       {data.latencyMs}ms
                     </Typography.Text>
@@ -174,7 +176,7 @@ export const AssigneeSuggestion: React.FC<AssigneeSuggestionProps> = ({
                   showIcon
                   icon={<WarningOutlined />}
                   title="Dịch vụ AI tạm không khả dụng. Bạn hãy phân công thủ công."
-                  style={{ borderRadius: 6 }}
+                  style={{ borderRadius: 8 }}
                 />
               )}
 
@@ -188,33 +190,41 @@ export const AssigneeSuggestion: React.FC<AssigneeSuggestionProps> = ({
                         key={candidate.userId}
                         size="small"
                         style={{
-                          borderRadius: 6,
-                          borderColor: '#b7eb8f',
-                          backgroundColor: '#f6ffed',
+                          borderRadius: 8,
+                          borderColor: '#a7f3d0',
+                          backgroundColor: '#ecfdf5',
                         }}
                         styles={{ body: { padding: '10px 12px' } }}
                       >
                         <Flex align="center" justify="space-between" gap={8}>
-                          <Flex vertical gap={2} style={{ minWidth: 0, flex: 1 }}>
-                            <Flex align="center" gap={6}>
-                              <Typography.Text
-                                strong
-                                style={{ fontSize: 12.5, color: '#237804' }}
-                              >
-                                {candidate.displayName}
-                              </Typography.Text>
-                              <Tag color="success" style={{ margin: 0, fontSize: 10.5 }}>
-                                {Math.round(candidate.probability * 100)}% phù hợp
-                              </Tag>
+                          <Flex align="center" gap={8} style={{ minWidth: 0, flex: 1 }}>
+                            <Avatar
+                              size={26}
+                              style={{ backgroundColor: '#059669', fontSize: 11, fontWeight: 600, flexShrink: 0 }}
+                            >
+                              {candidate.displayName?.[0]?.toUpperCase() ?? 'U'}
+                            </Avatar>
+                            <Flex vertical gap={2} style={{ minWidth: 0, flex: 1 }}>
+                              <Flex align="center" gap={6} wrap="wrap">
+                                <Typography.Text
+                                  strong
+                                  style={{ fontSize: 12.5, color: '#065f46' }}
+                                >
+                                  {candidate.displayName}
+                                </Typography.Text>
+                                <Tag color="success" style={{ margin: 0, fontSize: 10.5, fontWeight: 600 }}>
+                                  {Math.round(candidate.probability * 100)}% phù hợp
+                                </Tag>
+                              </Flex>
+                              {candidate.reason && (
+                                <Typography.Text
+                                  type="secondary"
+                                  style={{ fontSize: 11, color: '#047857' }}
+                                >
+                                  {candidate.reason}
+                                </Typography.Text>
+                              )}
                             </Flex>
-                            {candidate.reason && (
-                              <Typography.Text
-                                type="secondary"
-                                style={{ fontSize: 11 }}
-                              >
-                                {candidate.reason}
-                              </Typography.Text>
-                            )}
                           </Flex>
 
                           <Button
@@ -226,7 +236,11 @@ export const AssigneeSuggestion: React.FC<AssigneeSuggestionProps> = ({
                               setIsOpen(false)
                             }}
                             disabled={candidate.userId === currentAssigneeId}
-                            style={{ borderRadius: 6 }}
+                            style={{
+                              borderRadius: 6,
+                              backgroundColor: candidate.userId === currentAssigneeId ? undefined : '#059669',
+                              borderColor: candidate.userId === currentAssigneeId ? undefined : '#059669',
+                            }}
                           >
                             {candidate.userId === currentAssigneeId ? 'Đang gán' : 'Gán ngay'}
                           </Button>
@@ -248,35 +262,43 @@ export const AssigneeSuggestion: React.FC<AssigneeSuggestionProps> = ({
                         key={cand.userId}
                         size="small"
                         style={{
-                          borderRadius: 6,
+                          borderRadius: 8,
                           borderColor: '#e2e8f0',
-                          backgroundColor: '#fafafa',
+                          backgroundColor: '#f8fafc',
                         }}
                         styles={{ body: { padding: '8px 10px' } }}
                       >
                         <Flex align="center" justify="space-between" gap={8}>
-                          <Flex vertical gap={2} style={{ minWidth: 0, flex: 1 }}>
-                            <Flex align="center" gap={6}>
-                              <Typography.Text strong style={{ fontSize: 12 }}>
-                                {cand.displayName}
-                              </Typography.Text>
-                              <Tag color="processing" style={{ margin: 0, fontSize: 10.5 }}>
-                                {Math.round(cand.probability * 100)}%
-                              </Tag>
-                            </Flex>
-                            {cand.reason && (
-                              <Space size={4}>
-                                <InfoCircleOutlined
-                                  style={{ fontSize: 11, color: '#8c8c8c' }}
-                                />
-                                <Typography.Text
-                                  type="secondary"
-                                  style={{ fontSize: 11 }}
-                                >
-                                  {cand.reason}
+                          <Flex align="center" gap={8} style={{ minWidth: 0, flex: 1 }}>
+                            <Avatar
+                              size={24}
+                              style={{ backgroundColor: '#4f46e5', fontSize: 10.5, fontWeight: 600, flexShrink: 0 }}
+                            >
+                              {cand.displayName?.[0]?.toUpperCase() ?? 'U'}
+                            </Avatar>
+                            <Flex vertical gap={2} style={{ minWidth: 0, flex: 1 }}>
+                              <Flex align="center" gap={6} wrap="wrap">
+                                <Typography.Text strong style={{ fontSize: 12, color: '#0f172a' }}>
+                                  {cand.displayName}
                                 </Typography.Text>
-                              </Space>
-                            )}
+                                <Tag color="purple" style={{ margin: 0, fontSize: 10.5, fontWeight: 600 }}>
+                                  {Math.round(cand.probability * 100)}%
+                                </Tag>
+                              </Flex>
+                              {cand.reason && (
+                                <Space size={4}>
+                                  <InfoCircleOutlined
+                                    style={{ fontSize: 11, color: '#64748b' }}
+                                  />
+                                  <Typography.Text
+                                    type="secondary"
+                                    style={{ fontSize: 11 }}
+                                  >
+                                    {cand.reason}
+                                  </Typography.Text>
+                                </Space>
+                              )}
+                            </Flex>
                           </Flex>
 
                           <Button
@@ -286,7 +308,12 @@ export const AssigneeSuggestion: React.FC<AssigneeSuggestionProps> = ({
                               setIsOpen(false)
                             }}
                             disabled={cand.userId === currentAssigneeId}
-                            style={{ borderRadius: 6 }}
+                            style={{
+                              borderRadius: 6,
+                              borderColor: '#c7d2fe',
+                              color: '#4f46e5',
+                              fontWeight: 500,
+                            }}
                           >
                             {cand.userId === currentAssigneeId ? 'Đang gán' : 'Chọn'}
                           </Button>
@@ -303,7 +330,7 @@ export const AssigneeSuggestion: React.FC<AssigneeSuggestionProps> = ({
                   type="info"
                   showIcon
                   title="Chưa có ứng viên đạt độ tương thích cao. Vui lòng tự chọn thành viên từ danh sách."
-                  style={{ borderRadius: 6 }}
+                  style={{ borderRadius: 8 }}
                 />
               )}
             </Flex>

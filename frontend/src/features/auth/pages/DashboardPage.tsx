@@ -3,9 +3,7 @@ import {
   AppstoreOutlined,
   BarChartOutlined,
   CheckCircleOutlined,
-  CopyOutlined,
   DashboardOutlined,
-  FolderOpenOutlined,
   ProjectOutlined,
   RobotOutlined,
   SearchOutlined,
@@ -21,9 +19,7 @@ import {
   Descriptions,
   Empty,
   Flex,
-  Input,
   Layout,
-  message,
   Row,
   Space,
   Tag,
@@ -42,7 +38,6 @@ export const DashboardPage: React.FC = () => {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
-  const [manualWsId, setManualWsId] = useState<string>('')
 
   useEffect(() => {
     workspaceApi
@@ -50,7 +45,6 @@ export const DashboardPage: React.FC = () => {
       .then((list) => {
         if (list && list.length > 0) {
           setWorkspaces(list)
-          setManualWsId(list[0].id)
         }
       })
       .catch(() => {})
@@ -61,11 +55,6 @@ export const DashboardPage: React.FC = () => {
     if (hour < 12) return 'Chào buổi sáng'
     if (hour < 18) return 'Chào buổi chiều'
     return 'Chào buổi tối'
-  }
-
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard?.writeText(text)
-    message.success(`Đã sao chép ${label}`)
   }
 
   return (
@@ -316,18 +305,19 @@ export const DashboardPage: React.FC = () => {
                       )}
 
                       <Flex justify="space-between" align="center" style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
-                        <Flex align="center" gap={4}>
+                        <Flex align="center" gap={6}>
+                          <span
+                            style={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: '50%',
+                              backgroundColor: '#10b981',
+                              display: 'inline-block',
+                            }}
+                          />
                           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                            ID: {ws.id.slice(0, 8)}...
+                            SignalR & AI Ready
                           </Typography.Text>
-                          <Tooltip title="Sao chép ID">
-                            <Button
-                              type="text"
-                              size="small"
-                              icon={<CopyOutlined style={{ fontSize: 12, color: '#94a3b8' }} />}
-                              onClick={() => copyToClipboard(ws.id, 'Workspace ID')}
-                            />
-                          </Tooltip>
                         </Flex>
 
                         <Space>
@@ -335,10 +325,11 @@ export const DashboardPage: React.FC = () => {
                             type="primary"
                             icon={<DashboardOutlined />}
                             style={{
-                              backgroundColor: '#6366f1',
-                              borderRadius: 6,
-                              fontWeight: 500,
-                              boxShadow: '0 2px 6px rgba(99, 102, 241, 0.3)',
+                              backgroundColor: '#4f46e5',
+                              borderColor: '#4f46e5',
+                              borderRadius: 8,
+                              fontWeight: 600,
+                              boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)',
                             }}
                             onClick={() => navigate(`/workspaces/${ws.id}/dashboard`)}
                           >
@@ -346,7 +337,7 @@ export const DashboardPage: React.FC = () => {
                           </Button>
                           <Button
                             icon={<ProjectOutlined />}
-                            style={{ borderRadius: 6, fontWeight: 500 }}
+                            style={{ borderRadius: 8, fontWeight: 500 }}
                             onClick={() => navigate(`/workspaces/${ws.id}/boards`)}
                           >
                             Bảng Kanban
@@ -358,55 +349,36 @@ export const DashboardPage: React.FC = () => {
                 ))}
               </Row>
             )}
-
-            {/* MANUAL WORKSPACE ID ACCESS SECTION */}
-            <div
-              style={{
-                marginTop: 28,
-                padding: '16px 20px',
-                background: '#f8fafc',
-                borderRadius: 10,
-                border: '1px solid #e2e8f0',
-              }}
-            >
-              <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 10, fontSize: 13, fontWeight: 500 }}>
-                Hoặc nhập Workspace ID thủ công:
-              </Typography.Text>
-              <Flex gap={12} align="center" wrap="wrap">
-                <Input
-                  placeholder="Nhập Workspace ID (Guid)..."
-                  id="dashboard-workspace-input"
-                  value={manualWsId}
-                  onChange={(e) => setManualWsId(e.target.value)}
-                  style={{ maxWidth: 420, borderRadius: 8 }}
-                />
-                <Button
-                  type="default"
-                  icon={<FolderOpenOutlined />}
-                  style={{ borderRadius: 8, fontWeight: 500 }}
-                  onClick={() => {
-                    const wsId = manualWsId.trim() || '00000000-0000-0000-0000-000000000001'
-                    navigate(`/workspaces/${wsId}/dashboard`)
-                  }}
-                >
-                  Vào Dashboard →
-                </Button>
-              </Flex>
-            </div>
           </Card>
 
-          {/* USER ACCOUNT INFORMATION CARD */}
+          {/* USER ACCOUNT & HYBRID AI ENGINE SUMMARY CARD */}
           <Card
             title={
-              <Flex align="center" gap={8}>
-                <UserOutlined style={{ color: '#6366f1' }} />
-                <span>Thông tin Tài khoản</span>
+              <Flex align="center" justify="space-between" wrap="wrap" gap={8}>
+                <Flex align="center" gap={8}>
+                  <UserOutlined style={{ color: '#4f46e5' }} />
+                  <span>Thông tin Tài khoản & Quyền hạn</span>
+                </Flex>
+                <Tag
+                  style={{
+                    margin: 0,
+                    borderRadius: 999,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: '#7c3aed',
+                    backgroundColor: '#f5f3ff',
+                    borderColor: '#ddd6fe',
+                    fontFamily: "'JetBrains Mono', monospace",
+                  }}
+                >
+                  Jev 1.13 Sys-1 + DeepSeek Sys-2
+                </Tag>
               </Flex>
             }
-            style={{ borderRadius: 14, boxShadow: '0 4px 16px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0' }}
+            style={{ borderRadius: 14, boxShadow: '0 4px 16px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0' }}
           >
             <Descriptions
-              column={{ xs: 1, sm: 2 }}
+              column={{ xs: 1, sm: 3 }}
               bordered
               size="small"
               style={{ borderRadius: 8, overflow: 'hidden' }}
@@ -416,11 +388,6 @@ export const DashboardPage: React.FC = () => {
               </Descriptions.Item>
               <Descriptions.Item label="Email">
                 <Typography.Text copyable>{user?.email}</Typography.Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="ID Người dùng">
-                <Typography.Text copyable style={{ fontSize: 12, fontFamily: 'monospace' }}>
-                  {user?.id}
-                </Typography.Text>
               </Descriptions.Item>
               <Descriptions.Item label="Vai trò hệ thống">
                 {user?.roles && user.roles.length > 0 ? (
