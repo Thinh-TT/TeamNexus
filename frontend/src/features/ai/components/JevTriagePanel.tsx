@@ -1,5 +1,5 @@
 import React from 'react'
-import { Alert, Button, Card, Descriptions, Flex, Space, Tag, Tooltip, Typography } from 'antd'
+import { Alert, Button, Card, Flex, Space, Tag, Tooltip, Typography } from 'antd'
 import {
   ThunderboltOutlined,
   CheckCircleOutlined,
@@ -181,41 +181,67 @@ export const JevTriagePanel: React.FC<JevTriagePanelProps> = ({
         {/* ---- branch 1: DirectAssign (confidence >= 0.85) ---- */}
         {isDirectAssign(routingAdvice) && (
           <Flex vertical gap={10}>
-            <Descriptions
-              size="small"
-              bordered
-              column={3}
-              style={{ backgroundColor: '#ffffff', borderRadius: 8, overflow: 'hidden' }}
-              items={[
+            <Flex wrap="wrap" gap={8}>
+              {[
                 {
                   key: 'domain',
                   label: 'Miền kỹ thuật',
-                  children: (
-                    <Typography.Text strong style={{ color: '#4f46e5', fontSize: 12.5 }}>
-                      {suggestedDomain || 'Chung'}
-                    </Typography.Text>
-                  ),
+                  value: suggestedDomain || 'Chung',
+                  color: '#4f46e5',
+                  bg: '#eef2ff',
+                  border: '#c7d2fe',
                 },
                 {
                   key: 'workType',
                   label: 'Loại hình',
-                  children: (
-                    <Typography.Text strong style={{ color: '#7c3aed', fontSize: 12.5 }}>
-                      {suggestedWorkType || 'Feature'}
-                    </Typography.Text>
-                  ),
+                  value: suggestedWorkType || 'Feature',
+                  color: '#7c3aed',
+                  bg: '#f5f3ff',
+                  border: '#ddd6fe',
                 },
                 {
                   key: 'priority',
                   label: 'Mức ưu tiên',
-                  children: (
-                    <Typography.Text strong style={{ color: '#d97706', fontSize: 12.5 }}>
-                      {suggestedPriority || 'Medium'}
-                    </Typography.Text>
-                  ),
+                  value: suggestedPriority || 'Medium',
+                  color: '#d97706',
+                  bg: '#fffbeb',
+                  border: '#fde68a',
                 },
-              ]}
-            />
+              ].map((item) => (
+                <div
+                  key={item.key}
+                  style={{
+                    flex: '1 1 110px',
+                    minWidth: 'max-content',
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    backgroundColor: '#ffffff',
+                    border: `1px solid ${item.border}`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 3,
+                  }}
+                >
+                  <Typography.Text
+                    type="secondary"
+                    style={{ fontSize: 11, whiteSpace: 'nowrap', lineHeight: 1.2 }}
+                  >
+                    {item.label}
+                  </Typography.Text>
+                  <Typography.Text
+                    strong
+                    style={{
+                      color: item.color,
+                      fontSize: 12.5,
+                      whiteSpace: 'nowrap',
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {item.value}
+                  </Typography.Text>
+                </div>
+              ))}
+            </Flex>
 
             {onApplyDirect && (
               <Button

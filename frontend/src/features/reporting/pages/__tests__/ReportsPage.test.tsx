@@ -124,7 +124,7 @@ describe('ReportsPage', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Xuất Báo Cáo/i })).toBeInTheDocument()
-      expect(screen.getByText('Tổng số Task')).toBeInTheDocument()
+      expect(screen.getByText('Tổng số Thẻ')).toBeInTheDocument()
     }, WAIT)
   })
 
@@ -187,7 +187,7 @@ describe('ReportsPage', () => {
     }, WAIT)
 
     // …và **không** kéo theo phần báo cáo đã tải xong: một sự cố nhỏ không được biến thành trang trắng.
-    expect(screen.getByText('Tổng số Task')).toBeInTheDocument()
+    expect(screen.getByText('Tổng số Thẻ')).toBeInTheDocument()
     expect(screen.queryByTestId('burndown-chart')).not.toBeInTheDocument()
   })
 })

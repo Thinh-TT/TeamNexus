@@ -88,16 +88,19 @@ describe('AppHeader', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/profile')
   })
 
-  it('calls logout when clicking Đăng xuất', () => {
+  it('calls logout when clicking Đăng xuất in user dropdown', async () => {
     render(
       <MemoryRouter>
         <AppHeader />
       </MemoryRouter>
     )
 
-    const logoutButtons = screen.getAllByRole('button', { name: /Đăng xuất/i })
-    expect(logoutButtons.length).toBeGreaterThan(0)
-    fireEvent.click(logoutButtons[0])
+    const dropdownTrigger = screen.getByTestId('user-dropdown-trigger')
+    fireEvent.click(dropdownTrigger)
+
+    const logoutOption = await screen.findByText('Đăng xuất')
+    expect(logoutOption).toBeInTheDocument()
+    fireEvent.click(logoutOption)
 
     expect(mockLogout).toHaveBeenCalled()
   })

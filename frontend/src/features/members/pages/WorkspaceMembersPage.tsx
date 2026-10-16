@@ -375,7 +375,7 @@ export const WorkspaceMembersPage: React.FC = () => {
               </Tag>
             </Flex>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              Giao việc trực tiếp cho AI Persona trong chi tiết thẻ công việc
+              Nhấp vào thẻ AI Persona để lọc nhanh các công việc đang phụ trách
             </Typography.Text>
           </Flex>
 
@@ -389,6 +389,25 @@ export const WorkspaceMembersPage: React.FC = () => {
             ].map((persona) => (
               <Col xs={24} sm={12} md={8} lg={4} key={persona.code} style={{ flex: '1 1 180px' }}>
                 <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() =>
+                    navigate(
+                      `/workspaces/${workspaceId}/search?q=${encodeURIComponent(
+                        persona.code.replace('@', '')
+                      )}`
+                    )
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      navigate(
+                        `/workspaces/${workspaceId}/search?q=${encodeURIComponent(
+                          persona.code.replace('@', '')
+                        )}`
+                      )
+                    }
+                  }}
                   style={{
                     padding: '10px 12px',
                     borderRadius: 8,
@@ -396,7 +415,20 @@ export const WorkspaceMembersPage: React.FC = () => {
                     border: '1px solid #e2e8f0',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 2,
+                    gap: 4,
+                    cursor: 'pointer',
+                    transition: 'all 0.16s ease',
+                    boxShadow: '0 1px 2px rgba(15, 23, 42, 0.03)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = persona.color
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                    e.currentTarget.style.boxShadow = '0 4px 10px rgba(79, 70, 229, 0.1)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = '#e2e8f0'
+                    e.currentTarget.style.transform = 'translateY(0)'
+                    e.currentTarget.style.boxShadow = '0 1px 2px rgba(15, 23, 42, 0.03)'
                   }}
                 >
                   <Flex align="center" justify="space-between">
@@ -412,12 +444,16 @@ export const WorkspaceMembersPage: React.FC = () => {
                     </span>
                     <span
                       style={{
-                        width: 7,
-                        height: 7,
-                        borderRadius: '50%',
-                        backgroundColor: '#10b981',
+                        fontSize: 10.5,
+                        fontWeight: 600,
+                        color: '#059669',
+                        backgroundColor: '#ecfdf5',
+                        padding: '0 6px',
+                        borderRadius: 999,
                       }}
-                    />
+                    >
+                      Sẵn sàng →
+                    </span>
                   </Flex>
                   <Typography.Text type="secondary" style={{ fontSize: 11.5 }}>
                     {persona.role}

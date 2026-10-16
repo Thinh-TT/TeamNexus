@@ -21,6 +21,7 @@ import {
   message,
 } from 'antd'
 import {
+  ArrowLeftOutlined,
   CrownOutlined,
   GlobalOutlined,
   LogoutOutlined,
@@ -195,16 +196,31 @@ export const ProfilePage: React.FC = () => {
     <Layout style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
       <AppHeader />
 
-      <Content style={{ padding: '32px 24px', maxWidth: 960, margin: '0 auto', width: '100%' }}>
+      <Content style={{ padding: '28px 24px', maxWidth: 980, margin: '0 auto', width: '100%' }}>
         <Flex justify="space-between" align="center" wrap="wrap" gap={12} style={{ marginBottom: 20 }}>
-          <div>
-            <Typography.Title level={3} style={{ margin: 0, color: '#0f172a', fontWeight: 700, letterSpacing: '-0.02em' }}>
-              Hồ sơ người dùng
-            </Typography.Title>
-            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              Quản lý thông tin định danh, danh sách Workspace tham gia và tuỳ chọn AI Digest hằng ngày
-            </Typography.Text>
-          </div>
+          <Flex align="center" gap={12}>
+            <Button
+              icon={<ArrowLeftOutlined />}
+              onClick={() =>
+                navigate(
+                  workspaces.length > 0
+                    ? `/workspaces/${workspaces[0].id}/dashboard`
+                    : '/dashboard'
+                )
+              }
+              style={{ borderRadius: 8, fontWeight: 500 }}
+            >
+              Quay lại Workspace
+            </Button>
+            <div>
+              <Typography.Title level={3} style={{ margin: 0, color: '#0f172a', fontWeight: 700, letterSpacing: '-0.02em' }}>
+                Hồ sơ người dùng
+              </Typography.Title>
+              <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                Quản lý thông tin định danh, danh sách Workspace tham gia và tuỳ chọn AI Digest hằng ngày
+              </Typography.Text>
+            </div>
+          </Flex>
           <Tag
             style={{
               margin: 0,
@@ -234,34 +250,51 @@ export const ProfilePage: React.FC = () => {
                   </span>
                 ),
                 children: (
-                  <div style={{ maxWidth: 620, padding: '12px 0' }}>
+                  <div style={{ maxWidth: 760, padding: '12px 0' }}>
                     <Flex
                       align="center"
+                      justify="space-between"
+                      wrap="wrap"
                       gap={20}
                       style={{
                         marginBottom: 28,
-                        padding: '16px 20px',
+                        padding: '18px 22px',
                         borderRadius: 12,
                         background: 'linear-gradient(135deg, #eef2ff 0%, #f5f3ff 60%, #ffffff 100%)',
-                        border: '1px solid #e0e7ff',
+                        border: '1px solid #c7d2fe',
                       }}
                     >
-                      <Avatar
-                        size={72}
-                        src={avatarPreview}
-                        icon={<UserOutlined />}
-                        style={{ backgroundColor: '#4f46e5', fontSize: 32, border: '3px solid #ffffff', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.2)' }}
-                      >
-                        {!avatarPreview && user?.displayName?.[0]?.toUpperCase()}
-                      </Avatar>
-                      <div>
-                        <Typography.Title level={4} style={{ margin: 0, color: '#0f172a', fontWeight: 700 }}>
-                          {user?.displayName ?? 'Người dùng'}
-                        </Typography.Title>
-                        <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-                          {user?.email}
-                        </Typography.Text>
-                      </div>
+                      <Flex align="center" gap={18}>
+                        <Avatar
+                          size={76}
+                          src={avatarPreview}
+                          icon={<UserOutlined />}
+                          style={{
+                            backgroundColor: '#4f46e5',
+                            fontSize: 32,
+                            border: '3px solid #ffffff',
+                            boxShadow: '0 0 0 2px #6366f1, 0 6px 14px rgba(79, 70, 229, 0.22)',
+                          }}
+                        >
+                          {!avatarPreview && user?.displayName?.[0]?.toUpperCase()}
+                        </Avatar>
+                        <div>
+                          <Typography.Title level={4} style={{ margin: 0, color: '#0f172a', fontWeight: 700 }}>
+                            {user?.displayName ?? 'Người dùng'}
+                          </Typography.Title>
+                          <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+                            {user?.email}
+                          </Typography.Text>
+                        </div>
+                      </Flex>
+                      <Space size={8} wrap>
+                        <Tag color="purple" style={{ margin: 0, borderRadius: 999, fontWeight: 600 }}>
+                          {workspaces.length} Workspace tham gia
+                        </Tag>
+                        <Tag color={digestEnabled ? 'success' : 'default'} style={{ margin: 0, borderRadius: 999, fontWeight: 600 }}>
+                          AI Digest: {digestEnabled ? 'Đang bật' : 'Đang tắt'}
+                        </Tag>
+                      </Space>
                     </Flex>
 
                     <Form

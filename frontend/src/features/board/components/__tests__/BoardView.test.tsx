@@ -184,19 +184,22 @@ describe('BoardView', () => {
     expect(screen.getByText('Write Documentation')).toBeInTheDocument()
   })
 
-  it('renders AI Smart Setup button and opens the modal on click', () => {
+  it('renders AI Smart Setup inside Trợ lý AI dropdown and opens the modal on click', async () => {
     renderComponent()
 
-    const aiBtn = screen.getByRole('button', { name: /AI Smart Setup/i })
-    expect(aiBtn).toBeInTheDocument()
+    const aiDropdownBtn = screen.getByTestId('board-ai-assistant-dropdown')
+    expect(aiDropdownBtn).toBeInTheDocument()
+    fireEvent.click(aiDropdownBtn)
 
+    const aiBtn = await screen.findByText('AI Smart Setup')
     fireEvent.click(aiBtn)
+
     expect(
       screen.getByPlaceholderText(/Xây dựng tính năng thông báo Real-time/i)
     ).toBeInTheDocument()
   })
 
-  it('renders Lịch sử AI button and opens the history drawer on click', async () => {
+  it('renders Lịch sử AI inside Trợ lý AI dropdown and opens the history drawer on click', async () => {
     const mockPendingLogs: AiActionLog[] = [
       {
         id: 'log-1',
@@ -227,57 +230,59 @@ describe('BoardView', () => {
       })
     })
 
-    const historyBtn = screen.getByRole('button', { name: /Lịch sử AI/i })
-    expect(historyBtn).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('board-ai-assistant-dropdown'))
 
-    fireEvent.click(historyBtn)
+    const historyItem = await screen.findByText('Lịch sử AI')
+    fireEvent.click(historyItem)
 
     await waitFor(() => {
       expect(screen.getByText('Lịch sử Hành động AI')).toBeInTheDocument()
     })
   })
 
-  it('renders Cảnh báo AI button with unread count and opens notification drawer on click', async () => {
+  it('renders Cảnh báo AI with unread count inside Trợ lý AI dropdown and opens notification drawer on click', async () => {
     renderComponent()
 
     await waitFor(() => {
       expect(notificationApi.listNotifications).toHaveBeenCalled()
     })
 
-    const notifBtn = screen.getByRole('button', { name: /Cảnh báo AI/i })
-    expect(notifBtn).toBeInTheDocument()
     expect(screen.getByText('3')).toBeInTheDocument()
 
-    fireEvent.click(notifBtn)
+    fireEvent.click(screen.getByTestId('board-ai-assistant-dropdown'))
+    const notifItem = await screen.findByText('Cảnh báo AI')
+    fireEvent.click(notifItem)
 
     await waitFor(() => {
       expect(screen.getByText('Cảnh báo AI Observer')).toBeInTheDocument()
     })
   })
 
-  it('renders AI Observer button for Manager/Admin and opens observer runs drawer on click', async () => {
+  it('renders AI Observer option for Manager/Admin and opens observer runs drawer on click', async () => {
     renderComponent()
 
-    const observerBtn = await screen.findByRole('button', { name: /AI Observer/i })
-    expect(observerBtn).toBeInTheDocument()
+    await waitFor(() => {
+      expect(httpClient.get).toHaveBeenCalledWith('/workspaces')
+    })
 
-    fireEvent.click(observerBtn)
+    fireEvent.click(screen.getByTestId('board-ai-assistant-dropdown'))
+    const observerItem = await screen.findByText('AI Observer')
+    fireEvent.click(observerItem)
 
     await waitFor(() => {
       expect(screen.getByText('AI Observer — Lịch sử quét')).toBeInTheDocument()
     })
   })
 
-  it('renders Báo cáo button for Manager/Admin and navigates on click', async () => {
+  it('does not render redundant workspace navigation buttons on board toolbar', () => {
     renderComponent()
 
-    const reportBtn = await screen.findByRole('button', { name: /Báo cáo/i })
-    expect(reportBtn).toBeInTheDocument()
-
-    fireEvent.click(reportBtn)
+    expect(screen.queryByRole('button', { name: /Báo cáo/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Hoạt động/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Cài đặt/i })).not.toBeInTheDocument()
   })
 
-  it('hides AI Observer and Báo cáo buttons when user is only a Member', async () => {
+  it('hides AI Observer in Trợ lý AI dropdown when user is only a Member', async () => {
     vi.mocked(httpClient.get).mockImplementation(async (url: string) => {
       if (url === '/workspaces') {
         return {
@@ -290,8 +295,14 @@ describe('BoardView', () => {
     renderComponent()
 
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: /AI Observer/i })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /Báo cáo/i })).not.toBeInTheDocument()
+      expect(httpClient.get).toHaveBeenCalledWith('/workspaces')
+    })
+
+    fireEvent.click(screen.getByTestId('board-ai-assistant-dropdown'))
+
+    await waitFor(() => {
+      expect(screen.getByText('AI Smart Setup')).toBeInTheDocument()
+      expect(screen.queryByText('AI Observer')).not.toBeInTheDocument()
     })
   })
 

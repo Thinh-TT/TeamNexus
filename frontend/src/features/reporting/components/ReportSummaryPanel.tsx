@@ -55,7 +55,7 @@ export const ReportSummaryPanel: React.FC<ReportSummaryPanelProps> = ({ report }
       render: (name: string) => <span style={{ fontWeight: 600 }}>{name}</span>,
     },
     {
-      title: 'Tổng Task',
+      title: 'Tổng Thẻ',
       dataIndex: 'total',
       key: 'total',
       align: 'right',
@@ -123,7 +123,7 @@ export const ReportSummaryPanel: React.FC<ReportSummaryPanelProps> = ({ report }
       ),
     },
     {
-      title: 'Tổng Task',
+      title: 'Tổng Thẻ',
       dataIndex: 'total',
       key: 'total',
       align: 'right',
@@ -205,91 +205,103 @@ export const ReportSummaryPanel: React.FC<ReportSummaryPanelProps> = ({ report }
         />
       )}
 
-      {/* Progress & KPI Metrics */}
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} md={6}>
-          <Card
-            styles={{ body: { padding: '16px 20px' } }}
-            style={{ borderRadius: 12, border: '1px solid #e2e8f0' }}
-          >
-            <Statistic
-              title={
-                <Tooltip title={metricDefinitions?.total || 'Tổng số task hiện có trong phạm vi'}>
-                  <span>
-                    Tổng số Task <InfoCircleOutlined style={{ fontSize: 12, color: '#94a3b8' }} />
-                  </span>
-                </Tooltip>
-              }
-              value={progress.total}
-              prefix={<ProfileOutlined style={{ color: '#6366f1' }} />}
-            />
-          </Card>
-        </Col>
-
-        <Col xs={24} sm={12} md={6}>
-          <Card
-            styles={{ body: { padding: '16px 20px' } }}
-            style={{ borderRadius: 12, border: '1px solid #e2e8f0' }}
-          >
-            <Statistic
-              title={
-                <Tooltip title={metricDefinitions?.done || 'Số task đã hoàn thành'}>
-                  <span>
-                    Đã Hoàn Thành <InfoCircleOutlined style={{ fontSize: 12, color: '#94a3b8' }} />
-                  </span>
-                </Tooltip>
-              }
-              value={progress.done}
-              valueStyle={{ color: '#16a34a' }}
-              prefix={<CheckCircleOutlined style={{ color: '#16a34a' }} />}
-            />
-          </Card>
-        </Col>
-
-        <Col xs={24} sm={12} md={6}>
-          <Card
-            styles={{ body: { padding: '16px 20px' } }}
-            style={{ borderRadius: 12, border: '1px solid #e2e8f0' }}
-          >
-            <Statistic
-              title={
-                <Tooltip title={metricDefinitions?.open || 'Số task chưa hoàn thành'}>
-                  <span>
-                    Đang Mở <InfoCircleOutlined style={{ fontSize: 12, color: '#94a3b8' }} />
-                  </span>
-                </Tooltip>
-              }
-              value={progress.open}
-              valueStyle={{ color: '#0284c7' }}
-              prefix={<ClockCircleOutlined style={{ color: '#0284c7' }} />}
-            />
-          </Card>
-        </Col>
-
-        <Col xs={24} sm={12} md={6}>
-          <Card
-            styles={{ body: { padding: '16px 20px' } }}
-            style={{ borderRadius: 12, border: '1px solid #e2e8f0' }}
-          >
-            <Statistic
-              title={
-                <Tooltip title={metricDefinitions?.overdue || 'Số task quá hạn'}>
-                  <span>
-                    Quá Hạn <InfoCircleOutlined style={{ fontSize: 12, color: '#94a3b8' }} />
-                  </span>
-                </Tooltip>
-              }
-              value={progress.overdue}
-              valueStyle={{ color: progress.overdue > 0 ? '#dc2626' : '#64748b' }}
-              prefix={
+      {/* Compact Mini-Stats Analytics Strip (Phase 15.1 Audit #16) */}
+      <Card
+        styles={{ body: { padding: '12px 18px' } }}
+        style={{
+          borderRadius: 12,
+          border: '1px solid #e2e8f0',
+          background: 'linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)',
+        }}
+      >
+        <Flex justify="space-between" align="center" wrap="wrap" gap={16}>
+          {[
+            {
+              key: 'total',
+              label: 'Tổng số Thẻ',
+              tooltip: metricDefinitions?.total || 'Tổng số thẻ hiện có trong phạm vi',
+              value: progress.total,
+              color: '#4f46e5',
+              icon: <ProfileOutlined style={{ color: '#4f46e5' }} />,
+            },
+            {
+              key: 'done',
+              label: 'Đã Hoàn Thành',
+              tooltip: metricDefinitions?.done || 'Số thẻ đã hoàn thành',
+              value: progress.done,
+              color: '#16a34a',
+              icon: <CheckCircleOutlined style={{ color: '#16a34a' }} />,
+            },
+            {
+              key: 'open',
+              label: 'Đang Mở',
+              tooltip: metricDefinitions?.open || 'Số thẻ chưa hoàn thành',
+              value: progress.open,
+              color: '#0284c7',
+              icon: <ClockCircleOutlined style={{ color: '#0284c7' }} />,
+            },
+            {
+              key: 'overdue',
+              label: 'Quá Hạn',
+              tooltip: metricDefinitions?.overdue || 'Số thẻ quá hạn',
+              value: progress.overdue,
+              color: progress.overdue > 0 ? '#dc2626' : '#64748b',
+              icon: (
                 <ExclamationCircleOutlined
                   style={{ color: progress.overdue > 0 ? '#dc2626' : '#64748b' }}
                 />
-              }
-            />
-          </Card>
-        </Col>
-      </Row>
+              ),
+            },
+            {
+              key: 'velocity',
+              label: 'Tốc Độ Tuần (Velocity)',
+              tooltip: 'Số thẻ hoàn thành trung bình mỗi tuần trong kỳ báo cáo',
+              value: `${performance.throughputPerWeek ?? 0} thẻ/tuần`,
+              color: '#7c3aed',
+              icon: <ThunderboltOutlined style={{ color: '#7c3aed' }} />,
+            },
+          ].map((stat) => (
+            <Flex
+              key={stat.key}
+              align="center"
+              gap={10}
+              style={{ flex: '1 1 150px', minWidth: 'max-content' }}
+            >
+              <div
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 8,
+                  backgroundColor: '#f1f5f9',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 15,
+                }}
+              >
+                {stat.icon}
+              </div>
+              <div>
+                <Tooltip title={stat.tooltip}>
+                  <Typography.Text type="secondary" style={{ fontSize: 11.5, display: 'block' }}>
+                    {stat.label} <InfoCircleOutlined style={{ fontSize: 11, color: '#94a3b8' }} />
+                  </Typography.Text>
+                </Tooltip>
+                <Typography.Text
+                  strong
+                  style={{
+                    fontSize: 16,
+                    color: stat.color,
+                    fontFamily: 'var(--tn-font-mono, monospace)',
+                  }}
+                >
+                  {stat.value}
+                </Typography.Text>
+              </div>
+            </Flex>
+          ))}
+        </Flex>
+      </Card>
 
       {/* Completion Rate & Performance Row */}
       <Card

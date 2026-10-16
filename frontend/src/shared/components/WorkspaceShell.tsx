@@ -33,26 +33,26 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   {
     key: 'dashboard',
-    label: 'Tổng quan (Dashboard)',
+    label: 'Tổng quan',
     pathSuffix: '/dashboard',
     icon: <DashboardOutlined />,
   },
   {
     key: 'boards',
-    label: 'Bảng Kanban (Boards)',
+    label: 'Bảng Kanban',
     pathSuffix: '/boards',
     icon: <ProjectOutlined />,
   },
   {
     key: 'search',
-    label: 'Tìm kiếm xuyên bảng',
+    label: 'Tìm kiếm',
     pathSuffix: '/search',
     icon: <SearchOutlined />,
     shortcut: 'Ctrl+K',
   },
   {
     key: 'knowledge',
-    label: 'Kho tri thức RAG',
+    label: 'Kho tri thức',
     pathSuffix: '/knowledge',
     icon: <DatabaseOutlined />,
     badge: 'RAG',
@@ -60,7 +60,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     key: 'members',
-    label: 'Thành viên & Kỹ năng',
+    label: 'Thành viên',
     pathSuffix: '/members',
     icon: <TeamOutlined />,
     badge: 'AI',
@@ -80,7 +80,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     key: 'settings',
-    label: 'Cài đặt (Settings)',
+    label: 'Cài đặt',
     pathSuffix: '/settings',
     icon: <SettingOutlined />,
   },

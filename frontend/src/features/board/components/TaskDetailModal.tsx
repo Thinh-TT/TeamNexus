@@ -414,19 +414,26 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
               rules={[{ required: true, message: 'Tiêu đề không được để trống' }]}
               style={{ marginBottom: 12 }}
             >
-              <Input
-                size="large"
+              <Input.TextArea
+                autoSize={{ minRows: 1, maxRows: 3 }}
                 placeholder="Tiêu đề thẻ..."
                 style={{
                   fontSize: 18,
                   fontWeight: 700,
+                  lineHeight: 1.4,
                   color: '#0f172a',
                   borderRadius: 8,
                   border: '1px solid #e2e8f0',
                   backgroundColor: '#f8fafc',
-                  paddingLeft: 12,
+                  padding: '8px 12px',
+                  whiteSpace: 'normal',
+                  wordBreak: 'break-word',
+                  resize: 'none',
                 }}
-                onPressEnter={handleSaveMetadata}
+                onPressEnter={(e) => {
+                  e.preventDefault()
+                  void handleSaveMetadata()
+                }}
                 onBlur={handleSaveMetadata}
               />
             </Form.Item>
@@ -591,7 +598,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                   key: 'comments',
                   label: `Bình luận (${comments.length})`,
                   children: (
-                    <Flex vertical gap={12}>
+                    <Flex vertical gap={12} style={{ paddingBottom: 16 }}>
                       {/* Comments List */}
                       <div
                         style={{

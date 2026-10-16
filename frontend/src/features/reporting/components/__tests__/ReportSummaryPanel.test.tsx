@@ -96,7 +96,7 @@ describe('ReportSummaryPanel', () => {
   it('renders all metrics from fixture properly', () => {
     render(<ReportSummaryPanel report={mockSummaryFixture} />)
 
-    expect(screen.getByText('Tổng số Task')).toBeInTheDocument()
+    expect(screen.getByText('Tổng số Thẻ')).toBeInTheDocument()
     expect(screen.getByText('Đã Hoàn Thành')).toBeInTheDocument()
     expect(screen.getByText('Đang Mở')).toBeInTheDocument()
     expect(screen.getByText('Quá Hạn')).toBeInTheDocument()

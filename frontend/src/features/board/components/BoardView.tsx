@@ -14,8 +14,8 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import {
   ArrowLeftOutlined,
-  BarChartOutlined,
   BellOutlined,
+  DownOutlined,
   HistoryOutlined,
   LoadingOutlined,
   PlusOutlined,
@@ -23,17 +23,16 @@ import {
   ReloadOutlined,
   RobotOutlined,
   SearchOutlined,
-  SettingOutlined,
   SyncOutlined,
 } from '@ant-design/icons'
 import {
   Badge,
   Button,
+  Dropdown,
   Flex,
   Input,
   Segmented,
   Select,
-  Space,
   Spin,
   Tag,
   Tooltip,
@@ -554,123 +553,88 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
 
           {/* Right: Primary Actions & Tools */}
           <Flex align="center" gap={8} wrap="wrap">
-            {/* Workspace Navigation (Manager/Admin only) */}
-            {isManagerOrAdmin && (
-              <Space size={6}>
-                <Button
-                  icon={<BarChartOutlined />}
-                  onClick={() =>
-                    navigate(`/workspaces/${workspaceId}/reports?boardId=${boardId}`)
-                  }
-                  style={{
-                    borderRadius: 8,
-                    borderColor: '#e2e8f0',
-                    color: '#334155',
-                    fontSize: 12.5,
-                  }}
-                >
-                  Báo cáo
-                </Button>
-
-                <Button
-                  icon={<HistoryOutlined />}
-                  onClick={() =>
-                    navigate(`/workspaces/${workspaceId}/activity`)
-                  }
-                  style={{
-                    borderRadius: 8,
-                    borderColor: '#e2e8f0',
-                    color: '#334155',
-                    fontSize: 12.5,
-                  }}
-                >
-                  Hoạt động
-                </Button>
-
-                <Button
-                  icon={<SettingOutlined />}
-                  onClick={() =>
-                    navigate(`/workspaces/${workspaceId}/settings`)
-                  }
-                  style={{
-                    borderRadius: 8,
-                    borderColor: '#e2e8f0',
-                    color: '#334155',
-                    fontSize: 12.5,
-                  }}
-                >
-                  Cài đặt
-                </Button>
-              </Space>
-            )}
-
-            {/* AI Action Buttons */}
-            <Badge count={unreadNotificationCount} offset={[-4, 4]}>
-              <Button
-                icon={<BellOutlined />}
-                onClick={() => setNotificationOpen(true)}
-                style={{
-                  borderRadius: 8,
-                  borderColor: unreadNotificationCount > 0 ? '#fecaca' : '#e2e8f0',
-                  backgroundColor: unreadNotificationCount > 0 ? '#fef2f2' : '#ffffff',
-                  color: unreadNotificationCount > 0 ? '#b91c1c' : '#334155',
-                  fontSize: 12.5,
-                  fontWeight: unreadNotificationCount > 0 ? 600 : 500,
+            {/* Consolidated AI Assistant Dropdown (Phase 15.1 Audit #5) */}
+            <Badge count={unreadNotificationCount + pendingAiActionCount} offset={[-4, 4]}>
+              <Dropdown
+                trigger={['click']}
+                placement="bottomRight"
+                menu={{
+                  items: [
+                    {
+                      key: 'ai-smart-setup',
+                      icon: <RobotOutlined style={{ color: '#7c3aed' }} />,
+                      label: 'AI Smart Setup',
+                      onClick: () => setSmartSetupModalOpen(true),
+                    },
+                    ...(isManagerOrAdmin
+                      ? [
+                          {
+                            key: 'ai-observer',
+                            icon: <RadarChartOutlined style={{ color: '#5b21b6' }} />,
+                            label: 'AI Observer',
+                            onClick: () => setObserverRunsOpen(true),
+                          },
+                        ]
+                      : []),
+                    {
+                      key: 'ai-notifications',
+                      icon: (
+                        <BellOutlined
+                          style={{ color: unreadNotificationCount > 0 ? '#b91c1c' : '#475569' }}
+                        />
+                      ),
+                      label: (
+                        <Flex align="center" justify="space-between" gap={12}>
+                          <span>Cảnh báo AI</span>
+                          {unreadNotificationCount > 0 && (
+                            <Badge count={unreadNotificationCount} size="small" />
+                          )}
+                        </Flex>
+                      ),
+                      onClick: () => setNotificationOpen(true),
+                    },
+                    {
+                      key: 'ai-history',
+                      icon: (
+                        <HistoryOutlined
+                          style={{ color: pendingAiActionCount > 0 ? '#92400e' : '#475569' }}
+                        />
+                      ),
+                      label: (
+                        <Flex align="center" justify="space-between" gap={12}>
+                          <span>Lịch sử AI</span>
+                          {pendingAiActionCount > 0 && (
+                            <Badge
+                              count={pendingAiActionCount}
+                              size="small"
+                              style={{ backgroundColor: '#d97706' }}
+                            />
+                          )}
+                        </Flex>
+                      ),
+                      onClick: () => setAiHistoryOpen(true),
+                    },
+                  ],
                 }}
               >
-                Cảnh báo AI
-              </Button>
+                <Button
+                  type="primary"
+                  icon={<RobotOutlined />}
+                  data-testid="board-ai-assistant-dropdown"
+                  style={{
+                    borderRadius: 8,
+                    borderColor: '#7c3aed',
+                    color: '#ffffff',
+                    fontWeight: 600,
+                    backgroundColor: '#7c3aed',
+                    boxShadow: '0 2px 6px rgba(124, 58, 237, 0.22)',
+                    fontSize: 12.5,
+                  }}
+                >
+                  Trợ lý AI <DownOutlined style={{ fontSize: 10 }} />
+                </Button>
+              </Dropdown>
             </Badge>
-
-            <Badge count={pendingAiActionCount} offset={[-4, 4]}>
-              <Button
-                icon={<HistoryOutlined />}
-                onClick={() => setAiHistoryOpen(true)}
-                style={{
-                  borderRadius: 8,
-                  borderColor: pendingAiActionCount > 0 ? '#fde68a' : '#e2e8f0',
-                  backgroundColor: pendingAiActionCount > 0 ? '#fffbeb' : '#ffffff',
-                  color: pendingAiActionCount > 0 ? '#92400e' : '#334155',
-                  fontSize: 12.5,
-                  fontWeight: pendingAiActionCount > 0 ? 600 : 500,
-                }}
-              >
-                Lịch sử AI
-              </Button>
-            </Badge>
-
-            {isManagerOrAdmin && (
-              <Button
-                icon={<RadarChartOutlined />}
-                onClick={() => setObserverRunsOpen(true)}
-                style={{
-                  borderRadius: 8,
-                  borderColor: '#ddd6fe',
-                  color: '#5b21b6',
-                  fontWeight: 600,
-                  backgroundColor: '#f5f3ff',
-                  fontSize: 12.5,
-                }}
-              >
-                AI Observer
-              </Button>
-            )}
-
-            <Button
-              icon={<RobotOutlined />}
-              onClick={() => setSmartSetupModalOpen(true)}
-              style={{
-                borderRadius: 8,
-                borderColor: '#7c3aed',
-                color: '#ffffff',
-                fontWeight: 600,
-                backgroundColor: '#7c3aed',
-                boxShadow: '0 2px 6px rgba(124, 58, 237, 0.22)',
-                fontSize: 12.5,
-              }}
-            >
-              AI Smart Setup
-            </Button>
 
             {/* View switch (Giai đoạn 13 §1): "Bảng Kanban" (mặc định) ⇄ "Lịch theo hạn chót". */}
             <Segmented
@@ -684,24 +648,22 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
               style={{ borderRadius: 8 }}
             />
 
-            {/* Primary Action Button */}
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setEditingColumn(null)
-                setColumnModalOpen(true)
-              }}
-              style={{
-                backgroundColor: '#4f46e5',
-                borderColor: '#4f46e5',
-                borderRadius: 8,
-                fontWeight: 600,
-                boxShadow: '0 2px 4px rgba(79, 70, 229, 0.22)',
-              }}
-            >
-              Thêm cột
-            </Button>
+            {/* Compact Add Column Icon Button (Phase 15.1 Audit #6 — full dashed "+ Thêm cột" card sits at end of columns) */}
+            <Tooltip title="Thêm cột mới">
+              <Button
+                icon={<PlusOutlined />}
+                aria-label="Thêm cột"
+                onClick={() => {
+                  setEditingColumn(null)
+                  setColumnModalOpen(true)
+                }}
+                style={{
+                  borderRadius: 8,
+                  borderColor: '#cbd5e1',
+                  color: '#334155',
+                }}
+              />
+            </Tooltip>
           </Flex>
         </Flex>
       </div>
