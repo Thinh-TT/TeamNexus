@@ -148,52 +148,189 @@ export const WorkspaceDashboardPage: React.FC = () => {
             {/* Quick Summary KPI Cards & Project Health */}
             <Row gutter={[16, 16]} align="stretch">
               <Col xs={12} sm={8} lg={4}>
-                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0', height: '100%' }}>
-                  <Statistic
-                    title="Tổng số thẻ"
-                    value={dashboard.summary.totalTasks}
-                    prefix={<ProjectOutlined style={{ color: '#6366f1' }} />}
-                  />
+                <Card
+                  hoverable
+                  style={{
+                    borderRadius: 12,
+                    border: '1px solid #e2e8f0',
+                    height: '100%',
+                    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
+                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                  }}
+                  styles={{ body: { padding: '16px' } }}
+                >
+                  <Flex align="center" gap={12}>
+                    <div
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 10,
+                        backgroundColor: '#eef2ff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <ProjectOutlined style={{ fontSize: 18, color: '#4f46e5' }} />
+                    </div>
+                    <Statistic
+                      title={<span style={{ fontSize: 12, fontWeight: 500, color: '#64748b' }}>Tổng số thẻ</span>}
+                      value={dashboard.summary.totalTasks}
+                      styles={{ content: { fontSize: 22, fontWeight: 700, color: '#0f172a' } }}
+                    />
+                  </Flex>
                 </Card>
               </Col>
               <Col xs={12} sm={8} lg={4}>
-                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0', height: '100%' }}>
-                  <Statistic
-                    title="Thẻ đã hoàn thành"
-                    value={dashboard.summary.doneTasks}
-                    prefix={<CheckCircleOutlined style={{ color: '#10b981' }} />}
-                    valueStyle={{ color: '#10b981' }}
-                  />
+                <Card
+                  hoverable
+                  style={{
+                    borderRadius: 12,
+                    border: '1px solid #e2e8f0',
+                    height: '100%',
+                    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
+                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                  }}
+                  styles={{ body: { padding: '16px' } }}
+                >
+                  <Flex align="center" gap={12}>
+                    <div
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 10,
+                        backgroundColor: '#ecfdf5',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <CheckCircleOutlined style={{ fontSize: 18, color: '#10b981' }} />
+                    </div>
+                    <Statistic
+                      title={<span style={{ fontSize: 12, fontWeight: 500, color: '#64748b' }}>Thẻ đã hoàn thành</span>}
+                      value={dashboard.summary.doneTasks}
+                      styles={{ content: { fontSize: 22, fontWeight: 700, color: '#10b981' } }}
+                    />
+                  </Flex>
                 </Card>
               </Col>
               <Col xs={12} sm={8} lg={4}>
-                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0', height: '100%' }}>
-                  <Statistic
-                    title="Thẻ đang mở"
-                    value={dashboard.summary.openTasks}
-                    prefix={<ClockCircleOutlined style={{ color: '#3b82f6' }} />}
-                    valueStyle={{ color: '#3b82f6' }}
-                  />
+                <Card
+                  hoverable
+                  style={{
+                    borderRadius: 12,
+                    border: '1px solid #e2e8f0',
+                    height: '100%',
+                    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
+                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                  }}
+                  styles={{ body: { padding: '16px' } }}
+                >
+                  <Flex align="center" gap={12}>
+                    <div
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 10,
+                        backgroundColor: '#eff6ff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <ClockCircleOutlined style={{ fontSize: 18, color: '#3b82f6' }} />
+                    </div>
+                    <Statistic
+                      title={<span style={{ fontSize: 12, fontWeight: 500, color: '#64748b' }}>Thẻ đang mở</span>}
+                      value={dashboard.summary.openTasks}
+                      styles={{ content: { fontSize: 22, fontWeight: 700, color: '#3b82f6' } }}
+                    />
+                  </Flex>
                 </Card>
               </Col>
               <Col xs={12} sm={8} lg={4}>
-                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0', height: '100%' }}>
-                  <Statistic
-                    title="Thẻ quá hạn"
-                    value={dashboard.summary.overdueTasks}
-                    prefix={<ExclamationCircleOutlined style={{ color: '#ef4444' }} />}
-                    valueStyle={{ color: dashboard.summary.overdueTasks > 0 ? '#ef4444' : undefined }}
-                  />
+                <Card
+                  hoverable
+                  style={{
+                    borderRadius: 12,
+                    border: '1px solid #e2e8f0',
+                    height: '100%',
+                    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
+                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                  }}
+                  styles={{ body: { padding: '16px' } }}
+                >
+                  <Flex align="center" gap={12}>
+                    <div
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 10,
+                        backgroundColor: dashboard.summary.overdueTasks > 0 ? '#fef2f2' : '#f8fafc',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <ExclamationCircleOutlined
+                        style={{
+                          fontSize: 18,
+                          color: dashboard.summary.overdueTasks > 0 ? '#ef4444' : '#94a3b8',
+                        }}
+                      />
+                    </div>
+                    <Statistic
+                      title={<span style={{ fontSize: 12, fontWeight: 500, color: '#64748b' }}>Thẻ quá hạn</span>}
+                      value={dashboard.summary.overdueTasks}
+                      styles={{
+                        content: {
+                          fontSize: 22,
+                          fontWeight: 700,
+                          color: dashboard.summary.overdueTasks > 0 ? '#ef4444' : '#0f172a',
+                        },
+                      }}
+                    />
+                  </Flex>
                 </Card>
               </Col>
               <Col xs={12} sm={8} lg={4}>
-                <Card style={{ borderRadius: 10, border: '1px solid #e2e8f0', height: '100%' }}>
-                  <Statistic
-                    title="Thẻ mở của tôi"
-                    value={dashboard.summary.myOpenTasks}
-                    prefix={<UserOutlined style={{ color: '#8b5cf6' }} />}
-                    valueStyle={{ color: '#8b5cf6' }}
-                  />
+                <Card
+                  hoverable
+                  style={{
+                    borderRadius: 12,
+                    border: '1px solid #e2e8f0',
+                    height: '100%',
+                    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.04)',
+                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                  }}
+                  styles={{ body: { padding: '16px' } }}
+                >
+                  <Flex align="center" gap={12}>
+                    <div
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: 10,
+                        backgroundColor: '#f5f3ff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <UserOutlined style={{ fontSize: 18, color: '#7c3aed' }} />
+                    </div>
+                    <Statistic
+                      title={<span style={{ fontSize: 12, fontWeight: 500, color: '#64748b' }}>Thẻ mở của tôi</span>}
+                      value={dashboard.summary.myOpenTasks}
+                      styles={{ content: { fontSize: 22, fontWeight: 700, color: '#7c3aed' } }}
+                    />
+                  </Flex>
                 </Card>
               </Col>
               <Col xs={24} sm={8} lg={4}>
