@@ -5,7 +5,6 @@ export interface NexusLogoProps {
   className?: string
   style?: React.CSSProperties
   idSuffix?: string
-  onClick?: (event: React.MouseEvent<SVGSVGElement>) => void
 }
 
 export const NexusLogo: React.FC<NexusLogoProps> = ({
@@ -13,7 +12,6 @@ export const NexusLogo: React.FC<NexusLogoProps> = ({
   className,
   style,
   idSuffix,
-  onClick,
 }) => {
   const reactId = useId()
   const suffix = idSuffix ?? reactId.replace(/:/g, '')
@@ -28,7 +26,6 @@ export const NexusLogo: React.FC<NexusLogoProps> = ({
       width={size}
       height={size}
       className={className}
-      onClick={onClick}
       style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
       data-testid="nexus-logo"
     >

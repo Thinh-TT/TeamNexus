@@ -1,8 +1,6 @@
 import { useEffect } from 'react'
-import { ConfigProvider } from 'antd'
 import { AppRouter } from './app/router'
 import { useAuth } from './features/auth/hooks/useAuth'
-import { teamNexusTheme } from './shared/theme/themeConfig'
 
 function App() {
   const { checkAuth } = useAuth()
@@ -11,11 +9,7 @@ function App() {
     checkAuth()
   }, [checkAuth])
 
-  return (
-    <ConfigProvider theme={teamNexusTheme}>
-      <AppRouter />
-    </ConfigProvider>
-  )
+  return <AppRouter />
 }
 
 export default App

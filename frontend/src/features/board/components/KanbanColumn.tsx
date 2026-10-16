@@ -268,7 +268,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
               boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
               border: '1px solid #cbd5e1',
             }}
-            styles={{ body: { padding: '8px' } }}
+            bodyStyle={{ padding: '8px' }}
           >
             <Input.TextArea
               autoFocus

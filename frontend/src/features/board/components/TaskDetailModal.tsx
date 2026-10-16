@@ -27,6 +27,7 @@ import {
   Input,
   Mentions,
   type MenuProps,
+  Modal,
   Popconfirm,
   Row,
   Segmented,
@@ -37,7 +38,6 @@ import {
   Tooltip,
   Typography,
   message,
-  Drawer,
 } from 'antd'
 import dayjs from 'dayjs'
 import { useAuth } from '../../auth/hooks/useAuth'
@@ -350,34 +350,16 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   const isDoneColumn = columns.find((c) => c.id === task.columnId)?.isDone
 
   return (
-    <Drawer
+    <Modal
       open={open}
-      onClose={() => {
+      onCancel={() => {
         setDescMode('write')
         onClose()
       }}
-      size="large"
-      placement="right"
+      width={780}
+      style={{ top: 32 }}
+      footer={null}
       destroyOnClose
-      styles={{
-        body: { padding: '20px 24px', overflowY: 'auto' },
-        mask: { backdropFilter: 'blur(4px)', backgroundColor: 'rgba(15, 23, 42, 0.25)' },
-        header: { borderBottom: '1px solid #f1f5f9', padding: '14px 24px' },
-      }}
-      title={
-        <Flex align="center" justify="space-between" style={{ width: '100%', paddingRight: 8 }}>
-          <Flex align="center" gap={8}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#64748b' }}>
-              Thẻ #{task?.id ? task.id.slice(0, 8) : ''}
-            </span>
-            {isDoneColumn && (
-              <Tag color="success" style={{ margin: 0, borderRadius: 12, fontSize: 11 }}>
-                Hoàn thành
-              </Tag>
-            )}
-          </Flex>
-        </Flex>
-      }
     >
       <Form form={form} layout="vertical" onFinish={handleSaveMetadata}>
         <Row gutter={24}>
@@ -454,7 +436,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     border: '1px solid #cbd5e1',
                     background: '#f8fafc',
                   }}
-                  styles={{ body: { padding: 10 } }}
+                  bodyStyle={{ padding: 10 }}
                 >
                   <Typography.Text strong style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
                     Tạo nhãn mới cho Workspace:
@@ -934,6 +916,6 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
           </Col>
         </Row>
       </Form>
-    </Drawer>
+    </Modal>
   )
 }
