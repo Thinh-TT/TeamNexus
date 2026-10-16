@@ -6,7 +6,6 @@ import {
   ExclamationCircleOutlined,
   ProjectOutlined,
   ReloadOutlined,
-  TeamOutlined,
   ThunderboltFilled,
   UserOutlined,
 } from '@ant-design/icons'
@@ -64,24 +63,7 @@ export const WorkspaceDashboardPage: React.FC = () => {
 
   return (
     <Layout style={{ minHeight: '100vh', background: '#f8fafc' }}>
-      <AppHeader workspaceId={workspaceId}>
-        <Button
-          icon={<ProjectOutlined />}
-          style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569', background: '#f8fafc' }}
-          onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
-          data-testid="nav-boards-header-btn"
-        >
-          Bảng Kanban
-        </Button>
-        <Button
-          icon={<TeamOutlined />}
-          style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569', background: '#f8fafc' }}
-          onClick={() => navigate(`/workspaces/${workspaceId}/members`)}
-          data-testid="nav-members-header-btn"
-        >
-          Thành viên
-        </Button>
-      </AppHeader>
+      <AppHeader workspaceId={workspaceId} />
 
       <Content style={{ padding: '28px 24px', maxWidth: 1360, margin: '0 auto', width: '100%' }}>
         {status === 'loading' ? (

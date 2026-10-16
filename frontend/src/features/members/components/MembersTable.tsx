@@ -235,15 +235,15 @@ export const MembersTable: React.FC<MembersTableProps> = ({
                 okButtonProps={{ danger: true }}
                 onConfirm={() => onRemoveMember(record.userId)}
               >
-                <Button
-                  danger
-                  type="text"
-                  size="small"
-                  icon={<DeleteOutlined />}
-                  aria-label={`Xoá ${record.displayName}`}
-                >
-                  Xoá
-                </Button>
+                <Tooltip title="Xoá thành viên">
+                  <Button
+                    danger
+                    type="text"
+                    size="small"
+                    icon={<DeleteOutlined />}
+                    aria-label={`Xoá ${record.displayName}`}
+                  />
+                </Tooltip>
               </Popconfirm>
             )}
           </Space>

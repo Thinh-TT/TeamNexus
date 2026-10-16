@@ -1,9 +1,7 @@
 import React, { useMemo } from 'react'
 import {
   ArrowLeftOutlined,
-  DashboardOutlined,
   ProjectOutlined,
-  TeamOutlined,
 } from '@ant-design/icons'
 import { Button, Flex, Layout, Space, Typography } from 'antd'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -102,29 +100,7 @@ export const TaskSearchPage: React.FC = () => {
 
   return (
     <Layout style={{ minHeight: '100vh', background: '#f8fafc' }}>
-      <AppHeader workspaceId={workspaceId}>
-        <Button
-          icon={<DashboardOutlined />}
-          style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569', background: '#f8fafc' }}
-          onClick={() => navigate(`/workspaces/${workspaceId}/dashboard`)}
-        >
-          Tổng quan
-        </Button>
-        <Button
-          icon={<ProjectOutlined />}
-          style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569', background: '#f8fafc' }}
-          onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
-        >
-          Bảng Kanban
-        </Button>
-        <Button
-          icon={<TeamOutlined />}
-          style={{ borderRadius: 8, borderColor: '#cbd5e1', color: '#475569', background: '#f8fafc' }}
-          onClick={() => navigate(`/workspaces/${workspaceId}/members`)}
-        >
-          Thành viên
-        </Button>
-      </AppHeader>
+      <AppHeader workspaceId={workspaceId} />
 
       <Content style={{ padding: '32px 24px', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
         <Flex vertical gap="large">

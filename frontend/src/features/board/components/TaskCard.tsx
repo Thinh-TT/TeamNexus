@@ -280,7 +280,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
           {/* Title */}
           <Flex align="flex-start" gap={6}>
             {isCompleted && (
-              <CheckCircleFilled style={{ color: '#10b981', fontSize: 14, marginTop: 3 }} />
+              <CheckCircleFilled style={{ color: '#10b981', fontSize: 14, marginTop: 3, flexShrink: 0 }} />
             )}
             <Typography.Text
               strong
@@ -288,9 +288,11 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               style={{
                 fontSize: 13.5,
                 lineHeight: 1.45,
-                color: isCompleted ? '#64748b' : '#0f172a',
+                color: isCompleted ? '#94a3b8' : '#0f172a',
+                opacity: isCompleted ? 0.85 : 1,
+                textDecoration: 'none',
                 flex: 1,
-                fontWeight: 600,
+                fontWeight: isCompleted ? 500 : 600,
               }}
             >
               {task.title}

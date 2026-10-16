@@ -209,17 +209,25 @@ export const WorkspaceActivityPage: React.FC = () => {
             <Empty description="Chưa có hoạt động nào được ghi nhận" />
           </Card>
         ) : (
-          <div>
-            {items.map((item) => (
+          <Card
+            style={{
+              borderRadius: 12,
+              border: '1px solid #e2e8f0',
+              backgroundColor: '#ffffff',
+            }}
+            styles={{ body: { padding: '20px 24px' } }}
+          >
+            {items.map((item, idx) => (
               <ActivityFeedItem
                 key={item.id}
                 item={item}
                 boardName={item.boardId ? boardNameMap.get(item.boardId) : undefined}
+                isLast={idx === items.length - 1}
               />
             ))}
 
             {hasMore && (
-              <Flex justify="center" style={{ marginTop: 20 }}>
+              <Flex justify="center" style={{ marginTop: 16 }}>
                 <Button
                   onClick={loadMore}
                   loading={loadingMore}
@@ -230,7 +238,7 @@ export const WorkspaceActivityPage: React.FC = () => {
                 </Button>
               </Flex>
             )}
-          </div>
+          </Card>
         )}
       </Content>
     </Layout>

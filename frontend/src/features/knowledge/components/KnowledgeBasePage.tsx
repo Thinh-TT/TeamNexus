@@ -393,7 +393,7 @@ export const KnowledgeBasePage: React.FC = () => {
             rowKey="id"
             loading={loading}
             pagination={false}
-            scroll={{ x: 'max-content' }}
+            tableLayout="auto"
             // With the feature off — or with the list never loaded — the table's own "no data" text would claim
             // the workspace has no documents. That is only knowable when the request actually succeeded, so the
             // empty state is shown on exactly that condition and the alerts above explain the other two.
