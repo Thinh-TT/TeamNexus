@@ -184,14 +184,29 @@ public sealed class TaskSearchService : ITaskSearchService
             query = query.Where(t => t.AssigneeId == null);
         }
 
+        long parsedTaskNumber = 0;
+        var hasTaskNumberQuery = hasQuery && TryParseTaskNumberQuery(request.Query, out parsedTaskNumber);
+
         if (hasQuery)
         {
             // ILike is PostgreSQL's case-insensitive LIKE (same choice as SearchSystemDataTool, and
             // the reason this feature needs no unaccent/full-text dependency).
+            // Phase 15.1 §T15.1.5: if the query matches `TN-123` / `tn-123` / `#123`, also match exact
+            // `t.TaskNumber == parsedTaskNumber`.
             var pattern = $"%{EscapeLike(request.Query!)}%";
-            query = query.Where(t =>
-                EF.Functions.ILike(t.Title, pattern)
-                || (t.Description != null && EF.Functions.ILike(t.Description, pattern)));
+            if (hasTaskNumberQuery)
+            {
+                query = query.Where(t =>
+                    t.TaskNumber == parsedTaskNumber
+                    || EF.Functions.ILike(t.Title, pattern)
+                    || (t.Description != null && EF.Functions.ILike(t.Description, pattern)));
+            }
+            else
+            {
+                query = query.Where(t =>
+                    EF.Functions.ILike(t.Title, pattern)
+                    || (t.Description != null && EF.Functions.ILike(t.Description, pattern)));
+            }
         }
 
         if (request.Priority.Length > 0)
@@ -257,6 +272,14 @@ public sealed class TaskSearchService : ITaskSearchService
         }
 
         var titlePattern = $"%{EscapeLike(request.Query!)}%";
+        if (hasTaskNumberQuery)
+        {
+            return query
+                .OrderBy(t => t.TaskNumber == parsedTaskNumber ? 0 : EF.Functions.ILike(t.Title, titlePattern) ? 1 : 2)
+                .ThenByDescending(t => t.UpdatedAt)
+                .ThenByDescending(t => t.Id);
+        }
+
         return query
             .OrderBy(t => EF.Functions.ILike(t.Title, titlePattern) ? 0 : 1)
             .ThenByDescending(t => t.UpdatedAt)
@@ -274,10 +297,11 @@ public sealed class TaskSearchService : ITaskSearchService
 
         var taskIds = tasks.Select(t => t.Id).ToList();
 
-        // The three shared batch loaders: exactly what TaskService uses for a Kanban page, so a search
-        // hit shows the same labels, comment count and agent badge as the board it came from (§P1).
+        // The shared batch loaders: exactly what TaskService uses for a Kanban page, so a search
+        // hit shows the same labels, comment count, external links and agent badge as the board it came from (§P1).
         var labelsByTask = await TaskReadHelpers.LoadLabelsByTaskAsync(_db, taskIds, ct);
         var counts = await TaskReadHelpers.LoadCommentCountsAsync(_db, taskIds, ct);
+        var externalLinksByTask = await TaskReadHelpers.LoadExternalLinksByTaskAsync(_db, taskIds, ct);
         var activeRunIds = await AgentRunLookup.LoadActiveRunIdsAsync(_db, taskIds, ct);
 
         // Workspace is a per-task fact through its board; every task in the page shares the searched
@@ -313,7 +337,8 @@ public sealed class TaskSearchService : ITaskSearchService
                     assigneeIsAiAgent,
                     // TryGetValue, NOT GetValueOrDefault: the latter yields Guid.Empty for a task with
                     // no live run, which serializes as "00000000-…" instead of null (Phase 7 harness bug).
-                    activeRunIds.TryGetValue(t.Id, out var runId) ? runId : null);
+                    activeRunIds.TryGetValue(t.Id, out var runId) ? runId : null,
+                    externalLinksByTask.GetValueOrDefault(t.Id, []));
 
                 return new TaskSearchItem(
                     response,
@@ -372,4 +397,49 @@ public sealed class TaskSearchService : ITaskSearchService
             .Replace("\\", "\\\\", StringComparison.Ordinal)
             .Replace("%", "\\%", StringComparison.Ordinal)
             .Replace("_", "\\_", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Recognises <c>TN-123</c>, <c>tn-123</c>, or <c>#123</c> so searching by task code matches
+    /// <see cref="BoardTask.TaskNumber"/> directly (Phase 15.1 §T15.1.5).
+    /// </summary>
+    private static bool TryParseTaskNumberQuery(string? rawQuery, out long taskNumber)
+    {
+        taskNumber = 0;
+        if (string.IsNullOrWhiteSpace(rawQuery))
+        {
+            return false;
+        }
+
+        var trimmed = rawQuery.Trim();
+        ReadOnlySpan<char> digits;
+
+        if (trimmed.StartsWith("TN-", StringComparison.OrdinalIgnoreCase))
+        {
+            digits = trimmed.AsSpan(3);
+        }
+        else if (trimmed.StartsWith('#'))
+        {
+            digits = trimmed.AsSpan(1);
+        }
+        else
+        {
+            return false;
+        }
+
+        if (digits.IsEmpty || digits.Length > 10)
+        {
+            return false;
+        }
+
+        foreach (var ch in digits)
+        {
+            if (ch < '0' || ch > '9')
+            {
+                return false;
+            }
+        }
+
+        return long.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out taskNumber)
+               && taskNumber > 0;
+    }
 }

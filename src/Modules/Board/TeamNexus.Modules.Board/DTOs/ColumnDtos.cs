@@ -5,10 +5,18 @@ namespace TeamNexus.Modules.Board.DTOs;
 /// Phase 7 §3.5 — mark the column as the "Chờ làm rõ" lane. Mutually exclusive with
 /// <paramref name="IsDone"/> (400 when both are true). Null/false by default.
 /// </param>
-public sealed record CreateColumnRequest(string Name, bool IsDone = false, bool? IsClarification = false);
+public sealed record CreateColumnRequest(
+    string Name,
+    bool IsDone = false,
+    bool? IsClarification = false,
+    bool IsInReview = false);
 
 /// <summary>Partial update: null fields are left unchanged.</summary>
-public sealed record UpdateColumnRequest(string? Name, bool? IsDone, bool? IsClarification = null);
+public sealed record UpdateColumnRequest(
+    string? Name,
+    bool? IsDone,
+    bool? IsClarification = null,
+    bool? IsInReview = null);
 
 public sealed record ColumnPositionItem(Guid Id, int Position);
 
@@ -23,6 +31,10 @@ public sealed record ReorderColumnsRequest(IReadOnlyList<ColumnPositionItem> Ite
 /// Phase 7 §3.5 — the "Chờ làm rõ" column managed by the AI Agent: at most one per board, never
 /// treated as "done", and it cannot be deleted.
 /// </param>
+/// <param name="IsInReview">
+/// Phase 15.1 §T15.1.4 — the "Đang duyệt PR" (In Review) column used by GitHub PR automation.
+/// Appended at the end with default <c>false</c> to preserve positional compatibility.
+/// </param>
 public sealed record ColumnResponse(
     Guid Id,
     Guid BoardId,
@@ -32,4 +44,5 @@ public sealed record ColumnResponse(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     IReadOnlyList<TaskResponse> Tasks,
-    bool IsClarification);
+    bool IsClarification,
+    bool IsInReview = false);

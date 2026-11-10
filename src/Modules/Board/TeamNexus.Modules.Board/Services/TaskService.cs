@@ -69,6 +69,7 @@ public sealed class TaskService : ITaskService
         var taskIds = tasks.Select(t => t.Id).ToList();
         var counts = await TaskReadHelpers.LoadCommentCountsAsync(_db, taskIds, ct);
         var labelsByTask = await TaskReadHelpers.LoadLabelsByTaskAsync(_db, taskIds, ct);
+        var externalLinksByTask = await TaskReadHelpers.LoadExternalLinksByTaskAsync(_db, taskIds, ct);
         var activeRunIds = await AgentRunLookup.LoadActiveRunIdsAsync(_db, taskIds, ct);
         var assigneeIsAiAgent = await TaskReadHelpers.ResolveAssigneeIsAiAgentAsync(
             _agents, board.WorkspaceId, tasks, ct);
@@ -80,7 +81,8 @@ public sealed class TaskService : ITaskService
             assigneeIsAiAgent,
             // TryGetValue, NOT GetValueOrDefault: the latter returns Guid.Empty for a missing
             // task, which would serialize as "00000000-..." instead of null (real bug, §3 harness).
-            activeRunIds.TryGetValue(t.Id, out var runId) ? runId : null)).ToList();
+            activeRunIds.TryGetValue(t.Id, out var runId) ? runId : null,
+            externalLinksByTask.GetValueOrDefault(t.Id, []))).ToList();
     }
 
     public async Task<TaskResponse> GetTaskByIdAsync(Guid taskId, Guid userId, CancellationToken ct = default)
@@ -94,6 +96,7 @@ public sealed class TaskService : ITaskService
             .CountAsync(c => c.TaskId == taskId, ct);
 
         var labels = await TaskReadHelpers.LoadLabelsByTaskAsync(_db, [taskId], ct);
+        var externalLinks = await TaskReadHelpers.LoadExternalLinksByTaskAsync(_db, [taskId], ct);
         var activeRunIds = await AgentRunLookup.LoadActiveRunIdsAsync(_db, [taskId], ct);
         var assigneeIsAiAgent = await TaskReadHelpers.ResolveAssigneeIsAiAgentAsync(
             _agents, workspaceId, [task], ct);
@@ -104,7 +107,8 @@ public sealed class TaskService : ITaskService
             count,
             assigneeIsAiAgent,
             // See the note in GetTasksAsync: GetValueOrDefault would produce Guid.Empty, not null.
-            activeRunIds.TryGetValue(taskId, out var detailRunId) ? detailRunId : null);
+            activeRunIds.TryGetValue(taskId, out var detailRunId) ? detailRunId : null,
+            externalLinks.GetValueOrDefault(taskId, []));
     }
 
     public async Task<TaskResponse> CreateTaskAsync(
@@ -130,8 +134,12 @@ public sealed class TaskService : ITaskService
         await RequireAssigneeInWorkspaceAsync(board.WorkspaceId, request.AssigneeId, ct);
         var assignee = await LoadAssigneeAsync(request.AssigneeId, ct);
 
+        var taskId = Guid.NewGuid();
+        var taskNumber = await TaskReadHelpers.AllocateNextTaskNumberAsync(_db, board.WorkspaceId, taskId, ct);
+
         var task = new BoardTask
         {
+            Id = taskId,
             BoardId = boardId,
             ColumnId = column.Id,
             Title = request.Title.Trim(),
@@ -142,6 +150,7 @@ public sealed class TaskService : ITaskService
             Priority = ParsePriority(request.Priority),
             CreatedBy = userId,
             CompletedAt = column.IsDone ? DateTimeOffset.UtcNow : null,
+            TaskNumber = taskNumber,
             Assignee = assignee,
         };
 

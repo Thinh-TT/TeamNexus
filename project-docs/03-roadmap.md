@@ -443,12 +443,13 @@ và mở rộng Smart Setup thành **AI Board Template**.
 
 ---
 
-## Giai đoạn 15: Tích hợp bên ngoài
+## Giai đoạn 15: Tích hợp bên ngoài — 🚧 ĐANG THI HÀNH (Sub-phase 15.1 ✅ XONG)
 
-> **Đã có thiết kế kỹ thuật — chưa hiện thực.** Chi tiết: `project-docs/07-external-integrations-design.md`. Chưa chia tasks.
+> **Tài liệu thiết kế & kế hoạch chia task:** `project-docs/07-external-integrations-design.md` & `project-docs/tasks/phase-15-0-external-integrations-master-plan.md` (`phase-15-1..15-5.md`).
 > **Độ phức tạp kỹ thuật: 🔴 Cao** — webhook, lưu secret bên thứ ba, eventual consistency, độ bền gửi ra ngoài (outbox + retry).
 > **Đã có sẵn seam:** `IExternalAlertSink` (Giai đoạn 14.5 A1.2) là điểm cắm thông báo ra ngoài — Phase 15 đăng ký
 > implementation thật và **không** phải sửa Observer/Agent/member path.
+> **📊 Tiến độ hiện tại (Sub-phase 15.1 ✅ XONG):** Migration #15 (`20261110154843_Phase15ExternalIntegrations`), 6 bảng mới (`task_numbers`, `workspace_webhook_endpoints`, `webhook_delivery_outbox`, `workspace_github_integrations`, `github_webhook_deliveries`, `task_external_links`), mã công việc tuần tự `TN-123` + tìm kiếm theo mã (`TN-123`/`#123`), cờ cột `is_in_review`, tài khoản hệ thống `GitHub Bot` (`IsSystem = true`) và port `ITaskAutomation` (`TaskAutomationService`). Số đo thật: `dotnet build --no-incremental` **0 warning / 0 error**, `has-pending-model-changes` **sạch**, `dotnet test` **Passed 1,175 / Failed 0 / Skipped 0** (baseline 1,167 ⇒ **+8**).
 
 Kết nối TeamNexus với hệ sinh thái công cụ phát triển: thông báo sang Slack/Discord, liên kết task với GitHub PR/Issue và tự cập nhật task từ webhook.
 

@@ -343,30 +343,46 @@ public sealed class DatabaseFixture : IAsyncLifetime
             }
         }
 
-        // The database itself is ensured HERE, not only in InitializeAsync, so this method is safe
-        // even when the database was dropped between two test classes.
-        EnsureDatabaseCreated();
-
+        await DatabaseLock.WaitAsync();
         try
         {
-            await MigrateOnceAsync();
-        }
-        catch (PostgresException ex) when (ex.SqlState == UndefinedDatabase)
-        {
-            // The database vanished after `_databaseReady` was cached (a developer wiped it, or a
-            // previous process dropped it). Forget the cached decisions and rebuild from scratch
-            // instead of permanently downgrading the whole class to "skipped".
             lock (Gate)
             {
-                _databaseReady = false;
-                _migrationsApplied = false;
+                if (_migrationsApplied)
+                {
+                    return;
+                }
             }
 
+            // The database itself is ensured HERE, not only in InitializeAsync, so this method is safe
+            // even when the database was dropped between two test classes.
             EnsureDatabaseCreated();
-            await MigrateOnceAsync();
-        }
 
-        MarkMigrated();
+            try
+            {
+                await MigrateOnceAsync();
+            }
+            catch (PostgresException ex) when (ex.SqlState == UndefinedDatabase)
+            {
+                // The database vanished after `_databaseReady` was cached (a developer wiped it, or a
+                // previous process dropped it). Forget the cached decisions and rebuild from scratch
+                // instead of permanently downgrading the whole class to "skipped".
+                lock (Gate)
+                {
+                    _databaseReady = false;
+                    _migrationsApplied = false;
+                }
+
+                EnsureDatabaseCreated();
+                await MigrateOnceAsync();
+            }
+
+            MarkMigrated();
+        }
+        finally
+        {
+            DatabaseLock.Release();
+        }
     }
 
     /// <summary>

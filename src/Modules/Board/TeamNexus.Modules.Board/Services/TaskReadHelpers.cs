@@ -86,4 +86,78 @@ internal static class TaskReadHelpers
 
         return false;
     }
+
+    /// <summary>
+    /// External GitHub PR / Issue links of each task in <paramref name="taskIds"/>, grouped by task
+    /// (Phase 15.1 §T15.1.5). Ordered newest-updated first per task.
+    /// </summary>
+    public static async Task<Dictionary<Guid, IReadOnlyList<TaskExternalLinkSummaryResponse>>> LoadExternalLinksByTaskAsync(
+        TeamNexusDbContext db, IReadOnlyCollection<Guid> taskIds, CancellationToken ct = default)
+    {
+        if (taskIds.Count == 0)
+        {
+            return [];
+        }
+
+        var links = await db.TaskExternalLinks
+            .Where(l => taskIds.Contains(l.TaskId))
+            .OrderByDescending(l => l.UpdatedAt)
+            .ThenByDescending(l => l.CreatedAt)
+            .AsNoTracking()
+            .ToListAsync(ct);
+
+        return links
+            .GroupBy(l => l.TaskId)
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<TaskExternalLinkSummaryResponse>)g.Select(DtoMapping.MapExternalLink).ToList());
+    }
+
+    /// <summary>
+    /// Atomically allocates the next sequential <c>task_number</c> for <paramref name="workspaceId"/>
+    /// (<c>TN-1, TN-2, ...</c>; Phase 15.1 §T15.1.5) and queues the companion <see cref="TaskNumberEntry"/> row.
+    /// </summary>
+    public static async Task<long> AllocateNextTaskNumberAsync(
+        TeamNexusDbContext db,
+        Guid workspaceId,
+        Guid taskId,
+        CancellationToken ct = default)
+    {
+        // Note: Do NOT call IQueryable.SingleAsync(ct) on SqlQueryRaw("UPDATE ... RETURNING"), because EF Core
+        // wraps composable operators in `SELECT ... FROM (UPDATE ...) LIMIT 2` and throws InvalidOperationException
+        // ("'FromSql' or 'SqlQuery' was called with non-composable SQL"). Materializing with ToListAsync(ct)
+        // executes the raw UPDATE ... RETURNING statement directly without subquery composition.
+        var allocatedRows = await db.Database
+            .SqlQueryRaw<long>(
+                """
+                UPDATE workspaces
+                SET next_task_number = next_task_number + 1
+                WHERE id = {0}
+                RETURNING next_task_number - 1 AS "Value"
+                """,
+                workspaceId)
+            .ToListAsync(ct);
+
+        var allocated = allocatedRows.Single();
+
+        // If the Workspace entity happens to be tracked in the current DbContext scope, sync its
+        // in-memory NextTaskNumber so a subsequent SaveChangesAsync never overwrites the DB value.
+        var trackedWorkspace = db.ChangeTracker.Entries<Workspace>()
+            .FirstOrDefault(e => e.Entity.Id == workspaceId);
+        if (trackedWorkspace is not null)
+        {
+            trackedWorkspace.Entity.NextTaskNumber = allocated + 1;
+            trackedWorkspace.Property(w => w.NextTaskNumber).IsModified = false;
+        }
+
+        db.TaskNumbers.Add(new TaskNumberEntry
+        {
+            WorkspaceId = workspaceId,
+            TaskNumber = allocated,
+            TaskId = taskId,
+            CreatedAt = DateTimeOffset.UtcNow,
+        });
+
+        return allocated;
+    }
 }

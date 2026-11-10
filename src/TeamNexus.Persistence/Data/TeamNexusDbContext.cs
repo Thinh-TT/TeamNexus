@@ -70,6 +70,19 @@ public class TeamNexusDbContext
 
     public DbSet<WorkspaceKnowledgeChunk> WorkspaceKnowledgeChunks => Set<WorkspaceKnowledgeChunk>();
 
+    // Phase 15.1 §T15.1.2: external integrations (task numbers, Slack/Discord outbox, GitHub webhooks & links).
+    public DbSet<TaskNumberEntry> TaskNumbers => Set<TaskNumberEntry>();
+
+    public DbSet<WorkspaceWebhookEndpoint> WorkspaceWebhookEndpoints => Set<WorkspaceWebhookEndpoint>();
+
+    public DbSet<WebhookDeliveryOutbox> WebhookDeliveryOutbox => Set<WebhookDeliveryOutbox>();
+
+    public DbSet<WorkspaceGitHubIntegration> WorkspaceGitHubIntegrations => Set<WorkspaceGitHubIntegration>();
+
+    public DbSet<GitHubWebhookDelivery> GitHubWebhookDeliveries => Set<GitHubWebhookDelivery>();
+
+    public DbSet<TaskExternalLink> TaskExternalLinks => Set<TaskExternalLink>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

@@ -22,6 +22,9 @@ public sealed class BoardColumnConfiguration : IEntityTypeConfiguration<BoardCol
         builder.Property(c => c.IsClarification)
             .HasDefaultValue(false);
 
+        builder.Property(c => c.IsInReview)
+            .HasDefaultValue(false);
+
         // Column order must be unique within a board (DB design §5).
         builder.HasIndex(c => new { c.BoardId, c.Position })
             .IsUnique();
@@ -33,6 +36,14 @@ public sealed class BoardColumnConfiguration : IEntityTypeConfiguration<BoardCol
             .IsUnique()
             .HasFilter("\"is_clarification\"")
             .HasDatabaseName("uq_board_columns_clarification");
+
+        // At most ONE "Đang duyệt PR" (In Review) column per board (Phase 15.1 §T15.1.1).
+        // Pass an explicit model index name so EF Core does not overwrite the existing
+        // unnamed index on BoardId (uq_board_columns_clarification).
+        builder.HasIndex(c => c.BoardId, "IX_board_columns_board_id_single_in_review")
+            .IsUnique()
+            .HasFilter("is_in_review = true")
+            .HasDatabaseName("IX_board_columns_board_id_single_in_review");
 
         builder.HasOne(c => c.Board)
             .WithMany()

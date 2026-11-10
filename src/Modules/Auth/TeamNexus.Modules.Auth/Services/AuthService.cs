@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using TeamNexus.Modules.Auth.Options;
 using TeamNexus.Persistence.Data;
 using TeamNexus.Persistence.Data.Entities;
+using TeamNexus.Shared;
 
 namespace TeamNexus.Modules.Auth.Services;
 
@@ -68,6 +69,7 @@ public sealed class AuthService
 
         if (user is not null)
         {
+            EnsureNotSystemUser(user);
             await ApplyProfileAsync(user, claimList, ct);
             return (user, false);
         }
@@ -80,6 +82,7 @@ public sealed class AuthService
 
         if (user is not null)
         {
+            EnsureNotSystemUser(user);
             // Same person logged in with another provider before → link this login.
             await _userManager.AddLoginAsync(user, new UserLoginInfo(provider, providerKey, provider));
             await ApplyProfileAsync(user, claimList, ct);
@@ -124,6 +127,8 @@ public sealed class AuthService
     /// <summary>Issues an access token + persists a fresh refresh token.</summary>
     public async Task<TokenPair> IssueTokenPairAsync(ApplicationUser user, CancellationToken ct = default)
     {
+        EnsureNotSystemUser(user);
+
         var roles = await _userManager.GetRolesAsync(user);
         var accessToken = _jwt.GenerateAccessToken(user, roles);
         var rawRefresh = JwtService.GenerateRefreshToken();
@@ -175,6 +180,8 @@ public sealed class AuthService
             return null;
         }
 
+        EnsureNotSystemUser(user);
+
         var roles = await _userManager.GetRolesAsync(user);
         var accessToken = _jwt.GenerateAccessToken(user, roles);
         var rawNewRefresh = JwtService.GenerateRefreshToken();
@@ -207,6 +214,14 @@ public sealed class AuthService
         {
             token.RevokedAt = DateTimeOffset.UtcNow;
             await _db.SaveChangesAsync(ct);
+        }
+    }
+
+    private static void EnsureNotSystemUser(ApplicationUser user)
+    {
+        if (user.IsSystem || user.Id == SystemUsers.GitHubBotUserId)
+        {
+            throw new InvalidOperationException("Tài khoản hệ thống không được phép đăng nhập trực tiếp.");
         }
     }
 

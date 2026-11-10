@@ -24,5 +24,9 @@ public sealed class ApplicationUserConfiguration : IEntityTypeConfiguration<Appl
         builder.Property(u => u.DigestEnabled)
             .HasDefaultValue(true)
             .IsRequired();
+
+        builder.Property(u => u.IsSystem)
+            .HasDefaultValue(false)
+            .IsRequired();
     }
 }

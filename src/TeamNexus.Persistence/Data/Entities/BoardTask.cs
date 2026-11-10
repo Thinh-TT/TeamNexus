@@ -52,6 +52,13 @@ public class BoardTask : IAuditableEntity
     /// <summary>Soft delete marker.</summary>
     public DateTimeOffset? DeletedAt { get; set; }
 
+    /// <summary>
+    /// Workspace-scoped sequential task number (<c>1, 2, 3, ...</c>, rendered as <c>TN-123</c>;
+    /// Phase 15.1 §T15.1.1). Backfilled for existing tasks in Migration #15 and allocated atomically
+    /// on creation.
+    /// </summary>
+    public long TaskNumber { get; set; }
+
     public Board? Board { get; set; }
 
     public BoardColumn? Column { get; set; }
@@ -59,4 +66,6 @@ public class BoardTask : IAuditableEntity
     public ApplicationUser? Assignee { get; set; }
 
     public ApplicationUser? CreatedByUser { get; set; }
+
+    public ICollection<TaskExternalLink> ExternalLinks { get; set; } = new List<TaskExternalLink>();
 }

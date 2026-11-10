@@ -948,20 +948,21 @@ public sealed class Phase147KnowledgeTests : IClassFixture<DatabaseFixture>
             var count = await ScalarLongAsync(connection,
                 "select count(*) from \"__EFMigrationsHistory\"");
 
-            // Fourteen applied migrations, and the last two are this phase's — asserted from the history table
-            // rather than by shelling out to `dotnet ef migrations list`.
-            Assert.Equal(14, count);
+            // Fifteen applied migrations after Phase 15.1 added Phase15ExternalIntegrations (14 in Phase 14.7 Track B).
+            Assert.Equal(15, count);
 
             // Read as one delimited scalar rather than a multi-row reader: `ExecuteScalar` is the shape every
             // other probe in this suite uses, and it keeps the assertion a single string comparison.
             //
             // ⚠️ The column is `migration_id`, not `MigrationId`: the whole schema goes through EF's snake_case
             // naming convention, and `count(*)` is the only probe in this method that would not have revealed it.
-            var lastTwo = await ScalarStringAsync(connection,
+            var lastTwoTrackB = await ScalarStringAsync(connection,
                 "select string_agg(\"migration_id\", '|' order by \"migration_id\" desc) "
-                + "from (select \"migration_id\" from \"__EFMigrationsHistory\" order by \"migration_id\" desc limit 2) t");
+                + "from (select \"migration_id\" from \"__EFMigrationsHistory\" "
+                + "where \"migration_id\" <= '20261015122250_Phase147KnowledgeBase' "
+                + "order by \"migration_id\" desc limit 2) t");
 
-            Assert.Equal("20261015122250_Phase147KnowledgeBase|20261015122214_Phase147AgentPersonas", lastTwo);
+            Assert.Equal("20261015122250_Phase147KnowledgeBase|20261015122214_Phase147AgentPersonas", lastTwoTrackB);
 
             // The persona index is the race guard for "one agent row per persona"; it replaced the Phase 7
             // single-agent index, and it is built on COALESCE(persona_key,'general') because PostgreSQL treats
