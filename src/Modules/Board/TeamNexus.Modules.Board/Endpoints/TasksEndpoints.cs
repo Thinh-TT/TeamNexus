@@ -28,6 +28,12 @@ public static class TasksEndpoints
         group.MapDelete("/{taskId:guid}", DeleteTaskAsync).RequireAuthorization()
             .AddEndpointFilter<AntiforgeryValidationEndpointFilter>();
 
+        endpoints.MapPut("/api/tasks/{taskId:guid}/github-link", UpdateTaskGitHubLinkAsync)
+            .WithTags("Tasks")
+            .RequireAuthorization()
+            .AddEndpointFilter<DomainExceptionFilter>()
+            .AddEndpointFilter<AntiforgeryValidationEndpointFilter>();
+
         return endpoints;
     }
 
@@ -110,5 +116,16 @@ public static class TasksEndpoints
 
         await tasks.DeleteTaskAsync(taskId, http.RequireUserId(), ct);
         return Results.NoContent();
+    }
+
+    private static async Task<IResult> UpdateTaskGitHubLinkAsync(
+        Guid taskId,
+        LinkTaskGitHubRequest request,
+        HttpContext http,
+        ITaskService tasks,
+        CancellationToken ct)
+    {
+        var response = await tasks.UpdateGitHubLinkAsync(taskId, request, http.RequireUserId(), ct);
+        return Results.Ok(response);
     }
 }

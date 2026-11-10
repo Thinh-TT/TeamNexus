@@ -16,6 +16,12 @@ public static class ObserverActivityActions
     /// <summary>Emitted in addition to <see cref="TaskMoved"/> when the task enters an is_done column.</summary>
     public const string TaskCompleted = "TaskCompleted";
 
+    /// <summary>Emitted when a task is completed via GitHub Pull Request merge (Phase 15).</summary>
+    public const string TaskCompletedViaGitHub = "TaskCompletedViaGitHub";
+
+    /// <summary>Emitted when a task has its GitHub PR/Issue links updated (Phase 15).</summary>
+    public const string TaskGitHubLinked = "TaskGitHubLinked";
+
     public const string TaskDeleted = "TaskDeleted";
 
     public const string CommentAdded = "CommentAdded";

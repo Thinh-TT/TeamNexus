@@ -25,6 +25,9 @@ public static class BoardEndpoints
         endpoints.MapTaxonomiesEndpoints();
         endpoints.MapInvitationsEndpoints();
         endpoints.MapProfileEndpoints();
+        // Phase 15: GitHub integration & webhook endpoints.
+        endpoints.MapGitHubEndpoints();
+        endpoints.MapGitHubWebhookEndpoints();
 
         return endpoints;
     }

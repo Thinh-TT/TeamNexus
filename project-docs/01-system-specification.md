@@ -171,3 +171,33 @@ Nâng AI lên **tương tác trực tiếp trong ngữ cảnh task**, biến Obs
 - **Hạ tầng — bắt buộc, không tuỳ chọn (✅):** `vector` là extension **bên thứ ba**, image chính thức `postgres:18` **không** có nó ⇒ CI và máy dev dùng **`pgvector/pgvector:pg18`** (cùng ENV/entrypoint/healthcheck, chỉ đổi một dòng `image:`). `DatabaseFixture` **probe `pg_available_extensions`/`pg_extension` TRƯỚC `MigrateAsync`**: thiếu extension ⇒ **skip CẢ NHÓM test DB** kèm thông điệp hướng dẫn. **Khác kế hoạch §3.3 (lệch L10):** không thể "chỉ skip nhóm test RAG" vì `CREATE EXTENSION` nằm ở **đầu** migration cuối ⇒ migration dừng **giữa chuỗi** (migration persona đã commit) và database rơi vào trạng thái nửa vời. **Không** try/catch quanh migration: nuốt lỗi migration sẽ che bug schema thật.
 - **Hợp đồng API mới:** `GET/POST /api/workspaces/{id}/knowledge/documents`, `DELETE /api/workspaces/{id}/knowledge/documents/{docId}`; `?persona=` trên `POST /api/boards/{id}/agent-chat/stream`. **Append field** (không đổi field cũ): `WorkspaceMemberResponse.personaKey`, `GET …/agent-chat/session` thêm `personas[]`/`defaultPersona`, payload `applied_snapshot` thêm `createdDocumentId`/`createdChunkCount` (null-omitted).
 - **Không đổi:** Accountability Layer (mọi đường ghi vẫn `Pending` → Approve → Undo, kể cả tài liệu kiến thức), mọi trần ngân sách/token của agent, `TaskResponse`/`BoardResponse`/`CommentResponse`/`NotificationResponse`/`AiActionLogResponse`, payload SignalR, hình dạng SSE. **Số đo thật:** xem §12 tài liệu task.
+
+### 17. Tích hợp bên ngoài (GitHub Integration) — Giai đoạn 15 (✅ Backend & Frontend)
+
+Kết nối TeamNexus hai chiều với GitHub: đồng bộ tiến độ phát triển phần mềm tự động giữa Pull Request và thẻ Kanban.
+
+- **Cơ sở dữ liệu & Migration (Phase 15):** Migration `20261110023711_Phase15GitHubIntegration` bổ sung 2 bảng mới `workspace_integrations` (lưu cấu hình repo, encrypted PAT, encrypted Webhook Secret theo workspace) và `webhook_delivery_logs` (lưu lịch sử delivery ID để bảo đảm tính **Idempotency** tuyệt đối, tránh duplicate task transition). Bổ sung 5 trường metadata vào `board_tasks`: `github_pr_url`, `github_pr_number`, `github_pr_status`, `github_issue_url`, `github_issue_number`.
+- **Bảo mật Secret & Chữ ký HMAC-SHA256:**
+  - Token PAT và Webhook Secret được mã hóa 2 lớp bằng `IIntegrationSecretProtector` qua ASP.NET Core Data Protection, không bao giờ lưu trữ plaintext.
+  - Endpoint quản lý cấu hình luôn che giấu token thật thông qua helper `MaskPat` (ví dụ: `ghp_••••••••3944`).
+  - Webhook receiver xác thực chữ ký `X-Hub-Signature-256` qua `GitHubSignatureValidator` bằng thuật toán so sánh chuỗi thời gian hằng số `CryptographicOperations.FixedTimeEquals` chống triệt để tấn công Timing Attack. Chữ ký sai hoặc thiếu lập tức trả về `401 Unauthorized`.
+- **Quy trình Tự động hóa Task (Auto-Done khi PR Merged):**
+  - Webhook listener `POST /api/webhooks/github` nhận sự kiện từ GitHub repository.
+  - Khi nhận event `pull_request` với `action == "closed"` và `merged == true`:
+    - Tìm task liên kết thông qua `github_pr_number` hoặc regex quét Task UUID trong tiêu đề, nội dung PR và tên branch.
+    - Tự động di chuyển task sang cột Done (`is_done = true`), cập nhật `github_pr_status = "merged"`.
+    - Phát thông báo thời gian thực SignalR `BoardHub.TaskMoved` và `BoardHub.TaskUpdated`.
+    - Ghi nhận lịch sử hoạt động `ObserverActivityActions.TaskCompletedViaGitHub`.
+  - Khả năng chịu lỗi cao (Graceful Degradation): Nếu repository chưa được tích hợp hoặc bị vô hiệu hóa, webhook trả về `200 OK` thay vì báo lỗi để tránh GitHub retry spam.
+- **Giao diện Frontend (React 19 + TypeScript + Ant Design v6):**
+  - **Cài đặt Tích hợp Workspace:** Tab "Tích hợp GitHub" trong `WorkspaceSettingsPage` cho phép Manager/Admin bật/tắt, cấu hình repo, PAT, Secret; nút 1-click sao chép Webhook URL và nút "Kiểm tra kết nối" trực tiếp tới GitHub REST API.
+  - **Huy hiệu GitHub trên Thẻ Kanban:** Component `TaskGitHubChip` gắn trên `TaskCard` hiển thị huy hiệu tím sang trọng `#8b5cf6` cho Merged PR (`✔ PR #123 Merged`), xanh lục `#10b981` cho Open PR, xám cho Closed PR và xanh lam cho Issue; chặn nổi bọt sự kiện không ảnh hưởng drag & drop hay click mở thẻ.
+  - **Quản lý Link Thẻ:** Cho phép gắn, sửa, gỡ bỏ đường dẫn PR/Issue trực tiếp trong `TaskDetailModal` với auto-validation định dạng URL.
+- **Hợp đồng API mới:**
+  - `GET /api/workspaces/{id}/integrations/github` (Manager+)
+  - `PUT /api/workspaces/{id}/integrations/github` (Manager+ · Antiforgery)
+  - `DELETE /api/workspaces/{id}/integrations/github` (Manager+ · Antiforgery)
+  - `POST /api/workspaces/{id}/integrations/github/test` (Manager+ · Antiforgery)
+  - `PUT /api/tasks/{taskId}/github-link` (Member+ · Antiforgery)
+  - `POST /api/webhooks/github` (Public · HMAC-SHA256 validated)
+- **Số đo nghiệm thu:** Xem báo cáo `project-docs/report/phase-15-github-integration-test-report.md` (185 tests mới PASS 100%, 0 warning, 0 error).

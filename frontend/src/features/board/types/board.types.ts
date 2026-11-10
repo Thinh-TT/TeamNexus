@@ -44,6 +44,11 @@ export interface TaskResponse {
   commentCount: number
   assigneeIsAiAgent: boolean
   activeAgentRunId: string | null
+  githubPrUrl?: string | null
+  githubPrNumber?: number | null
+  githubPrStatus?: string | null
+  githubIssueUrl?: string | null
+  githubIssueNumber?: number | null
 }
 
 export interface ColumnResponse {
@@ -126,6 +131,16 @@ export interface UpdateTaskRequest {
   assigneeId?: string | null
   dueDate?: string | null
   priority?: TaskPriority | null
+  githubPrUrl?: string | null
+  githubPrNumber?: number | null
+  githubPrStatus?: string | null
+  githubIssueUrl?: string | null
+  githubIssueNumber?: number | null
+}
+
+export interface TaskGitHubLinkRequest {
+  prUrl?: string | null
+  issueUrl?: string | null
 }
 
 export interface MoveTaskRequest {

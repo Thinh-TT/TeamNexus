@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using TeamNexus.Modules.Board.Endpoints;
 using TeamNexus.Modules.Board.Services;
+using TeamNexus.Modules.Board.Services.Integrations;
 using TeamNexus.Shared.Endpoints;
 
 namespace TeamNexus.Modules.Board;
@@ -36,6 +38,13 @@ public static class BoardModule
         services.AddScoped<ILabelService, LabelService>();
         services.AddScoped<ICommentService, CommentService>();
         services.AddScoped<IBoardEventPublisher, BoardEventPublisher>();
+
+        // Phase 15: GitHub integration secret protection (PAT & Webhook Secret), service & webhook handler.
+        services.AddDataProtection();
+        services.AddSingleton<IIntegrationSecretProtector, IntegrationSecretProtector>();
+        services.AddScoped<IGitHubIntegrationService, GitHubIntegrationService>();
+        services.AddScoped<IGitHubWebhookHandler, GitHubWebhookHandler>();
+        services.AddHttpClient();
 
         // Giai đoạn 14.7 §A2: the fixed workspace vocabulary that Jev answers `Choice` questions against.
         // Lives in Board (not Ai) because it is plain workspace configuration that any member may read, and

@@ -5,6 +5,7 @@ import {
   DeleteOutlined,
   EditOutlined,
   FlagOutlined,
+  GithubOutlined,
   LoadingOutlined,
   PlusOutlined,
   RobotOutlined,
@@ -55,6 +56,8 @@ import type {
   WorkspaceMemberResponse,
 } from '../types/board.types'
 import { useWorkspaceMembers } from '../hooks/useWorkspaceMembers'
+import { TaskGitHubChip } from './TaskGitHubChip'
+import { parseGitHubUrl } from '../utils/githubUrlParser'
 import { AgentRunPanel, AttachmentList, useAgentRuns } from '../../ai'
 import { AiChatPanel } from '../../ai/components/AiChatPanel'
 import { JevTriagePanel } from '../../ai/components/JevTriagePanel'
@@ -146,6 +149,11 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
   const [newLabelName, setNewLabelName] = useState('')
   const [newLabelColor, setNewLabelColor] = useState('#6366f1')
 
+  // GitHub Link state
+  const [isLinkingGitHub, setIsLinkingGitHub] = useState(false)
+  const [githubInputUrl, setGithubInputUrl] = useState('')
+  const [githubInputError, setGithubInputError] = useState<string | null>(null)
+
   const refreshComments = async () => {
     if (!task?.id) return
     try {
@@ -216,6 +224,11 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         priority: values.priority || null,
         dueDate: values.dueDate ? values.dueDate.toISOString() : null,
         assigneeId: task.assigneeId,
+        githubPrUrl: task.githubPrUrl,
+        githubPrNumber: task.githubPrNumber,
+        githubPrStatus: task.githubPrStatus,
+        githubIssueUrl: task.githubIssueUrl,
+        githubIssueNumber: task.githubIssueNumber,
       }
 
       await onUpdateTask(task.id, updateData)
@@ -239,6 +252,11 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
       priority: values.priority || task.priority,
       dueDate: values.dueDate ? values.dueDate.toISOString() : task.dueDate,
       assigneeId: newAssigneeId,
+      githubPrUrl: task.githubPrUrl,
+      githubPrNumber: task.githubPrNumber,
+      githubPrStatus: task.githubPrStatus,
+      githubIssueUrl: task.githubIssueUrl,
+      githubIssueNumber: task.githubIssueNumber,
     }
 
     await onUpdateTask(task.id, updateData)
@@ -248,6 +266,75 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     if (wasAiAgent !== isNowAgent || isNowAgent) {
       refetchMembers()
       onRefreshBoard?.()
+    }
+  }
+
+  const handleSaveGitHubLink = async () => {
+    if (!task) return
+    const trimmed = githubInputUrl.trim()
+    if (!trimmed) {
+      setGithubInputError('Vui lòng nhập đường dẫn GitHub')
+      return
+    }
+
+    const parsed = parseGitHubUrl(trimmed)
+    if (parsed.type === 'invalid') {
+      setGithubInputError(
+        'URL không hợp lệ. Vui lòng nhập link PR hoặc Issue (ví dụ: https://github.com/owner/repo/pull/123)'
+      )
+      return
+    }
+
+    try {
+      const values = form.getFieldsValue()
+      const isPr = parsed.type === 'pr'
+      const updateData: UpdateTaskRequest = {
+        title: values.title ? values.title.trim() : task.title,
+        description: values.description ? values.description.trim() : task.description,
+        priority: values.priority || task.priority,
+        dueDate: values.dueDate ? values.dueDate.toISOString() : task.dueDate,
+        assigneeId: task.assigneeId,
+        githubPrUrl: isPr ? trimmed : null,
+        githubPrNumber: isPr ? parsed.number : null,
+        githubPrStatus: isPr ? (task.githubPrStatus || 'open') : null,
+        githubIssueUrl: !isPr ? trimmed : null,
+        githubIssueNumber: !isPr ? parsed.number : null,
+      }
+
+      await onUpdateTask(task.id, updateData)
+      setIsLinkingGitHub(false)
+      setGithubInputUrl('')
+      setGithubInputError(null)
+      message.success(isPr ? `Đã gắn PR #${parsed.number}` : `Đã gắn Issue #${parsed.number}`)
+    } catch {
+      message.error('Gắn liên kết GitHub thất bại')
+    }
+  }
+
+  const handleRemoveGitHubLink = async () => {
+    if (!task) return
+    try {
+      const values = form.getFieldsValue()
+      const updateData: UpdateTaskRequest = {
+        title: values.title ? values.title.trim() : task.title,
+        description: values.description ? values.description.trim() : task.description,
+        priority: values.priority || task.priority,
+        dueDate: values.dueDate ? values.dueDate.toISOString() : task.dueDate,
+        assigneeId: task.assigneeId,
+        githubPrUrl: null,
+        githubPrNumber: null,
+        githubPrStatus: null,
+        githubIssueUrl: null,
+        githubIssueNumber: null,
+      }
+
+      await onUpdateTask(task.id, updateData)
+      setIsLinkingGitHub(false)
+      setGithubInputUrl('')
+      setGithubInputError(null)
+      message.success('Đã gỡ liên kết GitHub')
+    } catch {
+      message.error('Gỡ liên kết GitHub thất bại')
     }
   }
 
@@ -355,6 +442,9 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
       open={open}
       onCancel={() => {
         setDescMode('write')
+        setIsLinkingGitHub(false)
+        setGithubInputUrl('')
+        setGithubInputError(null)
         onClose()
       }}
       width={880}
@@ -955,6 +1045,127 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                       }}
                     />
                   </div>
+                </div>
+
+                {/* GitHub Integration Link */}
+                <div data-testid="task-github-link-section">
+                  <Typography.Text
+                    type="secondary"
+                    style={{ fontSize: 11.5, fontWeight: 600, display: 'block', marginBottom: 4 }}
+                  >
+                    <GithubOutlined style={{ marginRight: 4 }} /> GitHub PR / Issue:
+                  </Typography.Text>
+
+                  {isLinkingGitHub ? (
+                    <div
+                      style={{
+                        background: '#f8fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: 8,
+                        padding: '8px',
+                      }}
+                      data-testid="github-link-form"
+                    >
+                      <Input
+                        size="small"
+                        placeholder="https://github.com/owner/repo/pull/123"
+                        value={githubInputUrl}
+                        onChange={(e) => {
+                          setGithubInputUrl(e.target.value)
+                          if (githubInputError) setGithubInputError(null)
+                        }}
+                        onPressEnter={(e) => {
+                          e.preventDefault()
+                          void handleSaveGitHubLink()
+                        }}
+                        status={githubInputError ? 'error' : ''}
+                        data-testid="github-url-input"
+                        autoFocus
+                      />
+                      {githubInputError && (
+                        <Typography.Text type="danger" style={{ fontSize: 11, display: 'block', marginTop: 4 }}>
+                          {githubInputError}
+                        </Typography.Text>
+                      )}
+                      <Flex gap={6} justify="flex-end" style={{ marginTop: 6 }}>
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setIsLinkingGitHub(false)
+                            setGithubInputUrl('')
+                            setGithubInputError(null)
+                          }}
+                          data-testid="cancel-github-link-btn"
+                        >
+                          Huỷ
+                        </Button>
+                        <Button
+                          size="small"
+                          type="primary"
+                          onClick={handleSaveGitHubLink}
+                          data-testid="save-github-link-btn"
+                        >
+                          Lưu
+                        </Button>
+                      </Flex>
+                    </div>
+                  ) : (task.githubPrNumber || task.githubIssueNumber || task.githubPrUrl || task.githubIssueUrl) ? (
+                    <Flex align="center" justify="space-between" gap={6} wrap="wrap">
+                      <TaskGitHubChip
+                        prNumber={task.githubPrNumber}
+                        prUrl={task.githubPrUrl}
+                        prStatus={task.githubPrStatus}
+                        issueNumber={task.githubIssueNumber}
+                        issueUrl={task.githubIssueUrl}
+                      />
+                      <Space size={2}>
+                        <Tooltip title="Đổi liên kết">
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={<EditOutlined style={{ fontSize: 12, color: '#64748b' }} />}
+                            onClick={() => {
+                              setGithubInputUrl(task.githubPrUrl || task.githubIssueUrl || '')
+                              setGithubInputError(null)
+                              setIsLinkingGitHub(true)
+                            }}
+                            data-testid="edit-github-link-btn"
+                          />
+                        </Tooltip>
+                        <Popconfirm
+                          title="Gỡ liên kết GitHub?"
+                          description="Thẻ này sẽ không còn liên kết với PR hoặc Issue trên GitHub."
+                          okText="Gỡ liên kết"
+                          cancelText="Huỷ"
+                          okButtonProps={{ danger: true }}
+                          onConfirm={handleRemoveGitHubLink}
+                        >
+                          <Button
+                            type="text"
+                            size="small"
+                            danger
+                            icon={<DeleteOutlined style={{ fontSize: 12 }} />}
+                            data-testid="remove-github-link-btn"
+                          />
+                        </Popconfirm>
+                      </Space>
+                    </Flex>
+                  ) : (
+                    <Button
+                      size="small"
+                      type="dashed"
+                      icon={<PlusOutlined />}
+                      onClick={() => {
+                        setGithubInputUrl('')
+                        setGithubInputError(null)
+                        setIsLinkingGitHub(true)
+                      }}
+                      style={{ width: '100%', borderRadius: 6, fontSize: 12, color: '#475569' }}
+                      data-testid="attach-github-link-btn"
+                    >
+                      + Gắn GitHub PR / Issue
+                    </Button>
+                  )}
                 </div>
 
                 {/* Status info */}

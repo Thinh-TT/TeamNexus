@@ -3,7 +3,10 @@ import {
   ArrowLeftOutlined,
   CalendarOutlined,
   EditOutlined,
+  GithubOutlined,
   ProjectOutlined,
+  SettingOutlined,
+  TagsOutlined,
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons'
@@ -16,18 +19,22 @@ import {
   Layout,
   Result,
   Row,
+  Space,
   Spin,
   Statistic,
+  Tabs,
   Tag,
   Typography,
 } from 'antd'
 import dayjs from 'dayjs'
 import { useNavigate, useParams } from 'react-router-dom'
+import { AppHeader } from '../../../shared/components/AppHeader'
 import { useWorkspaceRole } from '../../../shared/hooks/useWorkspaceRole'
 import { useWorkspaceMembers } from '../../board/hooks/useWorkspaceMembers'
+import { GitHubIntegrationSettings } from '../components/GitHubIntegrationSettings'
+import { TaxonomySettings } from '../components/TaxonomySettings'
 import { WorkspaceSettingsModal } from '../components/WorkspaceSettingsModal'
 import { useWorkspaceDetail } from '../hooks/useWorkspaceDetail'
-import { AppHeader } from '../../../shared/components/AppHeader'
 
 const { Content } = Layout
 
@@ -88,57 +95,16 @@ export const WorkspaceSettingsPage: React.FC = () => {
     return false
   }
 
-  return (
-    <Layout style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
-      <AppHeader workspaceId={workspaceId} />
-
-      <div
-        style={{
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid #e2e8f0',
-          padding: '0 24px',
-          height: 64,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <Flex align="center" gap={12}>
-          <Button
-            type="text"
-            icon={<ArrowLeftOutlined />}
-            onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
-          />
-          <Typography.Title level={4} style={{ margin: 0, color: '#0f172a', fontWeight: 700 }}>
-            Cài đặt không gian làm việc
-          </Typography.Title>
-          <Tag
-            style={{
-              margin: 0,
-              borderRadius: 999,
-              fontSize: 11,
-              fontWeight: 600,
-              color: '#4f46e5',
-              backgroundColor: '#eef2ff',
-              borderColor: '#c7d2fe',
-            }}
-          >
-            RBAC Governance
-          </Tag>
-        </Flex>
-
-        <Button
-          type="primary"
-          icon={<EditOutlined />}
-          style={{ backgroundColor: '#4f46e5', borderColor: '#4f46e5', borderRadius: 8, fontWeight: 600 }}
-          onClick={() => setModalOpen(true)}
-          data-testid="open-settings-modal-btn"
-        >
-          Chỉnh Sửa Cài Đặt
-        </Button>
-      </div>
-
-      <Content style={{ padding: '24px 32px', maxWidth: 1000, margin: '0 auto', width: '100%' }}>
+  const tabItems = [
+    {
+      key: 'general',
+      label: (
+        <Space>
+          <SettingOutlined />
+          <span>Chung</span>
+        </Space>
+      ),
+      children: (
         <Row gutter={[24, 24]}>
           {/* Quick stats */}
           <Col xs={24} sm={12}>
@@ -202,6 +168,92 @@ export const WorkspaceSettingsPage: React.FC = () => {
             </Card>
           </Col>
         </Row>
+      ),
+    },
+    {
+      key: 'taxonomy',
+      label: (
+        <Space>
+          <TagsOutlined />
+          <span>Phân loại (Taxonomy)</span>
+        </Space>
+      ),
+      children: (
+        <TaxonomySettings
+          workspaceId={workspaceId}
+          isManagerOrAdmin={isManagerOrAdmin}
+        />
+      ),
+    },
+    {
+      key: 'github',
+      label: (
+        <Space>
+          <GithubOutlined />
+          <span>Tích hợp GitHub</span>
+        </Space>
+      ),
+      children: (
+        <GitHubIntegrationSettings
+          workspaceId={workspaceId}
+          isManagerOrAdmin={isManagerOrAdmin}
+        />
+      ),
+    },
+  ]
+
+  return (
+    <Layout style={{ minHeight: '100vh', backgroundColor: '#f8fafc' }}>
+      <AppHeader workspaceId={workspaceId} />
+
+      <div
+        style={{
+          backgroundColor: '#ffffff',
+          borderBottom: '1px solid #e2e8f0',
+          padding: '0 24px',
+          height: 64,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Flex align="center" gap={12}>
+          <Button
+            type="text"
+            icon={<ArrowLeftOutlined />}
+            onClick={() => navigate(`/workspaces/${workspaceId}/boards`)}
+          />
+          <Typography.Title level={4} style={{ margin: 0, color: '#0f172a', fontWeight: 700 }}>
+            Cài đặt không gian làm việc
+          </Typography.Title>
+          <Tag
+            style={{
+              margin: 0,
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 600,
+              color: '#4f46e5',
+              backgroundColor: '#eef2ff',
+              borderColor: '#c7d2fe',
+            }}
+          >
+            RBAC Governance
+          </Tag>
+        </Flex>
+
+        <Button
+          type="primary"
+          icon={<EditOutlined />}
+          style={{ backgroundColor: '#4f46e5', borderColor: '#4f46e5', borderRadius: 8, fontWeight: 600 }}
+          onClick={() => setModalOpen(true)}
+          data-testid="open-settings-modal-btn"
+        >
+          Chỉnh Sửa Cài Đặt
+        </Button>
+      </div>
+
+      <Content style={{ padding: '24px 32px', maxWidth: 1000, margin: '0 auto', width: '100%' }}>
+        <Tabs defaultActiveKey="general" items={tabItems} size="large" />
       </Content>
 
       <WorkspaceSettingsModal
@@ -218,3 +270,4 @@ export const WorkspaceSettingsPage: React.FC = () => {
     </Layout>
   )
 }
+export default WorkspaceSettingsPage

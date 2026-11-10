@@ -13,6 +13,7 @@ import type {
   MoveTaskRequest,
   ReorderColumnsRequest,
   TaskResponse,
+  TaskGitHubLinkRequest,
   UpdateBoardRequest,
   UpdateColumnRequest,
   UpdateCommentRequest,
@@ -120,6 +121,11 @@ export const boardApi = {
 
   deleteTask: async (boardId: string, taskId: string): Promise<void> => {
     await httpClient.delete(`/boards/${boardId}/tasks/${taskId}`)
+  },
+
+  linkGitHub: async (taskId: string, data: TaskGitHubLinkRequest): Promise<TaskResponse> => {
+    const res = await httpClient.put<TaskResponse>(`/tasks/${taskId}/github-link`, data)
+    return res.data
   },
 
   // ---- Labels ----

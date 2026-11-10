@@ -267,4 +267,110 @@ describe('TaskDetailModal', () => {
       expect(screen.getByTestId('ai-chat-panel')).toHaveAttribute('data-task-id', mockTask.id)
     })
   })
+
+  describe('GitHub Integration Link', () => {
+    it('renders "+ Gắn GitHub PR / Issue" button when task has no GitHub link', () => {
+      renderModal()
+      expect(screen.getByTestId('attach-github-link-btn')).toBeInTheDocument()
+      expect(screen.getByText('+ Gắn GitHub PR / Issue')).toBeInTheDocument()
+    })
+
+    it('opens input form when clicking "+ Gắn GitHub PR / Issue" button', async () => {
+      renderModal()
+      const attachBtn = screen.getByTestId('attach-github-link-btn')
+      fireEvent.click(attachBtn)
+
+      expect(screen.getByTestId('github-link-form')).toBeInTheDocument()
+      expect(screen.getByTestId('github-url-input')).toBeInTheDocument()
+      expect(screen.getByTestId('save-github-link-btn')).toBeInTheDocument()
+      expect(screen.getByTestId('cancel-github-link-btn')).toBeInTheDocument()
+    })
+
+    it('shows error if saving invalid GitHub URL', async () => {
+      renderModal()
+      fireEvent.click(screen.getByTestId('attach-github-link-btn'))
+
+      const input = screen.getByTestId('github-url-input')
+      fireEvent.change(input, { target: { value: 'https://invalid-url.com/something' } })
+
+      fireEvent.click(screen.getByTestId('save-github-link-btn'))
+
+      await waitFor(() => {
+        expect(screen.getByText(/URL không hợp lệ/i)).toBeInTheDocument()
+      })
+      expect(onUpdateTask).not.toHaveBeenCalled()
+    })
+
+    it('parses valid PR URL and calls onUpdateTask with PR fields on save', async () => {
+      renderModal()
+      fireEvent.click(screen.getByTestId('attach-github-link-btn'))
+
+      const input = screen.getByTestId('github-url-input')
+      fireEvent.change(input, {
+        target: { value: 'https://github.com/Thinh-TT/TeamNexus/pull/142' },
+      })
+
+      fireEvent.click(screen.getByTestId('save-github-link-btn'))
+
+      await waitFor(() => {
+        expect(onUpdateTask).toHaveBeenCalledWith(
+          mockTask.id,
+          expect.objectContaining({
+            githubPrUrl: 'https://github.com/Thinh-TT/TeamNexus/pull/142',
+            githubPrNumber: 142,
+            githubPrStatus: 'open',
+            githubIssueUrl: null,
+            githubIssueNumber: null,
+          })
+        )
+      })
+    })
+
+    it('renders chip and action buttons when task has existing GitHub PR', () => {
+      const taskWithPr: TaskResponse = {
+        ...mockTask,
+        githubPrNumber: 142,
+        githubPrUrl: 'https://github.com/Thinh-TT/TeamNexus/pull/142',
+        githubPrStatus: 'merged',
+      }
+      renderModal(taskWithPr)
+
+      expect(screen.getByTestId('github-pr-chip')).toBeInTheDocument()
+      expect(screen.getByText('PR #142 Merged')).toBeInTheDocument()
+      expect(screen.getByTestId('edit-github-link-btn')).toBeInTheDocument()
+      expect(screen.getByTestId('remove-github-link-btn')).toBeInTheDocument()
+    })
+
+    it('clears GitHub fields when removing GitHub link', async () => {
+      const taskWithPr: TaskResponse = {
+        ...mockTask,
+        githubPrNumber: 142,
+        githubPrUrl: 'https://github.com/Thinh-TT/TeamNexus/pull/142',
+        githubPrStatus: 'open',
+      }
+      renderModal(taskWithPr)
+
+      const removeBtn = screen.getByTestId('remove-github-link-btn')
+      fireEvent.click(removeBtn)
+
+      // Ant Design Popconfirm shows confirm button with okText "Gỡ liên kết"
+      await waitFor(() => {
+        expect(screen.getByText('Gỡ liên kết')).toBeInTheDocument()
+      })
+      fireEvent.click(screen.getByText('Gỡ liên kết'))
+
+      await waitFor(() => {
+        expect(onUpdateTask).toHaveBeenCalledWith(
+          mockTask.id,
+          expect.objectContaining({
+            githubPrUrl: null,
+            githubPrNumber: null,
+            githubPrStatus: null,
+            githubIssueUrl: null,
+            githubIssueNumber: null,
+          })
+        )
+      })
+    })
+  })
 })

@@ -874,6 +874,26 @@ namespace TeamNexus.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("due_date");
 
+                    b.Property<int?>("GithubIssueNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("github_issue_number");
+
+                    b.Property<string>("GithubIssueUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("github_issue_url");
+
+                    b.Property<int?>("GithubPrNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("github_pr_number");
+
+                    b.Property<string>("GithubPrStatus")
+                        .HasColumnType("text")
+                        .HasColumnName("github_pr_status");
+
+                    b.Property<string>("GithubPrUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("github_pr_url");
+
                     b.Property<int>("Position")
                         .HasColumnType("integer")
                         .HasColumnName("position");
@@ -1266,6 +1286,55 @@ namespace TeamNexus.Persistence.Migrations
                     b.ToTable("task_labels", (string)null);
                 });
 
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WebhookDeliveryLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("DeliveryId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("delivery_id");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("event_type");
+
+                    b.Property<DateTimeOffset>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_webhook_delivery_logs");
+
+                    b.HasIndex("DeliveryId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_webhook_delivery_logs_delivery_id");
+
+                    b.ToTable("webhook_delivery_logs", (string)null);
+                });
+
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.Workspace", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1307,6 +1376,58 @@ namespace TeamNexus.Persistence.Migrations
                         .HasDatabaseName("ix_workspaces_owner_id");
 
                     b.ToTable("workspaces", (string)null);
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceIntegration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("EncryptedPat")
+                        .HasColumnType("text")
+                        .HasColumnName("encrypted_pat");
+
+                    b.Property<string>("EncryptedWebhookSecret")
+                        .HasColumnType("text")
+                        .HasColumnName("encrypted_webhook_secret");
+
+                    b.Property<bool>("IsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_enabled");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("RepoName")
+                        .HasColumnType("text")
+                        .HasColumnName("repo_name");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_workspace_integrations");
+
+                    b.HasIndex("WorkspaceId", "Provider")
+                        .IsUnique()
+                        .HasDatabaseName("ix_workspace_integrations_workspace_id_provider");
+
+                    b.ToTable("workspace_integrations", (string)null);
                 });
 
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceInvitation", b =>
@@ -2080,6 +2201,18 @@ namespace TeamNexus.Persistence.Migrations
                         .HasConstraintName("fk_workspaces_users_owner_id");
 
                     b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceIntegration", b =>
+                {
+                    b.HasOne("TeamNexus.Persistence.Data.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_workspace_integrations_workspaces_workspace_id");
+
+                    b.Navigation("Workspace");
                 });
 
             modelBuilder.Entity("TeamNexus.Persistence.Data.Entities.WorkspaceInvitation", b =>

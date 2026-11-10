@@ -59,4 +59,11 @@ public class BoardTask : IAuditableEntity
     public ApplicationUser? Assignee { get; set; }
 
     public ApplicationUser? CreatedByUser { get; set; }
+
+    // GitHub Integration (Phase 15 §1.2)
+    public string? GithubPrUrl { get; set; }
+    public int? GithubPrNumber { get; set; }
+    public string? GithubPrStatus { get; set; }
+    public string? GithubIssueUrl { get; set; }
+    public int? GithubIssueNumber { get; set; }
 }

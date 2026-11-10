@@ -40,7 +40,12 @@ internal static class DtoMapping
             labels,
             commentCount,
             assigneeIsAiAgent,
-            activeAgentRunId);
+            activeAgentRunId,
+            task.GithubPrUrl,
+            task.GithubPrNumber,
+            task.GithubPrStatus,
+            task.GithubIssueUrl,
+            task.GithubIssueNumber);
 
     public static LabelResponse MapLabel(Label label)
         => new(label.Id, label.WorkspaceId, label.Name, label.Color, label.CreatedAt);

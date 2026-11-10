@@ -17,6 +17,7 @@ import { agentApi } from '../../ai/services/agentApi'
 import { AGENT_FALLBACK_DISPLAY_NAME } from '../../ai/utils/agentRunHelpers'
 import { isOverdue, isTaskCompleted, overdueDays } from '../utils/taskDueDate'
 import { getPriorityConfig } from '../utils/taskPriority'
+import { TaskGitHubChip } from './TaskGitHubChip'
 
 interface TaskCardProps {
   task: TaskResponse
@@ -351,7 +352,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             </Flex>
           )}
 
-          {/* Bottom info: Due date, comments, assignee */}
+          {/* Bottom info: Due date, comments, GitHub link, assignee */}
           <Flex
             justify="space-between"
             align="center"
@@ -361,7 +362,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               borderTop: '1px solid #f8fafc',
             }}
           >
-            <Space size={10}>
+            <Space size={8} wrap align="center">
               {task.dueDate && (
                 <Tooltip
                   title={`Hạn chót: ${dayjs(task.dueDate).format('DD/MM/YYYY')}${
@@ -390,6 +391,16 @@ export const TaskCard: React.FC<TaskCardProps> = ({
                     <span>{task.commentCount}</span>
                   </Space>
                 </Tooltip>
+              )}
+
+              {(task.githubPrNumber || task.githubIssueNumber || task.githubPrUrl || task.githubIssueUrl) && (
+                <TaskGitHubChip
+                  prNumber={task.githubPrNumber}
+                  prUrl={task.githubPrUrl}
+                  prStatus={task.githubPrStatus}
+                  issueNumber={task.githubIssueNumber}
+                  issueUrl={task.githubIssueUrl}
+                />
               )}
             </Space>
 

@@ -70,6 +70,11 @@ public class TeamNexusDbContext
 
     public DbSet<WorkspaceKnowledgeChunk> WorkspaceKnowledgeChunks => Set<WorkspaceKnowledgeChunk>();
 
+    // GitHub Integration (Phase 15 §1): workspace integration credentials & webhook idempotency log.
+    public DbSet<WorkspaceIntegration> WorkspaceIntegrations => Set<WorkspaceIntegration>();
+
+    public DbSet<WebhookDeliveryLog> WebhookDeliveryLogs => Set<WebhookDeliveryLog>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

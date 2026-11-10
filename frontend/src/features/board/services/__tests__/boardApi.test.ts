@@ -113,6 +113,17 @@ describe('boardApi', () => {
       await boardApi.deleteTask('b1', 't1')
       expect(httpClient.delete).toHaveBeenCalledWith('/boards/b1/tasks/t1')
     })
+
+    it('linkGitHub calls PUT /tasks/{taskId}/github-link', async () => {
+      vi.mocked(httpClient.put).mockResolvedValueOnce({ data: { id: 't1', githubPrNumber: 42 } })
+      const res = await boardApi.linkGitHub('t1', {
+        prUrl: 'https://github.com/owner/repo/pull/42',
+      })
+      expect(httpClient.put).toHaveBeenCalledWith('/tasks/t1/github-link', {
+        prUrl: 'https://github.com/owner/repo/pull/42',
+      })
+      expect(res.githubPrNumber).toBe(42)
+    })
   })
 
   describe('Labels', () => {

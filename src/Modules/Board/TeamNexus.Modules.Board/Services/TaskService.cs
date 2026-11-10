@@ -20,6 +20,10 @@ public interface ITaskService
     Task<TaskResponse> MoveTaskAsync(Guid taskId, MoveTaskRequest request, Guid userId, CancellationToken ct = default);
 
     Task DeleteTaskAsync(Guid taskId, Guid userId, CancellationToken ct = default);
+
+    Task<TaskResponse> UpdateGitHubLinkAsync(Guid taskId, LinkTaskGitHubRequest request, Guid userId, CancellationToken ct = default);
+
+    Task<TaskResponse> CompleteTaskViaGitHubAsync(Guid taskId, string prUrl, int prNumber, CancellationToken ct = default);
 }
 
 public sealed class TaskService : ITaskService
@@ -354,6 +358,187 @@ public sealed class TaskService : ITaskService
             taskId,
             ObserverActivityActions.TaskDeleted,
             ActivityPayload(new { columnId })), ct);
+    }
+
+    public async Task<TaskResponse> UpdateGitHubLinkAsync(
+        Guid taskId, LinkTaskGitHubRequest request, Guid userId, CancellationToken ct = default)
+    {
+        var task = await _db.Tasks
+            .Include(t => t.Assignee)
+            .Include(t => t.Board)
+            .FirstOrDefaultAsync(t => t.Id == taskId, ct)
+            ?? throw new NotFoundException("Task not found.");
+
+        var workspaceId = await RequireMemberOfTaskBoardWithWorkspaceAsync(task, userId, ct);
+
+        var prUrl = TrimToNull(request.PrUrl);
+        int? prNumber = null;
+        if (!string.IsNullOrEmpty(prUrl))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(prUrl, @"/pull/(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success && int.TryParse(match.Groups[1].Value, out var num))
+            {
+                prNumber = num;
+            }
+        }
+
+        var issueUrl = TrimToNull(request.IssueUrl);
+        int? issueNumber = null;
+        if (!string.IsNullOrEmpty(issueUrl))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(issueUrl, @"/issues/(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success && int.TryParse(match.Groups[1].Value, out var num))
+            {
+                issueNumber = num;
+            }
+        }
+
+        task.GithubPrUrl = prUrl;
+        task.GithubPrNumber = prNumber;
+        task.GithubPrStatus = prUrl != null ? (task.GithubPrStatus ?? "open") : null;
+        task.GithubIssueUrl = issueUrl;
+        task.GithubIssueNumber = issueNumber;
+        task.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await _db.SaveChangesAsync(ct);
+
+        await _activityLog.RecordAsync(new ActivityLogEntry(
+            workspaceId,
+            task.BoardId,
+            userId,
+            ObserverEntityTypes.Task,
+            task.Id,
+            ObserverActivityActions.TaskGitHubLinked,
+            ActivityPayload(new
+            {
+                prUrl = task.GithubPrUrl,
+                prNumber = task.GithubPrNumber,
+                issueUrl = task.GithubIssueUrl,
+                issueNumber = task.GithubIssueNumber,
+            })), ct);
+
+        var count = await _db.TaskComments.CountAsync(c => c.TaskId == taskId, ct);
+        var labels = await TaskReadHelpers.LoadLabelsByTaskAsync(_db, [taskId], ct);
+        var activeRunIds = await AgentRunLookup.LoadActiveRunIdsAsync(_db, [taskId], ct);
+        var assigneeIsAiAgent = await TaskReadHelpers.ResolveAssigneeIsAiAgentAsync(_agents, workspaceId, [task], ct);
+
+        var response = DtoMapping.MapTask(
+            task,
+            labels.GetValueOrDefault(taskId, []),
+            count,
+            assigneeIsAiAgent,
+            activeRunIds.TryGetValue(taskId, out var runId) ? runId : null);
+
+        await _events.TaskUpdated(task.BoardId, response, ct);
+
+        return response;
+    }
+
+    public async Task<TaskResponse> CompleteTaskViaGitHubAsync(
+        Guid taskId, string prUrl, int prNumber, CancellationToken ct = default)
+    {
+        var task = await _db.Tasks
+            .Include(t => t.Assignee)
+            .Include(t => t.Board)
+            .FirstOrDefaultAsync(t => t.Id == taskId, ct)
+            ?? throw new NotFoundException("Task not found.");
+
+        var workspaceId = task.Board?.WorkspaceId
+            ?? await _db.Boards.Where(b => b.Id == task.BoardId).Select(b => b.WorkspaceId).FirstOrDefaultAsync(ct);
+
+        var doneColumn = await _db.BoardColumns
+            .Where(c => c.BoardId == task.BoardId && c.IsDone)
+            .OrderBy(c => c.Position)
+            .FirstOrDefaultAsync(ct);
+
+        task.GithubPrUrl = prUrl;
+        task.GithubPrNumber = prNumber;
+        task.GithubPrStatus = "merged";
+        task.UpdatedAt = DateTimeOffset.UtcNow;
+
+        var fromColumnId = task.ColumnId;
+        var movedToDone = false;
+        var insertIndex = 0;
+
+        if (doneColumn != null && task.ColumnId != doneColumn.Id)
+        {
+            var tasksInColumn = await _db.Tasks
+                .Where(t => t.ColumnId == doneColumn.Id)
+                .OrderBy(t => t.Position)
+                .ThenBy(t => t.CreatedAt)
+                .ToListAsync(ct);
+
+            tasksInColumn.Remove(task);
+            insertIndex = tasksInColumn.Count;
+            tasksInColumn.Insert(insertIndex, task);
+
+            for (var i = 0; i < tasksInColumn.Count; i++)
+            {
+                tasksInColumn[i].Position = i;
+            }
+
+            task.ColumnId = doneColumn.Id;
+            task.CompletedAt = DateTimeOffset.UtcNow;
+            movedToDone = true;
+        }
+        else if (doneColumn != null && task.ColumnId == doneColumn.Id)
+        {
+            task.CompletedAt ??= DateTimeOffset.UtcNow;
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        if (movedToDone)
+        {
+            await _events.TaskMoved(
+                task.BoardId,
+                new TaskMovedEventPayload(task.Id, fromColumnId, doneColumn!.Id, insertIndex),
+                ct);
+
+            await _activityLog.RecordAsync(new ActivityLogEntry(
+                workspaceId,
+                task.BoardId,
+                task.AssigneeId,
+                ObserverEntityTypes.Task,
+                task.Id,
+                ObserverActivityActions.TaskMoved,
+                ActivityPayload(new
+                {
+                    fromColumnId,
+                    toColumnId = doneColumn.Id,
+                    position = insertIndex,
+                })), ct);
+        }
+
+        await _activityLog.RecordAsync(new ActivityLogEntry(
+            workspaceId,
+            task.BoardId,
+            task.AssigneeId,
+            ObserverEntityTypes.Task,
+            task.Id,
+            ObserverActivityActions.TaskCompletedViaGitHub,
+            ActivityPayload(new
+            {
+                prUrl,
+                prNumber,
+                status = "merged",
+            })), ct);
+
+        var count = await _db.TaskComments.CountAsync(c => c.TaskId == taskId, ct);
+        var labels = await TaskReadHelpers.LoadLabelsByTaskAsync(_db, [taskId], ct);
+        var activeRunIds = await AgentRunLookup.LoadActiveRunIdsAsync(_db, [taskId], ct);
+        var assigneeIsAiAgent = await TaskReadHelpers.ResolveAssigneeIsAiAgentAsync(_agents, workspaceId, [task], ct);
+
+        var response = DtoMapping.MapTask(
+            task,
+            labels.GetValueOrDefault(taskId, []),
+            count,
+            assigneeIsAiAgent,
+            activeRunIds.TryGetValue(taskId, out var runId) ? runId : null);
+
+        await _events.TaskUpdated(task.BoardId, response, ct);
+
+        return response;
     }
 
     // ---- helpers ----------------------------------------------------------

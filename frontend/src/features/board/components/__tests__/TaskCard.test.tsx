@@ -157,4 +157,37 @@ describe('TaskCard', () => {
     expect(screen.getByText('Khẩn cấp')).toBeInTheDocument()
     expect(screen.getByText('Frontend')).toBeInTheDocument()
   })
+
+  it('renders GitHub PR chip when task has githubPrNumber and githubPrUrl', () => {
+    const taskWithGithub: TaskResponse = {
+      ...baseTask,
+      githubPrNumber: 142,
+      githubPrUrl: 'https://github.com/Thinh-TT/TeamNexus/pull/142',
+      githubPrStatus: 'merged',
+    }
+
+    renderWithDnd(<TaskCard task={taskWithGithub} />)
+    const chip = screen.getByTestId('github-pr-chip')
+    expect(chip).toBeInTheDocument()
+    expect(chip).toHaveTextContent('PR #142 Merged')
+  })
+
+  it('renders GitHub Issue chip when task has githubIssueNumber and githubIssueUrl', () => {
+    const taskWithIssue: TaskResponse = {
+      ...baseTask,
+      githubIssueNumber: 89,
+      githubIssueUrl: 'https://github.com/Thinh-TT/TeamNexus/issues/89',
+    }
+
+    renderWithDnd(<TaskCard task={taskWithIssue} />)
+    const chip = screen.getByTestId('github-issue-chip')
+    expect(chip).toBeInTheDocument()
+    expect(chip).toHaveTextContent('Issue #89')
+  })
+
+  it('does not render GitHub chip when task has no GitHub information', () => {
+    renderWithDnd(<TaskCard task={baseTask} />)
+    expect(screen.queryByTestId('github-pr-chip')).toBeNull()
+    expect(screen.queryByTestId('github-issue-chip')).toBeNull()
+  })
 })

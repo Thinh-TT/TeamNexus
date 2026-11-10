@@ -55,4 +55,9 @@ public sealed record TaskResponse(
     IReadOnlyList<LabelResponse> Labels,
     int CommentCount,
     bool AssigneeIsAiAgent,
-    Guid? ActiveAgentRunId);
+    Guid? ActiveAgentRunId,
+    string? GithubPrUrl = null,
+    int? GithubPrNumber = null,
+    string? GithubPrStatus = null,
+    string? GithubIssueUrl = null,
+    int? GithubIssueNumber = null);

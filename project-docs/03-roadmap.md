@@ -443,20 +443,19 @@ và mở rộng Smart Setup thành **AI Board Template**.
 
 ---
 
-## Giai đoạn 15: Tích hợp bên ngoài
+## Giai đoạn 15: Tích hợp bên ngoài — ✅ HOÀN THÀNH PHẦN GITHUB INTEGRATION
 
-> **Chưa bắt đầu — dự kiến sau Giai đoạn 14.5.**
-> **Độ phức tạp kỹ thuật: 🔴 Cao** — webhook, OAuth của bên thứ ba, lưu trữ token bảo mật, xử lý eventual consistency.
-> **Đã có sẵn seam:** `IExternalAlertSink` (Giai đoạn 14.5 A1.2) là điểm cắm thông báo ra ngoài — Phase 15 đăng ký
-> implementation thật và **không** phải sửa Observer/Agent/member path.
+> **Phần GitHub Integration đã hoàn thành 100%** (Báo cáo nghiệm thu chi tiết: `report/phase-15-github-integration-test-report.md`).
+> **Độ phức tạp kỹ thuật: 🔴 Cao** — webhook, mã hóa PAT/Secret bằng ASP.NET Core Data Protection, chữ ký HMAC-SHA256 chống Timing Attack, xử lý Idempotency và event-driven card transition sang cột Done qua SignalR.
+> **Đã có sẵn seam:** `IExternalAlertSink` (Giai đoạn 14.5 A1.2) là điểm cắm thông báo ra ngoài cho Slack/Discord.
 
 Kết nối TeamNexus với hệ sinh thái công cụ phát triển phổ biến: thông báo sang Slack/Discord, liên kết task với GitHub PR/Issue.
 
 **Yêu cầu hoàn thiện:**
+- [x] **GitHub Integration**: Workspace Settings → nhập repo + Personal Access Token (mã hóa); task có thể gắn GitHub Issue/PR URL; webhook `POST /api/webhooks/github` → khi PR merge tự động move task sang cột `is_done`; chip "PR #123" trong `TaskCard` với link ngoài
+- [x] Webhook endpoint xác thực chữ ký HMAC-SHA256 (GitHub secret); token bên thứ ba được mã hóa khi lưu DB (`IIntegrationSecretProtector` + `GitHubSignatureValidator`)
+- [x] Hoạt động khi workspace không cấu hình tích hợp (graceful degradation)
 - [ ] **Slack / Discord Notification**: Workspace Settings → nhập Webhook URL; `SlackNotificationGateway : IExternalNotificationGateway` (adapter pattern, đúng tiền lệ `EmailGateway`); gửi khi AI Observer phát hiện tín hiệu, task overdue, member mới join
-- [ ] **GitHub Integration**: Workspace Settings → nhập repo + Personal Access Token (mã hóa); task có thể gắn GitHub Issue/PR URL; webhook `POST /api/webhooks/github` → khi PR merge tự động move task sang cột `is_done`; chip "PR #123" trong `TaskCard` với link ngoài
-- [ ] Webhook endpoint xác thực chữ ký HMAC-SHA256 (GitHub secret); token bên thứ ba được mã hóa khi lưu DB
-- [ ] Hoạt động khi workspace không cấu hình tích hợp (graceful degradation)
 
 ---
 
