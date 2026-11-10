@@ -1,6 +1,7 @@
 # TeamNexus — Thiết kế kỹ thuật Giai đoạn 15: Tích hợp bên ngoài
 
-> **Trạng thái:** Thiết kế (chưa hiện thực). **Phụ thuộc:** Giai đoạn 14.5 A1.2 (`IExternalAlertSink`), 14.7 (Jev triage).
+> **Trạng thái:** Thiết kế kiến trúc nền tảng. **Phụ thuộc:** Giai đoạn 14.5 A1.2 (`IExternalAlertSink`), 14.7 (Jev triage).
+> **📌 KẾ HOẠCH THI HÀNH CHÍNH THỨC (ĐÃ CHỐT):** Xem bộ tài liệu chia task tại [`tasks/phase-15-0-external-integrations-master-plan.md`](./tasks/phase-15-0-external-integrations-master-plan.md) (`15.1` → `15.5`). Khi hiện thực hóa, tuân thủ quy chuẩn tại [`AGENTS.md`](../AGENTS.md) và `phase-15-0..15-5`: **giữ nguyên 4 Modules** (đặt dịch vụ & Minimal APIs `Endpoints/*Endpoints.cs` trong `TeamNexus.Modules.Ai`, không tạo `.csproj` thứ 5 `Integrations`), sử dụng đúng tên bảng Migration #15 và ghi vết hoàn tác qua `AiActionLog` (`Status = AiActionStatus.Approved`).
 > **Tài liệu liên quan:** `03-roadmap.md` §Giai đoạn 15 · `05-capstone-and-itgottalent.md` §6.6 · `02-tech-stack-decisions.md` · `04-database-design.md` · `06-adjust-and-upgrade-with-jev.md` §3.1.
 > **Độ phức tạp:** 🔴 Cao — webhook, lưu secret, eventual consistency, độ bền gửi ra ngoài.
 
