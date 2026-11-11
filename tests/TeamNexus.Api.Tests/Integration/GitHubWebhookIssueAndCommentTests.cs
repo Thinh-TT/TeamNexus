@@ -791,6 +791,79 @@ public sealed class GitHubWebhookIssueAndCommentTests : IClassFixture<DatabaseFi
     }
 
     [Fact]
+    public async Task IssueCommentCreated_WithoutSenderField_IsIgnoredInsteadOfCrashing()
+    {
+        // Review F13: `sender` is guaranteed by GitHub, but a payload with a missing/scalar sender used to
+        // reach TryGetProperty on a non-object JsonElement and answer 500. A malformed event is an Ignored
+        // delivery, never a server error.
+        await using var s = await _database.CreateScenarioAsync();
+        var admin = await s.CreateUserAsync("Admin WS");
+        var ws = await s.CreateWorkspaceAsync(admin, "Workspace Comments F13");
+        var (board, _, _) = await s.CreateBoardAsync(ws, "Board F13");
+        using var client = await s.AsUserAsync(admin);
+
+        var putRes = await client.PutJsonAsync(BaseUrl(ws.Id), new UpsertWorkspaceGitHubIntegrationRequest(
+            IsEnabled: true,
+            DefaultBoardId: board.Id,
+            SyncIssueComments: true));
+        var integration = await putRes.Content.ReadFromJsonAsync<WorkspaceGitHubIntegrationResponse>();
+
+        var deliveryId = Guid.NewGuid().ToString();
+        var payload = $$"""
+        {
+            "action": "created",
+            "repository": { "full_name": "octocat/Hello-World" },
+            "issue": { "number": 100 },
+            "comment": { "id": 1, "body": "Bình luận không có sender", "html_url": "https://github.com/octocat/Hello-World/issues/100#issuecomment-1" }
+        }
+        """;
+
+        var req = CreateWebhookRequest(integration!.WebhookToken, "issue_comment", deliveryId, integration.WebhookSecretPlaintext!, payload);
+        var res = await s.Factory.CreateClient().SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+
+        await using var db = s.NewDbContext();
+        var delivery = await db.GitHubWebhookDeliveries.FirstOrDefaultAsync(d => d.DeliveryId == deliveryId);
+        Assert.NotNull(delivery);
+        Assert.Equal("Ignored", delivery!.Status);
+    }
+
+    [Fact]
+    public async Task IssuesOpened_WithoutSenderField_StillCreatesTaskWithUnknownAuthor()
+    {
+        await using var s = await _database.CreateScenarioAsync();
+        var admin = await s.CreateUserAsync("Admin WS");
+        var ws = await s.CreateWorkspaceAsync(admin, "Workspace Issues F13");
+        var (board, _, _) = await s.CreateBoardAsync(ws, "Board F13b");
+        using var client = await s.AsUserAsync(admin);
+
+        var putRes = await client.PutJsonAsync(BaseUrl(ws.Id), new UpsertWorkspaceGitHubIntegrationRequest(
+            IsEnabled: true,
+            DefaultBoardId: board.Id,
+            AutoCreateTasksFromIssues: true));
+        var integration = await putRes.Content.ReadFromJsonAsync<WorkspaceGitHubIntegrationResponse>();
+
+        var deliveryId = Guid.NewGuid().ToString();
+        var payload = $$"""
+        {
+            "action": "opened",
+            "repository": { "full_name": "octocat/Hello-World" },
+            "issue": { "number": 302, "title": "Issue không có sender", "html_url": "https://github.com/octocat/Hello-World/issues/302", "body": "Nội dung" }
+        }
+        """;
+
+        var req = CreateWebhookRequest(integration!.WebhookToken, "issues", deliveryId, integration.WebhookSecretPlaintext!, payload);
+        var res = await s.Factory.CreateClient().SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+
+        await using var db = s.NewDbContext();
+        var task = await db.Tasks.FirstOrDefaultAsync(t => t.BoardId == board.Id);
+        Assert.NotNull(task);
+        Assert.Contains("@unknown", task!.Description);
+    }
+
+    [Fact]
     public async Task IssueCommentCreated_WhenSyncDisabled_IsIgnored()
     {
         await using var s = await _database.CreateScenarioAsync();

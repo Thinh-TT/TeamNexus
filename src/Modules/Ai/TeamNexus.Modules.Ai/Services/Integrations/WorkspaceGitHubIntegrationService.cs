@@ -14,6 +14,12 @@ public sealed class WorkspaceGitHubIntegrationService : IWorkspaceGitHubIntegrat
 {
     private const string DefaultApiBaseUrl = "https://api.teamnexus.cloud";
 
+    /// <summary>Matches <c>workspace_github_integrations.issue_label_filter</c> (varchar 500).</summary>
+    public const int MaxIssueLabelFilterLength = 500;
+
+    /// <summary>One filter should not be able to carry an unbounded label list.</summary>
+    public const int MaxIssueLabelCount = 20;
+
     private readonly TeamNexusDbContext _db;
     private readonly IWorkspaceAccess _access;
     private readonly IGitHubSecretProtector _protector;
@@ -76,6 +82,10 @@ public sealed class WorkspaceGitHubIntegrationService : IWorkspaceGitHubIntegrat
         var entity = await _db.WorkspaceGitHubIntegrations
             .FirstOrDefaultAsync(x => x.WorkspaceId == workspaceId, ct);
 
+        // Validated up front: the column is varchar(500), so an oversized filter used to reach PostgreSQL and
+        // surface as a 500 from Npgsql instead of a 400 the caller can fix (review F12).
+        var issueLabelFilter = NormalizeIssueLabelFilter(request.IssueLabelFilter);
+
         var now = _clock.GetUtcNow();
         string? plainSecretOnce = null;
 
@@ -93,7 +103,7 @@ public sealed class WorkspaceGitHubIntegrationService : IWorkspaceGitHubIntegrat
                 SecretHint = hint,
                 IsEnabled = request.IsEnabled ?? true,
                 DefaultBoardId = request.DefaultBoardId == Guid.Empty ? null : request.DefaultBoardId,
-                IssueLabelFilter = string.IsNullOrWhiteSpace(request.IssueLabelFilter) ? null : request.IssueLabelFilter.Trim(),
+                IssueLabelFilter = issueLabelFilter,
                 AutoMoveOnPr = request.AutoMoveOnPr ?? true,
                 AutoCreateTasksFromIssues = request.AutoCreateTasksFromIssues ?? true,
                 SyncIssueComments = request.SyncIssueComments ?? true,
@@ -118,7 +128,7 @@ public sealed class WorkspaceGitHubIntegrationService : IWorkspaceGitHubIntegrat
 
             if (request.IssueLabelFilter is not null)
             {
-                entity.IssueLabelFilter = string.IsNullOrWhiteSpace(request.IssueLabelFilter) ? null : request.IssueLabelFilter.Trim();
+                entity.IssueLabelFilter = issueLabelFilter;
             }
 
             if (request.AutoMoveOnPr.HasValue)
@@ -206,6 +216,32 @@ public sealed class WorkspaceGitHubIntegrationService : IWorkspaceGitHubIntegrat
             d.Summary,
             d.ErrorMessage,
             d.ReceivedAt)).ToList();
+    }
+
+    private static string? NormalizeIssueLabelFilter(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        var trimmed = raw.Trim();
+
+        if (trimmed.Length > MaxIssueLabelFilterLength)
+        {
+            throw new BadRequestException($"Bộ lọc nhãn tối đa {MaxIssueLabelFilterLength} ký tự.");
+        }
+
+        var labels = trimmed.Split(
+            [',', ';'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (labels.Length > MaxIssueLabelCount)
+        {
+            throw new BadRequestException($"Bộ lọc nhãn tối đa {MaxIssueLabelCount} nhãn.");
+        }
+
+        return trimmed;
     }
 
     private WorkspaceGitHubIntegrationResponse MapResponse(

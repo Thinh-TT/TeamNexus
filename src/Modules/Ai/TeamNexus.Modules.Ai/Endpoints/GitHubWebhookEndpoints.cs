@@ -57,15 +57,31 @@ public static class GitHubWebhookEndpoints
             return Results.Unauthorized();
         }
 
-        using var memoryStream = new MemoryStream();
-        await request.Body.CopyToAsync(memoryStream, ct);
+        // Read with the limit enforced while reading, not after. `CopyToAsync` buffered the whole body first,
+        // so a chunked request (ContentLength == null) could allocate far above the feature's 256 KB budget
+        // before the comparison below ever ran (review F10).
+        using var buffer = new MemoryStream();
+        var chunk = new byte[16 * 1024];
+        var totalBytes = 0;
 
-        if (memoryStream.Length > MaxPayloadBytes)
+        while (true)
         {
-            return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+            var read = await request.Body.ReadAsync(chunk, ct);
+            if (read == 0)
+            {
+                break;
+            }
+
+            totalBytes += read;
+            if (totalBytes > MaxPayloadBytes)
+            {
+                return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+            }
+
+            buffer.Write(chunk, 0, read);
         }
 
-        var rawBytes = memoryStream.ToArray();
+        var rawBytes = buffer.ToArray();
 
         var integration = await db.WorkspaceGitHubIntegrations
             .FirstOrDefaultAsync(x => x.WebhookToken == webhookToken, ct);
@@ -97,6 +113,13 @@ public static class GitHubWebhookEndpoints
             deliveryHeader,
             rawBytes,
             ct);
+
+        // A "Failed" delivery means we could not do the work (e.g. the configured board is gone). Answering
+        // 200 told GitHub the event was accepted, so its own retry/redeliver never kicked in (review F11).
+        if (string.Equals(processResult.Status, "Failed", StringComparison.OrdinalIgnoreCase))
+        {
+            return Results.Json(processResult, statusCode: StatusCodes.Status502BadGateway);
+        }
 
         return Results.Ok(processResult);
     }

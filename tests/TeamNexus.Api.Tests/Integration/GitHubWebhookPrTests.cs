@@ -218,6 +218,107 @@ public sealed class GitHubWebhookPrTests : IClassFixture<DatabaseFixture>
     }
 
     [Fact]
+    public async Task Webhook_OversizedPayload_Returns413_AndWritesNoDelivery()
+    {
+        // Review F10: the 256 KB budget must be enforced while reading, not after the whole body was
+        // buffered. 300 KB is far below Kestrel's default and above this feature's limit.
+        await using var s = await _database.CreateScenarioAsync();
+        var admin = await s.CreateUserAsync("Admin WS");
+        var ws = await s.CreateWorkspaceAsync(admin, "Workspace GH F10");
+        using var client = await s.AsUserAsync(admin);
+
+        var putRes = await client.PutJsonAsync(BaseUrl(ws.Id), new UpsertWorkspaceGitHubIntegrationRequest(IsEnabled: true));
+        var integration = await putRes.Content.ReadFromJsonAsync<WorkspaceGitHubIntegrationResponse>();
+
+        var payload = "{\"pad\":\"" + new string('a', 300_000) + "\"}";
+        var deliveryId = Guid.NewGuid().ToString();
+        var req = CreateWebhookRequest(integration!.WebhookToken, "ping", deliveryId, integration.WebhookSecretPlaintext!, payload);
+
+        var res = await s.Factory.CreateClient().SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, res.StatusCode);
+
+        await using var db = s.NewDbContext();
+        Assert.False(await db.GitHubWebhookDeliveries.AnyAsync(d => d.DeliveryId == deliveryId));
+    }
+
+    [Fact]
+    public async Task Webhook_WhenDefaultBoardIsGone_Returns502_AndRecordsFailedDelivery()
+    {
+        // Review F11: answering 200 for a delivery we could not process told GitHub everything was fine,
+        // so its redelivery/retry support never engaged.
+        await using var s = await _database.CreateScenarioAsync();
+        var admin = await s.CreateUserAsync("Admin WS");
+        var ws = await s.CreateWorkspaceAsync(admin, "Workspace GH F11");
+        var (board, _, _) = await s.CreateBoardAsync(ws, "Board F11");
+        using var client = await s.AsUserAsync(admin);
+
+        var putRes = await client.PutJsonAsync(BaseUrl(ws.Id), new UpsertWorkspaceGitHubIntegrationRequest(
+            IsEnabled: true,
+            DefaultBoardId: board.Id,
+            AutoCreateTasksFromIssues: true));
+        var integration = await putRes.Content.ReadFromJsonAsync<WorkspaceGitHubIntegrationResponse>();
+
+        // Soft-delete the board: the webhook still receives the event, but there is nowhere to create the task.
+        var deleteRes = await client.DeleteAsync($"/api/workspaces/{ws.Id}/boards/{board.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteRes.StatusCode);
+
+        var deliveryId = Guid.NewGuid().ToString();
+        var payload = $$"""
+        {
+            "action": "opened",
+            "repository": { "full_name": "octocat/Hello-World" },
+            "issue": { "number": 501, "title": "Issue khi board đã bị xoá", "html_url": "https://github.com/octocat/Hello-World/issues/501" },
+            "sender": { "login": "octocat", "type": "User" }
+        }
+        """;
+
+        var req = CreateWebhookRequest(integration!.WebhookToken, "issues", deliveryId, integration.WebhookSecretPlaintext!, payload);
+        var res = await s.Factory.CreateClient().SendAsync(req);
+
+        Assert.Equal(HttpStatusCode.BadGateway, res.StatusCode);
+
+        await using var db = s.NewDbContext();
+        var delivery = await db.GitHubWebhookDeliveries.FirstOrDefaultAsync(d => d.DeliveryId == deliveryId);
+        Assert.NotNull(delivery);
+        Assert.Equal("Failed", delivery!.Status);
+    }
+
+    [Fact]
+    public async Task UpsertIntegration_WithAnOversizedLabelFilter_Returns400()
+    {
+        // Review F12: varchar(500) is a storage fact, not a validation rule — without this check the insert
+        // reaches PostgreSQL and the caller sees a 500 instead of a fixable 400.
+        await using var s = await _database.CreateScenarioAsync();
+        var admin = await s.CreateUserAsync("Admin WS");
+        var ws = await s.CreateWorkspaceAsync(admin, "Workspace GH F12");
+        using var client = await s.AsUserAsync(admin);
+
+        var tooLong = new string('a', 501);
+        var response = await client.PutJsonAsync(BaseUrl(ws.Id), new UpsertWorkspaceGitHubIntegrationRequest(
+            IsEnabled: true,
+            IssueLabelFilter: tooLong));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpsertIntegration_WithTooManyLabels_Returns400()
+    {
+        await using var s = await _database.CreateScenarioAsync();
+        var admin = await s.CreateUserAsync("Admin WS");
+        var ws = await s.CreateWorkspaceAsync(admin, "Workspace GH F12b");
+        using var client = await s.AsUserAsync(admin);
+
+        var manyLabels = string.Join(",", Enumerable.Range(0, 21).Select(i => $"label-{i}"));
+        var response = await client.PutJsonAsync(BaseUrl(ws.Id), new UpsertWorkspaceGitHubIntegrationRequest(
+            IsEnabled: true,
+            IssueLabelFilter: manyLabels));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Webhook_PingEvent_Returns200_RecordsProcessedDelivery()
     {
         await using var s = await _database.CreateScenarioAsync();

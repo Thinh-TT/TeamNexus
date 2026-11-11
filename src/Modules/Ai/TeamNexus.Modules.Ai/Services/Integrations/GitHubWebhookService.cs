@@ -448,6 +448,7 @@ public sealed class GitHubWebhookService : IGitHubWebhookService
         var issueBody = issue.TryGetProperty("body", out var ib) ? ib.GetString() : null;
 
         var senderLogin = root.TryGetProperty("sender", out var sender)
+                          && sender.ValueKind == JsonValueKind.Object
                           && sender.TryGetProperty("login", out var sl)
             ? sl.GetString() ?? "unknown"
             : "unknown";
@@ -554,7 +555,9 @@ public sealed class GitHubWebhookService : IGitHubWebhookService
                 {
                     foreach (var lbl in labelsElement.EnumerateArray())
                     {
-                        if (lbl.TryGetProperty("name", out var ln) && ln.GetString() is { } name)
+                        if (lbl.ValueKind == JsonValueKind.Object
+                            && lbl.TryGetProperty("name", out var ln)
+                            && ln.GetString() is { } name)
                         {
                             issueLabels.Add(name);
                         }
@@ -779,9 +782,15 @@ public sealed class GitHubWebhookService : IGitHubWebhookService
                 ct);
         }
 
-        // Anti-bot & anti-loop: ignore bot comments
-        var senderType = root.TryGetProperty("sender", out var sender)
-                         && sender.TryGetProperty("type", out var st)
+        // Anti-bot & anti-loop: ignore bot comments. Both defensively typed: GitHub always sends an object,
+        // but a `null`/scalar `sender` would make TryGetProperty throw and answer 500 (review F13).
+        var senderObject = root.TryGetProperty("sender", out var senderElement)
+                           && senderElement.ValueKind == JsonValueKind.Object
+            ? senderElement
+            : default;
+
+        var senderType = senderObject.ValueKind == JsonValueKind.Object
+                         && senderObject.TryGetProperty("type", out var st)
             ? st.GetString()
             : null;
 
@@ -826,7 +835,10 @@ public sealed class GitHubWebhookService : IGitHubWebhookService
         }
 
         var commentHtmlUrl = comment.TryGetProperty("html_url", out var ch) ? ch.GetString() ?? string.Empty : string.Empty;
-        var senderLogin = sender.TryGetProperty("login", out var sl) ? sl.GetString() ?? "unknown" : "unknown";
+        var senderLogin = senderObject.ValueKind == JsonValueKind.Object
+                          && senderObject.TryGetProperty("login", out var sl)
+            ? sl.GetString() ?? "unknown"
+            : "unknown";
 
         var issueNumber = root.TryGetProperty("issue", out var issue)
                           && issue.TryGetProperty("number", out var inum)
