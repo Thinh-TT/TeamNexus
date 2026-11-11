@@ -177,6 +177,13 @@ describe('WorkspaceSettingsPage & Integrations Tab', () => {
     })
   }
 
+  const selectDefaultBoard = async (boardName: string) => {
+    const select = screen.getByTestId('github-default-board-select')
+    fireEvent.mouseDown(select.querySelector('.ant-select-selector') ?? select)
+    const option = await screen.findByTitle(boardName)
+    fireEvent.click(option)
+  }
+
   it('defaults to "Cài đặt chung" tab and preserves open-settings-modal-btn', async () => {
     renderPage()
 
@@ -298,6 +305,10 @@ describe('WorkspaceSettingsPage & Integrations Tab', () => {
     ).toBeInTheDocument()
     expect(screen.queryByTestId('github-oneshot-secret-alert')).not.toBeInTheDocument()
 
+    // Review 15.5 F3: a brand-new integration no longer preselects the first board, so the board
+    // must be chosen explicitly before "Kích hoạt" can save an auto-create configuration.
+    await selectDefaultBoard('Sprint 1')
+
     fireEvent.click(screen.getByTestId('enable-github-btn'))
 
     await waitFor(() => {
@@ -401,5 +412,53 @@ describe('WorkspaceSettingsPage & Integrations Tab', () => {
     await waitFor(() => {
       expect(integrationApi.getGitHubDeliveries).toHaveBeenCalledTimes(2)
     })
+  })
+
+  it('blocks enabling auto-create from issues until a default board is selected', async () => {
+    // Review 15.5 F3: without a board the API would accept the config but silently ignore every issue.
+    vi.mocked(integrationApi.getGitHubIntegration).mockResolvedValueOnce(null)
+
+    renderPage()
+    await switchToIntegrationsTab()
+
+    fireEvent.click(screen.getByTestId('enable-github-btn'))
+
+    expect(
+      await screen.findByText(
+        /Vui lòng chọn "Bảng mặc định nhận Issue" trước khi bật tự động tạo thẻ/
+      )
+    ).toBeInTheDocument()
+    expect(integrationApi.upsertGitHubIntegration).not.toHaveBeenCalled()
+  })
+
+  it('deletes the GitHub configuration and returns to the not-configured state', async () => {
+    renderPage()
+    await switchToIntegrationsTab()
+
+    fireEvent.click(await screen.findByTestId('delete-github-config-btn'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Xoá cấu hình' }))
+
+    await waitFor(() => {
+      expect(integrationApi.deleteGitHubIntegration).toHaveBeenCalledWith('ws-1')
+      expect(
+        screen.getByText('Chưa kích hoạt tích hợp GitHub cho không gian làm việc này')
+      ).toBeInTheDocument()
+    })
+  })
+
+  it('reports an error instead of a false success when the clipboard API is unavailable', async () => {
+    // Review 15.5 F2: `navigator.clipboard?.writeText` used to resolve as a no-op and show success.
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
+
+    renderPage()
+    await switchToIntegrationsTab()
+
+    fireEvent.click(await screen.findByTestId('copy-github-payload-url-btn'))
+
+    expect(
+      await screen.findByText(
+        'Trình duyệt không cho phép sao chép — hãy bôi đen và sao chép thủ công.'
+      )
+    ).toBeInTheDocument()
   })
 })

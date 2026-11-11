@@ -363,8 +363,15 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
   const handleCopyTaskCode = async () => {
     if (!taskCode) return
+
+    if (!navigator.clipboard?.writeText) {
+      // Optional chaining alone would await `undefined` and report a false success (review 15.5 F2).
+      message.error('Trình duyệt không cho phép sao chép — hãy bôi đen mã và sao chép thủ công.')
+      return
+    }
+
     try {
-      await navigator.clipboard?.writeText(taskCode)
+      await navigator.clipboard.writeText(taskCode)
       message.success(`Đã sao chép mã ${taskCode}`)
     } catch {
       message.error('Không thể sao chép mã công việc')

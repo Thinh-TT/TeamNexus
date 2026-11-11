@@ -32,13 +32,15 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import type { BoardResponse } from '../../board/types/board.types'
+import {
+  buildGitHubIntegrationRequest,
+  requiresDefaultBoardForAutoCreate,
+} from '../utils/githubIntegrationRequest'
 import type {
   GitHubWebhookDeliveryResponse,
   UpsertWorkspaceGitHubIntegrationRequest,
   WorkspaceGitHubIntegrationResponse,
 } from '../types/integration.types'
-
-const EMPTY_GUID = '00000000-0000-0000-0000-000000000000'
 
 interface GitHubIntegrationSectionProps {
   config: WorkspaceGitHubIntegrationResponse | null
@@ -86,7 +88,9 @@ export const GitHubIntegrationSection: React.FC<GitHubIntegrationSectionProps> =
     } else {
       form.setFieldsValue({
         isEnabled: true,
-        defaultBoardId: boards[0]?.id ?? undefined,
+        // Deliberately no auto-selected board: "Kích hoạt" must not silently start creating tasks
+        // from every GitHub issue into whichever board happens to be first (review 15.5 F3).
+        defaultBoardId: undefined,
         issueLabelFilter: '',
         autoMoveOnPr: true,
         autoCreateTasksFromIssues: true,
@@ -96,8 +100,15 @@ export const GitHubIntegrationSection: React.FC<GitHubIntegrationSectionProps> =
   }, [config, boards, form])
 
   const handleCopyText = async (value: string, successText: string) => {
+    if (!navigator.clipboard?.writeText) {
+      // Optional chaining alone would await `undefined` and report a false success (review 15.5 F2):
+      // the user would paste an empty secret/URL into GitHub and the webhook would never work.
+      message.error('Trình duyệt không cho phép sao chép — hãy bôi đen và sao chép thủ công.')
+      return
+    }
+
     try {
-      await navigator.clipboard?.writeText(value)
+      await navigator.clipboard.writeText(value)
       message.success(successText)
     } catch {
       message.error('Không thể sao chép vào khay nhớ tạm')
@@ -107,28 +118,17 @@ export const GitHubIntegrationSection: React.FC<GitHubIntegrationSectionProps> =
   const handleSave = async () => {
     try {
       const values = await form.validateFields()
-      setSaving(true)
 
-      const filterText = typeof values.issueLabelFilter === 'string'
-        ? values.issueLabelFilter.trim()
-        : ''
-
-      const req: UpsertWorkspaceGitHubIntegrationRequest = {
-        isEnabled: Boolean(values.isEnabled),
-        // Backend ignores null on update; Guid.Empty explicitly clears DefaultBoardId.
-        defaultBoardId: values.defaultBoardId
-          ? values.defaultBoardId
-          : config
-            ? EMPTY_GUID
-            : undefined,
-        // Empty string explicitly clears IssueLabelFilter on update.
-        issueLabelFilter: filterText,
-        autoMoveOnPr: Boolean(values.autoMoveOnPr),
-        autoCreateTasksFromIssues: Boolean(values.autoCreateTasksFromIssues),
-        syncIssueComments: Boolean(values.syncIssueComments),
+      if (requiresDefaultBoardForAutoCreate(values)) {
+        message.warning(
+          'Vui lòng chọn "Bảng mặc định nhận Issue" trước khi bật tự động tạo thẻ từ GitHub Issue.'
+        )
+        return
       }
 
-      await onSave(req)
+      setSaving(true)
+
+      await onSave(buildGitHubIntegrationRequest(values, Boolean(config)))
     } catch {
       // Validation handled by Form
     } finally {
@@ -428,6 +428,7 @@ export const GitHubIntegrationSection: React.FC<GitHubIntegrationSectionProps> =
                 name="defaultBoardId"
                 label="Bảng mặc định nhận Issue mới (Default Board)"
                 tooltip="Khi GitHub gửi sự kiện issues.opened/labeled, thẻ mới sẽ được tạo ở cột đầu tiên của bảng này."
+                extra="Bắt buộc khi bật tự động tạo thẻ từ GitHub Issue."
               >
                 <Select
                   allowClear

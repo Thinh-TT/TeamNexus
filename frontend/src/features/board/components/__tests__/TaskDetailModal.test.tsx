@@ -292,6 +292,20 @@ describe('TaskDetailModal', () => {
     expect(screen.queryByTestId('copy-task-number-btn')).not.toBeInTheDocument()
   })
 
+  it('does not claim copy success when the clipboard API is unavailable', async () => {
+    // Review 15.5 F2: `await navigator.clipboard?.writeText(...)` resolved as a no-op.
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
+
+    renderModal({ ...mockTask, taskNumber: 42 })
+    fireEvent.click(screen.getByTestId('copy-task-number-btn'))
+
+    expect(
+      await screen.findByText(
+        'Trình duyệt không cho phép sao chép — hãy bôi đen mã và sao chép thủ công.'
+      )
+    ).toBeInTheDocument()
+  })
+
   it('renders GitHub external links section with state badge and target=_blank anchor', () => {
     renderModal({
       ...mockTask,
