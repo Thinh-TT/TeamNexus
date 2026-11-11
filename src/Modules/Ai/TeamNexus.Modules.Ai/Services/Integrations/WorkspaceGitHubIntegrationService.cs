@@ -212,11 +212,7 @@ public sealed class WorkspaceGitHubIntegrationService : IWorkspaceGitHubIntegrat
         WorkspaceGitHubIntegration entity,
         string? secretPlaintext)
     {
-        var apiBase = _configuration["Integrations:ApiBaseUrl"]?.TrimEnd('/')
-                      ?? _configuration["Frontend:BaseUrl"]?.TrimEnd('/')
-                      ?? DefaultApiBaseUrl;
-
-        var payloadUrl = $"{apiBase}/api/webhooks/github/{entity.WebhookToken}";
+        var payloadUrl = BuildPayloadUrl(_configuration, entity.WebhookToken);
 
         return new WorkspaceGitHubIntegrationResponse(
             entity.Id,
@@ -234,4 +230,35 @@ public sealed class WorkspaceGitHubIntegrationService : IWorkspaceGitHubIntegrat
             entity.UpdatedAt,
             secretPlaintext);
     }
+
+    /// <summary>
+    /// Public API origin used to build the GitHub Payload URL (Phase 15.3 §T15.3.2, design §13.1).
+    /// <para>
+    /// Resolution order: <c>Integrations:PublicApiBaseUrl</c> (the key the design names) →
+    /// <c>Integrations:ApiBaseUrl</c> (kept so an already-deployed environment variable keeps working) →
+    /// <c>Frontend:BaseUrl</c> (dev: Vite proxies <c>/api</c>) → <see cref="DefaultApiBaseUrl"/>.
+    /// </para>
+    /// <para>
+    /// <b>Why this is a public static helper:</b> the wrong host here is invisible until GitHub's first
+    /// delivery silently lands on the SPA rewrite, so the resolution order itself must be unit-tested.
+    /// </para>
+    /// </summary>
+    public static string ResolvePublicApiBaseUrl(IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        var configured = FirstNonBlank(
+            configuration["Integrations:PublicApiBaseUrl"],
+            configuration["Integrations:ApiBaseUrl"],
+            configuration["Frontend:BaseUrl"]);
+
+        return (configured ?? DefaultApiBaseUrl).TrimEnd('/');
+    }
+
+    /// <summary>Builds the copy-paste GitHub Payload URL from the resolved API origin.</summary>
+    public static string BuildPayloadUrl(IConfiguration configuration, Guid webhookToken)
+        => $"{ResolvePublicApiBaseUrl(configuration)}/api/webhooks/github/{webhookToken:D}";
+
+    private static string? FirstNonBlank(params string?[] candidates)
+        => candidates.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
 }

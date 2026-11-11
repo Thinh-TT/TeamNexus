@@ -405,11 +405,17 @@ public sealed class GitHubWebhookIssueAndCommentTests : IClassFixture<DatabaseFi
         Assert.NotNull(undoDetail);
         Assert.Equal("Undone", undoDetail!.Status);
 
-        // Verify task is soft-deleted
-        var taskAfterUndo = await db.Tasks.FirstOrDefaultAsync(t => t.Id == task.Id);
+        // Verify task is soft-deleted.
+        //
+        // The Undo ran in the API host's own DbContext, so `db` (opened earlier in this test) still tracks
+        // the pre-undo instance. EF Core's identity map returns that stale instance for a tracked query —
+        // `IgnoreQueryFilters()` would then report `DeletedAt == null` even though the row IS soft-deleted.
+        // A fresh context is what makes this assertion observe the database rather than the change tracker.
+        await using var verifyDb = s.NewDbContext();
+        var taskAfterUndo = await verifyDb.Tasks.FirstOrDefaultAsync(t => t.Id == task.Id);
         Assert.Null(taskAfterUndo); // Default query filter hides deleted tasks
 
-        var softDeleted = await db.Tasks.IgnoreQueryFilters().FirstOrDefaultAsync(t => t.Id == task.Id);
+        var softDeleted = await verifyDb.Tasks.IgnoreQueryFilters().FirstOrDefaultAsync(t => t.Id == task.Id);
         Assert.NotNull(softDeleted);
         Assert.NotNull(softDeleted!.DeletedAt);
     }

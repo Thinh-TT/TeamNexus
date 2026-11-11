@@ -1,3 +1,5 @@
+using System.Security.Cryptography.X509Certificates;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
@@ -59,7 +61,38 @@ builder.Services.AddCors(options =>
     });
 });
 
+// ---- Data Protection key ring (Phase 15.3 §T15.3.1) -------------------
+// GitHub webhook secrets are encrypted at rest via IDataProtectionProvider. The default key ring lives
+// in the machine profile, which is ephemeral inside a container: every redeploy would leave previously
+// stored secrets undecryptable and every GitHub delivery would answer 401. Phase 15.3 design §13.1
+// therefore requires an explicitly durable ring, configured here through environment variables:
+//   Integrations__DataProtection__KeysPath      → mounted directory (render/vps volume)
+//   Integrations__DataProtection__CertPath      → PFX (vps), with CertPassword
+var dataProtection = builder.Services.AddDataProtection().SetApplicationName("TeamNexus");
+var dataProtectionKeysPath = builder.Configuration["Integrations:DataProtection:KeysPath"];
+var dataProtectionCertPath = builder.Configuration["Integrations:DataProtection:CertPath"];
+
+if (!string.IsNullOrWhiteSpace(dataProtectionCertPath))
+{
+    var dataProtectionCertPassword = builder.Configuration["Integrations:DataProtection:CertPassword"];
+    dataProtection.ProtectKeysWithCertificate(
+        X509CertificateLoader.LoadPkcs12FromFile(dataProtectionCertPath, dataProtectionCertPassword));
+}
+else if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+{
+    Directory.CreateDirectory(dataProtectionKeysPath);
+    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
+}
+
 var app = builder.Build();
+
+if (string.IsNullOrWhiteSpace(dataProtectionKeysPath) && string.IsNullOrWhiteSpace(dataProtectionCertPath))
+{
+    app.Logger.LogWarning(
+        "DataProtection đang dùng key ring mặc định của máy. Trong container, secret tích hợp đã mã hoá sẽ "
+        + "KHÔNG giải mã được sau redeploy (GitHub delivery trả 401). Cấu hình "
+        + "Integrations:DataProtection:KeysPath (thư mục bền) hoặc CertPath (PFX) trước khi bật tích hợp trên production.");
+}
 
 // =====================================================================
 // Middleware pipeline
