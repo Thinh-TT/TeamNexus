@@ -22,6 +22,7 @@ import {
   Typography,
 } from 'antd'
 import type {
+  AiActionBasis,
   AiActionLog,
   AiActionLogDetail,
   AiActionStatus,
@@ -30,6 +31,52 @@ import { formatDateTime } from '../utils/aiActionHelpers'
 import { RecoveryPlanCard } from './RecoveryPlanCard'
 
 const { Text, Paragraph } = Typography
+
+/**
+ * Vietnamese label per action. A Record instead of a nested ternary chain: Phase 15.3/15.4 added two system
+ * actions, and the old chain silently fell through to the raw identifier ("GitHubPrMoveTask") in the UI.
+ */
+const ACTION_LABELS: Record<string, string> = {
+  CreateSubtasks: 'Tạo sub-tasks đề xuất',
+  CreateBoardFromTemplate: 'Tạo board từ mẫu AI',
+  RecoveryPlan: 'Kế hoạch phục hồi (AI Observer)',
+  UpdateTaskFields: 'Cập nhật thẻ (AI đề xuất)',
+  MoveTaskToColumn: 'Di chuyển thẻ (AI đề xuất)',
+  GitHubPrMoveTask: 'Tự động chuyển thẻ (GitHub PR)',
+  GitHubIssueCreateTask: 'Tạo thẻ từ GitHub Issue',
+}
+
+/**
+ * One-line explanation of why the action exists. Smart Setup stores a board-description excerpt; GitHub logs
+ * store `{ repo, prNumber | issueNumber, state }` — reading only `descriptionExcerpt` rendered an empty
+ * "Mô tả 0 ký tự" line for every GitHub action.
+ */
+const describeActionBasis = (basis: AiActionBasis): string => {
+  const repo = typeof basis.repo === 'string' && basis.repo.length > 0 ? basis.repo : null
+  if (repo) {
+    const reference =
+      typeof basis.prNumber === 'number'
+        ? `PR #${basis.prNumber}`
+        : typeof basis.issueNumber === 'number'
+          ? `Issue #${basis.issueNumber}`
+          : 'liên kết GitHub'
+    const state =
+      typeof basis.state === 'string' && basis.state.length > 0
+        ? ` · trạng thái ${basis.state}`
+        : ''
+    return `${repo} · ${reference}${state}`
+  }
+
+  if (basis.descriptionExcerpt) {
+    return basis.descriptionExcerpt
+  }
+
+  if (typeof basis.descriptionLength === 'number' && basis.descriptionLength > 0) {
+    return `Mô tả ${basis.descriptionLength} ký tự`
+  }
+
+  return 'Không có mô tả đầu vào.'
+}
 
 interface AiActionLogItemProps {
   log: AiActionLog
@@ -141,21 +188,13 @@ export const AiActionLogItem: React.FC<AiActionLogItemProps> = ({
           <Space size={8} align="center">
             {renderStatusTag(log.status)}
             <Text strong style={{ fontSize: 13.5 }}>
-              {log.action === 'CreateSubtasks'
-                ? 'Tạo sub-tasks đề xuất'
-                : log.action === 'CreateBoardFromTemplate'
-                ? 'Tạo board từ mẫu AI'
-                : log.action === 'RecoveryPlan'
-                ? 'Kế hoạch phục hồi (AI Observer)'
-                : log.action === 'UpdateTaskFields'
-                ? 'Cập nhật thẻ (AI đề xuất)'
-                : log.action === 'MoveTaskToColumn'
-                ? 'Di chuyển thẻ (AI đề xuất)'
-                : log.action}
+              {ACTION_LABELS[log.action] ?? log.action}
             </Text>
-            <Tag color="blue" style={{ borderRadius: 10 }}>
-              {log.taskCount} tasks
-            </Tag>
+            {log.taskCount > 0 && (
+              <Tag color="blue" style={{ borderRadius: 10 }}>
+                {log.taskCount} tasks
+              </Tag>
+            )}
           </Space>
 
           <Button
@@ -251,8 +290,7 @@ export const AiActionLogItem: React.FC<AiActionLogItemProps> = ({
                         fontStyle: 'italic',
                       }}
                     >
-                      {detail.basis.descriptionExcerpt ||
-                        `Mô tả ${detail.basis.descriptionLength || 0} ký tự`}
+                      {describeActionBasis(detail.basis)}
                     </Paragraph>
                   </div>
                 )}

@@ -75,6 +75,18 @@ public static class AiActionTypes
     /// </para>
     /// </summary>
     public const string CreateKnowledgeDocument = "CreateKnowledgeDocument";
+
+    /// <summary>
+    /// Automated movement of a task triggered by GitHub Pull Request (Phase 15.3 §T15.3.3).
+    /// Scope is <c>entity_type = 'Board'</c>.
+    /// </summary>
+    public const string GitHubPrMoveTask = "GitHubPrMoveTask";
+
+    /// <summary>
+    /// Automated creation of a task triggered by GitHub Issue (Phase 15.4 §T15.4.2).
+    /// Scope is <c>entity_type = 'Board'</c>.
+    /// </summary>
+    public const string GitHubIssueCreateTask = "GitHubIssueCreateTask";
 }
 
 /// <summary>

@@ -1,6 +1,6 @@
 # Giai đoạn 15 — Tích hợp Hệ sinh thái Bên ngoài (Slack, Discord & GitHub Webhooks) — Kế hoạch Tổng thể
 
-> **Trạng thái:** 📋 **SẴN SÀNG THI HÀNH (Đã hoàn tất Kiểm thử Local, Rà soát Code & Live Test 6 Chặng trên Production).**
+> **Trạng thái:** 🚧 **ĐANG THI HÀNH** — 15.1 ✅ · 15.2 ✅ · 15.3 ✅ · 15.4 ✅ (kèm đợt khắc phục review 2026-11-11) · **15.5 ⏳ chưa bắt đầu**. Bàn giao: [`phase-15-remaining-frontend-handover.md`](./phase-15-remaining-frontend-handover.md).
 > **Nguồn thiết kế:** [`project-docs/07-external-integrations-design.md`](../07-external-integrations-design.md) + [`project-docs/03-roadmap.md`](../03-roadmap.md) §15.
 > **Tiền đề đã merge:** Giai đoạn 1 → **14.99** (14 EF Core migrations, 1,167 bài test Backend xUnit, 744 bài test Frontend Vitest).
 > **Cấu trúc tài liệu chia task:**
@@ -10,6 +10,7 @@
 > 4. [`phase-15-3-inbound-github-webhooks-and-pr-automation.md`](./phase-15-3-inbound-github-webhooks-and-pr-automation.md) *(Sub-phase 15.3 — Inbound GitHub Webhook, HMAC-SHA256, `TaskKeyParser` & PR State Machine + Undo)*
 > 5. [`phase-15-4-github-issues-jev-triage-and-comments.md`](./phase-15-4-github-issues-jev-triage-and-comments.md) *(Sub-phase 15.4 — GitHub Issue → Task + Jev 1.13 Auto-Triage & Đồng bộ Comment 1 chiều)*
 > 6. [`phase-15-5-frontend-integrations-and-e2e-verification.md`](./phase-15-5-frontend-integrations-and-e2e-verification.md) *(Sub-phase 15.5 — Giao diện React 19 / Ant Design v6, Vitest / xUnit Gates & Đồng bộ Tài liệu)*
+> 7. [`phase-15-remaining-frontend-handover.md`](./phase-15-remaining-frontend-handover.md) *(Bàn giao phiên sau — trạng thái 15.1→15.4, cấu hình deploy đã đặt, checklist xác minh, việc còn lại của 15.5 & rủi ro mở)*
 
 ---
 
@@ -51,7 +52,7 @@
 - **Bug nhỏ về cờ `Degraded` khi Jev Smart Assignee trả về `ManualRequired`:**
   - *Hiện tượng trên Production:* Khi bấm `Gợi ý người làm (Jev)` trên thẻ `#850FB54F`, API trả về trong `513 ms` nhưng hiển thị đồng thời cảnh báo vàng *"Dịch vụ AI tạm không khả dụng"* và *"Chưa có ứng viên đạt độ tương thích cao"*.
   - *Nguyên nhân:* `TaskTriageService.cs` dòng 131 & 197 đang gán `Degraded: result.RoutingAdvice == Jev.ConfidenceRouting.ManualRequired`. Khi Jev chạy thành công (`LatencyMs > 0`) nhưng độ tự tin `< 0.50`, `RoutingAdvice` là `ManualRequired` khiến `Degraded` bị bật oan.
-  - *Cách xử lý:* Sửa dứt điểm trong **Task `T15.4.1`** (`Degraded` chỉ bằng `true` khi provider thực sự lỗi / fallback `LatencyMs == 0` hoặc thông báo lỗi).
+  - *Cách xử lý:* Sửa dứt điểm trong **Task `T15.4.1`**. ✅ Đã hoàn tất sau review 2026-11-11: cả `TriageAsync` và `SuggestAssigneesAsync` dùng chung quy tắc `Degraded = usage is null` (chỉ khi provider thực sự lỗi), nên kết quả confidence < 0.50 vẫn là `ManualRequired` bình thường mà không bật cảnh báo "AI tạm không khả dụng".
 
 ---
 
@@ -61,7 +62,7 @@
 | :--- | :--- | :---: | :--- | :--- |
 | **15.1** | [`phase-15-1-foundation-schema-and-task-numbers.md`](./phase-15-1-foundation-schema-and-task-numbers.md) | `T15.1.1` → `T15.1.5` | Migration #15 (`Phase15ExternalIntegrations`), 6 bảng mới, mã `TN-123` (`task_numbers`), cột `is_in_review`, tài khoản hệ thống `GitHub Bot`, port `ITaskAutomation`. | ✅ **XONG** — Build `0/0`, `has-pending-model-changes` sạch, `1,175 / 0 / 0` Backend tests PASS (`+8` tests trong `Phase15FoundationTests`). |
 | **15.2** | [`phase-15-2-outbound-slack-discord-webhooks.md`](./phase-15-2-outbound-slack-discord-webhooks.md) | `T15.2.1` → `T15.2.5` | Mở rộng `IExternalAlertSink`, sự kiện `MemberJoined`, `WebhookUrlValidator` (SSRF guard), Slack Block Kit & Discord Embed formatters, `WebhookOutboxExternalAlertSink`, `WebhookOutboxDispatcher`, `WorkspaceWebhooksEndpoints`. | Pure tests (SSRF + Formatters) & Integration tests (`WorkspaceWebhooksApiTests`) PASS. ✅ **XONG** — Build `0/0`, `has-pending-model-changes` sạch, `1,236 / 0 / 0` Backend tests PASS (`+61`). |
-| **15.3** | [`phase-15-3-inbound-github-webhooks-and-pr-automation.md`](./phase-15-3-inbound-github-webhooks-and-pr-automation.md) | `T15.3.1` → `T15.3.5` | `GitHubSecretProtector` (`DataProtection`), `GitHubSignatureValidator` (`HMAC-SHA256`), `TaskKeyParser` (`TN-123`/`#123`), `WorkspaceGitHubIntegrationEndpoints`, `GitHubWebhookEndpoints`, PR State Machine + `AiActionLog` Undo (`GitHubPrMoveTask`). | Pure tests (`TaskKeyParser`, `HMAC-SHA256`) & Integration tests (`GitHubWebhookPrTests`) PASS. |
-| **15.4** | [`phase-15-4-github-issues-jev-triage-and-comments.md`](./phase-15-4-github-issues-jev-triage-and-comments.md) | `T15.4.1` → `T15.4.4` | `ITaskTriageService.TriageForSystemAsync` (+ fix `Degraded`), luồng `issues` (`opened`/`labeled`/`closed`/`reopened`) + Jev 1.13 Auto-Triage, luồng `issue_comment.created` đồng bộ 1 chiều qua `GitHub Bot`. | Integration tests (`GitHubWebhookIssueAndCommentTests`) PASS. |
+| **15.3** | [`phase-15-3-inbound-github-webhooks-and-pr-automation.md`](./phase-15-3-inbound-github-webhooks-and-pr-automation.md) | `T15.3.1` → `T15.3.5` | `GitHubSecretProtector` (`DataProtection`), `GitHubSignatureValidator` (`HMAC-SHA256`), `TaskKeyParser` (`TN-123`, auto-link chỉ nhận tiền tố `TN-`), `WorkspaceGitHubIntegrationEndpoints`, `GitHubWebhookEndpoints`, PR State Machine + `AiActionLog` Undo (`GitHubPrMoveTask`). | ✅ **XONG (sau review 2026-11-11)** — Build `0/0`, drift sạch, `GitHubWebhookPrTests` **20/20**, Pure **665/665**, toàn bộ backend **1.329 / 0 / 0**. |
+| **15.4** | [`phase-15-4-github-issues-jev-triage-and-comments.md`](./phase-15-4-github-issues-jev-triage-and-comments.md) | `T15.4.1` → `T15.4.4` | `ITaskTriageService.TriageForSystemAsync` (+ fix `Degraded` cho cả triage & assignee), luồng `issues` (`opened`/`labeled`/`closed`/`reopened`) + Jev 1.13 Auto-Triage + SignalR `TaskUpdated`, luồng `issue_comment.created` đồng bộ 1 chiều qua `GitHub Bot`. | ✅ **XONG (sau review 2026-11-11)** — `GitHubWebhookIssueAndCommentTests` **15/15**; audit log ghi trước bước Jev (fail-soft), Undo dùng được. |
 | **15.5** | [`phase-15-5-frontend-integrations-and-e2e-verification.md`](./phase-15-5-frontend-integrations-and-e2e-verification.md) | `T15.5.1` → `T15.5.5` | Types & API client, badge `TN-123` + chip PR/Issue trên `TaskCard` & `TaskDetailModal`, vai trò cột `isInReview` trên `KanbanColumn`, tab `Tích hợp` trên `WorkspaceSettingsPage`, Vitest tests & cập nhật tài liệu dự án. | `oxlint` 0/0, `tsc -b` exit 0, Vitest 100% PASS, `dotnet test` 100% PASS. |
 

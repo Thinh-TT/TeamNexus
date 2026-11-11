@@ -222,6 +222,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         bool? embeddingsEnabled = null,
         IJevDecisionProvider? jevProvider = null,
         IEmbeddingProvider? embeddingProvider = null,
+        RecordingBoardEventPublisher? boardEvents = null,
         HttpMessageHandler? webhookHandler = null)
     {
         Require();
@@ -247,6 +248,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
                                || embeddingsEnabled.HasValue
                                || jevProvider is not null
                                || embeddingProvider is not null
+                               || boardEvents is not null
                                || webhookHandler is not null
                                || !string.IsNullOrWhiteSpace(jevApiKey);
 
@@ -262,6 +264,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
                     JevApiKey = jevApiKey,
                     JevProvider = jevProvider,
                     EmbeddingProvider = embeddingProvider,
+                    BoardEvents = boardEvents,
                     AutoRecoveryPlanEnabled = autoRecoveryPlanEnabled ?? false,
                     ObserverJevSeverityRouting = observerJevSeverityRouting ?? true,
                     RagEnabled = ragEnabled ?? false,

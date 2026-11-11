@@ -80,7 +80,7 @@ jobs:
           $failed = [int]$report.numFailedTests
           Write-Host "vitest: total=$total failed=$failed"
           if ($failed -ne 0) { throw "vitest reported $failed failing tests" }
-          if ($total -lt 738) { throw "Số test đã tụt: $total (baseline hiện tại là 738)" }
+          if ($total -lt 747) { throw "Số test đã tụt: $total (baseline hiện tại là 747, sau Phase 15.3/15.4 và đợt khắc phục review 2026-11-11)" }
 
       - name: Build (vite)
         run: npm run build

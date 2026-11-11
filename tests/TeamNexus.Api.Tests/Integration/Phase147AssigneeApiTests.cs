@@ -154,6 +154,9 @@ public sealed class Phase147AssigneeApiTests : IClassFixture<DatabaseFixture>
         Assert.Equal(ConfidenceRouting.ManualRequired, body!.RoutingAdvice);
         Assert.Null(body.RecommendedUserId);
         Assert.Empty(body.Candidates);
+
+        // A confident-service-but-unconfident-answer is NOT a degraded service (Phase 15.4 §T15.4.1).
+        Assert.False(body.Degraded);
     }
 
     [Fact]

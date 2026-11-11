@@ -247,4 +247,67 @@ describe('AiActionLogItem', () => {
 
     expect(screen.getByText('Di chuyển thẻ (AI đề xuất)')).toBeInTheDocument()
   })
+
+  // Phase 15.3/15.4 review F9: system GitHub actions reach the same history drawer, so they need a
+  // Vietnamese label, no misleading "0 tasks" tag, and a basis line that explains the GitHub event.
+  it('labels the GitHubPrMoveTask action and hides the empty task-count tag', () => {
+    render(
+      <AiActionLogItem
+        log={{ ...mockApprovedLog, action: 'GitHubPrMoveTask', taskCount: 0 }}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+        onUndo={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('Tự động chuyển thẻ (GitHub PR)')).toBeInTheDocument()
+    expect(screen.queryByText('0 tasks')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Hoàn tác hành động/i })).toBeInTheDocument()
+  })
+
+  it('labels the GitHubIssueCreateTask action and keeps its task count', () => {
+    render(
+      <AiActionLogItem
+        log={{ ...mockApprovedLog, action: 'GitHubIssueCreateTask', taskCount: 1 }}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+        onUndo={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('Tạo thẻ từ GitHub Issue')).toBeInTheDocument()
+    expect(screen.getByText('1 tasks')).toBeInTheDocument()
+  })
+
+  it('describes the GitHub basis instead of rendering an empty description', async () => {
+    const githubDetail: AiActionLogDetail = {
+      ...mockApprovedLog,
+      action: 'GitHubIssueCreateTask',
+      taskCount: 0,
+      basis: { repo: 'octocat/TeamNexus', issueNumber: 42, state: 'open' },
+      beforeSnapshot: null,
+      afterSnapshot: null,
+      appliedSnapshot: null,
+      createdTaskIds: [],
+    }
+
+    render(
+      <AiActionLogItem
+        log={{ ...mockApprovedLog, action: 'GitHubIssueCreateTask', taskCount: 0 }}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+        onUndo={vi.fn()}
+        onFetchDetail={vi.fn().mockResolvedValue(githubDetail)}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /Chi tiết/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('octocat/TeamNexus · Issue #42 · trạng thái open')
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/Mô tả 0 ký tự/)).not.toBeInTheDocument()
+    })
+  })
 })

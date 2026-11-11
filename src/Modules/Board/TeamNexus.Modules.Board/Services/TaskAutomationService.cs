@@ -441,6 +441,22 @@ public sealed class TaskAutomationService : ITaskAutomation
         return response;
     }
 
+    public async Task NotifyTaskUpdatedAsync(Guid taskId, CancellationToken ct = default)
+    {
+        var task = await _db.Tasks
+            .Include(t => t.Board)
+            .FirstOrDefaultAsync(t => t.Id == taskId, ct);
+
+        if (task?.Board is null)
+        {
+            // The task was deleted between the link update and the broadcast; nothing to tell the UI.
+            return;
+        }
+
+        var response = await BuildTaskResponseAsync(task, task.Board.WorkspaceId, ct);
+        await _events.TaskUpdated(task.BoardId, response, ct);
+    }
+
     // ---- helpers ----------------------------------------------------------
 
     private async Task<TaskResponse> BuildTaskResponseAsync(BoardTask task, Guid workspaceId, CancellationToken ct)
