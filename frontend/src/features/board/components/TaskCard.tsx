@@ -4,6 +4,7 @@ import { CSS } from '@dnd-kit/utilities'
 import {
   CalendarOutlined,
   CheckCircleFilled,
+  GithubOutlined,
   MessageOutlined,
   MoreOutlined,
   QuestionCircleOutlined,
@@ -15,6 +16,12 @@ import dayjs from 'dayjs'
 import type { TaskResponse } from '../types/board.types'
 import { agentApi } from '../../ai/services/agentApi'
 import { AGENT_FALLBACK_DISPLAY_NAME } from '../../ai/utils/agentRunHelpers'
+import {
+  formatExternalLinkChipText,
+  formatTaskCode,
+  getExternalLinkStateMeta,
+} from '../utils/externalLinkHelpers'
+import { isSafeHref } from '../utils/markdown'
 import { isOverdue, isTaskCompleted, overdueDays } from '../utils/taskDueDate'
 import { getPriorityConfig } from '../utils/taskPriority'
 
@@ -131,6 +138,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({
   }, [task.id, task.activeAgentRunId])
 
   const aiAgentLabel = task.assigneeName || agentRunDisplayName || AGENT_FALLBACK_DISPLAY_NAME
+  const taskCode = formatTaskCode(task.taskNumber)
+  const externalLinks = task.externalLinks ?? []
+  const visibleExternalLinks = externalLinks.slice(0, 3)
+  const extraExternalLinks = externalLinks.slice(3)
 
   const visibleLabels = task.labels?.slice(0, 2) || []
   const extraLabels = task.labels && task.labels.length > 2 ? task.labels.slice(2) : []
@@ -166,9 +177,35 @@ export const TaskCard: React.FC<TaskCardProps> = ({
         styles={{ body: { padding: '12px 13px' } }}
       >
         <Flex vertical gap={8}>
-          {/* Top meta: Priority + Labels + Overdue badge + Active Agent badge */}
-          {(priorityConfig || (task.labels && task.labels.length > 0) || taskIsOverdue || task.activeAgentRunId) && (
+          {/* Top meta: TaskCode + Priority + Labels + Overdue badge + Active Agent badge */}
+          {(taskCode ||
+            priorityConfig ||
+            (task.labels && task.labels.length > 0) ||
+            taskIsOverdue ||
+            task.activeAgentRunId) && (
             <Flex wrap="wrap" gap={4} align="center">
+              {taskCode && (
+                <span
+                  data-testid="task-card-number"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    fontFamily: "var(--tn-font-mono, 'JetBrains Mono', monospace)",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    lineHeight: '18px',
+                    padding: '0 6px',
+                    borderRadius: 5,
+                    backgroundColor: '#f1f5f9',
+                    border: '1px solid #e2e8f0',
+                    color: '#475569',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
+                >
+                  {taskCode}
+                </span>
+              )}
               {taskIsOverdue && (
                 <Tag
                   color="error"
@@ -348,6 +385,89 @@ export const TaskCard: React.FC<TaskCardProps> = ({
               >
                 {clarificationQuestion}
               </Typography.Paragraph>
+            </Flex>
+          )}
+
+          {/* GitHub PR / Issue chips */}
+          {externalLinks.length > 0 && (
+            <Flex wrap="wrap" gap={4} align="center" data-testid="task-card-external-links">
+              {visibleExternalLinks.map((link) => {
+                const stateMeta = getExternalLinkStateMeta(link.state)
+                const chipLabel = formatExternalLinkChipText(link)
+                const safeUrl = isSafeHref(link.externalUrl) ? link.externalUrl : null
+                const chipEl = (
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      fontSize: 10.5,
+                      fontWeight: 600,
+                      lineHeight: '18px',
+                      padding: '0 6px',
+                      borderRadius: 5,
+                      backgroundColor: stateMeta.bg,
+                      border: `1px solid ${stateMeta.border}`,
+                      color: stateMeta.color,
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                      fontFamily: "var(--tn-font-mono, 'JetBrains Mono', monospace)",
+                    }}
+                  >
+                    <GithubOutlined style={{ fontSize: 11 }} />
+                    <span>{chipLabel}</span>
+                  </span>
+                )
+
+                return (
+                  <Tooltip key={link.id} title={`${link.externalId}: ${link.title}`}>
+                    {safeUrl ? (
+                      <a
+                        href={safeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        style={{ textDecoration: 'none', display: 'inline-flex' }}
+                      >
+                        {chipEl}
+                      </a>
+                    ) : (
+                      chipEl
+                    )}
+                  </Tooltip>
+                )
+              })}
+              {extraExternalLinks.length > 0 && (
+                <Tooltip
+                  title={
+                    <Flex vertical gap={2}>
+                      {extraExternalLinks.map((l) => (
+                        <span key={l.id} style={{ fontSize: 11.5 }}>
+                          {formatExternalLinkChipText(l)} — {l.title}
+                        </span>
+                      ))}
+                    </Flex>
+                  }
+                >
+                  <Tag
+                    style={{
+                      margin: 0,
+                      fontSize: 10,
+                      lineHeight: '18px',
+                      borderRadius: 5,
+                      backgroundColor: '#f1f5f9',
+                      borderColor: '#cbd5e1',
+                      color: '#475569',
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                    }}
+                  >
+                    +{extraExternalLinks.length}
+                  </Tag>
+                </Tooltip>
+              )}
             </Flex>
           )}
 

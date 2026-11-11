@@ -72,6 +72,12 @@ jobs:
       # Giai đoạn 14.7 Track B = 738 (123 file): chọn persona trong Agent Chat (§B1), tên persona trên
       #   AgentRunPanel/TaskCard (§B1), trang Kho tri thức (§B3 — thêm/xoá tài liệu, hiển thị "chờ Manager duyệt",
       #   cảnh báo khi Jev:RagEnabled tắt).
+      # Giai đoạn 15.3/15.4 + đợt khắc phục review = 747 (123 file).
+      # Giai đoạn 15.5 = 778 (126 file): Webhooks Outbound (Slack/Discord) + GitHub Integration tab,
+      #   cờ isInReview trên ColumnModal/KanbanColumn, mã TN-123 & GitHub chip trên TaskCard/TaskDetailModal,
+      #   bình luận GitHub Bot + integrationApi/WorkspaceIntegrations Vitest suite (+31 tests).
+      # Đợt chỉnh sửa 15.5 trước merge (2026-11-11) = 786 (127 file): guard clipboard, chặn bật auto-create
+      #   khi chưa chọn board, unit test cho request builder (EMPTY_GUID/"").
       - name: Assert test count did not regress
         shell: pwsh
         run: |
@@ -80,7 +86,7 @@ jobs:
           $failed = [int]$report.numFailedTests
           Write-Host "vitest: total=$total failed=$failed"
           if ($failed -ne 0) { throw "vitest reported $failed failing tests" }
-          if ($total -lt 747) { throw "Số test đã tụt: $total (baseline hiện tại là 747, sau Phase 15.3/15.4 và đợt khắc phục review 2026-11-11)" }
+          if ($total -lt 786) { throw "Số test đã tụt: $total (baseline hiện tại là 786, sau Phase 15.5 + đợt chỉnh sửa review trước merge 2026-11-11)" }
 
       - name: Build (vite)
         run: npm run build

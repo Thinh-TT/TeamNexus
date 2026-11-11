@@ -647,7 +647,7 @@ Fan-out giữ nguyên "1 row / 1 người nhận".
 - Seed dữ liệu nền trong migration/`OnModelCreating`: 3 role `Admin`, `Manager`, `Member`.
 - Migration áp dụng lên PostgreSQL local để dev, sau đó lên Neon/Supabase (theo `phase-1-auth.md` §2.1).
 
-**Chuỗi migration đã áp dụng (tính tới Giai đoạn 11):**
+**Chuỗi migration đã áp dụng (tính tới Giai đoạn 15 — 15 migrations, 27 bảng nghiệp vụ + 7 bảng Identity):**
 
 | # | Migration | Giai đoạn | Nội dung |
 |---|---|---|---|
@@ -662,8 +662,12 @@ Fan-out giữ nguyên "1 row / 1 người nhận".
 | 9 | `Phase11MemberProfile` | 11 | Bổ sung `workspace_invitations`, `email_messages`, partial UQ pending invite |
 | 10 | `Phase13DailyDigest` | 13 | **Thêm 1 cột** `users.digest_enabled` (`boolean NOT NULL DEFAULT true`) — bật/tắt email tóm tắt hằng ngày |
 | 11 | `Phase14_5AgentChat` | 14.5 | **Thêm 1 bảng** `agent_chat_messages` (+ 2 index, + 2 CHECK) — transcript của AI Agent Chat cấp board |
+| 12 | `Phase147AgentPlatform` | 14.7A | Thêm `workspace_taxonomies` và các cột hồ sơ kỹ năng (`skills`, `primary_role`, `capacity_weight`, `max_wip_limit`) trên `workspace_members` |
+| 13 | `Phase147AgentPersonas` | 14.7B | Thêm `workspace_members.persona_key` + CHECK whitelist + thay `uq_workspace_members_ai_agent` bằng `uq_workspace_members_ai_persona` |
+| 14 | `Phase147KnowledgeBase` | 14.7B | `CREATE EXTENSION vector;` + thêm `workspace_knowledge_documents` & `workspace_knowledge_chunks` (`vector(1536)` + HNSW index) |
+| 15 | `Phase15ExternalIntegrations` | 15.1 | Thêm **6 bảng** (`task_numbers`, `workspace_webhook_endpoints`, `webhook_delivery_outbox`, `workspace_github_integrations`, `github_webhook_deliveries`, `task_external_links`), 4 cột mở rộng (`users.is_system`, `workspaces.next_task_number`, `board_columns.is_in_review`, `tasks.task_number`), backfill `TN-123` & seed `GitHub Bot` |
 
-> Dùng `dotnet ef migrations list` để đối chiếu — hiện tại phải là **11**.
+> Dùng `dotnet ef migrations list` để đối chiếu — hiện tại là **15** migrations (**27** bảng nghiệp vụ + **7** bảng Identity = **34** bảng vật lý), `has-pending-model-changes` sạch.
 
 > **Giai đoạn 14 — KHÔNG có migration nào (10 → 11 là do Giai đoạn 14.5, không phải 14).** Cả ba tính năng
 > của 14 đều không cần schema: xem §7 bên dưới. Đây là điểm **khác** Giai đoạn 13 (giai đoạn đó có 1 cột additive).
@@ -763,6 +767,26 @@ Query filter soft-delete theo `workspace.deleted_at` (cùng `WorkspaceTaxonomy`)
 > ⚠️ **Operator class phải khớp toán tử truy vấn.** Retrieval xếp hạng bằng cosine (`<=>` / `CosineDistance`) nên index phải là **`vector_cosine_ops`**; index dựng cho `vector_l2_ops` vẫn tồn tại, vẫn đúng cú pháp, và **không bao giờ được dùng**.
 > ⚠️ **`CREATE EXTENSION IF NOT EXISTS vector;` viết tay, đặt ĐẦU migration** — `modelBuilder.HasPostgresExtension("vector")` chỉ được EF ghi thành **annotation** trên `AlterDatabase()` và **không** phát ra câu lệnh. `vector` là extension **bên thứ ba** ⇒ image `postgres:18` chính thức **không** có; CI/dev dùng **`pgvector/pgvector:pg18`**.
 > ⚠️ **Query filter khớp document là BẮT BUỘC, không phải trang trí.** Document có filter soft-delete và là **đầu bắt buộc** của quan hệ ⇒ thiếu filter phía chunk thì EF cảnh báo `10622` và có thể nạp chunk mà document đã bị ẩn. Filter đi **qua document** (không qua `workspace_id` denormalize) để chỉ có **một** nguồn sự thật về khả năng hiển thị.
+
+---
+
+### 3.12 Module AI — Tích hợp Hệ sinh thái Bên ngoài (Giai đoạn 15 — Migration #15 `Phase15ExternalIntegrations`)
+
+> Migration #15 bổ sung **6 bảng mới** (nâng tổng số bảng nghiệp vụ từ **21 → 27** bảng, cộng 7 bảng Identity = 34 bảng) và 4 cột mở rộng trên các bảng sẵn có; `dotnet ef migrations list` = **15**.
+
+- **Cột mở rộng trên bảng hiện có:**
+  - `users.is_system` (`boolean NOT NULL DEFAULT false`) — đánh dấu tài khoản hệ thống `GitHub Bot` (`00000000-0000-0000-0000-00000000b071`), bị chặn đăng nhập OAuth/refresh ở `AuthService`.
+  - `workspaces.next_task_number` (`bigint NOT NULL DEFAULT 1`) — bộ đếm nguyên tử cấp phát mã `TN-123` theo từng workspace.
+  - `tasks.task_number` (`bigint NOT NULL DEFAULT 0`) + IX `(board_id, task_number)` — số thứ tự thẻ được backfill theo `(created_at ASC, id ASC)`.
+  - `board_columns.is_in_review` (`boolean NOT NULL DEFAULT false`) + partial UQ `IX_board_columns_board_id_single_in_review` (`WHERE is_in_review = true`) — cột hệ thống thứ 3 (loại trừ lẫn nhau với `is_done` và `is_clarification`).
+
+#### 6 Bảng Mới của Giai đoạn 15
+1. **`task_numbers`** (`PK (workspace_id, task_number)`, `UQ task_id`): đảm bảo duy nhất toàn cục `task_number` trong phạm vi workspace.
+2. **`workspace_webhook_endpoints`** (`id`, `workspace_id`, `name`, `provider` CHECK `('slack','discord')`, `target_url`, `subscribed_events`, `is_active`, `failure_count`, `last_success_at`, `last_failure_at`, `last_error`, `created_by_user_id`, `created_at`, `updated_at`): cấu hình kênh Slack/Discord outbound.
+3. **`webhook_delivery_outbox`** (`id`, `endpoint_id`, `workspace_id`, `notification_id`, `event_type`, `dedupe_key`, `payload_json` `jsonb`, `status` CHECK `('Pending','Sent','Failed')`, `attempt_count`, `max_attempts`, `next_attempt_at`, `sent_at`, `last_http_status`, `last_error`, `created_at`, `updated_at`): hàng đợi outbox bền với backoff + circuit breaker.
+4. **`workspace_github_integrations`** (`id`, `workspace_id` UQ, `webhook_token` UQ, `secret_ciphertext`, `secret_hint`, `is_enabled`, `default_board_id` SET NULL, `issue_label_filter` varchar(500), `auto_move_on_pr`, `auto_create_tasks_from_issues`, `sync_issue_comments`, `created_by_user_id`, `created_at`, `updated_at`): 1 cấu hình GitHub Webhook / workspace; secret mã hoá bằng `IDataProtectionProvider`.
+5. **`github_webhook_deliveries`** (`id`, `integration_id`, `workspace_id`, `delivery_id`, `event_name`, `action`, `repository_full_name`, `status` CHECK `('Processed','Ignored','Failed')`, `summary`, `error_message`, `received_at`, `UQ (integration_id, delivery_id)`): chống replay theo `X-GitHub-Delivery` và sổ nhật ký delivery.
+6. **`task_external_links`** (`id`, `workspace_id`, `task_id` CASCADE, `provider` CHECK `('github')`, `link_type` CHECK `('pull_request','issue')`, `external_id`, `external_url`, `title`, `state` CHECK `('draft','open','merged','closed')`, `created_at`, `updated_at`, `UQ (task_id, provider, link_type, external_id)`): liên kết thẻ Kanban với GitHub Pull Request / Issue kèm matching global query filter.
 
 ---
 

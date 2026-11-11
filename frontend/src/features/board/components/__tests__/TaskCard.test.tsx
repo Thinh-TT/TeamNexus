@@ -1,6 +1,6 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { DndContext } from '@dnd-kit/core'
 import { TaskCard } from '../TaskCard'
 import type { TaskResponse } from '../../types/board.types'
@@ -156,5 +156,109 @@ describe('TaskCard', () => {
     expect(screen.getByTestId('task-card-overdue-badge')).toBeInTheDocument()
     expect(screen.getByText('Khẩn cấp')).toBeInTheDocument()
     expect(screen.getByText('Frontend')).toBeInTheDocument()
+  })
+
+  it('renders TN-42 monospace badge when taskNumber > 0 and omits it when absent/0', () => {
+    const numberedTask: TaskResponse = {
+      ...baseTask,
+      priority: null,
+      labels: [],
+      taskNumber: 42,
+    }
+
+    const { rerender } = renderWithDnd(<TaskCard task={numberedTask} />)
+    const codeBadge = screen.getByTestId('task-card-number')
+    expect(codeBadge).toHaveTextContent('TN-42')
+    expect(codeBadge.style.fontFamily).toContain('JetBrains Mono')
+
+    rerender(
+      <DndContext>
+        <TaskCard task={{ ...numberedTask, taskNumber: 0 }} />
+      </DndContext>
+    )
+    expect(screen.queryByTestId('task-card-number')).not.toBeInTheDocument()
+  })
+
+  it('renders GitHub PR and Issue state chips with overflow indicator when > 3 links', () => {
+    const linkedTask: TaskResponse = {
+      ...baseTask,
+      taskNumber: 42,
+      externalLinks: [
+        {
+          id: 'lnk-1',
+          provider: 'github',
+          linkType: 'pull_request',
+          externalId: 'octocat/TeamNexus#88',
+          externalUrl: 'https://github.com/octocat/TeamNexus/pull/88',
+          title: 'feat: implement oauth',
+          state: 'merged',
+          updatedAt: '2026-11-10T10:00:00Z',
+        },
+        {
+          id: 'lnk-2',
+          provider: 'github',
+          linkType: 'issue',
+          externalId: 'octocat/TeamNexus#12',
+          externalUrl: 'https://github.com/octocat/TeamNexus/issues/12',
+          title: 'Login bug',
+          state: 'open',
+          updatedAt: '2026-11-10T10:00:00Z',
+        },
+        {
+          id: 'lnk-3',
+          provider: 'github',
+          linkType: 'pull_request',
+          externalId: 'octocat/TeamNexus#89',
+          externalUrl: 'https://github.com/octocat/TeamNexus/pull/89',
+          title: 'wip',
+          state: 'draft',
+          updatedAt: '2026-11-10T10:00:00Z',
+        },
+        {
+          id: 'lnk-4',
+          provider: 'github',
+          linkType: 'pull_request',
+          externalId: 'octocat/TeamNexus#90',
+          externalUrl: 'https://github.com/octocat/TeamNexus/pull/90',
+          title: 'old pr',
+          state: 'closed',
+          updatedAt: '2026-11-10T10:00:00Z',
+        },
+      ],
+    }
+
+    renderWithDnd(<TaskCard task={linkedTask} />)
+    expect(screen.getByTestId('task-card-external-links')).toBeInTheDocument()
+    expect(screen.getByText('PR #88 · Merged')).toBeInTheDocument()
+    expect(screen.getByText('Issue #12 · Open')).toBeInTheDocument()
+    expect(screen.getByText('PR #89 · Draft')).toBeInTheDocument()
+    expect(screen.getByText('+1')).toBeInTheDocument()
+  })
+
+  it('does not trigger card onClick when clicking a GitHub chip link', () => {
+    const onClick = vi.fn()
+    const linkedTask: TaskResponse = {
+      ...baseTask,
+      externalLinks: [
+        {
+          id: 'lnk-1',
+          provider: 'github',
+          linkType: 'pull_request',
+          externalId: 'octocat/TeamNexus#88',
+          externalUrl: 'https://github.com/octocat/TeamNexus/pull/88',
+          title: 'feat: implement oauth',
+          state: 'merged',
+          updatedAt: '2026-11-10T10:00:00Z',
+        },
+      ],
+    }
+
+    renderWithDnd(<TaskCard task={linkedTask} onClick={onClick} />)
+    const chipLink = screen.getByText('PR #88 · Merged').closest('a')
+    expect(chipLink).toHaveAttribute('href', 'https://github.com/octocat/TeamNexus/pull/88')
+    expect(chipLink).toHaveAttribute('target', '_blank')
+
+    fireEvent.click(chipLink!)
+    expect(onClick).not.toHaveBeenCalled()
   })
 })
