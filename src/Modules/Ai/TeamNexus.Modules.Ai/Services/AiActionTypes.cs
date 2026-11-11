@@ -81,6 +81,12 @@ public static class AiActionTypes
     /// Scope is <c>entity_type = 'Board'</c>.
     /// </summary>
     public const string GitHubPrMoveTask = "GitHubPrMoveTask";
+
+    /// <summary>
+    /// Automated creation of a task triggered by GitHub Issue (Phase 15.4 §T15.4.2).
+    /// Scope is <c>entity_type = 'Board'</c>.
+    /// </summary>
+    public const string GitHubIssueCreateTask = "GitHubIssueCreateTask";
 }
 
 /// <summary>

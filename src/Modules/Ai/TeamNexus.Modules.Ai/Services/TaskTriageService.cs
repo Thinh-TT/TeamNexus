@@ -37,6 +37,13 @@ public interface ITaskTriageService
     /// </summary>
     Task<AssigneeSuggestionResponse> SuggestAssigneesAsync(
         Guid boardId, Guid taskId, Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// System-level task triage for automated workflows (e.g. GitHub issue webhooks).
+    /// Does not require an interactive workspace member user id. Returns null on failure or if Jev is disabled.
+    /// </summary>
+    Task<TaskTriageResponse?> TriageForSystemAsync(
+        Guid boardId, string title, string? description, CancellationToken ct = default);
 }
 
 public sealed class TaskTriageService : ITaskTriageService
@@ -139,6 +146,80 @@ public sealed class TaskTriageService : ITaskTriageService
         return response;
     }
 
+    public async Task<TaskTriageResponse?> TriageForSystemAsync(
+        Guid boardId, string title, string? description, CancellationToken ct = default)
+    {
+        if (!_options.Enabled)
+        {
+            return null;
+        }
+
+        var board = await _db.Boards
+            .AsNoTracking()
+            .FirstOrDefaultAsync(b => b.Id == boardId, ct);
+
+        if (board is null)
+        {
+            return null;
+        }
+
+        var trimmedTitle = title?.Trim();
+        if (string.IsNullOrEmpty(trimmedTitle))
+        {
+            return null;
+        }
+
+        if (trimmedTitle.Length > MaxTitleLength)
+        {
+            trimmedTitle = trimmedTitle[..MaxTitleLength];
+        }
+
+        var trimmedDescription = description?.Trim();
+        if (trimmedDescription is { Length: > MaxDescriptionLength })
+        {
+            trimmedDescription = trimmedDescription[..MaxDescriptionLength];
+        }
+
+        try
+        {
+            var domains = await _taxonomies.GetSeedsAsync(board.WorkspaceId, TaxonomyKind.Domain, ct);
+            var workTypes = await _taxonomies.GetSeedsAsync(board.WorkspaceId, TaxonomyKind.WorkType, ct);
+
+            var context = new TaskTriageContext(
+                trimmedTitle,
+                trimmedDescription,
+                domains.Select(seed => new Jev.TaxonomyEntry(seed.Key, seed.Label)).ToList(),
+                workTypes.Select(seed => new Jev.TaxonomyEntry(seed.Key, seed.Label)).ToList());
+
+            var result = await _jev.TriageTaskAsync(context, ct);
+
+            var isDegraded = result.Usage is null || (result.LatencyMs == 0 && result.Options.Count == 0);
+
+            var response = new TaskTriageResponse(
+                result.SuggestedDomain,
+                result.SuggestedWorkType,
+                result.SuggestedPriority,
+                result.NeedsSecurityReview,
+                result.ConfidenceScore,
+                result.RoutingAdvice,
+                result.Options.Select(option => new TriageOptionResponse(option.Field, option.Value, option.Probability)).ToList(),
+                Degraded: isDegraded,
+                Model: _options.EffectiveModel,
+                LatencyMs: result.LatencyMs);
+
+            _logger.LogDebug(
+                "System triage for board {BoardId}: advice={Advice}, confidence={Confidence}, degraded={Degraded}.",
+                boardId, result.RoutingAdvice, result.ConfidenceScore, response.Degraded);
+
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "System triage for board {BoardId} failed; proceeding without AI suggestions.", boardId);
+            return null;
+        }
+    }
+
     // ---- §A4 assignee dispatch ----------------------------------------------------------------
 
     public async Task<AssigneeSuggestionResponse> SuggestAssigneesAsync(
@@ -194,7 +275,7 @@ public sealed class TaskTriageService : ITaskTriageService
                 .Select(rank => new CandidateSuggestionResponse(
                     rank.UserId, rank.DisplayName, rank.Probability, rank.Reason))
                 .ToList(),
-            Degraded: result.RoutingAdvice == Jev.ConfidenceRouting.ManualRequired,
+            Degraded: candidates.Count > 0 && (result.Usage is null || (result.LatencyMs == 0 && result.CandidateRankings.Count == 0)),
             Model: _options.EffectiveModel,
             LatencyMs: result.LatencyMs);
 

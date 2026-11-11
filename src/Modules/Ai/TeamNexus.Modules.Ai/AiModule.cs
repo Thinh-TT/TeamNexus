@@ -171,6 +171,7 @@ public static class AiModule
         services.AddScoped<IWorkspaceGitHubIntegrationService, WorkspaceGitHubIntegrationService>();
         services.AddScoped<IGitHubWebhookService, GitHubWebhookService>();
         services.AddScoped<IAiActionApplier, GitHubPrMoveTaskApplier>();
+        services.AddScoped<IAiActionApplier, GitHubIssueCreateTaskApplier>();
 
         // User-facing alerts (Phase 11 §6.4): Board declares the port + a no-op default, this line
         // overrides it — the same ordering rule as IEmailGateway/IActivityLogWriter above.

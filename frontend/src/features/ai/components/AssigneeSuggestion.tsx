@@ -325,7 +325,7 @@ export const AssigneeSuggestion: React.FC<AssigneeSuggestionProps> = ({
               )}
 
               {/* Nhánh 3: ManualRequired (Tự tin < 50%) */}
-              {isManualRequired(data.routingAdvice) && (
+              {!data.degraded && isManualRequired(data.routingAdvice) && (
                 <Alert
                   type="info"
                   showIcon

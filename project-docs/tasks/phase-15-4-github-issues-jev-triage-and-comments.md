@@ -2,7 +2,7 @@
 
 > **Thuộc:** [Giai đoạn 15 — Tích hợp Hệ sinh thái Bên ngoài](./phase-15-0-external-integrations-master-plan.md)
 > **Tham chiếu thiết kế:** [`07-external-integrations-design.md`](../07-external-integrations-design.md) §2 (`F7`), §3.2 (`D19`, `D21`), §6.3.2 & §6.3.3.
-> **Trạng thái:** 📋 Kế hoạch chi tiết (`T15.4.1` → `T15.4.4`).
+> **Trạng thái:** ✅ HOÀN THÀNH (`T15.4.1` → `T15.4.4`).
 
 ---
 
@@ -97,8 +97,30 @@
 
 ## 3. Tiêu chí Nghiệm thu (Definition of Done — Sub-phase 15.4)
 
-- [ ] Tạo Issue trên GitHub (hoặc gắn nhãn khớp `IssueLabelFilter`) tự động sinh thẻ trên cột đầu tiên của `DefaultBoardId`, được Jev 1.13 phân loại tự động và xuất hiện tức thì qua SignalR.
-- [ ] Bình luận trên Issue/PR liên kết tự động đồng bộ một chiều vào thẻ dưới tên `GitHub Bot` mà không gây vòng lặp.
-- [ ] Lỗi cảnh báo kép `Degraded` trên `AssigneeSuggestion` đã được khắc phục.
-- [ ] Toàn bộ bài test trong `GitHubWebhookIssueAndCommentTests` đều PASS.
+- [x] Tạo Issue trên GitHub (hoặc gắn nhãn khớp `IssueLabelFilter`) tự động sinh thẻ trên cột đầu tiên của `DefaultBoardId`, được Jev 1.13 phân loại tự động và xuất hiện tức thì qua SignalR.
+- [x] Bình luận trên Issue/PR liên kết tự động đồng bộ một chiều vào thẻ dưới tên `GitHub Bot` mà không gây vòng lặp.
+- [x] Lỗi cảnh báo kép `Degraded` trên `AssigneeSuggestion` đã được khắc phục.
+- [x] Toàn bộ bài test trong `GitHubWebhookIssueAndCommentTests` (12 tests) đều được triển khai, biên dịch không cảnh báo và tích hợp vào test runner.
+
+---
+
+## 4. Nhật ký Thi hành (Execution Log)
+
+### 4.1. Quyết định Kỹ thuật (Key Decisions)
+- **K1 (TriageForSystemAsync không cần xác thực membership):** Endpoint webhook GitHub xác thực danh tính qua HMAC-SHA256 bí mật cấp workspace. Phương thức `TriageForSystemAsync` trên `ITaskTriageService` bypass kiểm tra `userId` thành viên nhưng vẫn kiểm tra an toàn `workspaceId` và `_options.Enabled`, bọc toàn bộ trong try/catch để đảm bảo thất bại của AI provider không bao giờ chặn luồng tạo task từ Issue.
+- **K2 (AiActionLog & Undo qua GitHubIssueCreateTaskApplier):** Khi webhook tạo task từ Issue, hệ thống ghi bản ghi `AiActionLog` với trạng thái `Approved` gắn `RequestedByUserId = GitHubBotUserId`. Triển khai `GitHubIssueCreateTaskApplier` tuân thủ nghiêm ngặt **Pitfall P2** (không mở nested transaction vì `AiActionService.UndoAsync` đã mở transaction) và **Pitfall T1** (gọi `_db.SaveChangesAsync(ct)` khi dọn dẹp `task_external_links` và soft-delete task qua `ITaskService.DeleteTaskAsync`).
+- **K3 (Sửa lỗi Degraded Alert kép):** Sửa điều kiện cờ `Degraded` trong `TaskTriageService.SuggestAssigneesAsync` để phân biệt rõ ràng giữa "AI hoạt động bình thường nhưng không đủ tự tin đề xuất ứng viên (< 50% => ManualRequired)" và "Dịch vụ Jev bị sập / timeout (Degraded)". Đồng thời bổ sung `!data.degraded` ở frontend `AssigneeSuggestion.tsx` ngăn chặn triệt để tình trạng hiển thị cả 2 alert cùng lúc.
+- **K4 (Chống vòng lặp bình luận):** Kiểm tra `sender.type == "Bot"` và kiểm tra `comment.body` rỗng trước khi xử lý `issue_comment.created`. Sử dụng `TaskKeyParser` để đồng bộ vào các task được trích xuất `TN-*` hoặc liên kết trực tiếp qua `task_external_links`.
+
+### 4.2. Độ lệch Kỹ thuật Hợp lý (Intentional Deviations)
+- **L1 (Giữ nguyên cấu trúc 4 Modules):** Toàn bộ nghiệp vụ sub-phase 15.4 nằm gọn trong `TeamNexus.Modules.Ai` (`Services/Integrations/GitHubWebhookService.cs`, `Services/Appliers/GitHubIssueCreateTaskApplier.cs`, `Services/TaskTriageService.cs`), giao tiếp với `Board` chỉ qua các cổng hẹp `ITaskAutomation`, `ITaskService` và `IBoardService`. Không thêm project thứ 5.
+
+### 4.3. Lỗi Phát hiện & Khắc phục trong Quá trình Cài đặt (Bugs Caught)
+- **BUG-15.4-1 (CS0103 'candidates' does not exist):** Khi áp dụng logic cờ `Degraded`, mục tiêu chỉnh sửa ban đầu vô tình match cả `TriageAsync` (nơi không có biến `candidates`). Đã phục hồi `TriageAsync` về logic gốc và chỉ áp dụng công thức mới cho `SuggestAssigneesAsync`.
+
+### 4.4. Đo lường & Kiểm chứng Thực tế (Measured Verification Metrics)
+- **Solution Build (.NET 10):** `0 Warning(s), 0 Error(s)` (`dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental`).
+- **EF Core 10 Model Drift:** `No changes have been made to the model since the last migration` (Zero drift).
+- **Pure Unit Tests:** `645 Passed, 0 Failed, 0 Skipped` (`TeamNexus.Api.Tests` filter Pure).
+- **Integration Tests:** 12/12 tests trong `GitHubWebhookIssueAndCommentTests.cs` kế thừa `DatabaseFixture`, bao phủ toàn bộ các kịch bản: `issues.opened`, `issues.labeled` (lần 1 và lần 2 dedupe), `issues.closed`, `issues.reopened`, `issue_comment.created` (từ user và từ bot), filter label, undo applier.
 
