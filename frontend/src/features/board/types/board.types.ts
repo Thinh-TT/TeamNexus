@@ -26,6 +26,17 @@ export interface WorkspaceMemberResponse {
   personaKey?: string | null
 }
 
+export interface TaskExternalLinkSummary {
+  id: string
+  provider: 'github' | string
+  linkType: 'pull_request' | 'issue' | string
+  externalId: string
+  externalUrl: string
+  title: string
+  state: 'draft' | 'open' | 'merged' | 'closed' | string
+  updatedAt: string
+}
+
 export interface TaskResponse {
   id: string
   boardId: string
@@ -44,6 +55,8 @@ export interface TaskResponse {
   commentCount: number
   assigneeIsAiAgent: boolean
   activeAgentRunId: string | null
+  taskNumber?: number
+  externalLinks?: TaskExternalLinkSummary[]
 }
 
 export interface ColumnResponse {
@@ -56,6 +69,7 @@ export interface ColumnResponse {
   createdAt: string
   updatedAt: string
   tasks: TaskResponse[]
+  isInReview?: boolean
 }
 
 export interface BoardResponse {
@@ -94,12 +108,14 @@ export interface CreateColumnRequest {
   name: string
   isDone?: boolean
   isClarification?: boolean
+  isInReview?: boolean
 }
 
 export interface UpdateColumnRequest {
   name?: string | null
   isDone?: boolean | null
   isClarification?: boolean | null
+  isInReview?: boolean | null
 }
 
 export interface ColumnPositionItem {

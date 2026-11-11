@@ -2,9 +2,12 @@ import React, { useEffect, useState } from 'react'
 import {
   CalendarOutlined,
   CheckCircleFilled,
+  CopyOutlined,
   DeleteOutlined,
   EditOutlined,
   FlagOutlined,
+  GithubOutlined,
+  LinkOutlined,
   LoadingOutlined,
   PlusOutlined,
   RobotOutlined,
@@ -42,7 +45,12 @@ import {
 import dayjs from 'dayjs'
 import { useAuth } from '../../auth/hooks/useAuth'
 import { boardApi } from '../services/boardApi'
-import { renderMarkdown } from '../utils/markdown'
+import {
+  GITHUB_BOT_USER_ID,
+  formatTaskCode,
+  getExternalLinkStateMeta,
+} from '../utils/externalLinkHelpers'
+import { isSafeHref, renderMarkdown } from '../utils/markdown'
 import { extractMentionUserIds } from '../utils/mentionUtils'
 import type {
   ColumnResponse,
@@ -347,8 +355,28 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     },
   ]
 
-  const isDoneColumn = columns.find((c) => c.id === task.columnId)?.isDone
-  const currentColumnName = columns.find((c) => c.id === task.columnId)?.name ?? 'Kanban'
+  const currentColumn = columns.find((c) => c.id === task.columnId)
+  const isDoneColumn = currentColumn?.isDone
+  const isInReviewColumn = Boolean(currentColumn?.isInReview)
+  const currentColumnName = currentColumn?.name ?? 'Kanban'
+  const taskCode = formatTaskCode(task.taskNumber)
+
+  const handleCopyTaskCode = async () => {
+    if (!taskCode) return
+
+    if (!navigator.clipboard?.writeText) {
+      // Optional chaining alone would await `undefined` and report a false success (review 15.5 F2).
+      message.error('Trình duyệt không cho phép sao chép — hãy bôi đen mã và sao chép thủ công.')
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(taskCode)
+      message.success(`Đã sao chép mã ${taskCode}`)
+    } catch {
+      message.error('Không thể sao chép mã công việc')
+    }
+  }
 
   return (
     <Modal
@@ -377,26 +405,76 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
           }}
         >
           <Space size={8} wrap>
+            {taskCode ? (
+              <Space size={4} align="center">
+                <Tag
+                  data-testid="task-detail-number"
+                  style={{
+                    margin: 0,
+                    borderRadius: 6,
+                    backgroundColor: '#f1f5f9',
+                    borderColor: '#e2e8f0',
+                    color: '#0f172a',
+                    fontFamily: 'var(--tn-font-mono, monospace)',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {taskCode}
+                </Tag>
+                <Tooltip title={`Sao chép mã ${taskCode}`}>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<CopyOutlined style={{ fontSize: 12 }} />}
+                    aria-label={`Sao chép mã ${taskCode}`}
+                    data-testid="copy-task-number-btn"
+                    onClick={() => void handleCopyTaskCode()}
+                    style={{ color: '#64748b', padding: '0 4px', height: 22 }}
+                  />
+                </Tooltip>
+              </Space>
+            ) : (
+              <Tag
+                data-testid="task-detail-number"
+                style={{
+                  margin: 0,
+                  borderRadius: 6,
+                  backgroundColor: '#f1f5f9',
+                  borderColor: '#e2e8f0',
+                  color: '#475569',
+                  fontFamily: 'var(--tn-font-mono, monospace)',
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                #{task.id.slice(0, 8).toUpperCase()}
+              </Tag>
+            )}
             <Tag
+              color={isDoneColumn ? 'success' : isInReviewColumn ? 'purple' : 'processing'}
               style={{
                 margin: 0,
-                borderRadius: 6,
-                backgroundColor: '#f1f5f9',
-                borderColor: '#e2e8f0',
-                color: '#475569',
-                fontFamily: 'var(--tn-font-mono, monospace)',
+                borderRadius: 9999,
                 fontSize: 11.5,
                 fontWeight: 600,
+                padding: '0 10px',
+                whiteSpace: 'nowrap',
               }}
-            >
-              #{task.id.slice(0, 8).toUpperCase()}
-            </Tag>
-            <Tag
-              color={isDoneColumn ? 'success' : 'processing'}
-              style={{ margin: 0, borderRadius: 9999, fontSize: 11.5, fontWeight: 600, padding: '0 10px' }}
             >
               Cột: {currentColumnName}
             </Tag>
+            {isInReviewColumn && (
+              <Tag
+                color="purple"
+                icon={<GithubOutlined />}
+                style={{ margin: 0, borderRadius: 9999, fontWeight: 600, whiteSpace: 'nowrap' }}
+              >
+                Đang duyệt PR
+              </Tag>
+            )}
             {task.activeAgentRunId && (
               <Tag color="purple" icon={<RobotOutlined />} style={{ margin: 0, borderRadius: 9999, fontWeight: 600 }}>
                 AI Agent đang xử lý
@@ -565,6 +643,101 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
               )}
             </div>
 
+            {/* External GitHub Links (PRs & Issues) */}
+            {task.externalLinks && task.externalLinks.length > 0 && (
+              <Card
+                size="small"
+                data-testid="task-external-links"
+                style={{
+                  marginBottom: 16,
+                  borderRadius: 10,
+                  borderColor: '#e2e8f0',
+                  backgroundColor: '#f8fafc',
+                }}
+                styles={{ body: { padding: '10px 12px' } }}
+              >
+                <Flex align="center" gap={6} style={{ marginBottom: 8 }}>
+                  <GithubOutlined style={{ color: '#0f172a', fontSize: 14 }} />
+                  <Typography.Text strong style={{ fontSize: 12.5, color: '#0f172a' }}>
+                    Liên kết GitHub ({task.externalLinks.length})
+                  </Typography.Text>
+                </Flex>
+                <Flex vertical gap={6}>
+                  {task.externalLinks.map((link) => {
+                    const stateMeta = getExternalLinkStateMeta(link.state)
+                    const isPr = link.linkType === 'pull_request'
+                    const safeUrl = isSafeHref(link.externalUrl) ? link.externalUrl : null
+                    return (
+                      <Flex
+                        key={link.id}
+                        justify="space-between"
+                        align="center"
+                        gap={8}
+                        style={{
+                          padding: '6px 10px',
+                          borderRadius: 8,
+                          backgroundColor: '#ffffff',
+                          border: '1px solid #e2e8f0',
+                        }}
+                      >
+                        <Flex align="center" gap={8} style={{ minWidth: 0, flex: 1 }}>
+                          <Tag
+                            style={{
+                              margin: 0,
+                              fontSize: 10.5,
+                              fontWeight: 600,
+                              borderRadius: 5,
+                              backgroundColor: stateMeta.bg,
+                              borderColor: stateMeta.border,
+                              color: stateMeta.color,
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {stateMeta.label}
+                          </Tag>
+                          <Typography.Text
+                            style={{
+                              fontSize: 11.5,
+                              fontFamily: 'var(--tn-font-mono, monospace)',
+                              color: '#475569',
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {isPr ? 'PR' : 'Issue'} · {link.externalId}
+                          </Typography.Text>
+                          <Typography.Text ellipsis style={{ fontSize: 12.5, color: '#0f172a' }}>
+                            {link.title}
+                          </Typography.Text>
+                        </Flex>
+                        {safeUrl && (
+                          <a
+                            href={safeUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              fontSize: 12,
+                              fontWeight: 500,
+                              color: '#4f46e5',
+                              whiteSpace: 'nowrap',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <LinkOutlined />
+                            <span>Mở GitHub</span>
+                          </a>
+                        )}
+                      </Flex>
+                    )
+                  })}
+                </Flex>
+              </Card>
+            )}
+
             {/* Jev Triage Panel */}
             <div style={{ marginBottom: 16 }}>
               <JevTriagePanel
@@ -619,28 +792,62 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                           </Typography.Text>
                         )}
                         {comments.map((comment) => {
-                          const isAuthor = user?.id === comment.authorId
+                          const legacyUserId = (comment as CommentResponse & { userId?: string })
+                            .userId
+                          const isGitHubBot =
+                            comment.authorName === 'GitHub Bot' ||
+                            comment.authorId === GITHUB_BOT_USER_ID ||
+                            legacyUserId === GITHUB_BOT_USER_ID
+                          const isAuthor = user?.id === comment.authorId && !isGitHubBot
                           const isEditing = editingCommentId === comment.id
 
                           return (
                             <Flex key={comment.id} gap={10} align="flex-start">
-                              <Avatar size={30} style={{ backgroundColor: '#6366f1' }}>
-                                {comment.authorName?.[0]?.toUpperCase() ?? 'U'}
-                              </Avatar>
+                              {isGitHubBot ? (
+                                <Avatar
+                                  size={30}
+                                  icon={<GithubOutlined />}
+                                  style={{ backgroundColor: '#0f172a', color: '#ffffff', flexShrink: 0 }}
+                                  data-testid="github-bot-comment-avatar"
+                                />
+                              ) : (
+                                <Avatar size={30} style={{ backgroundColor: '#6366f1', flexShrink: 0 }}>
+                                  {comment.authorName?.[0]?.toUpperCase() ?? 'U'}
+                                </Avatar>
+                              )}
                               <div
                                 style={{
                                   flex: 1,
-                                  background: '#f8fafc',
+                                  background: isGitHubBot ? '#f1f5f9' : '#f8fafc',
                                   padding: '8px 12px',
                                   borderRadius: 8,
-                                  border: '1px solid #e2e8f0',
+                                  border: isGitHubBot ? '1px solid #cbd5e1' : '1px solid #e2e8f0',
                                 }}
                               >
                                 <Flex justify="space-between" align="center">
-                                  <Space size={6}>
+                                  <Space size={6} wrap>
                                     <Typography.Text strong style={{ fontSize: 13 }}>
                                       {comment.authorName}
                                     </Typography.Text>
+                                    {isGitHubBot && (
+                                      <Tag
+                                        data-testid="github-bot-comment-tag"
+                                        style={{
+                                          margin: 0,
+                                          fontSize: 10,
+                                          fontWeight: 700,
+                                          lineHeight: '16px',
+                                          borderRadius: 4,
+                                          backgroundColor: '#0f172a',
+                                          borderColor: '#0f172a',
+                                          color: '#ffffff',
+                                          whiteSpace: 'nowrap',
+                                          flexShrink: 0,
+                                        }}
+                                      >
+                                        GITHUB BOT
+                                      </Tag>
+                                    )}
                                     <Typography.Text type="secondary" style={{ fontSize: 11 }}>
                                       {dayjs(comment.createdAt).format('HH:mm DD/MM/YYYY')}
                                     </Typography.Text>
@@ -698,6 +905,10 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                         Huỷ
                                       </Button>
                                     </Space>
+                                  </div>
+                                ) : isGitHubBot ? (
+                                  <div style={{ margin: '4px 0 0 0', fontSize: 13, lineHeight: 1.55 }}>
+                                    {renderMarkdown(comment.content)}
                                   </div>
                                 ) : (
                                   <Typography.Paragraph
@@ -855,6 +1066,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                         label: (
                           <Space>
                             {c.isDone && <CheckCircleFilled style={{ color: '#10b981' }} />}
+                            {c.isInReview && <GithubOutlined style={{ color: '#7c3aed' }} />}
                             <span>{c.name}</span>
                           </Space>
                         ),

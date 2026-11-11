@@ -43,9 +43,11 @@ import { useWorkspaceRole } from '../../../shared/hooks/useWorkspaceRole'
 import { useBoard } from '../hooks/useBoard'
 import type {
   ColumnResponse,
+  CreateColumnRequest,
   HubConnectionStatus,
   TaskPriority,
   TaskResponse,
+  UpdateColumnRequest,
 } from '../types/board.types'
 import { SmartSetupModal } from '../../ai/components/SmartSetupModal'
 import { AgentChatFab } from '../../ai/components/AgentChatFab'
@@ -363,7 +365,7 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
         if (priorityFilter !== 'ALL' && t.priority !== priorityFilter) {
           return false
         }
-        // Search query filter (matches title, description, assignee name, or label text)
+        // Search query filter (matches title, description, assignee name, label text, or TN-number)
         if (!query) return true
         const titleMatch = t.title.toLowerCase().includes(query)
         const descMatch = t.description?.toLowerCase().includes(query) ?? false
@@ -372,8 +374,12 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
         const labelMatch = t.labels?.some((l) =>
           l.name.toLowerCase().includes(query)
         ) ?? false
+        const taskCodeMatch =
+          typeof t.taskNumber === 'number' && t.taskNumber > 0
+            ? `tn-${t.taskNumber}`.includes(query)
+            : false
 
-        return titleMatch || descMatch || assigneeMatch || labelMatch
+        return titleMatch || descMatch || assigneeMatch || labelMatch || taskCodeMatch
       })
     }
     return result
@@ -910,9 +916,9 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
         }}
         onSubmit={async (data) => {
           if (editingColumn) {
-            await updateColumn(editingColumn.id, data)
+            await updateColumn(editingColumn.id, data as UpdateColumnRequest)
           } else {
-            await createColumn(data as { name: string; isDone?: boolean })
+            await createColumn(data as CreateColumnRequest)
           }
         }}
       />

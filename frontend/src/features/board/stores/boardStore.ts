@@ -308,7 +308,19 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   applyColumnUpdated: (column) => {
     const { columns } = get()
     const newColumns = columns
-      .map((c) => (c.id === column.id ? { ...c, name: column.name, isDone: column.isDone } : c))
+      .map((c) =>
+        c.id === column.id
+          ? {
+              ...c,
+              name: column.name,
+              position: column.position,
+              isDone: column.isDone,
+              isClarification: column.isClarification ?? c.isClarification,
+              isInReview: column.isInReview ?? false,
+              updatedAt: column.updatedAt,
+            }
+          : c
+      )
       .sort((a, b) => a.position - b.position)
 
     set({ columns: newColumns })
