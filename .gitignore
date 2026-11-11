@@ -494,3 +494,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .eslintcache
+
+# ---- Local MCP / tooling artifacts (not part of the product) ----
+sqlite_mcp_server.db
+sqlite_mcp_server.db-*
+*.sqlite_mcp*
+.mcp/
