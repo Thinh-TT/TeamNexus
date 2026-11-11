@@ -12,6 +12,10 @@ export type AiActionType =
   | 'CreateBoardFromTemplate'
   | 'UpdateTaskFields'
   | 'MoveTaskToColumn'
+  // Phase 15.3/15.4 inbound GitHub automations. They are system-approved logs, but the history drawer still
+  // has to label them and explain what GitHub event produced them.
+  | 'GitHubPrMoveTask'
+  | 'GitHubIssueCreateTask'
 
 export interface ConfirmSmartSetupRequest {
   description: string
@@ -66,6 +70,14 @@ export interface AiActionBasis {
   columnCount?: number
   taskCount?: number
   requestedAt?: string
+  // Phase 15.3/15.4: GitHub webhook logs store the event context instead of a board description.
+  repo?: string | null
+  prNumber?: number | null
+  issueNumber?: number | null
+  issueTitle?: string | null
+  state?: string | null
+  sender?: string | null
+  action?: string | null
   [key: string]: unknown
 }
 
