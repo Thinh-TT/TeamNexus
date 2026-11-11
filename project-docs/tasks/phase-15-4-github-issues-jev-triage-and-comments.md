@@ -53,9 +53,9 @@
      - Gọi `ITaskTriageService.TriageForSystemAsync(defaultBoardId, issueTitle, issueBody, ct)`:
        - Nếu `triage != null && !triage.Degraded && triage.ConfidenceScore >= 0.50`:
          - Áp dụng `SuggestedPriority`, `SuggestedDomain`, `SuggestedWorkType` (tự động gắn/tạo nhãn tương ứng trên Workspace thông qua `ITaskAutomation.ApplySystemTriageSuggestionsAsync`).
-     - Ghi bản ghi `AiActionLog` (`Action = AiActionTypes.GitHubIssueCreateTask`, `EntityType = AiEntityTypes.Board`, `EntityId = defaultBoardId`, `Status = AiActionStatus.Approved`, `RequestedByUserId = SystemUsers.GitHubBotUserId`, `DecidedByUserId = SystemUsers.GitHubBotUserId`, `DecidedAt = UtcNow`, `AppliedSnapshot` chứa `createdTaskIds: [createdTask.Id]`) để lưu vết kiểm toán trên `Lịch sử Hành động AI` và hỗ trợ hoàn tác (soft-delete task vừa tạo khi bấm Undo).
+     - Ghi bản ghi `AiActionLog` (`Action = AiActionTypes.GitHubIssueCreateTask`, `EntityType = AiEntityTypes.Board`, `EntityId = defaultBoardId`, `Status = AiActionStatus.Approved`, `RequestedByUserId = SystemUsers.GitHubBotUserId`, `DecidedByUserId = SystemUsers.GitHubBotUserId`, `DecidedAt = UtcNow`, `AppliedSnapshot` chứa `createdTaskIds: [createdTask.Id]`) ngay **sau khi** tạo thẻ + link và **trước** bước Jev/tag, để lưu vết kiểm toán trên `Lịch sử Hành động AI` và luôn hỗ trợ hoàn tác (soft-delete task vừa tạo khi bấm Undo). Phần Jev/tag chạy sau đó trong `try/catch` fail-soft: lỗi AI không được làm mất thẻ lẫn audit log.
   4. **Cập nhật trạng thái khi Issue đóng / mở lại (`closed`, `reopened`):**
-     - Cập nhật `TaskExternalLink.State = action == "closed" ? "closed" : "open"` và phát SignalR `TaskUpdated`.
+     - Cập nhật `TaskExternalLink.State = action == "closed" ? "closed" : "open"` và phát SignalR `TaskUpdated` qua port `ITaskAutomation.NotifyTaskUpdatedAsync` (Board đọc lại thẻ + external links và broadcast, giữ chiều phụ thuộc `Ai → Board`).
 
 ---
 
@@ -99,8 +99,8 @@
 
 - [x] Tạo Issue trên GitHub (hoặc gắn nhãn khớp `IssueLabelFilter`) tự động sinh thẻ trên cột đầu tiên của `DefaultBoardId`, được Jev 1.13 phân loại tự động và xuất hiện tức thì qua SignalR.
 - [x] Bình luận trên Issue/PR liên kết tự động đồng bộ một chiều vào thẻ dưới tên `GitHub Bot` mà không gây vòng lặp.
-- [x] Lỗi cảnh báo kép `Degraded` trên `AssigneeSuggestion` đã được khắc phục.
-- [x] Toàn bộ bài test trong `GitHubWebhookIssueAndCommentTests` (12 tests) đều được triển khai, biên dịch không cảnh báo và tích hợp vào test runner.
+- [x] Lỗi cảnh báo kép `Degraded` trên `AssigneeSuggestion` đã được khắc phục, và `TriageAsync` cũng không còn đánh dấu `Degraded` cho kết quả Jev hợp lệ có confidence < 0.50 (review F4).
+- [x] Toàn bộ bài test trong `GitHubWebhookIssueAndCommentTests` (**15 tests**) đều được triển khai, biên dịch không cảnh báo và tích hợp vào test runner; **tất cả xanh** (test Undo trước đây đỏ do dùng lại `DbContext` cũ — đã sửa dùng context mới).
 
 ---
 
@@ -121,6 +121,20 @@
 ### 4.4. Đo lường & Kiểm chứng Thực tế (Measured Verification Metrics)
 - **Solution Build (.NET 10):** `0 Warning(s), 0 Error(s)` (`dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental`).
 - **EF Core 10 Model Drift:** `No changes have been made to the model since the last migration` (Zero drift).
-- **Pure Unit Tests:** `645 Passed, 0 Failed, 0 Skipped` (`TeamNexus.Api.Tests` filter Pure).
-- **Integration Tests:** 12/12 tests trong `GitHubWebhookIssueAndCommentTests.cs` kế thừa `DatabaseFixture`, bao phủ toàn bộ các kịch bản: `issues.opened`, `issues.labeled` (lần 1 và lần 2 dedupe), `issues.closed`, `issues.reopened`, `issue_comment.created` (từ user và từ bot), filter label, undo applier.
+- **Pure Unit Tests:** `665 Passed, 0 Failed, 0 Skipped` (645 của 15.3 + 11 test case `requireTnPrefix` + 6 `GitHubIntegrationUrlTests` + 3 `DataProtectionKeyRingTests`).
+- **Integration Tests:** **15 tests** trong `GitHubWebhookIssueAndCommentTests.cs` kế thừa `DatabaseFixture`, bao phủ toàn bộ các kịch bản: `issues.opened`, `issues.labeled` (lần 1 và lần 2 dedupe), `issues.closed`, `issues.reopened` (kèm assert broadcast `TaskUpdated`), `issue_comment.created` (từ user và từ bot), filter label, undo applier, Jev ném lỗi (fail-soft) và payload thiếu `sender`. **Tất cả xanh** sau khi sửa test Undo dùng `DbContext` cũ.
+
+---
+
+## 5. Khắc phục sau Review (2026-11-11)
+
+> **Nguồn:** [`phase-15-3-15-4-code-review-and-remediation-plan.md`](../report/phase-15-3-15-4-code-review-and-remediation-plan.md). Không phát sinh migration mới.
+
+| Mã | Lỗi gốc | Thay đổi | Kiểm chứng |
+| :--- | :--- | :--- | :--- |
+| `R2.1` | `TriageAsync` đánh `Degraded` cho kết quả confidence < 0.50 | Một helper `CreateTriageResponse` + `IsProviderDegraded(usage)` dùng chung cho tương tác và system; `SuggestAssigneesAsync` cũng dùng cùng quy tắc | `Triage_WithALowAnswer_..._WithoutClaimingTheServiceIsDegraded`, `Suggest_WithALowConfidenceAnswer_OffersNobody` |
+| `R2.3` | Thiếu SignalR `TaskUpdated` khi Issue `closed`/`reopened` | Port `ITaskAutomation.NotifyTaskUpdatedAsync` + `RecordingBoardEventPublisher` trong test | `IssuesClosed_And_Reopened_UpdatesLinkStateAccurately_AndBroadcastsTaskUpdated` |
+| `R2.4` | Lỗi Jev/tag có thể làm mất `AiActionLog` (mất Undo) | Ghi audit log trước, bọc Jev/tag trong `try/catch` fail-soft | `IssuesOpened_WhenTriageThrows_StillCreatesTaskAndAuditLog` |
+| `R4.1` | Lịch sử AI hiển thị thô `GitHubIssueCreateTask` / "Mô tả 0 ký tự" | Nhãn tiếng Việt + `describeActionBasis` cho basis GitHub + ẩn tag "0 tasks" | 3 Vitest tests trong `AiActionLogItem.test.tsx` |
+| `R1.1` | Test Undo đỏ do stale tracking | Dùng `s.NewDbContext()` cho assert sau Undo | `IssuesOpened_CreatesApprovedAiActionLog_AndUndo_SoftDeletesCreatedTask` |
 
