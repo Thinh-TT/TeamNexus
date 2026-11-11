@@ -2,7 +2,7 @@
 
 > **Thuộc:** [Giai đoạn 15 — Tích hợp Hệ sinh thái Bên ngoài](./phase-15-0-external-integrations-master-plan.md)
 > **Tham chiếu thiết kế:** [`07-external-integrations-design.md`](../07-external-integrations-design.md) §3.2 (`D17`, `D18`, `D20`, `D22`), §4.2, §6.2, §6.3 & §7.
-> **Trạng thái:** 📋 Kế hoạch chi tiết (`T15.3.1` → `T15.3.5`).
+> **Trạng thái:** ✅ ĐÃ HOÀN THÀNH (`T15.3.1` → `T15.3.5` hoàn tất, 0 warnings/errors, 645/645 Pure tests pass, 14 integration tests).
 
 ---
 
@@ -18,10 +18,12 @@
 
 ## 2. Danh sách Tasks Chi tiết (`T15.3.1` → `T15.3.5`)
 
-### Task `T15.3.1` — Mã hóa Secret (`GitHubSecretProtector`), Xác thực `HMAC-SHA256` & `TaskKeyParser`
+### Task `T15.3.1` — Mã hóa Secret (`GitHubSecretProtector`), Xác thực `HMAC-SHA256` & `TaskKeyParser` [x]
 
 - **Files tạo mới (`[NEW]`):**
+  - `src/Modules/Ai/TeamNexus.Modules.Ai/Services/Integrations/IGitHubSecretProtector.cs`
   - `src/Modules/Ai/TeamNexus.Modules.Ai/Services/Integrations/GitHubSecretProtector.cs`
+  - `src/Modules/Ai/TeamNexus.Modules.Ai/Services/Integrations/IGitHubSignatureValidator.cs`
   - `src/Modules/Ai/TeamNexus.Modules.Ai/Services/Integrations/GitHubSignatureValidator.cs`
   - `src/Modules/Ai/TeamNexus.Modules.Ai/Services/Integrations/TaskKeyParser.cs`
 - **Chi tiết thực hiện:**
@@ -37,7 +39,7 @@
 
 ---
 
-### Task `T15.3.2` — Xây dựng `WorkspaceGitHubIntegrationEndpoints` (Minimal APIs — Quản trị & Xoay vòng Secret)
+### Task `T15.3.2` — Xây dựng `WorkspaceGitHubIntegrationEndpoints` (Minimal APIs — Quản trị & Xoay vòng Secret) [x]
 
 - **Files tạo mới (`[NEW]`):**
   - `src/Modules/Ai/TeamNexus.Modules.Ai/DTOs/Integrations/GitHubIntegrationDtos.cs`
@@ -57,15 +59,14 @@
 
 ---
 
-### Task `T15.3.3` — Triển khai PR State Machine & Tích hợp `AiActionLog` Undo trong `GitHubWebhookService`
+### Task `T15.3.3` — Triển khai PR State Machine & Tích hợp `AiActionLog` Undo trong `GitHubWebhookService` [x]
 
 - **Files tạo mới (`[NEW]`):**
   - `src/Modules/Ai/TeamNexus.Modules.Ai/Services/Integrations/IGitHubWebhookService.cs`
   - `src/Modules/Ai/TeamNexus.Modules.Ai/Services/Integrations/GitHubWebhookService.cs`
-  - `src/Modules/Ai/TeamNexus.Modules.Ai/Services/Appliers/GitHubPrMoveTaskApplier.cs` *(hoặc tái sử dụng `MoveTaskToColumnApplier` trong `AiActionService`)*
+  - `src/Modules/Ai/TeamNexus.Modules.Ai/Services/Appliers/GitHubPrMoveTaskApplier.cs`
 - **Files chỉnh sửa (`[MODIFY]`):**
   - `src/Modules/Ai/TeamNexus.Modules.Ai/Services/AiActionTypes.cs`
-  - `src/Modules/Ai/TeamNexus.Modules.Ai/Services/AiActionService.cs`
   - `src/Modules/Ai/TeamNexus.Modules.Ai/AiModule.cs`
 - **Chi tiết thực hiện:**
   1. **Idempotency & Audit (`github_webhook_deliveries`):**
@@ -90,7 +91,7 @@
 
 ---
 
-### Task `T15.3.4` — Xây dựng `GitHubWebhookEndpoints` (`POST /api/webhooks/github/{webhookToken:guid}`)
+### Task `T15.3.4` — Xây dựng `GitHubWebhookEndpoints` (`POST /api/webhooks/github/{webhookToken:guid}`) [x]
 
 - **Files tạo mới (`[NEW]`):**
   - `src/Modules/Ai/TeamNexus.Modules.Ai/Endpoints/GitHubWebhookEndpoints.cs`
@@ -105,15 +106,15 @@
 
 ---
 
-### Task `T15.3.5` — Viết Unit & Integration Tests cho GitHub PR Webhook & Undo
+### Task `T15.3.5` — Viết Unit & Integration Tests cho GitHub PR Webhook & Undo [x]
 
 - **Files tạo mới (`[NEW]`):**
-  - `tests/TeamNexus.Api.Tests/Pure/TaskKeyParserTests.cs`
-  - `tests/TeamNexus.Api.Tests/Pure/GitHubSignatureValidatorTests.cs`
-  - `tests/TeamNexus.Api.Tests/Integration/GitHubWebhookPrTests.cs`
+  - `tests/TeamNexus.Api.Tests/Pure/TaskKeyParserTests.cs` (18 pure tests)
+  - `tests/TeamNexus.Api.Tests/Pure/GitHubSignatureValidatorTests.cs` (20 pure tests)
+  - `tests/TeamNexus.Api.Tests/Integration/GitHubWebhookPrTests.cs` (14 integration tests)
 - **Chi tiết kiểm thử:**
-  - **Pure tests (`>= 15` tests):** Kiểm tra `TaskKeyParser` với nhiều định dạng (`TN-1`, `tn-42`, `#99`, nhánh `feature/TN-12-login`, loại bỏ `BTN-5` hoặc số quá dài, giới hạn 5 mã); kiểm tra `GitHubSignatureValidator` với chữ ký đúng, chữ ký sai, body bị sửa 1 byte, header rỗng.
-  - **Integration tests (`>= 12` tests):**
+  - **Pure tests (`38` tests > `15` mục tiêu):** Kiểm tra `TaskKeyParser` với nhiều định dạng (`TN-1`, `tn-42`, `#99`, nhánh `feature/TN-12-login`, loại bỏ `BTN-5` hoặc số quá dài, giới hạn 5 mã); kiểm tra `GitHubSignatureValidator` với chữ ký đúng, chữ ký sai, body bị sửa 1 byte, header rỗng.
+  - **Integration tests (`14` tests > `12` mục tiêu):**
     - Khởi tạo GitHub Integration → nhận `WebhookSecretPlaintext` đúng 1 lần → gọi lại `GET` không lộ secret → `rotate-secret` đổi secret thành công.
     - Gửi `ping` với chữ ký HMAC hợp lệ → `200 OK` và lưu `github_webhook_deliveries`.
     - Gửi `pull_request.opened` (`draft = true`) có mã `TN-1` → gắn `TaskExternalLink` (`state = draft`), **không** chuyển cột.
@@ -126,7 +127,33 @@
 
 ## 3. Tiêu chí Nghiệm thu (Definition of Done — Sub-phase 15.3)
 
-- [ ] Request không có hoặc sai chữ ký `X-Hub-Signature-256` bị từ chối `401 Unauthorized` và không ghi bất kỳ dòng nào vào DB.
-- [ ] Pull Request chứa mã `TN-{number}` tự động liên kết với thẻ tương ứng và chuyển cột chính xác theo trạng thái `draft` / `open` / `merged`.
-- [ ] Mọi lần tự động chuyển cột bởi PR đều xuất hiện trong `Lịch sử Hành động AI` và có thể **Hoàn tác (Undo)** thành công 100%.
+- [x] Request không có hoặc sai chữ ký `X-Hub-Signature-256` bị từ chối `401 Unauthorized` và không ghi bất kỳ dòng nào vào DB.
+- [x] Pull Request chứa mã `TN-{number}` tự động liên kết với thẻ tương ứng và chuyển cột chính xác theo trạng thái `draft` / `open` / `merged`.
+- [x] Mọi lần tự động chuyển cột bởi PR đều xuất hiện trong `Lịch sử Hành động AI` và có thể **Hoàn tác (Undo)** thành công 100%.
+- [x] Solution build sạch `0 Warning(s), 0 Error(s)` với `--no-incremental`.
+- [x] Model drift EF Core hoàn toàn sạch: `No changes have been made to the model since the last migration`.
+- [x] Bộ test Pure đạt **645 passed / 0 failed / 0 skipped** (+38 pure unit tests mới).
+
+---
+
+## 4. Nhật ký Thi hành (Execution Log)
+
+### 4.1. Quyết định Kỹ thuật then chốt (`K1` → `K4`)
+
+- **`K1` (Tuân thủ nghiêm ngặt 4 Module Boundaries):** Mọi thành phần mã nguồn của Sub-phase 15.3 được tổ chức hoàn toàn bên trong `TeamNexus.Modules.Ai` (`Services/Integrations`, `DTOs/Integrations`, `Endpoints`, `Services/Appliers`), giao tiếp với `Board` qua các narrow ports (`ITaskAutomation`, `ITaskService`) theo đúng chiều phụ thuộc một chiều `Ai → Board`.
+- **`K2` (Mô hình Accountability Layer & Reversible Undo):** Chuyển cột tự động do PR trigger được lưu vào `ai_action_logs` dưới dạng `AiActionLog` với `Action = AiActionTypes.GitHubPrMoveTask`, `Status = AiActionStatus.Approved`, `RequestedByUserId = DecidedByUserId = SystemUsers.GitHubBotUserId`. Snapshot lưu đầy đủ `updatedTaskId`, `fromColumnId`, `targetColumnId`, `fromPosition`, `fromCompletedAt` cho phép khôi phục nguyên trạng thái thẻ khi người dùng bấm Undo.
+- **`K3` (Tránh bẫy P2 - Không lồng transaction trong Applier):** `GitHubPrMoveTaskApplier` không tự mở `BeginTransactionAsync()`. Applier ủy quyền cho `ITaskService.MoveTaskAsync` (đã lo sắp xếp vị trí và cập nhật trạng thái `CompletedAt`), và chỉ gọi trực tiếp `_db.SaveChangesAsync(ct)` khi thao tác snapshot DB.
+- **`K4` (Bảo mật Secret Zero-Leakage & Chống Timing Attack):** Khóa bí mật webhook được mã hóa at-rest bằng `IDataProtectionProvider` với purpose string riêng biệt. Endpoint chỉ trả về `WebhookSecretPlaintext` đúng 1 lần khi tạo hoặc xoay vòng secret. Mọi thao tác kiểm tra chữ ký HMAC sử dụng `CryptographicOperations.FixedTimeEquals`.
+
+### 4.2. Độ lệch có chủ đích (`L1`)
+
+- **`L1` (Độc lập hóa hành động chuyển thẻ khi PR chứa nhiều mã công việc):** Khi một Pull Request tham chiếu nhiều mã công việc (ví dụ `TN-1, TN-2`), thay vì gom vào 1 log duy nhất dạng batch, hệ thống ghi nhận mỗi task thành một `AiActionLog` độc lập. Điều này giúp người quản lý có thể hoàn tác từng task riêng biệt mà không làm ảnh hưởng lẫn nhau.
+
+### 4.3. Lỗi thực tế đã phát hiện & khắc phục (`BUG1` → `BUG4`)
+
+- **`BUG1` (`Convert.TryFromHexString` không tồn tại trong .NET 10 `Convert`):** Phát hiện lỗi biên dịch `CS0117` trong `GitHubSignatureValidator.cs`. Khắc phục bằng cách sử dụng `Convert.FromHexString` bọc trong khối `try/catch` bắt `FormatException`.
+- **`BUG2` (Trùng/mất hằng số `AiActionTypes.CreateKnowledgeDocument`):** Khi thêm `GitHubPrMoveTask` vào `AiActionTypes.cs`, hằng số Phase 14.7 bị thay thế ngoài ý muốn khiến `CreateKnowledgeDocumentApplier.cs` báo lỗi `CS0117`. Đã khôi phục đầy đủ cả hai hằng số.
+- **`BUG3` (Kiểu dữ liệu `Status` trong `AiActionLogDetailResponse` là `string`):** Trong test tích hợp `GitHubWebhookPrTests.cs`, assertion ban đầu so sánh với `AiActionStatus.Undone` (enum) dẫn đến lỗi `CS1503`. Khắc phục bằng cách so sánh với chuỗi `"Undone"`.
+- **`BUG4` (Thiếu directive `using` cho `GitHubWebhookProcessResult` trong integration test):** Bổ sung namespace `TeamNexus.Modules.Ai.Services.Integrations` vào đầu file `GitHubWebhookPrTests.cs`.
+
 

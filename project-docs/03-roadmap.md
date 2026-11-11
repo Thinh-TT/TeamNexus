@@ -443,12 +443,13 @@ và mở rộng Smart Setup thành **AI Board Template**.
 
 ---
 
-## Giai đoạn 15: Tích hợp bên ngoài — 🚧 ĐANG THI HÀNH (Sub-phase 15.1 ✅ · 15.2 ✅ XONG)
+## Giai đoạn 15: Tích hợp bên ngoài — 🚧 ĐANG THI HÀNH (Sub-phase 15.1 ✅ · 15.2 ✅ · 15.3 ✅ XONG)
 
 > **Tài liệu thiết kế & kế hoạch chia task:** `project-docs/07-external-integrations-design.md` & `project-docs/tasks/phase-15-0-external-integrations-master-plan.md` (`phase-15-1..15-5.md`).
 > **Độ phức tạp kỹ thuật: 🔴 Cao** — webhook, lưu secret bên thứ ba, eventual consistency, độ bền gửi ra ngoài (outbox + retry).
 > **Đã có sẵn seam:** `IExternalAlertSink` (Giai đoạn 14.5 A1.2) là điểm cắm thông báo ra ngoài — Phase 15 đăng ký
 > implementation thật và **không** phải sửa Observer/Agent/member path.
+> **📊 Sub-phase 15.3 ✅ XONG (Inbound GitHub Webhook Core & PR State Machine):** Quản lý cấu hình GitHub theo Workspace (5 endpoint Minimal APIs: `GET/PUT/DELETE`, `POST /rotate-secret`, `GET /deliveries`), mã hóa secret bằng `IDataProtectionProvider` ("TeamNexus.Integrations.GitHub.WebhookSecret.v1"), zero secret leakage (`SecretHint` 4 ký tự cuối), webhook public `POST /api/webhooks/github/{webhookToken:guid}` (xác thực `X-Hub-Signature-256` HMAC-SHA256 trên raw body bằng `CryptographicOperations.FixedTimeEquals`, body limit 256KB, anonymous, skip CSRF, chống replay bằng delivery idempotency), bộ bóc tách mã task `TaskKeyParser` (`TN-123`, `tn-123`, `#123`, tối đa 5 task/event), PR State Machine liên kết `task_external_links` (`draft`, `open`, `merged`, `closed`) và tự động kéo task sang `In Review` khi mở PR, sang `Done` (`CompletedAt != null`) khi merge PR (kiểm tra an toàn multi-PR open). Tích hợp Accountability Layer: ghi nhận `ai_action_logs` (`GitHubPrMoveTask`, actor `GitHubBotUserId`) và hỗ trợ **Hoàn tác (Undo) 100%** qua `GitHubPrMoveTaskApplier` tuân thủ nghiêm ngặt Bẫy P2 (không mở transaction lồng). Số đo thật: build **0 warning / 0 error**, `has-pending-model-changes` **sạch**, unit test Pure **Passed 645 / Failed 0 / Skipped 0** (baseline 607 ⇒ **+38**), integration test **14 tests** (`GitHubWebhookPrTests`).
 > **📊 Sub-phase 15.2 ✅ XONG (Outbound Slack/Discord):** `IExternalAlertSink` → transactional outbox (`WebhookOutboxExternalAlertSink` + `WebhookOutboxRunner`/`Dispatcher`: retry `5s→30s→2m→10m→30m`, circuit breaker ở 10 lỗi), `WebhookUrlValidator` chống SSRF, Slack Block Kit / Discord Embed, sự kiện `MemberJoined`, 6 endpoint `/api/workspaces/{id}/integrations/webhooks`. Số đo thật: build **0/0**, `has-pending-model-changes` **sạch** (không migration mới), `dotnet test` **Passed 1,236 / Failed 0 / Skipped 0** (từ 1,175 ⇒ **+61**).
 > **📊 Tiến độ trước đó (Sub-phase 15.1 ✅ XONG):** Migration #15 (`20261110154843_Phase15ExternalIntegrations`), 6 bảng mới (`task_numbers`, `workspace_webhook_endpoints`, `webhook_delivery_outbox`, `workspace_github_integrations`, `github_webhook_deliveries`, `task_external_links`), mã công việc tuần tự `TN-123` + tìm kiếm theo mã (`TN-123`/`#123`), cờ cột `is_in_review`, tài khoản hệ thống `GitHub Bot` (`IsSystem = true`) và port `ITaskAutomation` (`TaskAutomationService`). Số đo thật: `dotnet build --no-incremental` **0 warning / 0 error**, `has-pending-model-changes` **sạch**, `dotnet test` **Passed 1,175 / Failed 0 / Skipped 0** (baseline 1,167 ⇒ **+8**).
 
@@ -468,7 +469,7 @@ Kết nối TeamNexus với hệ sinh thái công cụ phát triển: thông bá
 **Yêu cầu hoàn thiện:**
 - [ ] **Slack / Discord Notification**: Workspace Settings → thêm channel (Webhook URL, chọn loại sự kiện, gửi thử); `IChatProvider` (Slack/Discord) sau `IExternalAlertSink`; gửi khi Observer phát hiện tín hiệu, task overdue, member mới join, agent failed; outbox + retry + dead-letter
 - [ ] **GitHub Integration**: Workspace Settings → thêm repo (+PAT tuỳ chọn, mã hoá) → nhận Payload URL + secret; task gắn Issue/PR bằng URL hoặc tự nhận diện mã `TN-123`; webhook `POST /api/webhooks/github/{publicId}` → PR opened/ready ⇒ In Review, PR merge ⇒ Done (kèm hoàn tác), Issue mới ⇒ tạo task, Issue closed ⇒ đóng task, comment ⇒ comment task; chip "PR #123" (theo trạng thái) trên `TaskCard`
-- [ ] Webhook endpoint xác thực chữ ký HMAC-SHA256 trên raw body (so sánh hằng thời gian), idempotency theo delivery id; secret/PAT/Webhook URL mã hoá khi lưu DB và không bao giờ trả về qua API
+- [x] Webhook endpoint xác thực chữ ký HMAC-SHA256 trên raw body (so sánh hằng thời gian), idempotency theo delivery id; secret/PAT/Webhook URL mã hoá khi lưu DB và không bao giờ trả về qua API
 - [ ] Hoạt động khi workspace không cấu hình tích hợp (graceful degradation): core không đổi hành vi, test cũ vẫn xanh
 - [ ] Cờ `is_in_review` trên cột + `task_number` (backfill) + delivery log trên UI
 

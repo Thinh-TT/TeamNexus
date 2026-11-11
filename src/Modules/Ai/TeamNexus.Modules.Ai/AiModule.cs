@@ -164,6 +164,14 @@ public static class AiModule
         services.AddHostedService<WebhookOutboxDispatcher>();
         services.AddScoped<IWorkspaceWebhookService, WorkspaceWebhookService>();
 
+        // ---- GitHub Webhook & PR automation (Phase 15.3) -----------------------
+        services.AddSingleton<IGitHubSecretProtector, GitHubSecretProtector>();
+        services.AddSingleton<IGitHubSignatureValidator, GitHubSignatureValidator>();
+        services.AddSingleton<TaskKeyParser>();
+        services.AddScoped<IWorkspaceGitHubIntegrationService, WorkspaceGitHubIntegrationService>();
+        services.AddScoped<IGitHubWebhookService, GitHubWebhookService>();
+        services.AddScoped<IAiActionApplier, GitHubPrMoveTaskApplier>();
+
         // User-facing alerts (Phase 11 §6.4): Board declares the port + a no-op default, this line
         // overrides it — the same ordering rule as IEmailGateway/IActivityLogWriter above.
         services.AddScoped<INotificationWriter, NotificationWriter>();
@@ -465,6 +473,9 @@ public static class AiModule
         endpoints.MapKnowledgeEndpoints();
         // Phase 15.2: outbound Slack/Discord webhook management (Manager+).
         endpoints.MapWorkspaceWebhooksEndpoints();
+        // Phase 15.3: inbound GitHub webhooks, secret rotation and PR automation.
+        endpoints.MapWorkspaceGitHubIntegrationEndpoints();
+        endpoints.MapGitHubWebhookEndpoints();
 
         return endpoints;
     }
