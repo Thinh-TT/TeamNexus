@@ -68,6 +68,10 @@ builder.Services.AddCors(options =>
 // therefore requires an explicitly durable ring, configured here through environment variables:
 //   Integrations__DataProtection__KeysPath      → mounted directory (render/vps volume)
 //   Integrations__DataProtection__CertPath      → PFX (vps), with CertPassword
+//
+// The two settings are independent on purpose: KeysPath makes the ring durable, CertPath encrypts it at
+// rest. A VPS should set BOTH; Render (no certificate) sets only KeysPath. Treating them as either/or would
+// have silently sent a VPS back to the ephemeral default ring the moment a certificate was configured.
 var dataProtection = builder.Services.AddDataProtection().SetApplicationName("TeamNexus");
 var dataProtectionKeysPath = builder.Configuration["Integrations:DataProtection:KeysPath"];
 var dataProtectionCertPath = builder.Configuration["Integrations:DataProtection:CertPath"];
@@ -78,7 +82,8 @@ if (!string.IsNullOrWhiteSpace(dataProtectionCertPath))
     dataProtection.ProtectKeysWithCertificate(
         X509CertificateLoader.LoadPkcs12FromFile(dataProtectionCertPath, dataProtectionCertPassword));
 }
-else if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+
+if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
 {
     Directory.CreateDirectory(dataProtectionKeysPath);
     dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
