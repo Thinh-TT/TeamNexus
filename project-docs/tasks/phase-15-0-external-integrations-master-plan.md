@@ -1,6 +1,6 @@
 # Giai đoạn 15 — Tích hợp Hệ sinh thái Bên ngoài (Slack, Discord & GitHub Webhooks) — Kế hoạch Tổng thể
 
-> **Trạng thái:** 📋 **SẴN SÀNG THI HÀNH (Đã hoàn tất Kiểm thử Local, Rà soát Code & Live Test 6 Chặng trên Production).**
+> **Trạng thái:** 🚧 **ĐANG THI HÀNH** — 15.1 ✅ · 15.2 ✅ · 15.3 ✅ · 15.4 ✅ (kèm đợt khắc phục review 2026-11-11) · **15.5 ⏳ chưa bắt đầu**. Bàn giao: [`phase-15-remaining-frontend-handover.md`](./phase-15-remaining-frontend-handover.md).
 > **Nguồn thiết kế:** [`project-docs/07-external-integrations-design.md`](../07-external-integrations-design.md) + [`project-docs/03-roadmap.md`](../03-roadmap.md) §15.
 > **Tiền đề đã merge:** Giai đoạn 1 → **14.99** (14 EF Core migrations, 1,167 bài test Backend xUnit, 744 bài test Frontend Vitest).
 > **Cấu trúc tài liệu chia task:**
@@ -10,6 +10,7 @@
 > 4. [`phase-15-3-inbound-github-webhooks-and-pr-automation.md`](./phase-15-3-inbound-github-webhooks-and-pr-automation.md) *(Sub-phase 15.3 — Inbound GitHub Webhook, HMAC-SHA256, `TaskKeyParser` & PR State Machine + Undo)*
 > 5. [`phase-15-4-github-issues-jev-triage-and-comments.md`](./phase-15-4-github-issues-jev-triage-and-comments.md) *(Sub-phase 15.4 — GitHub Issue → Task + Jev 1.13 Auto-Triage & Đồng bộ Comment 1 chiều)*
 > 6. [`phase-15-5-frontend-integrations-and-e2e-verification.md`](./phase-15-5-frontend-integrations-and-e2e-verification.md) *(Sub-phase 15.5 — Giao diện React 19 / Ant Design v6, Vitest / xUnit Gates & Đồng bộ Tài liệu)*
+> 7. [`phase-15-remaining-frontend-handover.md`](./phase-15-remaining-frontend-handover.md) *(Bàn giao phiên sau — trạng thái 15.1→15.4, cấu hình deploy đã đặt, checklist xác minh, việc còn lại của 15.5 & rủi ro mở)*
 
 ---
 

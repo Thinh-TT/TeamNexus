@@ -2,7 +2,42 @@
 
 > **Thuộc:** [Giai đoạn 15 — Tích hợp Hệ sinh thái Bên ngoài](./phase-15-0-external-integrations-master-plan.md)
 > **Tham chiếu thiết kế:** [`07-external-integrations-design.md`](../07-external-integrations-design.md) §2 (`F9`, `F10`), §8 (Frontend Design) & §9 (Testing Strategy).
-> **Trạng thái:** 📋 Kế hoạch chi tiết (`T15.5.1` → `T15.5.5`).
+> **Trạng thái:** 📋 **SẴN SÀNG THI HÀNH** — đầu vào 15.3/15.4 (kèm đợt khắc phục review 2026-11-11) đã xong trên `develop`; **15.5 chưa bắt đầu**. Bàn giao chi tiết: [`phase-15-remaining-frontend-handover.md`](./phase-15-remaining-frontend-handover.md).
+
+---
+
+## 0. Trạng thái Đầu vào & Bàn giao (đọc trước khi code)
+
+### 0.1. Đã có sẵn từ 15.1 → 15.4 + đợt khắc phục review
+
+| Hạng mục | Trạng thái |
+| :--- | :--- |
+| Backend GitHub Integration (5 endpoint quản trị + webhook công khai) | ✅ Xong — `20/20` test `GitHubWebhookPrTests` |
+| GitHub Issue → Task, Jev Triage, comment sync, SignalR khi issue đóng/mở | ✅ Xong — `15/15` test `GitHubWebhookIssueAndCommentTests` |
+| Accountability Layer: `GitHubPrMoveTask`, `GitHubIssueCreateTask` + Undo (đúng cột/vị trí/`CompletedAt`) | ✅ Xong |
+| Nhãn tiếng Việt + basis GitHub + ẩn tag "0 tasks" trong `AiActionLogItem` (**một phần `T15.5.3` đã làm sớm**) | ✅ Xong (`0bd1aab`) |
+| Cấu hình triển khai `Integrations__PublicApiBaseUrl`, `Integrations__DataProtection__KeysPath` | ✅ Người dùng đã đặt trên môi trường deploy (2026-11-11) |
+| Cổng hiện tại | Build `0/0`, drift sạch, backend **1.329**, frontend **747**, Pure **665** |
+
+### 0.2. Hợp đồng API frontend được phép dựa vào (đã kiểm chứng bằng test)
+
+- `GET/PUT /api/workspaces/{id}/integrations/github`, `POST .../rotate-secret`, `DELETE ...`, `GET .../deliveries` — trả `SecretHint` (4 ký tự cuối) + `WebhookPayloadUrl` dựng từ `Integrations:PublicApiBaseUrl`; plaintext secret **chỉ** ở response tạo mới/rotate.
+- `TaskResponse` đã có `taskNumber` + `externalLinks` (append-only, cuối record); `ColumnResponse` đã có `isInReview`.
+- `TaskExternalLinkSummaryResponse`: `provider`, `linkType` (`pull_request`/`issue`), `externalId`, `externalUrl`, `title`, `state` (`draft`/`open`/`merged`/`closed`), `updatedAt`.
+- `AiActionLog` action mới: `GitHubPrMoveTask`, `GitHubIssueCreateTask` (đã có nhãn ở `AiActionLogItem`).
+- Webhook công khai trả `200` cho `Processed`/`Ignored`, **`502`** cho `Failed`, `413` khi payload > 256 KB, `401` khi sai HMAC, `404` khi token sai/tắt.
+
+### 0.3. Bẫy phải giữ khi làm UI
+
+- Auto-link GitHub chỉ nhận `TN-…`; **không** hiển thị `#n` như mã công việc.
+- `AiActionLogItem` đã xử lý 2 action GitHub; đừng thêm lại nhánh trùng.
+- Không đổi/đảo thứ tự tham số các record DTO hiện có (append-only, chuẩn bị Phase 16 Flutter).
+- `data-testid` hiện có phải giữ nguyên (`open-settings-modal-btn`, ...).
+- 1 tích hợp GitHub / workspace (chưa có đa repo/PAT) — UI chỉ cần 1 form cấu hình.
+
+### 0.4. Việc còn lại của 15.5
+
+Toàn bộ `T15.5.1` → `T15.5.5` bên dưới, **trừ** phần nhãn `AiActionLogItem` (đã xong). Checklist bàn giao đầy đủ (gồm env deploy + xác minh sau deploy): [`phase-15-remaining-frontend-handover.md`](./phase-15-remaining-frontend-handover.md).
 
 ---
 
@@ -78,8 +113,8 @@
   2. **Khối Liên kết GitHub (Pull Requests & Issues):**
      - Khi `task.externalLinks` có phần tử: hiển thị khung thông tin liên kết GitHub ngay bên dưới phần mô tả/metadata với danh sách PR/Issue, badge trạng thái (`Draft`, `Open`, `Merged`, `Closed`), tiêu đề và link mở tab mới (`target="_blank" rel="noopener noreferrer"`).
   3. **Nhận diện bình luận từ `GitHub Bot` & Nhãn hành động trên `AiActionLogItem.tsx`:**
-     - Khi `comment.authorName === 'GitHub Bot'` hoặc `comment.userId === '00000000-0000-0000-0000-00000000b071'`: hiển thị avatar icon GitHub và tag `GITHUB BOT` rõ ràng.
-     - Trong `AiActionLogItem.tsx`: hiển thị nhãn tiếng Việt cho `log.action === 'GitHubPrMoveTask'` (`'Tự động chuyển cột từ GitHub PR'`) và `log.action === 'GitHubIssueCreateTask'` (`'Tự động tạo thẻ từ GitHub Issue'`).
+     - Khi `comment.authorName === 'GitHub Bot'` hoặc `comment.userId === '00000000-0000-0000-0000-00000000b071'`: hiển thị avatar icon GitHub và tag `GITHUB BOT` rõ ràng (**còn lại**).
+     - Trong `AiActionLogItem.tsx`: nhãn `GitHubPrMoveTask` → *"Tự động chuyển thẻ (GitHub PR)"* và `GitHubIssueCreateTask` → *"Tạo thẻ từ GitHub Issue"*, kèm basis GitHub + ẩn tag "0 tasks" (**đã hoàn tất sớm** trong đợt khắc phục review — commit `0bd1aab`; chỉ cần giữ nguyên khi sửa file này).
 
 ---
 

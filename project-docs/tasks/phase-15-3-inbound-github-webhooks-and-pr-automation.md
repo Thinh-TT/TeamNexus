@@ -169,7 +169,7 @@
 | Mã | Lỗi gốc | Thay đổi | Kiểm chứng |
 | :--- | :--- | :--- | :--- |
 | `R1.2` | Payload URL rơi về `Frontend:BaseUrl` (host SPA Vercel) | Thêm `Integrations:PublicApiBaseUrl` + `ResolvePublicApiBaseUrl`/`BuildPayloadUrl`; dev override rỗng để Vite proxy | `GitHubIntegrationUrlTests` (6 tests) |
-| `R1.3` | Key ring DataProtection không bền ⇒ secret chết sau redeploy | `AddDataProtection().SetApplicationName("TeamNexus")` + `KeysPath`/`CertPath` từ env + cảnh báo khi chưa cấu hình | `DataProtectionKeyRingTests` (3 tests); chạy API với `Integrations__DataProtection__KeysPath` sinh key trong thư mục chỉ định |
+| `R1.3` | Key ring DataProtection không bền ⇒ secret chết sau redeploy | `AddDataProtection().SetApplicationName("TeamNexus")` + `KeysPath`/`CertPath` từ env + cảnh báo khi chưa cấu hình. `KeysPath` và `CertPath` **độc lập**, bật được đồng thời (commit `8891bac`): `KeysPath` lo độ bền, `CertPath` lo mã hoá at-rest | `DataProtectionKeyRingTests` (3 tests); chạy API với `Integrations__DataProtection__KeysPath` sinh key trong thư mục chỉ định |
 | `R2.2` | `#123` (số Issue GitHub) bị auto-link thành `TN-123` | `TaskKeyParser` thêm `requireTnPrefix`; webhook PR/comment chỉ nhận `TN-` | 10 Pure tests + `Webhook_PullRequestReferencingOnlyGitHubIssueNumbers_...` |
 | `R2.5` | Undo nối thẻ vào cuối cột | Undo đọc `previousPosition`/`previousCompletedAt`, clamp và khôi phục `CompletedAt` | `AiAction_Undo_RestoresTheOriginalPositionInTheColumn` |
 | `R3.1` | Body limit kiểm tra sau khi buffer | Vòng đọc có trần 256 KB, chặn ngay khi vượt | `Webhook_OversizedPayload_Returns413_AndWritesNoDelivery` |
