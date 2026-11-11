@@ -2,7 +2,7 @@
 
 > **Thuộc:** [Giai đoạn 15 — Tích hợp Hệ sinh thái Bên ngoài](./phase-15-0-external-integrations-master-plan.md)
 > **Tham chiếu thiết kế:** [`07-external-integrations-design.md`](../07-external-integrations-design.md) §2 (`F4`, `F5`, `F6`, `F8`) & §5 (Database Schema Design).
-> **Trạng thái:** 📋 Kế hoạch chi tiết (`T15.1.1` → `T15.1.5`).
+> **Trạng thái:** ✅ **ĐÃ HOÀN THÀNH (`T15.1.1` → `T15.1.5`) — 1.175/1.175 Backend Tests PASS, 0 Warning / 0 Error.**
 
 ---
 
@@ -151,10 +151,43 @@
 
 ## 3. Tiêu chí Nghiệm thu (Definition of Done — Sub-phase 15.1)
 
-- [ ] `dotnet build TeamNexus.sln --no-incremental` đạt `0 Warning(s), 0 Error(s)`.
-- [ ] `dotnet ef migrations has-pending-model-changes` báo không có thay đổi model treo.
-- [ ] Mọi task tạo mới qua `POST /api/boards/{boardId}/tasks` đều nhận `taskNumber >= 1` tăng dần theo từng workspace và trả về trong `TaskResponse`.
-- [ ] Tìm kiếm công việc với từ khóa `TN-1` hoặc `#1` trả về đúng thẻ có `taskNumber = 1`.
-- [ ] Bật đồng thời 2 trong 3 cờ (`isDone`, `isClarification`, `isInReview`) trên cùng 1 cột bị từ chối với `400 Bad Request` và thông báo tiếng Việt rõ ràng.
-- [ ] Tài khoản `IsSystem = true` bị chặn hoàn toàn ở `AuthService`.
+- [x] `dotnet build TeamNexus.sln --no-incremental` đạt `0 Warning(s), 0 Error(s)`.
+- [x] `dotnet ef migrations has-pending-model-changes` báo không có thay đổi model treo (`No changes have been made to the model since the last migration.`).
+- [x] Mọi task tạo mới qua `POST /api/boards/{boardId}/tasks` đều nhận `taskNumber >= 1` tăng dần theo từng workspace và trả về trong `TaskResponse`.
+- [x] Tìm kiếm công việc với từ khóa `TN-1`, `tn-1` hoặc `#1` trả về đúng thẻ có `taskNumber = 1`.
+- [x] Bật đồng thời 2 trong 3 cờ (`isDone`, `isClarification`, `isInReview`) trên cùng 1 cột bị từ chối với `400 Bad Request` và thông báo tiếng Việt rõ ràng.
+- [x] Tài khoản `IsSystem = true` bị chặn hoàn toàn ở `AuthService`.
+
+---
+
+## 4. NHẬT KÝ THI HÀNH SUB-PHASE 15.1 (`T15.1.1` → `T15.1.5`)
+
+> **Số đo thực tế:**
+> - **Backend Build:** `dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental` → **0 Warning(s), 0 Error(s)**.
+> - **EF Core Migration #15:** `20261110154843_Phase15ExternalIntegrations` · `dotnet ef migrations has-pending-model-changes` → **No changes have been made to the model since the last migration.**
+> - **Backend Tests (`xUnit` trên PostgreSQL `pgvector/pgvector:pg18`):** **Passed: 1,175 / Failed: 0 / Skipped: 0 / Total: 1,175** (Baseline 1,167 ⇒ **+8 bài kiểm thử tích hợp mới** trong `Phase15FoundationTests`).
+
+### 4.1. Quyết định Kỹ thuật Đã Chốt (`K1..K4`)
+
+| # | Quyết định | Lý do kỹ thuật & Bằng chứng |
+|---|---|---|
+| **K1** | **Truyền tên model index tường minh trong `BoardColumnConfiguration`:** `builder.HasIndex(c => c.BoardId, "IX_board_columns_board_id_single_in_review")` | Trong EF Core, gọi `builder.HasIndex(c => c.BoardId)` lần thứ hai trên cùng một thuộc tính `BoardId` mà không truyền tên model index sẽ ghi đè lên index không tên trước đó (`uq_board_columns_clarification`), làm migration sinh lệnh `DropIndex("uq_board_columns_clarification")`. Truyền tên model index tường minh giúp giữ nguyên `uq_board_columns_clarification` và tạo mới `IX_board_columns_board_id_single_in_review`. |
+| **K2** | **Cấp phát `TaskNumber` nguyên tử bằng `UPDATE workspaces SET next_task_number = next_task_number + 1 ... RETURNING next_task_number - 1 AS "Value"`** | Đảm bảo hai request tạo thẻ đồng thời trên cùng workspace không bao giờ nhận trùng `task_number`, đồng thời đồng bộ lại `trackedWorkspace.Entity.NextTaskNumber` trên `ChangeTracker` để `SaveChangesAsync()` không ghi đè giá trị cũ. |
+| **K3** | **Khớp Global Query Filter trên `TaskExternalLinkConfiguration` (Pitfall T6)** | `BoardTask` có Global Query Filter soft-delete (`DeletedAt == null`). Khai báo filter tương ứng trên `TaskExternalLink` (`x.Task == null || (x.Task.DeletedAt == null && ...)`) giúp triệt tiêu cảnh báo EF Core `10622` và giữ vững cổng `0 Warning`. |
+| **K4** | **Khôi phục `GitHub Bot` trong `TestScenario.ResetDatabaseAsync()` và `TaskAutomationService`** | Bộ khung kiểm thử tích hợp chạy `TRUNCATE TABLE ... "users" RESTART IDENTITY CASCADE` trước mỗi test, xóa sạch dữ liệu seed từ migration. Việc tự động re-seed tài khoản `GitHub Bot` (`00000000-0000-0000-0000-00000000b071`) ngay sau `TRUNCATE` đảm bảo tính cô lập giữa các test mà vẫn giữ nguyên vẹn khóa ngoại. |
+
+### 4.2. Lệch Kế Hoạch Có Chủ Ý (`L1..L2`)
+
+| # | Lệch | Lý do |
+|---|---|---|
+| **L1** | **Giữ nguyên 3 cột mặc định khi tạo Board mới (`Cần làm`, `Đang làm`, `Hoàn thành`) trong `BoardService.CreateBoardAsync`** | Theo đúng lưu ý ở `T15.1.4` mục 3: các bài kiểm thử hiện có kỳ vọng Board mới khởi tạo với 3 cột tiêu chuẩn. Vai trò `isInReview` được bật linh hoạt khi tạo cột mới hoặc cập nhật cột hiện có qua `POST/PUT /api/boards/{boardId}/columns`. |
+| **L2** | **Cập nhật đúng 1 assertion đếm số migration trong `Phase147KnowledgeTests.Schema_MigrationChainEndsWithTheTwoTrackBMigrations` (`14 → 15`)** | Bài test của Phase 14.7 Track B kiểm tra tổng số dòng trong `__EFMigrationsHistory`. Khi Sub-phase 15.1 bổ sung Migration #15 (`Phase15ExternalIntegrations`), tổng số migration tăng từ `14` lên `15` (2 migration của Track B vẫn được xác minh chính xác theo thứ tự). |
+
+### 4.3. Bug Thật Bắt Được Trong Lúc Thi Hành (`P1..P2`)
+
+| # | Bug | Nguyên nhân & Cách khắc phục |
+|---|---|---|
+| **P1** | **`InvalidOperationException: 'FromSql' or 'SqlQuery' was called with non-composable SQL` khi gọi `.SingleAsync(ct)` trên `SqlQueryRaw("UPDATE ... RETURNING")`** | Toán tử LINQ `.SingleAsync(ct)` trên `IQueryable<long>` khiến EF Core 10 cố gắng bọc câu lệnh SQL vào subquery `SELECT ... FROM (UPDATE ...) LIMIT 2`, vi phạm cú pháp SQL của PostgreSQL. **Cách sửa:** Đổi sang `.ToListAsync(ct)` rồi gọi `.Single()` trên bộ nhớ để EF Core thực thi trực tiếp câu lệnh `UPDATE ... RETURNING` mà không bọc subquery. |
+| **P2** | **Race condition trong `DatabaseFixture.EnsureMigratedAsync()` khi áp dụng migration mới lên DB test đã có sẵn các migration cũ** | `WaitForMigrationsAsync()` chỉ kiểm tra `COUNT(*) FROM "__EFMigrationsHistory" > 0`. Khi DB test đã có 14 migration từ Phase 14.7, các class test chạy song song thấy `14 > 0` nên lập tức chạy `TRUNCATE` trong khi luồng đầu tiên đang chạy `ALTER TABLE` của Migration #15, gây lỗi thiếu cột hoặc deadlock `40P01`. **Cách sửa:** Bọc `EnsureMigratedAsync()` bằng `await DatabaseLock.WaitAsync()` để tuần tự hóa bước migrate trong tiến trình test trước khi bất kỳ scenario nào chạy `ResetDatabaseAsync()`. |
+
 

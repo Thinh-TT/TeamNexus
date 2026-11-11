@@ -49,6 +49,9 @@ public static class AiModule
     /// </summary>
     public const string JevHttpClientName = "Jev";
 
+    /// <summary>Name of the <see cref="IHttpClientFactory"/> client used for outbound Slack/Discord webhooks (Phase 15.2).</summary>
+    public const string ExternalWebhookHttpClientName = "ExternalWebhookClient";
+
     public static IServiceCollection AddAiModule(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -144,7 +147,22 @@ public static class AiModule
         // three notification write paths (Observer · agent · member) now already funnel through it, so
         // Phase 15 adds one implementation here and edits no producer. NoOp is the intended production
         // default — with no transport configured, the in-app notification is the whole feature.
-        services.AddSingleton<IExternalAlertSink, NoOpExternalAlertSink>();
+        // Phase 15.2: the real transport replaces the NoOp default — a transactional outbox that stays silent
+        // (zero DB writes) for workspaces with no active webhook endpoint.
+        services.AddOptions<IntegrationsOptions>()
+            .Bind(configuration.GetSection(IntegrationsOptions.SectionName));
+
+        // No redirects (an SSRF vector) and a short timeout; the URL is also re-validated before every send.
+        services.AddHttpClient(ExternalWebhookHttpClientName, (provider, client) =>
+        {
+            var options = provider.GetRequiredService<IOptions<IntegrationsOptions>>().Value;
+            client.Timeout = options.Outbox.EffectiveTimeout;
+        }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+
+        services.AddSingleton<IExternalAlertSink, WebhookOutboxExternalAlertSink>();
+        services.AddScoped<WebhookOutboxRunner>();
+        services.AddHostedService<WebhookOutboxDispatcher>();
+        services.AddScoped<IWorkspaceWebhookService, WorkspaceWebhookService>();
 
         // User-facing alerts (Phase 11 §6.4): Board declares the port + a no-op default, this line
         // overrides it — the same ordering rule as IEmailGateway/IActivityLogWriter above.
@@ -445,6 +463,8 @@ public static class AiModule
         endpoints.MapTaskTriageEndpoints();
         // Giai đoạn 14.7 Track B §B3: the workspace knowledge base (writes go through Pending actions).
         endpoints.MapKnowledgeEndpoints();
+        // Phase 15.2: outbound Slack/Discord webhook management (Manager+).
+        endpoints.MapWorkspaceWebhooksEndpoints();
 
         return endpoints;
     }

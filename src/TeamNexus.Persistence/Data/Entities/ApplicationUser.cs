@@ -32,4 +32,10 @@ public class ApplicationUser : IdentityUser<Guid>
     /// </para>
     /// </summary>
     public bool DigestEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Marks this account as an internal system bot (e.g., <c>GitHub Bot</c>, Phase 15.1 §T15.1.1).
+    /// System accounts cannot sign in interactively via OAuth or rotate refresh tokens.
+    /// </summary>
+    public bool IsSystem { get; set; } = false;
 }

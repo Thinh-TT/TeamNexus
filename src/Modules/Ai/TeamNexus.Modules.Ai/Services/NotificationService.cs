@@ -201,13 +201,19 @@ public sealed class NotificationService : INotificationService
         // digest the transport would have to split.
         foreach (var alert in toAdd
                      .GroupBy(n => new { n.Type, n.Title, n.Message, n.Payload })
-                     .Select(group => new ExternalAlertMessage(
-                         workspaceId,
-                         group.Key.Type,
-                         group.Key.Title,
-                         group.Key.Message,
-                         group.Key.Payload,
-                         group.Select(n => n.RecipientUserId).ToList())))
+                     .Select(group =>
+                     {
+                         var firstId = group.First().Id;
+                         return new ExternalAlertMessage(
+                             workspaceId,
+                             group.Key.Type,
+                             group.Key.Title,
+                             group.Key.Message,
+                             group.Key.Payload,
+                             group.Select(n => n.RecipientUserId).ToList(),
+                             NotificationId: firstId,
+                             DedupeKey: $"{group.Key.Type}:{workspaceId}:{firstId}");
+                     }))
         {
             await PublishExternalAsync(alert, ct);
         }
@@ -256,6 +262,7 @@ public sealed class NotificationService : INotificationService
 
         // Phase 14.5 (A1.2): same seam as the Observer and member paths — every alert family leaves the
         // system through one place.
+        var firstAgentNotificationId = rows[0].Id;
         await PublishExternalAsync(
             new ExternalAlertMessage(
                 workspaceId,
@@ -263,7 +270,9 @@ public sealed class NotificationService : INotificationService
                 notification.Title,
                 notification.Message,
                 notification.PayloadJson,
-                rows.Select(r => r.RecipientUserId).ToList()),
+                rows.Select(r => r.RecipientUserId).ToList(),
+                NotificationId: firstAgentNotificationId,
+                DedupeKey: $"{notification.Type}:{workspaceId}:{firstAgentNotificationId}"),
             ct);
 
         _logger.LogInformation(
@@ -395,6 +404,7 @@ public sealed class NotificationService : INotificationService
         // Phase 14.5 (A1.2): the member-facing path (task assigned, comment, mention, invitation) goes
         // through the same seam. Phase 15 wants "task overdue" and "member joined" on Slack, and both
         // of those are exactly this call.
+        var firstMemberNotificationId = rows[0].Id;
         await PublishExternalAsync(
             new ExternalAlertMessage(
                 workspaceId,
@@ -402,7 +412,9 @@ public sealed class NotificationService : INotificationService
                 Truncate(title, 200),
                 Truncate(message, 2000),
                 payloadJson,
-                recipients),
+                recipients,
+                NotificationId: firstMemberNotificationId,
+                DedupeKey: $"{type}:{workspaceId}:{firstMemberNotificationId}"),
             ct);
 
         _logger.LogInformation(

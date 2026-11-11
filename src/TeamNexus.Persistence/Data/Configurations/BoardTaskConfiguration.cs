@@ -28,8 +28,15 @@ public sealed class BoardTaskConfiguration : IEntityTypeConfiguration<BoardTask>
             .HasConversion<string>()
             .HasMaxLength(32);
 
+        builder.Property(t => t.TaskNumber)
+            .HasDefaultValue(0L)
+            .IsRequired();
+
         // Ordering index for drag & drop within a column (Phase 2 §1 / DB design §5).
         builder.HasIndex(t => new { t.BoardId, t.ColumnId, t.Position });
+
+        builder.HasIndex(t => new { t.BoardId, t.TaskNumber })
+            .HasDatabaseName("ix_tasks_board_id_task_number");
 
         // No physical cascade anywhere (DB design §7): every FK is Restrict.
         builder.HasOne(t => t.Board)

@@ -69,9 +69,11 @@ public sealed class ColumnService : IColumnService
             Position = maxPosition + 1,
             IsDone = request.IsDone,
             IsClarification = request.IsClarification ?? false,
+            IsInReview = request.IsInReview,
         };
 
-        RequireOnlyOneSystemMeaning(column.IsDone, column.IsClarification);
+        RequireOnlyOneSystemMeaning(column.IsDone, column.IsClarification, column.IsInReview);
+        await EnsureSingleInReviewColumnAsync(boardId, column.Id, column.IsInReview, ct);
 
         _db.BoardColumns.Add(column);
         await _db.SaveChangesAsync(ct);
@@ -103,9 +105,15 @@ public sealed class ColumnService : IColumnService
             column.IsClarification = request.IsClarification.Value;
         }
 
-        // Checked on the values AFTER the merge so both directions are covered: turning on
-        // is_clarification over a column that is is_done, and the reverse (Phase 7 §3.5).
-        RequireOnlyOneSystemMeaning(column.IsDone, column.IsClarification);
+        if (request.IsInReview.HasValue)
+        {
+            column.IsInReview = request.IsInReview.Value;
+        }
+
+        // Checked on the values AFTER the merge so all directions are covered: turning on
+        // is_clarification / is_in_review over a column that is is_done, and the reverse (Phase 7 §3.5 / Phase 15.1 §T15.1.4).
+        RequireOnlyOneSystemMeaning(column.IsDone, column.IsClarification, column.IsInReview);
+        await EnsureSingleInReviewColumnAsync(column.BoardId, column.Id, column.IsInReview, ct);
 
         await _db.SaveChangesAsync(ct);
         var response = ToResponse(column, []);
@@ -238,20 +246,38 @@ public sealed class ColumnService : IColumnService
     }
 
     /// <summary>
-    /// Phase 7 §3.5 — the two system meanings are mutually exclusive: a column cannot be both the
-    /// "Done" lane and the "Awaiting clarification" lane (400). Reporting/Observer treat only
-    /// <c>is_done</c> as completion, so an overlap would produce contradictory state.
+    /// Phase 7 §3.5 &amp; Phase 15.1 §T15.1.4 — the three system meanings are mutually exclusive:
+    /// a column can carry at most one of <c>is_done</c>, <c>is_clarification</c>, or <c>is_in_review</c> (400).
     /// </summary>
-    private static void RequireOnlyOneSystemMeaning(bool isDone, bool isClarification)
+    private static void RequireOnlyOneSystemMeaning(bool isDone, bool isClarification, bool isInReview)
     {
-        if (isDone && isClarification)
+        var activeCount = (isDone ? 1 : 0) + (isClarification ? 1 : 0) + (isInReview ? 1 : 0);
+        if (activeCount > 1)
         {
             throw new BadRequestException(
-                "A column cannot be both Done and Awaiting clarification.");
+                "Một cột chỉ có thể đóng một vai trò hệ thống (Hoàn thành, Cần làm rõ hoặc Đang duyệt PR).");
+        }
+    }
+
+    private async Task EnsureSingleInReviewColumnAsync(
+        Guid boardId, Guid currentColumnId, bool isInReview, CancellationToken ct)
+    {
+        if (!isInReview)
+        {
+            return;
+        }
+
+        var existsOther = await _db.BoardColumns
+            .AnyAsync(c => c.BoardId == boardId && c.Id != currentColumnId && c.IsInReview, ct);
+
+        if (existsOther)
+        {
+            throw new ConflictException(
+                "Bảng này đã có một cột Đang duyệt PR (In Review).");
         }
     }
 
     private static ColumnResponse ToResponse(BoardColumn column, IReadOnlyList<TaskResponse> tasks)
         => new(column.Id, column.BoardId, column.Name, column.Position, column.IsDone,
-            column.CreatedAt, column.UpdatedAt, tasks, column.IsClarification);
+            column.CreatedAt, column.UpdatedAt, tasks, column.IsClarification, column.IsInReview);
 }

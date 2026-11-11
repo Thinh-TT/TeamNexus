@@ -128,6 +128,10 @@ public sealed class TestScenario : IAsyncDisposable
             // Phase 14.5 §B: the board-chat transcript is append-only and is read back by "load the stored
             // conversation", so a row left behind makes the next suite see someone else's history.
             "agent_chat_messages",
+            // Phase 14.7 & Phase 15.1: workspace taxonomies, RAG knowledge & external integrations.
+            "workspace_knowledge_chunks", "workspace_knowledge_documents", "workspace_taxonomies",
+            "task_external_links", "github_webhook_deliveries", "workspace_github_integrations",
+            "webhook_delivery_outbox", "workspace_webhook_endpoints", "task_numbers",
         ];
 
         var present = wanted.Where(existing.Contains).ToList();
@@ -149,6 +153,36 @@ public sealed class TestScenario : IAsyncDisposable
         await db.Database.ExecuteSqlRawAsync("""
             UPDATE roles SET name = 'User', normalized_name = 'USER' WHERE id = '33333333-3333-3333-3333-333333333333'::uuid;
             DELETE FROM roles WHERE id = '22222222-2222-2222-2222-222222222222'::uuid;
+            INSERT INTO users (
+                id, user_name, normalized_user_name, email, normalized_email,
+                email_confirmed, password_hash, security_stamp, concurrency_stamp,
+                phone_number, phone_number_confirmed, two_factor_enabled,
+                lockout_end, lockout_enabled, access_failed_count,
+                display_name, avatar_url, digest_enabled, is_system, created_at
+            )
+            VALUES (
+                '00000000-0000-0000-0000-00000000b071'::uuid,
+                'github-bot',
+                'GITHUB-BOT',
+                'github-bot@system.teamnexus.invalid',
+                'GITHUB-BOT@SYSTEM.TEAMNEXUS.INVALID',
+                true,
+                NULL,
+                '00000000-0000-0000-0000-00000000b071',
+                '00000000-0000-0000-0000-00000000b071',
+                NULL,
+                false,
+                true,
+                NULL,
+                true,
+                0,
+                'GitHub Bot',
+                NULL,
+                false,
+                true,
+                TIMESTAMPTZ '2026-01-01 00:00:00+00'
+            )
+            ON CONFLICT (id) DO NOTHING;
             """);
 
         db.ChangeTracker.Clear();

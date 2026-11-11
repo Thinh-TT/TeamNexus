@@ -97,6 +97,12 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
     public IExternalAlertSink? ExternalAlerts { get; init; }
 
     /// <summary>
+    /// Handler behind the outbound webhook HttpClient (Phase 15.2). Always set so no suite can reach a real
+    /// Slack/Discord; a suite that wants to assert on traffic or script a failure passes its own.
+    /// </summary>
+    public HttpMessageHandler ExternalWebhookHandler { get; init; } = new StubWebhookHandler();
+
+    /// <summary>
     /// When set, replaces the registered <c>IEmbeddingProvider</c> (Giai đoạn 14.7 Track B §B3) for this host,
     /// so a suite can exercise the embedding pass's two failure branches without any network. Kept on the
     /// factory rather than the shared host for the same reason as <see cref="ScriptedAi"/>.
@@ -309,6 +315,13 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
         // The Observer would otherwise occupy a hosted-service slot and race the assertions; a long
         // startup delay on top of Enabled=false keeps it out of every suite deterministically.
         builder.UseSetting("Observer:StartupDelaySeconds", "3600");
+
+        // Phase 15.2: the outbox timer must not race assertions on Pending rows; suites call
+        // `WebhookOutboxRunner.ProcessBatchAsync` directly. The HTTP layer is always stubbed.
+        builder.UseSetting("Integrations:Outbox:StartupDelaySeconds", "3600");
+        builder.ConfigureTestServices(services =>
+            services.AddHttpClient(TeamNexus.Modules.Ai.AiModule.ExternalWebhookHttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(() => ExternalWebhookHandler));
 
         // Guardrails are exercised explicitly by the Agent suite; test runs must not depend on them.
         builder.UseSetting("Agent:MaxToolCalls", "15");

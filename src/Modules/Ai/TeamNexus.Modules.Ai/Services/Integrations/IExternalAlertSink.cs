@@ -21,13 +21,22 @@ namespace TeamNexus.Modules.Ai.Services.Integrations;
 /// The recipients the in-app rows were written for. A workspace-level transport (one Slack channel per
 /// workspace) can ignore this; a direct-message transport needs it.
 /// </param>
+/// <param name="NotificationId">
+/// Optional primary key of the first persisted <c>notifications</c> row produced for this alert (Phase 15.2 §T15.2.1).
+/// </param>
+/// <param name="DedupeKey">
+/// Optional idempotency key (<c>{Type}:{WorkspaceId}:{NotificationId}</c>) used by transactional outbox sinks
+/// to prevent duplicate deliveries per channel (Phase 15.2 §T15.2.1).
+/// </param>
 public sealed record ExternalAlertMessage(
     Guid WorkspaceId,
     string Type,
     string Title,
     string Message,
     string? PayloadJson,
-    IReadOnlyList<Guid> RecipientUserIds);
+    IReadOnlyList<Guid> RecipientUserIds,
+    Guid? NotificationId = null,
+    string? DedupeKey = null);
 
 /// <summary>
 /// Outbound seam for alerts (Phase 14.5 §Track A / A1.2): every alert that becomes an in-app

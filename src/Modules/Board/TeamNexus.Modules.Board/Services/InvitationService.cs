@@ -49,6 +49,7 @@ public sealed class InvitationService : IInvitationService
     private readonly IWorkspaceAccess _access;
     private readonly IEmailGateway _email;
     private readonly IActivityLogWriter _activityLog;
+    private readonly INotificationWriter _notifications;
     private readonly InvitationSettings _settings;
     private readonly ILogger<InvitationService> _logger;
 
@@ -57,6 +58,7 @@ public sealed class InvitationService : IInvitationService
         IWorkspaceAccess access,
         IEmailGateway email,
         IActivityLogWriter activityLog,
+        INotificationWriter notifications,
         InvitationSettings settings,
         ILogger<InvitationService> logger)
     {
@@ -64,6 +66,7 @@ public sealed class InvitationService : IInvitationService
         _access = access;
         _email = email;
         _activityLog = activityLog;
+        _notifications = notifications;
         _settings = settings;
         _logger = logger;
     }
@@ -338,7 +341,64 @@ public sealed class InvitationService : IInvitationService
             JsonSerializer.Serialize(new { invitationId = invitation.Id, role = invitation.InvitedRole.ToString() })),
             ct);
 
+        await NotifyManagersMemberJoinedAsync(invitation.WorkspaceId, userId, email, invitation.InvitedRole, ct);
+
         return new AcceptInvitationResponse(invitation.WorkspaceId, invitation.InvitedRole.ToString(), AlreadyMember: false);
+    }
+
+    private async Task NotifyManagersMemberJoinedAsync(
+        Guid workspaceId,
+        Guid joinedUserId,
+        string joinedEmail,
+        WorkspaceRole role,
+        CancellationToken ct)
+    {
+        var managerIds = await _db.WorkspaceMembers
+            .AsNoTracking()
+            .Where(wm => wm.WorkspaceId == workspaceId
+                         && wm.UserId != joinedUserId
+                         && wm.MemberType == MemberType.Human
+                         && (wm.Role == WorkspaceRole.Admin || wm.Role == WorkspaceRole.Manager))
+            .Select(wm => wm.UserId)
+            .ToListAsync(ct);
+
+        if (managerIds.Count == 0)
+        {
+            return;
+        }
+
+        var displayName = await _db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == joinedUserId)
+            .Select(u => u.DisplayName)
+            .FirstOrDefaultAsync(ct);
+
+        var memberLabel = string.IsNullOrWhiteSpace(displayName)
+            ? joinedEmail
+            : $"{displayName.Trim()} ({joinedEmail})";
+
+        var message = MemberNotificationLimits.Clamp(
+            $"{memberLabel} đã tham gia không gian làm việc với vai trò {role}.",
+            MemberNotificationLimits.Message);
+
+        var payloadJson = JsonSerializer.Serialize(new
+        {
+            workspaceId,
+            userId = joinedUserId,
+            email = joinedEmail,
+            displayName,
+            role = role.ToString(),
+        });
+
+        await _notifications.NotifyAsync(
+            new MemberNotification(
+                workspaceId,
+                managerIds,
+                MemberNotificationTypes.MemberJoined,
+                "Thành viên mới tham gia không gian làm việc",
+                message,
+                payloadJson),
+            ct);
     }
 
     // ---- helpers -----------------------------------------------------------

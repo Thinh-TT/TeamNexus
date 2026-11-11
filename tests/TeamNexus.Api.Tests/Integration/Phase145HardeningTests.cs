@@ -326,7 +326,9 @@ public sealed class Phase145HardeningTests : IClassFixture<DatabaseFixture>
         // The shared host carries no test double: the production registration is the NoOp sink, which is
         // the intended behaviour with no transport configured — not a degraded mode.
         var sink = scenario.Services.GetRequiredService<IExternalAlertSink>();
-        Assert.IsType<NoOpExternalAlertSink>(sink);
+        // Phase 15.2 (L1): the production default is now the webhook outbox sink, which writes nothing for a
+        // workspace with no configured endpoint — the same "in-app only" behaviour this test protects.
+        Assert.IsType<WebhookOutboxExternalAlertSink>(sink);
     }
 
     [Fact]

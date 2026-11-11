@@ -61,6 +61,7 @@ public sealed class BoardService : IBoardService
         var taskIds = tasks.Select(t => t.Id).ToList();
         var commentCounts = await LoadCommentCountsAsync(taskIds, ct);
         var labelsByTask = await LoadLabelsByTaskAsync(taskIds, ct);
+        var externalLinksByTask = await TaskReadHelpers.LoadExternalLinksByTaskAsync(_db, taskIds, ct);
 
         // Phase 7 §3.3: the Kanban board is one of the THREE task-returning paths, so the new
         // TaskResponse fields must be resolved here too — otherwise cards silently lose the agent
@@ -77,9 +78,11 @@ public sealed class BoardService : IBoardService
                      commentCounts.GetValueOrDefault(t.Id),
                      assigneeIsAiAgent,
                      // TryGetValue, NOT GetValueOrDefault (Guid.Empty would leak as a fake run id).
-                     activeRunIds.TryGetValue(t.Id, out var runId) ? runId : null))
+                     activeRunIds.TryGetValue(t.Id, out var runId) ? runId : null,
+                     externalLinksByTask.GetValueOrDefault(t.Id, [])))
                  .ToList(),
-            c.IsClarification)).ToList();
+            c.IsClarification,
+            c.IsInReview)).ToList();
 
         return ToResponse(board, columnResponses);
     }

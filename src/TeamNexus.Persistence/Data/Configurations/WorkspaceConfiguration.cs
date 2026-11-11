@@ -19,6 +19,10 @@ public sealed class WorkspaceConfiguration : IEntityTypeConfiguration<Workspace>
         builder.Property(w => w.Description)
             .HasMaxLength(2000);
 
+        builder.Property(w => w.NextTaskNumber)
+            .HasDefaultValue(1L)
+            .IsRequired();
+
         builder.HasOne(w => w.Owner)
             .WithMany()
             .HasForeignKey(w => w.OwnerId)

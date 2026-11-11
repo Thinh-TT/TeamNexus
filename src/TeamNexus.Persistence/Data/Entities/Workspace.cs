@@ -21,4 +21,10 @@ public class Workspace : IAuditableEntity
     public DateTimeOffset UpdatedAt { get; set; }
 
     public DateTimeOffset? DeletedAt { get; set; }
+
+    /// <summary>
+    /// Monotonically increasing sequence counter for workspace-scoped task keys (<c>TN-1</c>, <c>TN-2</c>, ...;
+    /// Phase 15.1 §T15.1.1). Incremented atomically when a task is created.
+    /// </summary>
+    public long NextTaskNumber { get; set; } = 1;
 }

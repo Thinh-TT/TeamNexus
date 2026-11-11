@@ -33,6 +33,7 @@ public static class BoardModule
         services.AddScoped<IBoardService, BoardService>();
         services.AddScoped<IColumnService, ColumnService>();
         services.AddScoped<ITaskService, TaskService>();
+        services.AddScoped<ITaskAutomation, TaskAutomationService>();
         services.AddScoped<ILabelService, LabelService>();
         services.AddScoped<ICommentService, CommentService>();
         services.AddScoped<IBoardEventPublisher, BoardEventPublisher>();

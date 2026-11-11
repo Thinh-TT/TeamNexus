@@ -22,7 +22,8 @@ internal static class DtoMapping
         IReadOnlyList<LabelResponse> labels,
         int commentCount = 0,
         bool assigneeIsAiAgent = false,
-        Guid? activeAgentRunId = null)
+        Guid? activeAgentRunId = null,
+        IReadOnlyList<TaskExternalLinkSummaryResponse>? externalLinks = null)
         => new(
             task.Id,
             task.BoardId,
@@ -40,7 +41,20 @@ internal static class DtoMapping
             labels,
             commentCount,
             assigneeIsAiAgent,
-            activeAgentRunId);
+            activeAgentRunId,
+            task.TaskNumber,
+            externalLinks ?? []);
+
+    public static TaskExternalLinkSummaryResponse MapExternalLink(TaskExternalLink link)
+        => new(
+            link.Id,
+            link.Provider,
+            link.LinkType,
+            link.ExternalId,
+            link.ExternalUrl,
+            link.Title,
+            link.State,
+            link.UpdatedAt);
 
     public static LabelResponse MapLabel(Label label)
         => new(label.Id, label.WorkspaceId, label.Name, label.Color, label.CreatedAt);

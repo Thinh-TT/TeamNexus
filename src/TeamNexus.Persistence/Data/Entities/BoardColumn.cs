@@ -29,6 +29,14 @@ public class BoardColumn : IAuditableEntity
     /// </summary>
     public bool IsClarification { get; set; }
 
+    /// <summary>
+    /// Marks this column as the "Đang duyệt PR" (In Review) lane where tasks are moved automatically
+    /// when a linked GitHub Pull Request is opened or marked ready for review (Phase 15.1 §T15.1.1).
+    /// Mutually exclusive with <see cref="IsDone"/> and <see cref="IsClarification"/>; at most one
+    /// per board, enforced by the partial unique index <c>IX_board_columns_board_id_single_in_review</c>.
+    /// </summary>
+    public bool IsInReview { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; }
