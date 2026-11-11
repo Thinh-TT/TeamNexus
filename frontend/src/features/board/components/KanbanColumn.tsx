@@ -7,6 +7,7 @@ import {
   CloseOutlined,
   DeleteOutlined,
   EditOutlined,
+  GithubOutlined,
   MoreOutlined,
   PlusOutlined,
   QuestionCircleOutlined,
@@ -160,16 +161,23 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
           borderTopRightRadius: 12,
         }}
       >
-        <Flex align="center" gap={8} style={{ overflow: 'hidden' }}>
+        <Flex align="center" gap={6} style={{ overflow: 'hidden', minWidth: 0, flex: 1 }}>
           {column.isDone ? (
             <Tooltip title="Cột hoàn thành (Done)">
-              <CheckCircleOutlined style={{ color: '#10b981', fontSize: 14 }} />
+              <CheckCircleOutlined style={{ color: '#10b981', fontSize: 14, flexShrink: 0 }} />
             </Tooltip>
           ) : column.isClarification ? (
             <Tooltip title="Cột chờ làm rõ (Clarification)">
               <QuestionCircleOutlined
-                style={{ color: '#f59e0b', fontSize: 14 }}
+                style={{ color: '#f59e0b', fontSize: 14, flexShrink: 0 }}
                 data-testid="clarification-col-icon"
+              />
+            </Tooltip>
+          ) : column.isInReview ? (
+            <Tooltip title="Cột Đang duyệt PR (In Review)">
+              <GithubOutlined
+                style={{ color: '#7c3aed', fontSize: 14, flexShrink: 0 }}
+                data-testid="in-review-col-icon"
               />
             </Tooltip>
           ) : (
@@ -197,6 +205,26 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
           >
             {column.name}
           </Typography.Text>
+          {column.isInReview && (
+            <Tag
+              data-testid="in-review-col-tag"
+              style={{
+                margin: 0,
+                fontSize: 10.5,
+                lineHeight: '18px',
+                borderRadius: 9999,
+                padding: '0 7px',
+                backgroundColor: '#f5f3ff',
+                borderColor: '#ddd6fe',
+                color: '#6d28d9',
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              Đang duyệt PR
+            </Tag>
+          )}
           <Badge
             count={tasks.length}
             showZero
@@ -210,6 +238,7 @@ export const KanbanColumn: React.FC<KanbanColumnProps> = ({
               fontFamily: 'var(--tn-font-mono, monospace)',
               borderRadius: 9999,
               padding: '0 5px',
+              flexShrink: 0,
             }}
           />
         </Flex>

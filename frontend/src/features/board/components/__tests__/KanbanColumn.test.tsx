@@ -154,4 +154,26 @@ describe('KanbanColumn', () => {
 
     expect(screen.getByTestId('quick-add-assignee-select')).toBeInTheDocument()
   })
+
+  it('renders "Đang duyệt PR" badge when isInReview is true', () => {
+    const inReviewColumn: ColumnResponse = {
+      ...mockColumn,
+      name: 'In Review',
+      isInReview: true,
+    }
+
+    renderWithDnd(
+      <KanbanColumn
+        column={inReviewColumn}
+        tasks={[]}
+        onTaskClick={vi.fn()}
+        onEditColumn={vi.fn()}
+        onDeleteColumn={vi.fn()}
+        onCreateTask={vi.fn()}
+      />
+    )
+
+    expect(screen.getByTestId('in-review-col-icon')).toBeInTheDocument()
+    expect(screen.getByTestId('in-review-col-tag')).toHaveTextContent('Đang duyệt PR')
+  })
 })

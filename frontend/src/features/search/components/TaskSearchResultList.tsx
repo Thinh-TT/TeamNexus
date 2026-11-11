@@ -20,6 +20,7 @@ import {
 } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { dueDateLabel, isOverdue } from '../../board/utils/taskDueDate'
+import { formatTaskCode } from '../../board/utils/externalLinkHelpers'
 import type { TaskSearchItem } from '../types/search.types'
 
 interface TaskSearchResultListProps {
@@ -106,11 +107,31 @@ export const TaskSearchResultList: React.FC<TaskSearchResultListProps> = ({
               className="task-search-item"
             >
               <Flex vertical gap={8} style={{ width: '100%' }}>
-                {/* Header: Title + Priority + Done tag */}
+                {/* Header: Task Code + Title + Priority + Done tag */}
                 <Flex justify="space-between" align="flex-start" wrap="wrap" gap={8}>
-                  <Typography.Text strong style={{ fontSize: 15, color: '#0f172a', flex: 1 }}>
-                    {task.title}
-                  </Typography.Text>
+                  <Flex align="center" gap={8} style={{ flex: 1, minWidth: 200 }}>
+                    {formatTaskCode(task.taskNumber) && (
+                      <Tag
+                        style={{
+                          margin: 0,
+                          borderRadius: 5,
+                          backgroundColor: '#f1f5f9',
+                          borderColor: '#e2e8f0',
+                          color: '#475569',
+                          fontFamily: "var(--tn-font-mono, 'JetBrains Mono', monospace)",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0,
+                        }}
+                      >
+                        {formatTaskCode(task.taskNumber)}
+                      </Tag>
+                    )}
+                    <Typography.Text strong style={{ fontSize: 15, color: '#0f172a' }}>
+                      {task.title}
+                    </Typography.Text>
+                  </Flex>
 
                   <Space size={6} wrap>
                     {isDone && (

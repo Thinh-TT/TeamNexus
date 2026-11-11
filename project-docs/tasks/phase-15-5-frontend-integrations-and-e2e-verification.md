@@ -2,7 +2,7 @@
 
 > **Thuộc:** [Giai đoạn 15 — Tích hợp Hệ sinh thái Bên ngoài](./phase-15-0-external-integrations-master-plan.md)
 > **Tham chiếu thiết kế:** [`07-external-integrations-design.md`](../07-external-integrations-design.md) §2 (`F9`, `F10`), §8 (Frontend Design) & §9 (Testing Strategy).
-> **Trạng thái:** 📋 **SẴN SÀNG THI HÀNH** — đầu vào 15.3/15.4 (kèm đợt khắc phục review 2026-11-11) đã xong trên `develop`; **15.5 chưa bắt đầu**. Bàn giao chi tiết: [`phase-15-remaining-frontend-handover.md`](./phase-15-remaining-frontend-handover.md).
+> **Trạng thái:** ✅ **ĐÃ HOÀN THÀNH (2026-11-11)** — Toàn bộ `T15.5.1` → `T15.5.5` đã thi hành và kiểm chứng xong (cổng Frontend xanh 100%; xem [`phase-15-external-integrations-test-report.md`](../report/phase-15-external-integrations-test-report.md) về kết quả chi tiết cả Frontend & Backend).
 
 ---
 
@@ -164,5 +164,36 @@ Toàn bộ `T15.5.1` → `T15.5.5` bên dưới, **trừ** phần nhãn `AiActio
      - `npm run lint` (`oxlint`) → `0 warnings, 0 errors`.
      - `npx tsc -b` → `exit 0`.
      - `npx vitest run` → `100% PASS`.
-  3. **Cập nhật tài liệu dự án:** Đồng bộ số lượng bảng (21 → 27 bảng), số lượng migrations (14 → 15 migrations) và số lượng bài test trong `01-system-specification.md`, `03-roadmap.md`, `04-database-design.md` và lập báo cáo nghiệm thu `report/phase-15-external-integrations-test-report.md`.
+  3. **Cập nhật tài liệu dự án:** Đồng bộ số lượng bảng (21 → 27 bảng domain + 7 bảng Identity), số lượng migrations (14 → 15 migrations) và số lượng bài test trong `01-system-specification.md`, `02-tech-stack-decisions.md`, `03-roadmap.md`, `04-database-design.md` và lập báo cáo nghiệm thu `report/phase-15-external-integrations-test-report.md`.
+
+---
+
+## 3. Nhật ký thi hành (Execution Log — 2026-11-11)
+
+### 3.1. Quyết định kỹ thuật chính (`K1..K4`)
+- **K1 — Xóa sạch cấu hình tùy chọn từ `GitHubIntegrationSection` đúng hợp đồng Backend (`EMPTY_GUID` & `""`):** Gửi `00000000-0000-0000-0000-000000000000` khi người dùng xóa chọn `defaultBoardId` và chuỗi rỗng `""` khi xóa `issueLabelFilter` (thay vì `null`/`undefined`) để khớp logic chuẩn hóa trong `WorkspaceGitHubIntegrationService`.
+- **K2 — Fallback an toàn cho fixture cũ & nhận diện `GitHub Bot` kép:** `TaskCard`, `TaskDetailModal` và `TaskSearchResultList` chỉ hiển thị badge `TN-123` khi `taskNumber > 0`; `TaskDetailModal` fallback về `#XXXXXXXX` khi thiếu `taskNumber`, và nhận diện comment bot qua cả `authorName === 'GitHub Bot'`, `authorId === GITHUB_BOT_USER_ID` lẫn legacy `userId` (`00000000-0000-0000-0000-00000000b071`).
+- **K3 — Bảo toàn `data-testid` & nguyên tắc không trùng lặp UI:** Giữ nguyên `open-settings-modal-btn` trong header `WorkspaceSettingsPage`, đặt nội dung cũ vào tab mặc định `general` (`Cài đặt chung`), mở tab mới `integrations` (`Tích hợp (Slack / Discord / GitHub)`), và không sửa trùng lặp logic `AiActionLogItem.tsx` đã hoàn tất ở commit `0bd1aab`.
+- **K4 — Chống click-through & giao thức an toàn trên Kanban Card:** Mọi chip PR/Issue trên `TaskCard` giới hạn hiển thị tối đa 3 chip + `+N`, lọc URL qua `isSafeHref`, và gọi `stopPropagation()` ở `onClick`/`onPointerDown` để tránh kéo nhầm hoặc mở modal thẻ ngoài ý muốn.
+
+### 3.2. Độ lệch có chủ đích (`L1..L2`)
+- **L1 — Mở rộng phạm vi tìm kiếm `BoardView` / `TaskSearchResultList` / `ColumnModal.tsx` & giữ `delete={isCompleted}` trên `TaskCard`:** Bổ sung lọc `tn-{taskNumber}` trực tiếp trên thanh tìm kiếm client của `BoardView`, tách riêng `ColumnModal.test.tsx` (4 test) và giữ `delete={isCompleted}` trên tiêu đề `TaskCard` để tôn trọng assertion của bài test `TaskCard.test.tsx` hiện có.
+- **L2 — Kế thừa lệch thiết kế Backend 15.3 (1 GitHub Integration / workspace, không PAT / manual URL paste):** UI `GitHubIntegrationSection` bám sát API thật (cấu hình 1 tích hợp / workspace bằng `WebhookToken` + `WebhookSecret`, không có form nhập PAT hay dán URL PR thủ công).
+
+### 3.3. Lỗi thật phát hiện & xử lý trong lúc thi hành (`BUG1..BUG4`)
+- **BUG1 — `boardStore.applyColumnUpdated` làm rơi thuộc tính cột:** Phát hiện khi nối `isInReview` rằng hàm `applyColumnUpdated` chỉ copy `{ name, isDone }` nên cập nhật cột cục bộ hoặc SignalR `ColumnUpdated` sẽ làm mất `isInReview`, `isClarification`, `position` và `updatedAt`. Đã sửa để cập nhật đầy đủ các trường này.
+- **BUG2 — Cảnh báo lint `react(set-state-in-effect)` trong `useWorkspaceIntegrations`:** Gọi `reload()` trực tiếp đồng bộ trong `useEffect` kích hoạt rule của `oxlint`. Đã bọc qua `Promise.resolve().then(...)` kèm cờ cleanup `ignore` để đảm bảo an toàn unmount.
+- **BUG3 — Đường dẫn mock cũ sai trong `TaskDetailModal.test.tsx`:** `vi.mock('../services/boardApi')` trỏ sai thư mục (`components/__tests__` tới `services` phải là `../../services/boardApi`). Đã sửa lại chuẩn trong lúc bổ sung 4 bài test 15.5.
+- **BUG4 — `destroyOnClose` trên `ColumnModal`:** Đã chuyển sang `destroyOnHidden` theo chuẩn Ant Design v6 khi nâng cấp `ColumnModal.tsx`.
+
+### 3.4. Kết quả kiểm chứng đo thật sau chỉnh sửa cuối
+| Cổng | Kết quả đo thật | Ghi chú |
+|---|---|---|
+| `npm run lint` (`oxlint`) | ✅ **0 warnings, 0 errors** (297 files, 116 rules) | Chạy từ `frontend/` |
+| `npm run build` (`tsc -b && vite build`) | ✅ **exit 0** (3,339 modules, 2.66s) | Không phát sinh lỗi TS/bundle |
+| `npm test` (Vitest) | ✅ **126/126 files PASS · 778/778 tests PASS** | `+31` test mới so với baseline 747; đã nâng gate [`ci-web.yml`](../../.github/workflows/ci-web.yml) lên `778` |
+| `dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental` | ✅ **0 Warning(s), 0 Error(s)** (`30.37s`) | Backend không đổi mã nguồn từ sau 15.4 |
+| `dotnet test --filter "FullyQualifiedName~Pure"` | ✅ **Failed: 0 · Passed: 665 · Skipped: 0 · Total: 665** (`1s`) | Toàn bộ Pure unit tests xanh |
+| `dotnet test` (toàn suite trên máy cục bộ Windows) | ⚠️ **Failed: 0 · Passed: 670 · Skipped: 659 · Total: 1,329** (`3m 2s`) | Docker daemon tắt & PostgreSQL 18 native không cài extension `pgvector`, nên 659 DB integration tests tự skip sạch qua `DatabaseFixture.EnsureVectorExtensionAvailable`; bộ 1,329 toàn phần & `dotnet ef migrations has-pending-model-changes` (tool `dotnet-ef` chưa cài global trên máy cục bộ) cần chạy với container `pgvector/pgvector:pg18` như ở `.github/workflows/ci-backend.yml` |
+
 

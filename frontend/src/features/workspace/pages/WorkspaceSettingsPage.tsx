@@ -1,13 +1,16 @@
 import React, { useState } from 'react'
 import {
+  ApiOutlined,
   ArrowLeftOutlined,
   CalendarOutlined,
   EditOutlined,
   ProjectOutlined,
+  SettingOutlined,
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import {
+  Alert,
   Button,
   Card,
   Col,
@@ -16,8 +19,10 @@ import {
   Layout,
   Result,
   Row,
+  Space,
   Spin,
   Statistic,
+  Tabs,
   Tag,
   Typography,
 } from 'antd'
@@ -25,8 +30,11 @@ import dayjs from 'dayjs'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useWorkspaceRole } from '../../../shared/hooks/useWorkspaceRole'
 import { useWorkspaceMembers } from '../../board/hooks/useWorkspaceMembers'
+import { GitHubIntegrationSection } from '../components/GitHubIntegrationSection'
+import { OutboundWebhooksSection } from '../components/OutboundWebhooksSection'
 import { WorkspaceSettingsModal } from '../components/WorkspaceSettingsModal'
 import { useWorkspaceDetail } from '../hooks/useWorkspaceDetail'
+import { useWorkspaceIntegrations } from '../hooks/useWorkspaceIntegrations'
 import { AppHeader } from '../../../shared/components/AppHeader'
 
 const { Content } = Layout
@@ -38,8 +46,29 @@ export const WorkspaceSettingsPage: React.FC = () => {
   const { isManagerOrAdmin, isAdmin, isOwner, loading: roleLoading } = useWorkspaceRole(workspaceId)
   const { detail, loading: detailLoading, save, transfer, remove } = useWorkspaceDetail(workspaceId)
   const { members } = useWorkspaceMembers(workspaceId)
+  const {
+    webhooks,
+    webhookStats,
+    githubIntegration,
+    githubDeliveries,
+    boards,
+    oneTimeSecret,
+    loading: integrationsLoading,
+    error: integrationsError,
+    createWebhook,
+    updateWebhook,
+    deleteWebhook,
+    testWebhook,
+    fetchWebhookDeliveries,
+    saveGitHubIntegration,
+    rotateGitHubSecret,
+    deleteGitHubIntegration,
+    refreshGitHubDeliveries,
+    dismissOneTimeSecret,
+  } = useWorkspaceIntegrations(workspaceId, !roleLoading && isManagerOrAdmin)
 
   const [modalOpen, setModalOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<'general' | 'integrations'>('general')
 
   if (roleLoading || detailLoading) {
     return (
@@ -121,6 +150,8 @@ export const WorkspaceSettingsPage: React.FC = () => {
               color: '#4f46e5',
               backgroundColor: '#eef2ff',
               borderColor: '#c7d2fe',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
             }}
           >
             RBAC Governance
@@ -138,70 +169,143 @@ export const WorkspaceSettingsPage: React.FC = () => {
         </Button>
       </div>
 
-      <Content style={{ padding: '24px 32px', maxWidth: 1000, margin: '0 auto', width: '100%' }}>
-        <Row gutter={[24, 24]}>
-          {/* Quick stats */}
-          <Col xs={24} sm={12}>
-            <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', borderTop: '3px solid #4f46e5' }}>
-              <Statistic
-                title="Số thành viên"
-                value={detail.memberCount}
-                prefix={<TeamOutlined style={{ color: '#4f46e5' }} />}
-              />
-            </Card>
-          </Col>
-          <Col xs={24} sm={12}>
-            <Card style={{ borderRadius: 12, border: '1px solid #e2e8f0', borderTop: '3px solid #0ea5e9' }}>
-              <Statistic
-                title="Số bảng Kanban"
-                value={detail.boardCount}
-                prefix={<ProjectOutlined style={{ color: '#0ea5e9' }} />}
-              />
-            </Card>
-          </Col>
+      <Content style={{ padding: '24px 32px', maxWidth: 1120, margin: '0 auto', width: '100%' }}>
+        <Tabs
+          activeKey={activeTab}
+          onChange={(key) => setActiveTab(key as 'general' | 'integrations')}
+          items={[
+            {
+              key: 'general',
+              label: (
+                <Space size={6}>
+                  <SettingOutlined />
+                  <span>Cài đặt chung</span>
+                </Space>
+              ),
+              children: (
+                <Row gutter={[24, 24]}>
+                  {/* Quick stats */}
+                  <Col xs={24} sm={12}>
+                    <Card
+                      style={{
+                        borderRadius: 12,
+                        border: '1px solid #e2e8f0',
+                        borderTop: '3px solid #4f46e5',
+                      }}
+                    >
+                      <Statistic
+                        title="Số thành viên"
+                        value={detail.memberCount}
+                        prefix={<TeamOutlined style={{ color: '#4f46e5' }} />}
+                      />
+                    </Card>
+                  </Col>
+                  <Col xs={24} sm={12}>
+                    <Card
+                      style={{
+                        borderRadius: 12,
+                        border: '1px solid #e2e8f0',
+                        borderTop: '3px solid #0ea5e9',
+                      }}
+                    >
+                      <Statistic
+                        title="Số bảng Kanban"
+                        value={detail.boardCount}
+                        prefix={<ProjectOutlined style={{ color: '#0ea5e9' }} />}
+                      />
+                    </Card>
+                  </Col>
 
-          {/* Details Card */}
-          <Col xs={24}>
-            <Card
-              title="Thông tin chung"
-              style={{ borderRadius: 12, border: '1px solid #e2e8f0' }}
-            >
-              <Descriptions bordered column={{ xs: 1, sm: 2 }}>
-                <Descriptions.Item label="Tên không gian làm việc" span={2}>
-                  <Typography.Text strong style={{ fontSize: 16 }}>
-                    {detail.name}
-                  </Typography.Text>
-                </Descriptions.Item>
-                <Descriptions.Item label="Mô tả" span={2}>
-                  {detail.description || (
-                    <Typography.Text type="secondary">Chưa có mô tả</Typography.Text>
+                  {/* Details Card */}
+                  <Col xs={24}>
+                    <Card
+                      title="Thông tin chung"
+                      style={{ borderRadius: 12, border: '1px solid #e2e8f0' }}
+                    >
+                      <Descriptions bordered column={{ xs: 1, sm: 2 }}>
+                        <Descriptions.Item label="Tên không gian làm việc" span={2}>
+                          <Typography.Text strong style={{ fontSize: 16 }}>
+                            {detail.name}
+                          </Typography.Text>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Mô tả" span={2}>
+                          {detail.description || (
+                            <Typography.Text type="secondary">Chưa có mô tả</Typography.Text>
+                          )}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Chủ sở hữu">
+                          <Flex align="center" gap={6}>
+                            <UserOutlined style={{ color: '#6366f1' }} />
+                            <span>{detail.ownerDisplayName}</span>
+                          </Flex>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Vai trò của bạn">
+                          <Tag color="blue">{detail.currentUserRole}</Tag>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Ngày tạo">
+                          <Flex align="center" gap={6}>
+                            <CalendarOutlined />
+                            <span>{dayjs(detail.createdAt).format('DD/MM/YYYY HH:mm')}</span>
+                          </Flex>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="Cập nhật lần cuối">
+                          <Flex align="center" gap={6}>
+                            <CalendarOutlined />
+                            <span>{dayjs(detail.updatedAt).format('DD/MM/YYYY HH:mm')}</span>
+                          </Flex>
+                        </Descriptions.Item>
+                      </Descriptions>
+                    </Card>
+                  </Col>
+                </Row>
+              ),
+            },
+            {
+              key: 'integrations',
+              label: (
+                <Space size={6} data-testid="workspace-integrations-tab">
+                  <ApiOutlined />
+                  <span>Tích hợp (Slack / Discord / GitHub)</span>
+                </Space>
+              ),
+              children: (
+                <Flex vertical gap={24}>
+                  {integrationsError && (
+                    <Alert
+                      type="error"
+                      showIcon
+                      title="Không thể tải dữ liệu tích hợp"
+                      description={integrationsError}
+                      style={{ borderRadius: 10 }}
+                    />
                   )}
-                </Descriptions.Item>
-                <Descriptions.Item label="Chủ sở hữu">
-                  <Flex align="center" gap={6}>
-                    <UserOutlined style={{ color: '#6366f1' }} />
-                    <span>{detail.ownerDisplayName}</span>
-                  </Flex>
-                </Descriptions.Item>
-                <Descriptions.Item label="Vai trò của bạn">
-                  <Tag color="blue">{detail.currentUserRole}</Tag>
-                </Descriptions.Item>
-                <Descriptions.Item label="Ngày tạo">
-                  <Flex align="center" gap={6}>
-                    <CalendarOutlined />
-                    <span>{dayjs(detail.createdAt).format('DD/MM/YYYY HH:mm')}</span>
-                  </Flex>
-                </Descriptions.Item>
-                <Descriptions.Item label="Cập nhật lần cuối">
-                  <Flex align="center" gap={6}>
-                    <CalendarOutlined />
-                    <span>{dayjs(detail.updatedAt).format('DD/MM/YYYY HH:mm')}</span>
-                  </Flex>
-                </Descriptions.Item>
-              </Descriptions>
-            </Card>
-          </Col>
-        </Row>
+                  <OutboundWebhooksSection
+                    endpoints={webhooks}
+                    stats={webhookStats}
+                    loading={integrationsLoading}
+                    onCreate={createWebhook}
+                    onUpdate={updateWebhook}
+                    onDelete={deleteWebhook}
+                    onTest={testWebhook}
+                    onFetchDeliveries={fetchWebhookDeliveries}
+                  />
+                  <GitHubIntegrationSection
+                    config={githubIntegration}
+                    deliveries={githubDeliveries}
+                    boards={boards}
+                    oneTimeSecret={oneTimeSecret}
+                    loading={integrationsLoading}
+                    onSave={saveGitHubIntegration}
+                    onRotateSecret={rotateGitHubSecret}
+                    onDelete={deleteGitHubIntegration}
+                    onRefreshDeliveries={refreshGitHubDeliveries}
+                    onDismissSecret={dismissOneTimeSecret}
+                  />
+                </Flex>
+              ),
+            },
+          ]}
+        />
       </Content>
 
       <WorkspaceSettingsModal

@@ -2,6 +2,7 @@ import React from 'react'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TaskDetailModal } from '../TaskDetailModal'
+import { boardApi } from '../../services/boardApi'
 import type { ColumnResponse, TaskResponse } from '../../types/board.types'
 
 // Mock useAuth
@@ -36,7 +37,7 @@ vi.mock('../../ai/components/AiChatPanel', () => ({
 }))
 
 // Mock boardApi
-vi.mock('../services/boardApi', () => ({
+vi.mock('../../services/boardApi', () => ({
   boardApi: {
     getComments: vi.fn().mockResolvedValue([]),
     createComment: vi.fn(),
@@ -266,5 +267,134 @@ describe('TaskDetailModal', () => {
       expect(screen.getByTestId('ai-chat-panel')).toBeInTheDocument()
       expect(screen.getByTestId('ai-chat-panel')).toHaveAttribute('data-task-id', mockTask.id)
     })
+  })
+
+  it('displays TN-42 and copies task code to clipboard; falls back to #XXXXXXXX when taskNumber is missing', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    })
+
+    const { unmount } = renderModal({ ...mockTask, taskNumber: 42 })
+
+    expect(screen.getByTestId('task-detail-number')).toHaveTextContent('TN-42')
+    fireEvent.click(screen.getByTestId('copy-task-number-btn'))
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('TN-42')
+    })
+
+    unmount()
+
+    renderModal({ ...mockTask, taskNumber: undefined })
+    expect(screen.getByTestId('task-detail-number')).toHaveTextContent('#TASK-100')
+    expect(screen.queryByTestId('copy-task-number-btn')).not.toBeInTheDocument()
+  })
+
+  it('renders GitHub external links section with state badge and target=_blank anchor', () => {
+    renderModal({
+      ...mockTask,
+      taskNumber: 42,
+      externalLinks: [
+        {
+          id: 'lnk-1',
+          provider: 'github',
+          linkType: 'pull_request',
+          externalId: 'octocat/TeamNexus#88',
+          externalUrl: 'https://github.com/octocat/TeamNexus/pull/88',
+          title: 'Add webhook support',
+          state: 'merged',
+          updatedAt: '2026-11-10T10:00:00Z',
+        },
+        {
+          id: 'lnk-2',
+          provider: 'github',
+          linkType: 'issue',
+          externalId: 'octocat/TeamNexus#12',
+          externalUrl: 'https://github.com/octocat/TeamNexus/issues/12',
+          title: 'Bug report',
+          state: 'open',
+          updatedAt: '2026-11-10T10:00:00Z',
+        },
+      ],
+    })
+
+    const section = screen.getByTestId('task-external-links')
+    expect(section).toBeInTheDocument()
+    expect(screen.getByText('Liên kết GitHub (2)')).toBeInTheDocument()
+    expect(screen.getByText('PR · octocat/TeamNexus#88')).toBeInTheDocument()
+    expect(screen.getByText('Merged')).toBeInTheDocument()
+    expect(screen.getByText('Issue · octocat/TeamNexus#12')).toBeInTheDocument()
+    expect(screen.getByText('Open')).toBeInTheDocument()
+
+    const links = screen.getAllByRole('link', { name: /Mở GitHub/i })
+    expect(links[0]).toHaveAttribute('href', 'https://github.com/octocat/TeamNexus/pull/88')
+    expect(links[0]).toHaveAttribute('target', '_blank')
+  })
+
+  it('renders GITHUB BOT badge, dark GitHub avatar, and safe Markdown links for GitHub Bot comments', async () => {
+    vi.mocked(boardApi.getComments).mockResolvedValueOnce([
+      {
+        id: 'c-bot',
+        taskId: mockTask.id,
+        authorId: '00000000-0000-0000-0000-00000000b071',
+        authorName: 'GitHub Bot',
+        content:
+          '💬 **@octocat** đã bình luận trên GitHub ([#88](https://github.com/octocat/TeamNexus/pull/88)):',
+        createdAt: '2026-11-10T12:00:00Z',
+        updatedAt: '2026-11-10T12:00:00Z',
+      },
+    ])
+
+    renderModal()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('github-bot-comment-tag')).toHaveTextContent('GITHUB BOT')
+      expect(screen.getByTestId('github-bot-comment-avatar')).toBeInTheDocument()
+      const commentLink = screen.getByRole('link', { name: '#88' })
+      expect(commentLink).toHaveAttribute('href', 'https://github.com/octocat/TeamNexus/pull/88')
+      expect(commentLink).toHaveAttribute('target', '_blank')
+    })
+  })
+
+  it('renders "Đang duyệt PR" pill in modal header when task sits in an isInReview column', () => {
+    const columnsWithReview: ColumnResponse[] = [
+      ...mockColumns,
+      {
+        id: 'col-review',
+        boardId: 'board-1',
+        name: 'Code Review',
+        position: 3,
+        isDone: false,
+        isClarification: false,
+        isInReview: true,
+        createdAt: '',
+        updatedAt: '',
+        tasks: [],
+      },
+    ]
+
+    render(
+      <TaskDetailModal
+        task={{ ...mockTask, columnId: 'col-review' }}
+        columns={columnsWithReview}
+        workspaceLabels={[]}
+        workspaceId="ws-1"
+        workspaceMembers={mockMembers}
+        isManagerOrAdmin={true}
+        open={true}
+        onClose={onClose}
+        onUpdateTask={onUpdateTask}
+        onMoveTask={onMoveTask}
+        onDeleteTask={onDeleteTask}
+        onCreateLabel={onCreateLabel}
+        onAttachLabel={onAttachLabel}
+        onDetachLabel={onDetachLabel}
+      />
+    )
+
+    expect(screen.getByText('Cột: Code Review')).toBeInTheDocument()
+    expect(screen.getByText('Đang duyệt PR')).toBeInTheDocument()
   })
 })
