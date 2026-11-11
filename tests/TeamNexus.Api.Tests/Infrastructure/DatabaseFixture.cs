@@ -221,7 +221,8 @@ public sealed class DatabaseFixture : IAsyncLifetime
         bool? ragEnabled = null,
         bool? embeddingsEnabled = null,
         IJevDecisionProvider? jevProvider = null,
-        IEmbeddingProvider? embeddingProvider = null)
+        IEmbeddingProvider? embeddingProvider = null,
+        HttpMessageHandler? webhookHandler = null)
     {
         Require();
 
@@ -246,6 +247,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
                                || embeddingsEnabled.HasValue
                                || jevProvider is not null
                                || embeddingProvider is not null
+                               || webhookHandler is not null
                                || !string.IsNullOrWhiteSpace(jevApiKey);
 
             var factory = needsOwnHost
@@ -264,6 +266,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
                     ObserverJevSeverityRouting = observerJevSeverityRouting ?? true,
                     RagEnabled = ragEnabled ?? false,
                     EmbeddingsEnabled = embeddingsEnabled ?? false,
+                    ExternalWebhookHandler = webhookHandler ?? new StubWebhookHandler(),
                 }
                 : Factory;
 

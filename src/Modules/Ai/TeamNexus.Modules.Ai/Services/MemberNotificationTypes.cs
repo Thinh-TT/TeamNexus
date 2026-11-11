@@ -38,4 +38,7 @@ public static class MemberNotificationTypes
     /// </para>
     /// </summary>
     public const string CommentMention = Board.Services.MemberNotificationTypes.CommentMention;
+
+    /// <summary>A new member accepted an invitation and joined the workspace (Phase 15.2 §T15.2.1).</summary>
+    public const string MemberJoined = Board.Services.MemberNotificationTypes.MemberJoined;
 }

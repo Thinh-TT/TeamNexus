@@ -2,7 +2,7 @@
 
 > **Thuộc:** [Giai đoạn 15 — Tích hợp Hệ sinh thái Bên ngoài](./phase-15-0-external-integrations-master-plan.md)
 > **Tham chiếu thiết kế:** [`07-external-integrations-design.md`](../07-external-integrations-design.md) §2 (`F1`, `F2`, `F3`), §4.1 & §6.1.
-> **Trạng thái:** 📋 Kế hoạch chi tiết (`T15.2.1` → `T15.2.5`).
+> **Trạng thái:** ✅ **ĐÃ HOÀN THÀNH (`T15.2.1` → `T15.2.5`) — 1.236/1.236 Backend Tests PASS, 0 Warning / 0 Error.**
 
 ---
 
@@ -127,7 +127,37 @@
 
 ## 3. Tiêu chí Nghiệm thu (Definition of Done — Sub-phase 15.2)
 
-- [ ] Khi `NotificationService` phát cảnh báo `ObserverAlert`, `AgentActionPending`, `ClarificationNeeded`, `TaskAssigned`, `CommentMentioned`, hoặc `MemberJoined`, bản ghi `webhook_delivery_outbox` được tạo tự động cho các endpoint đăng ký sự kiện tương ứng.
-- [ ] Lỗi mạng hoặc lỗi từ Slack/Discord tuyệt đối không làm hỏng giao dịch nghiệp vụ chính của người dùng.
-- [ ] Toàn bộ bài test trong `WebhookUrlValidatorTests`, `WebhookPayloadFormatterTests` và `WorkspaceWebhooksApiTests` đều PASS.
+- [x] Khi `NotificationService` phát cảnh báo `ObserverAlert`, `AgentActionPending`, `ClarificationNeeded`, `TaskAssigned`, `CommentMentioned`, hoặc `MemberJoined`, bản ghi `webhook_delivery_outbox` được tạo tự động cho các endpoint đăng ký sự kiện tương ứng.
+- [x] Lỗi mạng hoặc lỗi từ Slack/Discord tuyệt đối không làm hỏng giao dịch nghiệp vụ chính của người dùng.
+- [x] Toàn bộ bài test trong `WebhookUrlValidatorTests`, `WebhookPayloadFormatterTests` và `WorkspaceWebhooksApiTests` đều PASS.
+
+---
+
+## 4. NHẬT KÝ THI HÀNH SUB-PHASE 15.2 (`T15.2.1` → `T15.2.5`)
+
+> **Số đo thực tế:**
+> - **Backend Build:** `dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental` → **0 Warning(s), 0 Error(s)**.
+> - **EF Core:** `has-pending-model-changes` → **No changes have been made to the model since the last migration.** (Sub-phase 15.2 **không** thêm migration — dùng 2 bảng của Migration #15.)
+> - **Backend Tests (`xUnit` trên `pgvector/pgvector:pg18`):** **Passed 1,236 / Failed 0 / Skipped 0 / Total 1,236** (baseline 1,175 ⇒ **+61**).
+
+### 4.1. Quyết định Kỹ thuật (`K1..K3`)
+
+| # | Quyết định | Lý do |
+|---|---|---|
+| **K1** | `WebhookOutboxExternalAlertSink` đăng ký `Singleton`, mở scope riêng qua `IServiceScopeFactory` mỗi lần `PublishAsync`. | Giữ nguyên vòng đời `Singleton` của `IExternalAlertSink` (khế ước cũ) nhưng vẫn dùng được `TeamNexusDbContext` scoped; scope riêng cũng tách lỗi sink khỏi `DbContext` của request. |
+| **K2** | Named `HttpClient` `ExternalWebhookClient` với `AllowAutoRedirect = false`, đồng thời `WebhookOutboxRunner` **kiểm tra lại `WebhookUrlValidator` ngay trước mỗi lần gửi**. | Phòng thủ nhiều lớp chống SSRF: dữ liệu cũ trong DB hoặc redirect không thể vượt rào. |
+| **K3** | Hạ tầng test luôn thay handler HTTP bằng `StubWebhookHandler` (kể cả host dùng chung) và đặt `Integrations:Outbox:StartupDelaySeconds = 3600`. | Không suite nào có thể chạm Slack/Discord thật; timer nền không chạy đua với assertion trên hàng `Pending`. |
+
+### 4.2. Lệch Kế Hoạch Có Chủ Ý (`L1`)
+
+| # | Lệch | Lý do |
+|---|---|---|
+| **L1** | Sửa 1 assertion của `Phase145HardeningTests.PHASE145_A6`: `NoOpExternalAlertSink` → `WebhookOutboxExternalAlertSink`. | Đã nêu ở mục *User Review Required* của kế hoạch: `NoOp` chỉ là mặc định "cho đến Phase 15". Hành vi được bảo vệ (workspace không cấu hình ⇒ chỉ in-app) vẫn được kiểm chứng bởi `WorkspaceWithoutEndpoints_WritesNothingToTheOutbox`. |
+
+### 4.3. Bug thật bắt được trong lúc thi hành
+
+Không có bug nào được bài test phát hiện trong Sub-phase 15.2 (không bịa số liệu).
+
+> [!NOTE]
+> **Lưu ý môi trường kiểm thử:** Nếu không có PostgreSQL, các test Integration **bị Skip chứ không Fail**, nên một lần chạy "Passed" có thể chỉ gồm Pure test (lần chạy đầu của phiên này: 45 passed / 73 skipped). Luôn kiểm tra `Skipped: 0`.
 

@@ -53,6 +53,7 @@ public static class NotificationVocabulary
         Board.Services.MemberNotificationTypes.CommentOnTask,
         Board.Services.MemberNotificationTypes.CommentMention,
         Board.Services.MemberNotificationTypes.WorkspaceInvitation,
+        Board.Services.MemberNotificationTypes.MemberJoined,
     ];
 
     /// <summary>

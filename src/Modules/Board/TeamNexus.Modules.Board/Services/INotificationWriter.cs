@@ -87,6 +87,12 @@ public static class MemberNotificationTypes
     /// </para>
     /// </summary>
     public const string CommentMention = "CommentMention";
+
+    /// <summary>
+    /// A new member accepted an invitation and joined the workspace (Phase 15.2 §T15.2.1).
+    /// Addressed to the workspace's Managers and Admins (excluding the joining user).
+    /// </summary>
+    public const string MemberJoined = "MemberJoined";
 }
 
 /// <summary>
