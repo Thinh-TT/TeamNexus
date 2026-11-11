@@ -18,7 +18,7 @@
 | Khắc phục review R1–R4 (14 lỗi F1–F16) | ✅ Xong — xem §3 |
 | 15.5 Frontend (badge `TN-123`, chip PR, tab Tích hợp, E2E) | ⏳ **Chưa bắt đầu** — xem §5 |
 | Migration | Đúng **1 migration** Phase 15 (`Phase15ExternalIntegrations`), không drift |
-| Cổng kiểm thử | Build `0/0`; backend **1.329 passed / 0 failed / 0 skipped**; frontend **747 passed / 123 files**; Pure **665** |
+| Cổng kiểm thử | Build `0/0`; backend **1.329 passed / 0 failed / 0 skipped**; frontend **786 passed / 127 files**; Pure **665** |
 | Git | `develop` ahead `origin/develop` **36 commit**; `backup/main-before-reset-26382b6` đã merge, không còn file rác `sqlite_mcp_server.db` |
 
 ---
@@ -91,7 +91,7 @@ Bẫy cần giữ: auto-link chỉ `TN-…`; `Failed` trả `502`; giữ nguyên
 dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental   # 0/0
 $env:TEAMNEXUS_TEST_DB = "Host=localhost;Port=5433;Database=TeamNexus_Test;Username=postgres;Password=postgres"
 dotnet test tests/TeamNexus.Api.Tests/TeamNexus.Api.Tests.csproj   # 1.329 / 0 / 0
-cd frontend; npm run lint; npx tsc -b; npm test                      # 0/0; exit 0; 747
+cd frontend; npm run lint; npx tsc -b; npm test                      # 0/0; exit 0; 786
 ```
 
 DB test phải là `pgvector/pgvector:pg18` (container `:5433` trong phiên này); thiếu nó ⇒ 35 test GitHub bị **skip** và cổng "Skipped = 0" sai.

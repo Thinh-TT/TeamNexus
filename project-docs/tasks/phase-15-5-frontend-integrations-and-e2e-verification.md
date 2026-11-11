@@ -189,11 +189,21 @@ Toàn bộ `T15.5.1` → `T15.5.5` bên dưới, **trừ** phần nhãn `AiActio
 ### 3.4. Kết quả kiểm chứng đo thật sau chỉnh sửa cuối
 | Cổng | Kết quả đo thật | Ghi chú |
 |---|---|---|
-| `npm run lint` (`oxlint`) | ✅ **0 warnings, 0 errors** (297 files, 116 rules) | Chạy từ `frontend/` |
-| `npm run build` (`tsc -b && vite build`) | ✅ **exit 0** (3,339 modules, 2.66s) | Không phát sinh lỗi TS/bundle |
-| `npm test` (Vitest) | ✅ **126/126 files PASS · 778/778 tests PASS** | `+31` test mới so với baseline 747; đã nâng gate [`ci-web.yml`](../../.github/workflows/ci-web.yml) lên `778` |
-| `dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental` | ✅ **0 Warning(s), 0 Error(s)** (`30.37s`) | Backend không đổi mã nguồn từ sau 15.4 |
-| `dotnet test --filter "FullyQualifiedName~Pure"` | ✅ **Failed: 0 · Passed: 665 · Skipped: 0 · Total: 665** (`1s`) | Toàn bộ Pure unit tests xanh |
-| `dotnet test` (toàn suite trên máy cục bộ Windows) | ⚠️ **Failed: 0 · Passed: 670 · Skipped: 659 · Total: 1,329** (`3m 2s`) | Docker daemon tắt & PostgreSQL 18 native không cài extension `pgvector`, nên 659 DB integration tests tự skip sạch qua `DatabaseFixture.EnsureVectorExtensionAvailable`; bộ 1,329 toàn phần & `dotnet ef migrations has-pending-model-changes` (tool `dotnet-ef` chưa cài global trên máy cục bộ) cần chạy với container `pgvector/pgvector:pg18` như ở `.github/workflows/ci-backend.yml` |
+| `npm run lint` (`oxlint`) | ✅ **0 warnings, 0 errors** (299 files, 116 rules) | Chạy từ `frontend/` |
+| `npm run build` (`tsc -b && vite build`) | ✅ **exit 0** (3,340 modules, 1.31s) | Không phát sinh lỗi TS/bundle |
+| `npm test` (Vitest) | ✅ **127/127 files PASS · 786/786 tests PASS** | `+39` test mới so với baseline 747; đã nâng gate [`ci-web.yml`](../../.github/workflows/ci-web.yml) lên `786` |
+| `dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental` | ✅ **0 Warning(s), 0 Error(s)** | Backend không đổi mã nguồn từ sau 15.4 |
+| `dotnet test --filter "FullyQualifiedName~Pure"` | ✅ **Failed: 0 · Passed: 665 · Skipped: 0 · Total: 665** | Toàn bộ Pure unit tests xanh |
+| `dotnet test` (toàn suite trên máy cục bộ Windows) | ⚠️ **Failed: 0 · Passed: 670 · Skipped: 659 · Total: 1,329** | Docker daemon tắt & PostgreSQL 18 native không cài extension `pgvector`, nên 659 DB integration tests tự skip sạch qua `DatabaseFixture.EnsureVectorExtensionAvailable`; bộ 1,329 toàn phần & `dotnet ef migrations has-pending-model-changes` (tool `dotnet-ef` chưa cài global trên máy cục bộ) cần chạy với container `pgvector/pgvector:pg18` như ở `.github/workflows/ci-backend.yml` |
+
+### 3.5. Khắc phục sau Review 15.5 trước khi merge (2026-11-11)
+
+| Mã | Lỗi | Thay đổi | Kiểm chứng |
+| :--- | :--- | :--- | :--- |
+| **R15.5-1** | Báo cáo khai báo có test "clear `DefaultBoardId`/`IssueLabelFilter`" nhưng chưa có | Tách `buildGitHubIntegrationRequest` + `requiresDefaultBoardForAutoCreate` ra file utils và unit-test 4 case (`EMPTY_GUID`, `""`, giữ board, điều kiện board) | `githubIntegrationRequest.test.ts` (4 tests) |
+| **R15.5-2** | Copy báo thành công giả khi `navigator.clipboard` không khả dụng | Guard trước khi gọi + thông báo lỗi rõ ràng ở `TaskDetailModal` và `GitHubIntegrationSection` | 2 test "clipboard unavailable ⇒ báo lỗi" |
+| **R15.5-3** | "Kích hoạt" tự chọn bảng đầu tiên và bật auto-create từ mọi Issue | Bỏ preselect board; chặn lưu khi `autoCreateTasksFromIssues` bật mà chưa chọn board; thêm ghi chú dưới ô chọn bảng | Test "blocks enabling auto-create…" (không gọi API + hiện cảnh báo) |
+
+**Còn lại (follow-up sau merge, xem báo cáo review §5):** `boardStore` giữ `isInReview` khi thiếu field; `ColumnModal` bắt rejection 409; lazy-load theo tab / huỷ request; nhận diện GitHub Bot theo ID; giữ key subscription legacy khi sửa webhook; exact-match tìm `tn-…`; bỏ plaintext secret khỏi state; bỏ prop `delete` trên tiêu đề `TaskCard`; **E2E/live verification trên production vẫn chưa chạy** (dùng checklist §6 của báo cáo nghiệm thu sau deploy).
 
 

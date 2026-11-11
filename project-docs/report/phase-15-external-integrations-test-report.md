@@ -5,7 +5,7 @@
 > - **15.2:** Outbound Slack / Discord Webhooks (`WebhookOutboxExternalAlertSink`, `WebhookOutboxRunner` / `Dispatcher`, `WebhookUrlValidator` SSRF guard, Slack Block Kit & Discord Embed formatters, sự kiện `MemberJoined`, 6 endpoint `/api/workspaces/{id}/integrations/webhooks`).
 > - **15.3:** Inbound GitHub Webhooks Core & PR State Machine (`WorkspaceGitHubIntegrationEndpoints`, `GitHubWebhookEndpoints` public HMAC-SHA256 + idempotency theo `X-GitHub-Delivery`, `GitHubSecretProtector`, `TaskKeyParser`, PR → `In Review` / `Done` + Undo `GitHubPrMoveTask`).
 > - **15.4:** GitHub Issue → Task + Jev 1.13 `TriageForSystemAsync` (+ fix cờ `Degraded`), SignalR đóng/mở Issue, Undo `GitHubIssueCreateTask`, đồng bộ bình luận 1 chiều qua `GitHub Bot`.
-> - **15.5:** Giao diện Frontend React 19 + TypeScript 6 + Ant Design v6 (`integrationApi`, `useWorkspaceIntegrations`, `TN-123` + GitHub chips, `isInReview` column, `WorkspaceSettingsPage` Tabs) + Vitest tests (`+31`) + Đồng bộ tài liệu dự án.
+> - **15.5:** Giao diện Frontend React 19 + TypeScript 6 + Ant Design v6 (`integrationApi`, `useWorkspaceIntegrations`, `TN-123` + GitHub chips, `isInReview` column, `WorkspaceSettingsPage` Tabs) + Vitest tests (`+39`) + Đồng bộ tài liệu dự án.
 >
 > **Ngày nghiệm thu:** 11/11/2026.
 
@@ -19,7 +19,7 @@
 | **15.2** | Outbound Slack/Discord + Transactional Outbox + Retry + SSRF Guard (`WebhookUrlValidator`) | ✅ **XONG** | Đã merge từ `develop` |
 | **15.3** | Inbound GitHub Webhook (`HMAC-SHA256`, body <= 256 KB, replay protection), `TaskKeyParser` (`TN-`), PR State Machine + `GitHubPrMoveTask` Undo | ✅ **XONG** | Sau khắc phục review 2026-11-11 (`GitHubWebhookPrTests` 20/20 trong 15.3) |
 | **15.4** | Issue → Task + Jev `TriageForSystemAsync` (fix `Degraded` khi confidence < 0.50), Comment 1 chiều qua `GitHub Bot`, Undo `GitHubIssueCreateTask` | ✅ **XONG** | Sau khắc phục review 2026-11-11 (`GitHubWebhookIssueAndCommentTests` 15/15 trong 15.4) |
-| **15.5** | Frontend Integration UI (`TN-123`, PR/Issue chips, `isInReview`, Tabs `Cài đặt chung` + `Tích hợp`), Vitest (+31 tests), Tài liệu & CI baseline | ✅ **XONG** | Kiểm chứng trực tiếp trong phiên nghiệm thu 15.5 (xem §2) |
+| **15.5** | Frontend Integration UI (`TN-123`, PR/Issue chips, `isInReview`, Tabs `Cài đặt chung` + `Tích hợp`), Vitest (+39 tests), Tài liệu & CI baseline | ✅ **XONG** | Kiểm chứng trực tiếp trong phiên nghiệm thu 15.5 + đợt chỉnh sửa trước merge 2026-11-11 (xem §2) |
 
 ---
 
@@ -29,10 +29,10 @@
 
 | Cổng kiểm tra | Ngưỡng bắt buộc | Kết quả đo thật |
 | :--- | :--- | :--- |
-| `npm run lint` (`oxlint`) | 0 warning / 0 error | ✅ **Found 0 warnings and 0 errors** (297 files, 116 rules) |
-| `npm run build` (`tsc -b && vite build`) | Exit code 0 | ✅ **Exit 0** (`3339 modules transformed`, built in `2.66s`, `dist/assets/index-BWV20Ge4.js` `2,084.10 kB` / gzip `626.42 kB`) |
-| `npm test` (`vitest run --maxWorkers=4 --reporter=dot`) | 100% PASS, không tụt baseline | ✅ **Test Files 126 passed (126) · Tests 778 passed (778)** (`+31` test mới so với baseline `747` đầu kỳ 15.5) |
-| `.github/workflows/ci-web.yml` | Baseline khớp thực tế | ✅ Đã cập nhật ngưỡng tối thiểu từ `747` lên **`778`** |
+| `npm run lint` (`oxlint`) | 0 warning / 0 error | ✅ **Found 0 warnings and 0 errors** (299 files, 116 rules) |
+| `npm run build` (`tsc -b && vite build`) | Exit code 0 | ✅ **Exit 0** (`3340 modules transformed`, built in `1.31s`, `dist/assets/index-B24_51R5.js` `2,084.71 kB` / gzip `626.56 kB`) |
+| `npm test` (`vitest run`) | 100% PASS, không tụt baseline | ✅ **Test Files 127 passed (127) · Tests 786 passed (786)** (`+39` test so với baseline `747` đầu kỳ 15.5; gồm 8 test của đợt chỉnh sửa trước merge) |
+| `.github/workflows/ci-web.yml` | Baseline khớp thực tế | ✅ Đã cập nhật ngưỡng tối thiểu từ `747` lên **`786`** |
 
 ### 2.2. Backend (.NET 10 + PostgreSQL 18 `pgvector`) — Không thay đổi mã nguồn trong 15.5
 
@@ -40,8 +40,8 @@
 | :--- | :--- | :--- |
 | `dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental` | ✅ **Build succeeded · 0 Warning(s) · 0 Error(s)** (`30.37s`) | Đo trực tiếp trên máy cục bộ Windows |
 | `dotnet test --no-build --filter "FullyQualifiedName~Pure"` | ✅ **Failed: 0 · Passed: 665 · Skipped: 0 · Total: 665** (`1s`) | Toàn bộ Pure unit tests chạy & xanh 100% |
-| `dotnet test tests/TeamNexus.Api.Tests/TeamNexus.Api.Tests.csproj --no-build` | ⚠️ **Failed: 0 · Passed: 670 · Skipped: 659 · Total: 1,329** (`3m 2s`) | Máy Windows cục bộ chưa bật Docker daemon và PostgreSQL 18 native trên port `5432` không cài extension `pgvector`, nên `DatabaseFixture.EnsureVectorExtensionAvailable` skip an toàn toàn bộ 659 test DB-backed. Bộ test đầy đủ 1,329 tests (Passed 1,329 / Failed 0 / Skipped 0) yêu cầu container `pgvector/pgvector:pg18` như đã cấu hình trong `.github/workflows/ci-backend.yml` |
-| `dotnet ef migrations has-pending-model-changes` | ℹ️ Chưa chạy trực tiếp ở phiên 15.5 (`dotnet-ef` chưa cài global trên máy cục bộ) | Không có bất kỳ chỉnh sửa nào ở `src/TeamNexus.Persistence` hay backend từ sau 15.4 |
+| `dotnet test tests/TeamNexus.Api.Tests/TeamNexus.Api.Tests.csproj --no-build` | ✅ **Failed: 0 · Passed: 1,329 · Skipped: 0 · Total: 1,329** (`7m 03s` trên máy review 2026-11-11) | Máy dev 15.5 thiếu `pgvector` nên 659 test DB skip; máy review dùng container `pgvector/pgvector:pg18` (`localhost:5433`) và toàn bộ 1.329 test xanh, 0 skip |
+| `dotnet ef migrations has-pending-model-changes` | ✅ **No changes have been made to the model since the last migration.** (review 2026-11-11) | Backend không có chỉnh sửa nào từ sau 15.4 |
 
 ---
 
@@ -68,11 +68,12 @@
 - `frontend/src/features/workspace/components/OutboundWebhooksSection.tsx`: 3 thẻ thống kê 24h (`Đã gửi (24h)`, `Thất bại (24h)`, `Đang chờ Outbox`), bảng Slack/Discord webhook (toggle kích hoạt, gửi thử, drawer xem lịch sử 20 outbox deliveries, sửa, xóa) và Modal tạo/sửa HTTPS kèm checkbox chọn sự kiện.
 - `frontend/src/features/workspace/components/GitHubIntegrationSection.tsx`: Khối hướng dẫn khởi tạo ban đầu, hộp `Webhook Payload URL` kèm nút copy, `SecretHint`, nút **Xoay vòng Secret** (`Popconfirm`), cảnh báo hiển thị **1 lần duy nhất** `Webhook Secret` (`data-testid="github-oneshot-secret-alert"`), biểu mẫu cấu hình (`DefaultBoardId`, `IssueLabelFilter`, 3 công tắc auto PR / auto Issue+Jev / comment sync) và bảng 30 delivery logs gần nhất.
 
-### 3.4. Độ phủ Kiểm thử Mới (`T15.5.5`, `+31` tests)
+### 3.4. Độ phủ Kiểm thử Mới (`T15.5.5`, `+39` tests)
 - `frontend/src/features/workspace/services/__tests__/integrationApi.test.ts` [MỚI — **11 tests**]: Bao phủ đủ 11 endpoint Outbound/GitHub + nhánh `404 -> null` trên `getGitHubIntegration`.
 - `frontend/src/features/board/components/__tests__/ColumnModal.test.tsx` [MỚI — **4 tests**]: Tạo cột `isInReview`, loại trừ lẫn nhau `isDone`/`isInReview`, khóa khi `isClarification`, và pre-populate khi sửa cột.
-- `frontend/src/features/workspace/components/__tests__/WorkspaceIntegrations.test.tsx` [MỚI — **8 tests**]: Bảo toàn tab mặc định + `open-settings-modal-btn`, chuyển sang tab `Tích hợp`, hiển thị thống kê 24h & Slack endpoint, tạo webhook, bấm `Gửi thử`, mở Drawer lịch sử outbox, khởi tạo GitHub Integration hiển thị one-shot secret, lưu clear `DefaultBoardId`/`IssueLabelFilter`, Rotate Secret & Refresh deliveries.
-- `frontend/src/features/board/components/__tests__/TaskCard.test.tsx` (**+3 tests**), `KanbanColumn.test.tsx` (**+1 test**), `TaskDetailModal.test.tsx` (**+4 tests**).
+- `frontend/src/features/workspace/utils/__tests__/githubIntegrationRequest.test.ts` [MỚI — **4 tests**]: `EMPTY_GUID` khi xoá board của cấu hình đã có, `""` khi xoá label filter, giữ board + trim filter, và điều kiện bắt buộc board khi bật auto-create.
+- `frontend/src/features/workspace/components/__tests__/WorkspaceIntegrations.test.tsx` [MỚI — **11 tests**]: Bảo toàn tab mặc định + `open-settings-modal-btn`, chuyển sang tab `Tích hợp`, thống kê 24h & Slack endpoint, tạo webhook, `Gửi thử`, Drawer lịch sử outbox, khởi tạo GitHub Integration hiển thị one-shot secret, lưu cấu hình, Rotate Secret, Refresh deliveries, chặn bật auto-create khi chưa chọn board, xoá cấu hình và lỗi clipboard unavailable.
+- `frontend/src/features/board/components/__tests__/TaskCard.test.tsx` (**+3 tests**), `KanbanColumn.test.tsx` (**+1 test**), `TaskDetailModal.test.tsx` (**+5 tests**, gồm clipboard unavailable).
 
 ---
 
