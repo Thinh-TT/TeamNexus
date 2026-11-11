@@ -82,4 +82,50 @@ public sealed class TaskKeyParserTests
         Assert.Single(result);
         Assert.Equal(55L, result[0]);
     }
+
+    // ---- review F5: automated GitHub paths must not act on a bare #number ---------------------
+
+    [Theory]
+    [InlineData("TN-42", 42L)]
+    [InlineData("tn-42", 42L)]
+    [InlineData("feat/TN-42-auth", 42L)]
+    [InlineData("Sửa lỗi TN-42 gây crash", 42L)]
+    public void ParseTaskNumbers_RequireTnPrefix_StillAcceptsExplicitKeys(string input, long expectedNumber)
+    {
+        var result = _parser.ParseTaskNumbers(input, requireTnPrefix: true);
+
+        Assert.Single(result);
+        Assert.Equal(expectedNumber, result[0]);
+    }
+
+    [Theory]
+    [InlineData("#42")]
+    [InlineData("Fixes #42")]
+    [InlineData("Closes #7, see #12")]
+    [InlineData("fix/issue-#88-null-ref")]
+    [InlineData("see issues/#42 and #7")]
+    public void ParseTaskNumbers_RequireTnPrefix_IgnoresBareGitHubNumbers(string input)
+    {
+        // These are GitHub cross-references, not TeamNexus task keys. Acting on them would move or comment
+        // on an unrelated card whose task_number happens to match.
+        Assert.Empty(_parser.ParseTaskNumbers(input, requireTnPrefix: true));
+    }
+
+    [Fact]
+    public void ParseTaskNumbers_RequireTnPrefix_KeepsOnlyTheTnKeysInAMixedText()
+    {
+        var result = _parser.ParseTaskNumbers("Closes #20, relates to TN-10 and #30", requireTnPrefix: true);
+
+        Assert.Equal([10L], result);
+    }
+
+    [Fact]
+    public void ParseTaskNumbers_RequireTnPrefix_AppliesAcrossMultipleSources()
+    {
+        var result = _parser.ParseTaskNumbers(
+            ["Fixes #7", "fix/issue-#7", "relates to TN-7"],
+            requireTnPrefix: true);
+
+        Assert.Equal([7L], result);
+    }
 }

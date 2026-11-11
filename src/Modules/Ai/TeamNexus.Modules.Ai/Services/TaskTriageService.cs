@@ -124,20 +124,7 @@ public sealed class TaskTriageService : ITaskTriageService
 
         var result = await _jev.TriageTaskAsync(context, ct);
 
-        var response = new TaskTriageResponse(
-            result.SuggestedDomain,
-            result.SuggestedWorkType,
-            result.SuggestedPriority,
-            result.NeedsSecurityReview,
-            result.ConfidenceScore,
-            result.RoutingAdvice,
-            result.Options.Select(option => new TriageOptionResponse(option.Field, option.Value, option.Probability)).ToList(),
-            // The provider failure is already absorbed into "ManualRequired + nothing offered"; this flag
-            // exists so the UI can say "AI tạm không khả dụng" instead of implying the AI looked and found
-            // nothing, which are very different messages to a user.
-            Degraded: result.RoutingAdvice == Jev.ConfidenceRouting.ManualRequired,
-            Model: _options.EffectiveModel,
-            LatencyMs: result.LatencyMs);
+        var response = CreateTriageResponse(result);
 
         _logger.LogDebug(
             "Triage for board {BoardId}: advice={Advice}, confidence={Confidence}, degraded={Degraded}.",
@@ -193,19 +180,7 @@ public sealed class TaskTriageService : ITaskTriageService
 
             var result = await _jev.TriageTaskAsync(context, ct);
 
-            var isDegraded = result.Usage is null || (result.LatencyMs == 0 && result.Options.Count == 0);
-
-            var response = new TaskTriageResponse(
-                result.SuggestedDomain,
-                result.SuggestedWorkType,
-                result.SuggestedPriority,
-                result.NeedsSecurityReview,
-                result.ConfidenceScore,
-                result.RoutingAdvice,
-                result.Options.Select(option => new TriageOptionResponse(option.Field, option.Value, option.Probability)).ToList(),
-                Degraded: isDegraded,
-                Model: _options.EffectiveModel,
-                LatencyMs: result.LatencyMs);
+            var response = CreateTriageResponse(result);
 
             _logger.LogDebug(
                 "System triage for board {BoardId}: advice={Advice}, confidence={Confidence}, degraded={Degraded}.",
@@ -219,6 +194,37 @@ public sealed class TaskTriageService : ITaskTriageService
             return null;
         }
     }
+
+    /// <summary>
+    /// Maps one Jev triage result onto the HTTP contract.
+    /// <para>
+    /// <b>Why this is one helper for both entry points:</b> the interactive and the system path must agree
+    /// on what "degraded" means. They did not once — <c>TriageAsync</c> marked every
+    /// <see cref="Jev.ConfidenceRouting.ManualRequired"/> answer as degraded while the other paths checked
+    /// the provider usage, so a perfectly healthy Jev that simply was not confident enough (confidence
+    /// &lt; 0.50) made the UI claim "Dịch vụ AI tạm không khả dụng". Those are very different messages to a
+    /// user, and only one of them is true.
+    /// </para>
+    /// </summary>
+    private TaskTriageResponse CreateTriageResponse(Jev.TaskTriageResult result)
+        => new(
+            result.SuggestedDomain,
+            result.SuggestedWorkType,
+            result.SuggestedPriority,
+            result.NeedsSecurityReview,
+            result.ConfidenceScore,
+            result.RoutingAdvice,
+            result.Options.Select(option => new TriageOptionResponse(option.Field, option.Value, option.Probability)).ToList(),
+            Degraded: IsProviderDegraded(result.Usage),
+            Model: _options.EffectiveModel,
+            LatencyMs: result.LatencyMs);
+
+    /// <summary>
+    /// <c>true</c> only when the call never produced a decision (provider exception/timeout ⇒
+    /// <c>Usage is null</c>). A successful low-confidence answer is <b>not</b> degraded: Jev did its job,
+    /// it just recommended a human decision.
+    /// </summary>
+    private static bool IsProviderDegraded(Jev.JevDecisionUsage? usage) => usage is null;
 
     // ---- §A4 assignee dispatch ----------------------------------------------------------------
 
@@ -275,7 +281,10 @@ public sealed class TaskTriageService : ITaskTriageService
                 .Select(rank => new CandidateSuggestionResponse(
                     rank.UserId, rank.DisplayName, rank.Probability, rank.Reason))
                 .ToList(),
-            Degraded: candidates.Count > 0 && (result.Usage is null || (result.LatencyMs == 0 && result.CandidateRankings.Count == 0)),
+            // Same rule as triage: only a call that never produced a decision is degraded. A low-confidence
+            // answer (ManualRequired) is a valid outcome and the UI must say "chưa có ứng viên phù hợp",
+            // not "dịch vụ AI tạm không khả dụng" — the two used to be shown together (Phase 15.4 §T15.4.1).
+            Degraded: IsProviderDegraded(result.Usage),
             Model: _options.EffectiveModel,
             LatencyMs: result.LatencyMs);
 

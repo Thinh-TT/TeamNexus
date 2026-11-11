@@ -9,6 +9,7 @@ using TeamNexus.Modules.Ai.Services.Integrations;
 using TeamNexus.Modules.Ai.Services.Jev;
 using TeamNexus.Modules.Ai.Services.Knowledge;
 using TeamNexus.Modules.Auth.Options;
+using TeamNexus.Modules.Board.Services;
 
 namespace TeamNexus.Api.Tests.Infrastructure;
 
@@ -95,6 +96,14 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
     /// test-only doubles.
     /// </summary>
     public IExternalAlertSink? ExternalAlerts { get; init; }
+
+    /// <summary>
+    /// When set, replaces the registered <c>IBoardEventPublisher</c> so a suite can assert a SignalR
+    /// broadcast without a client (Phase 15.4 review F6: <c>TaskUpdated</c> after an issue closes).
+    /// Kept on the factory for the same reason as <see cref="ScriptedAi"/>: the shared host must stay free of
+    /// test-only doubles.
+    /// </summary>
+    public RecordingBoardEventPublisher? BoardEvents { get; init; }
 
     /// <summary>
     /// Handler behind the outbound webhook HttpClient (Phase 15.2). Always set so no suite can reach a real
@@ -363,6 +372,14 @@ public sealed class TeamNexusApiFactory : WebApplicationFactory<Program>
             // tool built (the offline fake answers correctly but keeps no record).
             builder.ConfigureTestServices(services =>
                 services.AddSingleton<IJevDecisionProvider>(JevProvider));
+        }
+
+        if (BoardEvents is not null)
+        {
+            // Phase 15.4 review F6: the production publisher writes to a SignalR hub, which a suite cannot
+            // read. The recorder is the only way to prove the webhook actually broadcasts `TaskUpdated`.
+            builder.ConfigureTestServices(services =>
+                services.AddSingleton<IBoardEventPublisher>(BoardEvents));
         }
 
         if (EmbeddingProvider is not null)

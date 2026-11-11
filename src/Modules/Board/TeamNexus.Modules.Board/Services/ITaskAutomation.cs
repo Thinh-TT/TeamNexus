@@ -64,5 +64,16 @@ public interface ITaskAutomation
         Guid systemUserId,
         string markdownContent,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Re-reads a task and broadcasts <c>TaskUpdated</c> so an out-of-band change (an external link's
+    /// state moving to <c>closed</c>/<c>open</c> because a GitHub issue changed) reaches every open board
+    /// without a manual refresh.
+    /// <para>
+    /// Id-only on purpose: the <c>Ai</c> module must not build a Board DTO itself, and the caller does not
+    /// know which fields the board UI needs.
+    /// </para>
+    /// </summary>
+    Task NotifyTaskUpdatedAsync(Guid taskId, CancellationToken ct = default);
 }
 

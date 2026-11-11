@@ -321,6 +321,57 @@ public sealed class GitHubWebhookPrTests : IClassFixture<DatabaseFixture>
     }
 
     [Fact]
+    public async Task Webhook_PullRequestReferencingOnlyGitHubIssueNumbers_IsIgnored_AndNoLinkIsCreated()
+    {
+        // Review F5: `Fixes #1` is a GitHub cross-reference. It must never auto-link the task whose
+        // task_number happens to be 1 — the two numbering spaces are unrelated.
+        await using var s = await _database.CreateScenarioAsync();
+        var admin = await s.CreateUserAsync("Admin WS");
+        var ws = await s.CreateWorkspaceAsync(admin, "Workspace GH F5");
+        var (board, todo, _) = await s.CreateBoardAsync(ws, "Board GH F5");
+
+        using var client = await s.AsUserAsync(admin);
+        var putRes = await client.PutJsonAsync(BaseUrl(ws.Id), new UpsertWorkspaceGitHubIntegrationRequest(IsEnabled: true, AutoMoveOnPr: true));
+        var integration = await putRes.Content.ReadFromJsonAsync<WorkspaceGitHubIntegrationResponse>();
+
+        var taskRes = await client.PostJsonAsync($"/api/boards/{board.Id}/tasks", new { columnId = todo.Id, title = "Thẻ TN-1 không liên quan" });
+        var task = await taskRes.Content.ReadFromJsonAsync<TaskResponse>();
+        Assert.NotNull(task);
+        Assert.Equal(1L, task!.TaskNumber);
+
+        var payload = $$"""
+        {
+            "action": "opened",
+            "repository": { "full_name": "octocat/TeamNexus" },
+            "pull_request": {
+                "number": 7,
+                "title": "Fixes #1 — việc của repo khác",
+                "html_url": "https://github.com/octocat/TeamNexus/pull/7",
+                "body": "Đóng issue #1 của GitHub, không phải thẻ công việc nào.",
+                "draft": false,
+                "merged": false,
+                "head": { "ref": "fix/issue-1" }
+            }
+        }
+        """;
+
+        var deliveryId = Guid.NewGuid().ToString();
+        var req = CreateWebhookRequest(integration!.WebhookToken, "pull_request", deliveryId, integration.WebhookSecretPlaintext!, payload);
+        var res = await s.Factory.CreateClient().SendAsync(req);
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+
+        await using var db = s.NewDbContext();
+        var delivery = await db.GitHubWebhookDeliveries.FirstOrDefaultAsync(d => d.DeliveryId == deliveryId);
+        Assert.NotNull(delivery);
+        Assert.Equal("Ignored", delivery!.Status);
+        Assert.Contains("Không tìm thấy mã thẻ", delivery.Summary);
+
+        Assert.Empty(await db.TaskExternalLinks.Where(l => l.TaskId == task.Id).ToListAsync());
+        var refreshedTask = await db.Tasks.FirstAsync(t => t.Id == task.Id);
+        Assert.Equal(todo.Id, refreshedTask.ColumnId);
+    }
+
+    [Fact]
     public async Task Webhook_PullRequestReadyForReview_MovesTaskToInReview_CreatesApprovedAiActionLog()
     {
         await using var s = await _database.CreateScenarioAsync();
@@ -364,7 +415,7 @@ public sealed class GitHubWebhookPrTests : IClassFixture<DatabaseFixture>
             "repository": { "full_name": "octocat/TeamNexus" },
             "pull_request": {
                 "number": 43,
-                "title": "Payment gateway (#{{task!.TaskNumber}})",
+                "title": "Payment gateway (TN-{{task!.TaskNumber}})",
                 "html_url": "https://github.com/octocat/TeamNexus/pull/43",
                 "body": "Ready for team review",
                 "draft": false,
@@ -616,6 +667,73 @@ public sealed class GitHubWebhookPrTests : IClassFixture<DatabaseFixture>
             var revertedTask = await finalDb.Tasks.FirstAsync(t => t.Id == task.Id);
             Assert.Equal(todo.Id, revertedTask.ColumnId);
             Assert.Null(revertedTask.CompletedAt);
+        }
+    }
+
+    [Fact]
+    public async Task AiAction_Undo_RestoresTheOriginalPositionInTheColumn()
+    {
+        // Review F8: Undo used to append the card to the bottom of its old column, so a PR merge/revert
+        // silently reshuffled the board. The recorded `previousPosition` must be honoured.
+        await using var s = await _database.CreateScenarioAsync();
+        var admin = await s.CreateUserAsync("Admin WS");
+        var ws = await s.CreateWorkspaceAsync(admin, "Workspace GH 14");
+        var (board, todo, _) = await s.CreateBoardAsync(ws, "Board Kanban");
+        using var client = await s.AsUserAsync(admin);
+
+        var putRes = await client.PutJsonAsync(BaseUrl(ws.Id), new UpsertWorkspaceGitHubIntegrationRequest(IsEnabled: true, AutoMoveOnPr: true));
+        var integration = await putRes.Content.ReadFromJsonAsync<WorkspaceGitHubIntegrationResponse>();
+
+        async Task<TaskResponse> CreateTaskAsync(string title)
+        {
+            var response = await client.PostJsonAsync($"/api/boards/{board.Id}/tasks", new { columnId = todo.Id, title });
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            return (await response.Content.ReadFromJsonAsync<TaskResponse>())!;
+        }
+
+        await CreateTaskAsync("Thẻ A");
+        var middle = await CreateTaskAsync("Thẻ B");
+        await CreateTaskAsync("Thẻ C");
+        Assert.Equal(2L, middle.TaskNumber);
+
+        var payload = $$"""
+        {
+            "action": "closed",
+            "repository": { "full_name": "octocat/TeamNexus" },
+            "pull_request": {
+                "number": 61,
+                "title": "Merge TN-{{middle.TaskNumber}}",
+                "html_url": "https://github.com/octocat/TeamNexus/pull/61",
+                "draft": false,
+                "merged": true,
+                "head": { "ref": "feat/TN-{{middle.TaskNumber}}" }
+            }
+        }
+        """;
+
+        var deliveryId = Guid.NewGuid().ToString();
+        var req = CreateWebhookRequest(integration!.WebhookToken, "pull_request", deliveryId, integration.WebhookSecretPlaintext!, payload);
+        Assert.Equal(HttpStatusCode.OK, (await s.Factory.CreateClient().SendAsync(req)).StatusCode);
+
+        Guid logId;
+        await using (var afterMerge = s.NewDbContext())
+        {
+            logId = (await afterMerge.AiActionLogs
+                .FirstAsync(l => l.EntityId == board.Id && l.Action == AiActionTypes.GitHubPrMoveTask)).Id;
+        }
+
+        var undoRes = await client.PostJsonAsync($"/api/ai-actions/{logId}/undo", new { });
+        Assert.Equal(HttpStatusCode.OK, undoRes.StatusCode);
+
+        await using (var finalDb = s.NewDbContext())
+        {
+            var ordered = await finalDb.Tasks
+                .Where(t => t.BoardId == board.Id && t.ColumnId == todo.Id)
+                .OrderBy(t => t.Position)
+                .ToListAsync();
+
+            Assert.Equal(new[] { "Thẻ A", "Thẻ B", "Thẻ C" }, ordered.Select(t => t.Title).ToList());
+            Assert.Equal(1, ordered.Single(t => t.Id == middle.Id).Position);
         }
     }
 }

@@ -1272,6 +1272,17 @@ public sealed class AiActionService : IAiActionService
             : null;
 
     /// <summary>
+    /// Reads one integer out of a snapshot (camelCase). Absent or non-numeric ⇒ <c>null</c>, so a legacy
+    /// snapshot without the field falls back to the caller's own default instead of a bogus position.
+    /// </summary>
+    public static int? ReadInt(string? snapshotJson, string propertyName)
+        => TryGetProperty(snapshotJson, propertyName, out var value)
+           && value.ValueKind == JsonValueKind.Number
+           && value.TryGetInt32(out var parsed)
+            ? parsed
+            : null;
+
+    /// <summary>
     /// Reads one boolean out of a snapshot (camelCase). Returns <c>false</c> for absent/non-boolean rather than
     /// <c>null</c>, because every caller so far uses it as "did this flag hold?" (Giai đoạn 14.7 §A5).
     /// </summary>

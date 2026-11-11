@@ -5,12 +5,15 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using TeamNexus.Api.Tests.Infrastructure;
 using TeamNexus.Modules.Ai.DTOs;
 using TeamNexus.Modules.Ai.DTOs.Integrations;
 using TeamNexus.Modules.Ai.Services;
 using TeamNexus.Modules.Ai.Services.Integrations;
 using TeamNexus.Modules.Board.DTOs;
+using TeamNexus.Modules.Board.Services;
 using TeamNexus.Persistence.Data.Entities;
 using TeamNexus.Shared;
 
@@ -420,12 +423,95 @@ public sealed class GitHubWebhookIssueAndCommentTests : IClassFixture<DatabaseFi
         Assert.NotNull(softDeleted!.DeletedAt);
     }
 
+    [Fact]
+    public async Task IssuesOpened_WhenTriageThrows_StillCreatesTaskAndAuditLog()
+    {
+        // Review F7: the accountability row is written before the optional AI enrichment, so even a triage
+        // explosion leaves a traced, undoable task instead of a card that redelivery can never repair.
+        await using var s = await _database.CreateScenarioAsync();
+        var admin = await s.CreateUserAsync("Admin WS");
+        var ws = await s.CreateWorkspaceAsync(admin, "Workspace Issues F7");
+        var (board, _, _) = await s.CreateBoardAsync(ws, "Board F7");
+        using var client = await s.AsUserAsync(admin);
+
+        var putRes = await client.PutJsonAsync(BaseUrl(ws.Id), new UpsertWorkspaceGitHubIntegrationRequest(
+            IsEnabled: true,
+            DefaultBoardId: board.Id,
+            AutoCreateTasksFromIssues: true));
+        Assert.Equal(HttpStatusCode.OK, putRes.StatusCode);
+
+        await using var db = s.NewDbContext();
+        var integration = await db.WorkspaceGitHubIntegrations.FirstAsync(i => i.WorkspaceId == ws.Id);
+
+        // ITaskAutomation is scoped: resolve it from a scope, exactly like a request would.
+        using var scope = s.Services.CreateScope();
+        var automation = scope.ServiceProvider.GetRequiredService<ITaskAutomation>();
+        var service = new GitHubWebhookService(
+            db,
+            automation,
+            new ThrowingTriageService(),
+            new TaskKeyParser(),
+            NullLogger<GitHubWebhookService>.Instance);
+
+        var deliveryId = Guid.NewGuid().ToString();
+        var payload = $$"""
+        {
+            "action": "opened",
+            "repository": { "full_name": "octocat/Hello-World" },
+            "issue": {
+                "number": 301,
+                "title": "Issue làm Jev nổ",
+                "html_url": "https://github.com/octocat/Hello-World/issues/301",
+                "body": "Nội dung bất kỳ"
+            },
+            "sender": { "login": "octocat", "type": "User" }
+        }
+        """;
+
+        var result = await service.ProcessWebhookAsync(
+            integration,
+            "issues",
+            deliveryId,
+            Encoding.UTF8.GetBytes(payload));
+
+        Assert.Equal("Processed", result.Status);
+
+        var task = Assert.Single(await db.Tasks.Where(t => t.BoardId == board.Id).ToListAsync());
+        Assert.Equal(SystemUsers.GitHubBotUserId, task.CreatedBy);
+
+        var log = Assert.Single(
+            await db.AiActionLogs
+                .Where(l => l.Action == AiActionTypes.GitHubIssueCreateTask && l.EntityId == board.Id)
+                .ToListAsync());
+        Assert.Equal(AiActionStatus.Approved, log.Status);
+        Assert.Contains(task.Id.ToString(), log.AppliedSnapshot);
+
+        Assert.Single(await db.GitHubWebhookDeliveries.Where(d => d.DeliveryId == deliveryId).ToListAsync());
+    }
+
+    /// <summary>Throws on the system triage call to prove the webhook survives an AI failure (review F7).</summary>
+    private sealed class ThrowingTriageService : ITaskTriageService
+    {
+        public Task<TaskTriageResponse> TriageAsync(
+            Guid boardId, TaskTriageRequest request, Guid userId, CancellationToken ct = default)
+            => throw new InvalidOperationException("The webhook path must not use interactive triage.");
+
+        public Task<AssigneeSuggestionResponse> SuggestAssigneesAsync(
+            Guid boardId, Guid taskId, Guid userId, CancellationToken ct = default)
+            => throw new InvalidOperationException("The webhook path must not suggest assignees.");
+
+        public Task<TaskTriageResponse?> TriageForSystemAsync(
+            Guid boardId, string title, string? description, CancellationToken ct = default)
+            => throw new InvalidOperationException("boom");
+    }
+
     // ---- 3. Issue Link State Machine Tests (Closed / Reopened) -------------
 
     [Fact]
-    public async Task IssuesClosed_And_Reopened_UpdatesLinkStateAccurately()
+    public async Task IssuesClosed_And_Reopened_UpdatesLinkStateAccurately_AndBroadcastsTaskUpdated()
     {
-        await using var s = await _database.CreateScenarioAsync();
+        var boardEvents = new RecordingBoardEventPublisher();
+        await using var s = await _database.CreateScenarioAsync(boardEvents: boardEvents);
         var admin = await s.CreateUserAsync("Admin WS");
         var ws = await s.CreateWorkspaceAsync(admin, "Workspace Issues 8");
         var (board, _, _) = await s.CreateBoardAsync(ws, "Board 8");
@@ -453,12 +539,18 @@ public sealed class GitHubWebhookIssueAndCommentTests : IClassFixture<DatabaseFi
         var openReq = CreateWebhookRequest(integration!.WebhookToken, "issues", Guid.NewGuid().ToString(), integration.WebhookSecretPlaintext!, openPayload);
         await s.Factory.CreateClient().SendAsync(openReq);
 
+        Guid taskId;
         await using (var db = s.NewDbContext())
         {
             var link = await db.TaskExternalLinks.FirstOrDefaultAsync(l => l.ExternalId == "octocat/Hello-World#123");
             Assert.NotNull(link);
             Assert.Equal("open", link!.State);
+            taskId = link.TaskId;
         }
+
+        // Jev already broadcast one TaskUpdated while applying its priority/tag suggestions, so the test
+        // counts deltas instead of assuming the webhook is the only publisher.
+        var updatesBeforeClose = boardEvents.TaskUpdatedEvents.Count(e => e.Task.Id == taskId);
 
         // 2. Close issue
         var closePayload = $$"""
@@ -484,6 +576,17 @@ public sealed class GitHubWebhookIssueAndCommentTests : IClassFixture<DatabaseFi
             Assert.Equal("closed", link!.State);
         }
 
+        // Review F6: closing an issue must broadcast TaskUpdated with the new chip state, otherwise the
+        // board keeps showing "open" until the user reloads.
+        Assert.Equal(updatesBeforeClose + 1, boardEvents.TaskUpdatedEvents.Count(e => e.Task.Id == taskId));
+        var closedUpdate = boardEvents.TaskUpdatedEvents.Last(e => e.Task.Id == taskId);
+        Assert.Equal(board.Id, closedUpdate.BoardId);
+        Assert.Equal(
+            "closed",
+            Assert.Single(
+                closedUpdate.Task.ExternalLinks!,
+                l => l.ExternalId == "octocat/Hello-World#123").State);
+
         // 3. Reopen issue
         var reopenPayload = $$"""
         {
@@ -507,6 +610,15 @@ public sealed class GitHubWebhookIssueAndCommentTests : IClassFixture<DatabaseFi
             Assert.NotNull(link);
             Assert.Equal("open", link!.State);
         }
+
+        // Reopening flips the chip back and broadcasts again — the same contract in the other direction.
+        var reopenUpdate = boardEvents.TaskUpdatedEvents.Last(e => e.Task.Id == taskId);
+        Assert.Equal(
+            "open",
+            Assert.Single(
+                reopenUpdate.Task.ExternalLinks!,
+                l => l.ExternalId == "octocat/Hello-World#123").State);
+        Assert.Equal(updatesBeforeClose + 2, boardEvents.TaskUpdatedEvents.Count(e => e.Task.Id == taskId));
     }
 
     // ---- 4. Comment Synchronization Tests (issue_comment.created) ----------

@@ -176,7 +176,9 @@ public sealed class GitHubWebhookService : IGitHubWebhookService
             _ => "open",
         };
 
-        var taskNumbers = _taskKeyParser.ParseTaskNumbers([prTitle, headRef, prBody], maxCount: 5);
+        // `requireTnPrefix: true` — a bare `#123` in a PR refers to a GitHub issue/PR number, and acting on
+        // it would move whichever TeamNexus task happens to carry number 123 (review F5).
+        var taskNumbers = _taskKeyParser.ParseTaskNumbers([prTitle, headRef, prBody], maxCount: 5, requireTnPrefix: true);
 
         if (taskNumbers.Count == 0)
         {
@@ -469,6 +471,9 @@ public sealed class GitHubWebhookService : IGitHubWebhookService
                 existingLink.UpdatedAt = now;
                 await _db.SaveChangesAsync(ct);
 
+                // Phase 15.4 §T15.4.2(4): the chip on the card must flip without a manual refresh.
+                await _taskAutomation.NotifyTaskUpdatedAsync(existingLink.TaskId, ct);
+
                 return await RecordDeliveryAsync(
                     integration,
                     deliveryId,
@@ -630,35 +635,12 @@ public sealed class GitHubWebhookService : IGitHubWebhookService
 
             await _db.SaveChangesAsync(ct);
 
-            // Jev 1.13 Auto-Triage (fail-soft)
-            var triage = await _triageService.TriageForSystemAsync(
-                integration.DefaultBoardId.Value,
-                issueTitle,
-                issueBody,
-                ct);
-
-            if (triage is not null && !triage.Degraded && triage.ConfidenceScore >= 0.50)
-            {
-                var tags = new List<string>();
-                if (!string.IsNullOrWhiteSpace(triage.SuggestedDomain))
-                {
-                    tags.Add(triage.SuggestedDomain);
-                }
-                if (!string.IsNullOrWhiteSpace(triage.SuggestedWorkType))
-                {
-                    tags.Add(triage.SuggestedWorkType);
-                }
-
-                await _taskAutomation.ApplySystemTriageSuggestionsAsync(
-                    createdTask.Id,
-                    triage.SuggestedPriority,
-                    estimatedHours: null,
-                    tags: tags.Count > 0 ? tags : null,
-                    assigneeId: null,
-                    ct);
-            }
-
-            // Record AiActionLog for accountability & Undo
+            // Record AiActionLog for accountability & Undo BEFORE the optional AI enrichment.
+            //
+            // Review F7: Jev/tag application used to run first. If it threw, the task already existed but no
+            // audit row was ever written — and because a redelivery is deduplicated by the external link,
+            // the card stayed permanently un-undoable. The accountability row is the non-negotiable part;
+            // the suggestions are best-effort.
             var log = new AiActionLog
             {
                 Action = AiActionTypes.GitHubIssueCreateTask,
@@ -693,6 +675,46 @@ public sealed class GitHubWebhookService : IGitHubWebhookService
 
             _db.AiActionLogs.Add(log);
             await _db.SaveChangesAsync(ct);
+
+            // Jev 1.13 Auto-Triage (fail-soft): the task already exists, so an AI/tagging failure must never
+            // turn the whole delivery into a 500 — it only means "no suggestions were applied".
+            try
+            {
+                var triage = await _triageService.TriageForSystemAsync(
+                    integration.DefaultBoardId.Value,
+                    issueTitle,
+                    issueBody,
+                    ct);
+
+                if (triage is not null && !triage.Degraded && triage.ConfidenceScore >= 0.50)
+                {
+                    var tags = new List<string>();
+                    if (!string.IsNullOrWhiteSpace(triage.SuggestedDomain))
+                    {
+                        tags.Add(triage.SuggestedDomain);
+                    }
+                    if (!string.IsNullOrWhiteSpace(triage.SuggestedWorkType))
+                    {
+                        tags.Add(triage.SuggestedWorkType);
+                    }
+
+                    await _taskAutomation.ApplySystemTriageSuggestionsAsync(
+                        createdTask.Id,
+                        triage.SuggestedPriority,
+                        estimatedHours: null,
+                        tags: tags.Count > 0 ? tags : null,
+                        assigneeId: null,
+                        ct);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Jev auto-triage skipped for TN-{TaskNumber} (Issue #{IssueNumber}); task and audit log were kept.",
+                    createdTask.TaskNumber,
+                    issueNumber);
+            }
 
             return await RecordDeliveryAsync(
                 integration,
@@ -831,8 +853,9 @@ public sealed class GitHubWebhookService : IGitHubWebhookService
             }
         }
 
-        // Source 2: Parse TN-* from commentBody
-        var taskNumbers = _taskKeyParser.ParseTaskNumbers([commentBody], maxCount: 5);
+        // Source 2: Parse TN-* from commentBody. `#123` is excluded on purpose — in a GitHub comment it
+        // references an issue/PR, not a TeamNexus task (review F5).
+        var taskNumbers = _taskKeyParser.ParseTaskNumbers([commentBody], maxCount: 5, requireTnPrefix: true);
         if (taskNumbers.Count > 0)
         {
             var referencedTaskIds = await _db.Tasks

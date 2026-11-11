@@ -133,7 +133,7 @@ public sealed class Phase147TriageApiTests : IClassFixture<DatabaseFixture>
     }
 
     [Fact]
-    public async Task Triage_WithALowAnswer_FallsBackToAManualDecision()
+    public async Task Triage_WithALowAnswer_FallsBackToAManualDecision_WithoutClaimingTheServiceIsDegraded()
     {
         await using var scenario = await _database.CreateScenarioAsync();
         var (admin, _, board) = await SeedAsync(scenario);
@@ -146,7 +146,10 @@ public sealed class Phase147TriageApiTests : IClassFixture<DatabaseFixture>
         Assert.Null(body.SuggestedWorkType);
         Assert.Null(body.SuggestedPriority);
         Assert.Empty(body.Options);
-        Assert.True(body.Degraded);
+
+        // Phase 15.3/15.4 review F4: the provider answered (it simply was not confident), so the response
+        // must NOT claim the AI service is unavailable. `Degraded` is reserved for a failed/fallback call.
+        Assert.False(body.Degraded);
     }
 
     [Fact]

@@ -90,6 +90,14 @@ public sealed class GitHubPrMoveTaskApplier : IAiActionApplier
             return warnings;
         }
 
+        // The PR move recorded where the card sat and which completion stamp it carried; restoring both is
+        // what makes Undo actually restore the previous state instead of appending the card to the bottom of
+        // its old column (review F8).
+        var previousPosition = AiActionService.ReadInt(log.AppliedSnapshot, "previousPosition")
+                               ?? AiActionService.ReadInt(log.BeforeSnapshot, "position");
+        var previousCompletedAt = AiActionService.ReadDateTimeOffset(log.AppliedSnapshot, "previousCompletedAt")
+                                  ?? AiActionService.ReadDateTimeOffset(log.BeforeSnapshot, "completedAt");
+
         try
         {
             var targetColumnExists = await _db.BoardColumns
@@ -102,9 +110,15 @@ public sealed class GitHubPrMoveTaskApplier : IAiActionApplier
                 return warnings;
             }
 
-            var position = await _db.Tasks
+            var otherTaskCount = await _db.Tasks
                 .AsNoTracking()
                 .CountAsync(t => t.ColumnId == fromColumnId.Value && t.Id != taskId.Value, ct);
+
+            // Clamp: the column may have grown/shrunk since the move, and a position beyond the end would
+            // make the board reorder more than this card.
+            var position = previousPosition.HasValue
+                ? Math.Clamp(previousPosition.Value, 0, otherTaskCount)
+                : otherTaskCount;
 
             await _tasks.MoveTaskAsync(
                 taskId.Value,
@@ -112,11 +126,29 @@ public sealed class GitHubPrMoveTaskApplier : IAiActionApplier
                 ctx.ActingUserId,
                 ct);
 
+            var currentCompletedAt = await _db.Tasks
+                .AsNoTracking()
+                .Where(t => t.Id == taskId.Value)
+                .Select(t => t.CompletedAt)
+                .FirstOrDefaultAsync(ct);
+
+            if (currentCompletedAt != previousCompletedAt)
+            {
+                // MoveTaskAsync derives CompletedAt from the destination column; the snapshot is the truth
+                // for an undo, so write the recorded value back when the two disagree.
+                await _db.Tasks
+                    .Where(t => t.Id == taskId.Value)
+                    .ExecuteUpdateAsync(
+                        setters => setters.SetProperty(t => t.CompletedAt, previousCompletedAt),
+                        ct);
+            }
+
             _logger.LogInformation(
-                "GitHub PR move task undone (log {LogId}, task {TaskId}) reverted to column {FromColumnId} by user {UserId}.",
+                "GitHub PR move task undone (log {LogId}, task {TaskId}) reverted to column {FromColumnId} at position {Position} by user {UserId}.",
                 log.Id,
                 taskId.Value,
                 fromColumnId.Value,
+                position,
                 ctx.ActingUserId);
         }
         catch (NotFoundException)
