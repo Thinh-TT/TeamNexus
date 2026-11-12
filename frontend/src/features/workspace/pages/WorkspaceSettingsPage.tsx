@@ -46,6 +46,9 @@ export const WorkspaceSettingsPage: React.FC = () => {
   const { isManagerOrAdmin, isAdmin, isOwner, loading: roleLoading } = useWorkspaceRole(workspaceId)
   const { detail, loading: detailLoading, save, transfer, remove } = useWorkspaceDetail(workspaceId)
   const { members } = useWorkspaceMembers(workspaceId)
+  const [modalOpen, setModalOpen] = useState(false)
+  // Declared before the integrations hook: that hook's `enabled` flag depends on the active tab.
+  const [activeTab, setActiveTab] = useState<'general' | 'integrations'>('general')
   const {
     webhooks,
     webhookStats,
@@ -65,10 +68,10 @@ export const WorkspaceSettingsPage: React.FC = () => {
     deleteGitHubIntegration,
     refreshGitHubDeliveries,
     dismissOneTimeSecret,
-  } = useWorkspaceIntegrations(workspaceId, !roleLoading && isManagerOrAdmin)
-
-  const [modalOpen, setModalOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'general' | 'integrations'>('general')
+  } = useWorkspaceIntegrations(
+    workspaceId,
+    !roleLoading && isManagerOrAdmin && activeTab === 'integrations'
+  )
 
   if (roleLoading || detailLoading) {
     return (
@@ -223,12 +226,12 @@ export const WorkspaceSettingsPage: React.FC = () => {
                       style={{ borderRadius: 12, border: '1px solid #e2e8f0' }}
                     >
                       <Descriptions bordered column={{ xs: 1, sm: 2 }}>
-                        <Descriptions.Item label="Tên không gian làm việc" span={2}>
+                        <Descriptions.Item label="Tên không gian làm việc" span={{ xs: 1, sm: 2 }}>
                           <Typography.Text strong style={{ fontSize: 16 }}>
                             {detail.name}
                           </Typography.Text>
                         </Descriptions.Item>
-                        <Descriptions.Item label="Mô tả" span={2}>
+                        <Descriptions.Item label="Mô tả" span={{ xs: 1, sm: 2 }}>
                           {detail.description || (
                             <Typography.Text type="secondary">Chưa có mô tả</Typography.Text>
                           )}

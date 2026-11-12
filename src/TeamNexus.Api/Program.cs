@@ -10,6 +10,7 @@ using TeamNexus.Modules.Board;
 using TeamNexus.Modules.Board.Endpoints;
 using TeamNexus.Modules.Board.Hubs;
 using TeamNexus.Modules.Reporting;
+using TeamNexus.Persistence.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,19 +62,18 @@ builder.Services.AddCors(options =>
     });
 });
 
-// ---- Data Protection key ring (Phase 15.3 §T15.3.1) -------------------
-// GitHub webhook secrets are encrypted at rest via IDataProtectionProvider. The default key ring lives
-// in the machine profile, which is ephemeral inside a container: every redeploy would leave previously
-// stored secrets undecryptable and every GitHub delivery would answer 401. Phase 15.3 design §13.1
-// therefore requires an explicitly durable ring, configured here through environment variables:
-//   Integrations__DataProtection__KeysPath      → mounted directory (render/vps volume)
-//   Integrations__DataProtection__CertPath      → PFX (vps), with CertPassword
+// ---- Data Protection key ring (Phase 15.3 §T15.3.1; TASK-DP-01 remediation) -------------
+// GitHub webhook secrets are encrypted at rest via IDataProtectionProvider. A file-system key ring is
+// ephemeral inside a container (Render free tier has no persistent disk), so every redeploy would leave
+// previously stored secrets undecryptable and every GitHub delivery would answer 401. The ring therefore
+// lives in PostgreSQL (`data_protection_keys`), the only durable store every deployment has:
+//   dotnet ef database update ...   → apply Phase15DataProtectionKeyRing BEFORE deploying this build.
 //
-// The two settings are independent on purpose: KeysPath makes the ring durable, CertPath encrypts it at
-// rest. A VPS should set BOTH; Render (no certificate) sets only KeysPath. Treating them as either/or would
-// have silently sent a VPS back to the ephemeral default ring the moment a certificate was configured.
+// Integrations__DataProtection__CertPath is an OPTIONAL at-rest encryption layer for VPS deployments:
+// the certificate never lives in the database, so a DB dump alone cannot decrypt the key ring. Render
+// runs without a certificate and accepts the residual risk (DB access = key ring access) documented in
+// 07-external-integrations-design.md §9.1.
 var dataProtection = builder.Services.AddDataProtection().SetApplicationName("TeamNexus");
-var dataProtectionKeysPath = builder.Configuration["Integrations:DataProtection:KeysPath"];
 var dataProtectionCertPath = builder.Configuration["Integrations:DataProtection:CertPath"];
 
 if (!string.IsNullOrWhiteSpace(dataProtectionCertPath))
@@ -83,21 +83,13 @@ if (!string.IsNullOrWhiteSpace(dataProtectionCertPath))
         X509CertificateLoader.LoadPkcs12FromFile(dataProtectionCertPath, dataProtectionCertPassword));
 }
 
-if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
-{
-    Directory.CreateDirectory(dataProtectionKeysPath);
-    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
-}
+dataProtection.PersistKeysToDbContext<TeamNexusDbContext>();
 
 var app = builder.Build();
 
-if (string.IsNullOrWhiteSpace(dataProtectionKeysPath) && string.IsNullOrWhiteSpace(dataProtectionCertPath))
-{
-    app.Logger.LogWarning(
-        "DataProtection đang dùng key ring mặc định của máy. Trong container, secret tích hợp đã mã hoá sẽ "
-        + "KHÔNG giải mã được sau redeploy (GitHub delivery trả 401). Cấu hình "
-        + "Integrations:DataProtection:KeysPath (thư mục bền) hoặc CertPath (PFX) trước khi bật tích hợp trên production.");
-}
+app.Logger.LogInformation(
+    "DataProtection: key ring lưu tại PostgreSQL (data_protection_keys); mã hoá at-rest: {AtRest}.",
+    string.IsNullOrWhiteSpace(dataProtectionCertPath) ? "không" : "PFX");
 
 // =====================================================================
 // Middleware pipeline

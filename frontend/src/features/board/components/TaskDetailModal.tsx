@@ -388,7 +388,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
       width={880}
       style={{ top: 28 }}
       footer={null}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical" onFinish={handleSaveMetadata}>
         {/* Top Context Breadcrumb Bar (Stitch Preview 3) */}
@@ -566,7 +566,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     border: '1px solid #cbd5e1',
                     background: '#f8fafc',
                   }}
-                  bodyStyle={{ padding: 10 }}
+                  styles={{ body: { padding: 10 } }}
                 >
                   <Typography.Text strong style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>
                     Tạo nhãn mới cho Workspace:
@@ -794,8 +794,9 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                         {comments.map((comment) => {
                           const legacyUserId = (comment as CommentResponse & { userId?: string })
                             .userId
+                          // Identity comes from the authenticated user id, never from the display name:
+                          // `authorName` is user-controlled and would let someone impersonate the bot.
                           const isGitHubBot =
-                            comment.authorName === 'GitHub Bot' ||
                             comment.authorId === GITHUB_BOT_USER_ID ||
                             legacyUserId === GITHUB_BOT_USER_ID
                           const isAuthor = user?.id === comment.authorId && !isGitHubBot

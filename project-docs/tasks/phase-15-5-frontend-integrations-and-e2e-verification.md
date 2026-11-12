@@ -16,7 +16,7 @@
 | GitHub Issue → Task, Jev Triage, comment sync, SignalR khi issue đóng/mở | ✅ Xong — `15/15` test `GitHubWebhookIssueAndCommentTests` |
 | Accountability Layer: `GitHubPrMoveTask`, `GitHubIssueCreateTask` + Undo (đúng cột/vị trí/`CompletedAt`) | ✅ Xong |
 | Nhãn tiếng Việt + basis GitHub + ẩn tag "0 tasks" trong `AiActionLogItem` (**một phần `T15.5.3` đã làm sớm**) | ✅ Xong (`0bd1aab`) |
-| Cấu hình triển khai `Integrations__PublicApiBaseUrl`, `Integrations__DataProtection__KeysPath` | ✅ Người dùng đã đặt trên môi trường deploy (2026-11-11) |
+| Cấu hình triển khai `Integrations__PublicApiBaseUrl`; key ring DataProtection lưu PostgreSQL `data_protection_keys` (TASK-DP-01, migration #16) | ✅ Đã chốt — `KeysPath` bị loại bỏ, `CertPath` chỉ là tuỳ chọn VPS |
 | Cổng hiện tại | Build `0/0`, drift sạch, backend **1.329**, frontend **747**, Pure **665** |
 
 ### 0.2. Hợp đồng API frontend được phép dựa vào (đã kiểm chứng bằng test)

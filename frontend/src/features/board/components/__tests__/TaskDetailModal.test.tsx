@@ -372,6 +372,28 @@ describe('TaskDetailModal', () => {
     })
   })
 
+  it('does not treat a display name "GitHub Bot" as the system bot (identity comes from authorId)', async () => {
+    vi.mocked(boardApi.getComments).mockResolvedValueOnce([
+      {
+        id: 'c-spoof',
+        taskId: mockTask.id,
+        authorId: 'u-2',
+        authorName: 'GitHub Bot',
+        content: 'Tôi chỉ là người dùng đổi tên hiển thị.',
+        createdAt: '2026-11-10T12:00:00Z',
+        updatedAt: '2026-11-10T12:00:00Z',
+      },
+    ])
+
+    renderModal()
+
+    expect(
+      await screen.findByText('Tôi chỉ là người dùng đổi tên hiển thị.')
+    ).toBeInTheDocument()
+    expect(screen.queryByTestId('github-bot-comment-tag')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('github-bot-comment-avatar')).not.toBeInTheDocument()
+  })
+
   it('renders "Đang duyệt PR" pill in modal header when task sits in an isInReview column', () => {
     const columnsWithReview: ColumnResponse[] = [
       ...mockColumns,

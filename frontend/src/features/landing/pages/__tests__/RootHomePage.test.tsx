@@ -39,6 +39,9 @@ describe('RootHomePage Router Coordinator', () => {
     )
 
     expect(screen.getByText('Đang khởi động TeamNexus...')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Lần đầu mở có thể mất 30–60 giây/)
+    ).toBeInTheDocument()
   })
 
   it('renders LandingPage when user is unauthenticated', () => {

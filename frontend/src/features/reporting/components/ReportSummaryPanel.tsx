@@ -200,7 +200,7 @@ export const ReportSummaryPanel: React.FC<ReportSummaryPanelProps> = ({ report }
         <Alert
           type="warning"
           showIcon
-          message="Giới hạn hiển thị dòng dữ liệu"
+          title="Giới hạn hiển thị dòng dữ liệu"
           description={`Dữ liệu chi tiết đã đạt giới hạn tối đa (${truncated.maxRows} dòng) và được cắt bớt để bảo toàn hiệu năng hệ thống. Các chỉ số thống kê tổng hợp bên dưới vẫn phản ánh đầy đủ toàn bộ workspace.`}
         />
       )}
@@ -332,35 +332,35 @@ export const ReportSummaryPanel: React.FC<ReportSummaryPanelProps> = ({ report }
               <Statistic
                 title="Tỉ lệ đúng hạn"
                 value={formatPercent(performance.onTimeRate)}
-                valueStyle={{ fontSize: 18 }}
+                styles={{ content: { fontSize: 18 } }}
               />
             </Col>
             <Col xs={12} sm={8} md={5}>
               <Statistic
                 title="Thời gian xong TB"
                 value={formatDurationHours(performance.avgCompletionHours)}
-                valueStyle={{ fontSize: 18 }}
+                styles={{ content: { fontSize: 18 } }}
               />
             </Col>
             <Col xs={12} sm={8} md={5}>
               <Statistic
                 title="Lead Time TB"
                 value={formatDurationHours(performance.avgLeadTimeHours)}
-                valueStyle={{ fontSize: 18 }}
+                styles={{ content: { fontSize: 18 } }}
               />
             </Col>
             <Col xs={12} sm={8} md={5}>
               <Statistic
                 title="Throughput / tuần"
                 value={`${performance.throughputPerWeek.toFixed(1)} task`}
-                valueStyle={{ fontSize: 18 }}
+                styles={{ content: { fontSize: 18 } }}
               />
             </Col>
             <Col xs={12} sm={8} md={5}>
               <Statistic
                 title="Xong trong kỳ"
                 value={`${performance.completedInRange} task`}
-                valueStyle={{ fontSize: 18, color: '#16a34a' }}
+                styles={{ content: { fontSize: 18, color: '#16a34a' } }}
               />
             </Col>
           </Row>
@@ -435,21 +435,21 @@ export const ReportSummaryPanel: React.FC<ReportSummaryPanelProps> = ({ report }
                   <Statistic
                     title="Tổng thao tác"
                     value={activity?.totalActions || 0}
-                    valueStyle={{ fontSize: 20 }}
+                    styles={{ content: { fontSize: 20 } }}
                   />
                 </Col>
                 <Col span={8}>
                   <Statistic
                     title="Người hoạt động"
                     value={activity?.activeUsers || 0}
-                    valueStyle={{ fontSize: 20 }}
+                    styles={{ content: { fontSize: 20 } }}
                   />
                 </Col>
                 <Col span={8}>
                   <Statistic
                     title="Thao tác / ngày"
                     value={activity?.actionsPerDay?.toFixed(1) || 0}
-                    valueStyle={{ fontSize: 20 }}
+                    styles={{ content: { fontSize: 20 } }}
                   />
                 </Col>
               </Row>

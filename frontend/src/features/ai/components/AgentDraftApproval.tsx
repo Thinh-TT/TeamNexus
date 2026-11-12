@@ -105,7 +105,7 @@ export const AgentDraftApproval: React.FC<AgentDraftApprovalProps> = ({
   if (loading && !logDetail) {
     return (
       <Flex justify="center" align="center" style={{ padding: '24px 0' }}>
-        <Spin tip="Đang tải bản thảo kết quả..." />
+        <Spin description="Đang tải bản thảo kết quả..." />
       </Flex>
     )
   }
@@ -115,7 +115,7 @@ export const AgentDraftApproval: React.FC<AgentDraftApprovalProps> = ({
       <Alert
         type="warning"
         showIcon
-        message="Không thể hiển thị bản thảo phê duyệt"
+        title="Không thể hiển thị bản thảo phê duyệt"
         description={error}
         style={{ borderRadius: 8 }}
       />
@@ -130,7 +130,7 @@ export const AgentDraftApproval: React.FC<AgentDraftApprovalProps> = ({
     <div data-testid="agent-draft-approval">
       <Card
         size="small"
-        bordered={false}
+        variant="borderless"
         style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8 }}
         styles={{ body: { padding: 12 } }}
       >

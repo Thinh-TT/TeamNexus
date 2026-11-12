@@ -188,7 +188,7 @@ export const ReportsPage: React.FC = () => {
             <Alert
               type="error"
               showIcon
-              message="Không thể tải báo cáo"
+              title="Không thể tải báo cáo"
               description={error}
               action={
                 <Button size="small" type="primary" onClick={() => reload()}>
@@ -215,7 +215,7 @@ export const ReportsPage: React.FC = () => {
             <Alert
               type="error"
               showIcon
-              message="Không thể tải biểu đồ tiến độ"
+              title="Không thể tải biểu đồ tiến độ"
               description={seriesError}
               action={
                 <Button size="small" type="primary" onClick={() => void reloadSeries()}>

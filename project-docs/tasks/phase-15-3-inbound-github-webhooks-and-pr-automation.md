@@ -133,7 +133,7 @@
 - [x] Solution build sạch `0 Warning(s), 0 Error(s)` với `--no-incremental`.
 - [x] Model drift EF Core hoàn toàn sạch: `No changes have been made to the model since the last migration`.
 - [x] Bộ test Pure đạt **645 passed / 0 failed / 0 skipped** (+38 pure unit tests mới).
-- [x] **Sau review 2026-11-11:** `GitHubWebhookPrTests` **20/20** và `GitHubWebhookIssueAndCommentTests` **15/15** xanh; Undo khôi phục đúng `position`; Payload URL lấy từ `Integrations:PublicApiBaseUrl`; key ring DataProtection cấu hình được qua `Integrations:DataProtection:KeysPath|CertPath`; body limit 256 KB cưỡng chế trong lúc đọc; delivery `Failed` trả `502` để GitHub retry. Toàn bộ backend **1.329 passed / 0 failed / 0 skipped**.
+- [x] **Sau review 2026-11-11:** `GitHubWebhookPrTests` **20/20** và `GitHubWebhookIssueAndCommentTests` **15/15** xanh; Undo khôi phục đúng `position`; Payload URL lấy từ `Integrations:PublicApiBaseUrl`; key ring DataProtection cấu hình được qua `Integrations:DataProtection:KeysPath|CertPath` (**lịch sử — đã thay bằng key ring PostgreSQL ở TASK-DP-01**); body limit 256 KB cưỡng chế trong lúc đọc; delivery `Failed` trả `502` để GitHub retry. Toàn bộ backend **1.329 passed / 0 failed / 0 skipped**.
 
 ---
 
@@ -169,7 +169,7 @@
 | Mã | Lỗi gốc | Thay đổi | Kiểm chứng |
 | :--- | :--- | :--- | :--- |
 | `R1.2` | Payload URL rơi về `Frontend:BaseUrl` (host SPA Vercel) | Thêm `Integrations:PublicApiBaseUrl` + `ResolvePublicApiBaseUrl`/`BuildPayloadUrl`; dev override rỗng để Vite proxy | `GitHubIntegrationUrlTests` (6 tests) |
-| `R1.3` | Key ring DataProtection không bền ⇒ secret chết sau redeploy | `AddDataProtection().SetApplicationName("TeamNexus")` + `KeysPath`/`CertPath` từ env + cảnh báo khi chưa cấu hình. `KeysPath` và `CertPath` **độc lập**, bật được đồng thời (commit `8891bac`): `KeysPath` lo độ bền, `CertPath` lo mã hoá at-rest | `DataProtectionKeyRingTests` (3 tests); chạy API với `Integrations__DataProtection__KeysPath` sinh key trong thư mục chỉ định |
+| `R1.3` | Key ring DataProtection không bền ⇒ secret chết sau redeploy | *(Lịch sử)* `AddDataProtection().SetApplicationName("TeamNexus")` + `KeysPath`/`CertPath` từ env + cảnh báo khi chưa cấu hình. **Đã được TASK-DP-01 thay thế:** key ring lưu PostgreSQL `data_protection_keys`, bỏ `KeysPath`, `CertPath` chỉ còn là tuỳ chọn mã hoá at-rest | `DataProtectionKeyRingTests` (file-system mechanism) + `DataProtectionKeyRingPersistenceTests` (PostgreSQL) |
 | `R2.2` | `#123` (số Issue GitHub) bị auto-link thành `TN-123` | `TaskKeyParser` thêm `requireTnPrefix`; webhook PR/comment chỉ nhận `TN-` | 10 Pure tests + `Webhook_PullRequestReferencingOnlyGitHubIssueNumbers_...` |
 | `R2.5` | Undo nối thẻ vào cuối cột | Undo đọc `previousPosition`/`previousCompletedAt`, clamp và khôi phục `CompletedAt` | `AiAction_Undo_RestoresTheOriginalPositionInTheColumn` |
 | `R3.1` | Body limit kiểm tra sau khi buffer | Vòng đọc có trần 256 KB, chặn ngay khi vượt | `Webhook_OversizedPayload_Returns413_AndWritesNoDelivery` |

@@ -275,7 +275,7 @@ export const BoardListPage: React.FC = () => {
           {/* Boards Grid */}
           {loading ? (
             <Flex align="center" justify="center" style={{ height: 300 }}>
-              <Spin size="large" tip="Đang tải danh sách bảng..." />
+              <Spin size="large" description="Đang tải danh sách bảng..." />
             </Flex>
           ) : boards.length === 0 ? (
             <Card style={{ borderRadius: 12, padding: 32, textAlign: 'center' }}>
@@ -310,7 +310,7 @@ export const BoardListPage: React.FC = () => {
                       display: 'flex',
                       flexDirection: 'column',
                     }}
-                    bodyStyle={{ flex: 1, display: 'flex', flexDirection: 'column' }}
+                    styles={{ body: { flex: 1, display: 'flex', flexDirection: 'column' } }}
                     onClick={() => navigate(`/workspaces/${workspaceId}/boards/${board.id}`)}
                   >
                     <Flex justify="space-between" align="flex-start" style={{ marginBottom: 12 }}>

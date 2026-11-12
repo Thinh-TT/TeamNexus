@@ -191,8 +191,21 @@ describe('WorkspaceSettingsPage & Integrations Tab', () => {
     expect(screen.getByText('Thông tin chung')).toBeInTheDocument()
     expect(screen.getByText('Không Gian Chính')).toBeInTheDocument()
 
+    // Phase 15 remediation: integrations are lazy-loaded only when the tab is opened.
+    expect(integrationApi.listWebhooks).not.toHaveBeenCalled()
+    expect(integrationApi.getGitHubIntegration).not.toHaveBeenCalled()
+  })
+
+  it('loads integrations only after switching to the Tích hợp tab', async () => {
+    renderPage()
+
+    expect(integrationApi.listWebhooks).not.toHaveBeenCalled()
+
+    await switchToIntegrationsTab()
+
     await waitFor(() => {
       expect(integrationApi.listWebhooks).toHaveBeenCalledWith('ws-1')
+      expect(integrationApi.getGitHubIntegration).toHaveBeenCalledWith('ws-1')
     })
   })
 

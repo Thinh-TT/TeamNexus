@@ -132,6 +132,9 @@ public sealed class TestScenario : IAsyncDisposable
             "workspace_knowledge_chunks", "workspace_knowledge_documents", "workspace_taxonomies",
             "task_external_links", "github_webhook_deliveries", "workspace_github_integrations",
             "webhook_delivery_outbox", "workspace_webhook_endpoints", "task_numbers",
+            // TASK-DP-01: `data_protection_keys` is deliberately ABSENT. The shared test host uses the
+            // PostgreSQL key ring, so truncating it would invalidate a key mid-run; its persistence is
+            // covered by DataProtectionKeyRingPersistenceTests instead.
         ];
 
         var present = wanted.Where(existing.Contains).ToList();

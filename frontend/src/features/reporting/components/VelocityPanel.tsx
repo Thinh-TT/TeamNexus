@@ -50,7 +50,7 @@ export const VelocityPanel: React.FC<VelocityPanelProps> = ({ series }) => {
               title="Hoàn thành trong kỳ"
               value={stats.completedInRange}
               prefix={<CheckCircleOutlined style={{ color: '#10b981' }} />}
-              valueStyle={{ color: '#10b981' }}
+              styles={{ content: { color: '#10b981' } }}
               data-testid="velocity-completed"
             />
           </Tooltip>
@@ -62,7 +62,7 @@ export const VelocityPanel: React.FC<VelocityPanelProps> = ({ series }) => {
               title="Còn mở ở cuối kỳ"
               value={stats.openAtEnd}
               prefix={<UnorderedListOutlined style={{ color: '#f59e0b' }} />}
-              valueStyle={{ color: '#f59e0b' }}
+              styles={{ content: { color: '#f59e0b' } }}
               data-testid="velocity-open"
             />
           </Tooltip>

@@ -24,7 +24,7 @@ export const BoardSummaryPanel: React.FC<BoardSummaryPanelProps> = ({
     >
       {boardsTruncated && (
         <Alert
-          message="Workspace có nhiều bảng: chỉ hiển thị 20 bảng đầu tiên."
+          title="Workspace có nhiều bảng: chỉ hiển thị 20 bảng đầu tiên."
           type="info"
           showIcon
           style={{ marginBottom: 16, borderRadius: 8 }}

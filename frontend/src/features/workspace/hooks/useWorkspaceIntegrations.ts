@@ -166,14 +166,17 @@ export function useWorkspaceIntegrations(workspaceId?: string, enabled = true) {
     if (!workspaceId) return null
     try {
       const saved = await integrationApi.upsertGitHubIntegration(workspaceId, req)
-      setGithubIntegration(saved)
-      if (saved.webhookSecretPlaintext) {
-        setOneTimeSecret(saved.webhookSecretPlaintext)
+      // The plaintext secret is a one-time value. Keep it only in `oneTimeSecret` (the alert the user
+      // must copy); never retain it in the long-lived configuration state or return it to callers.
+      const { webhookSecretPlaintext, ...safeConfig } = saved
+      setGithubIntegration(safeConfig)
+      if (webhookSecretPlaintext) {
+        setOneTimeSecret(webhookSecretPlaintext)
       }
       const deliveries = await integrationApi.getGitHubDeliveries(workspaceId, 30).catch(() => [])
       setGithubDeliveries(deliveries)
       message.success('Đã lưu cấu hình tích hợp GitHub.')
-      return saved
+      return safeConfig
     } catch (err: unknown) {
       message.error(extractApiError(err, 'Không thể lưu cấu hình GitHub.'))
       return null

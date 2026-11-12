@@ -331,7 +331,7 @@ export const AcceptInvitationPage: React.FC = () => {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 20 }}
-                message="Email tài khoản không khớp"
+                title="Email tài khoản không khớp"
                 description={`Bạn đang đăng nhập bằng ${user.email}, nhưng lời mời được gửi tới ${preview.invitedEmail}. Hệ thống sẽ từ chối nếu không trùng khớp email.`}
               />
             )}

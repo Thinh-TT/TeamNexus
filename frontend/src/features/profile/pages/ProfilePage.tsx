@@ -372,7 +372,7 @@ export const ProfilePage: React.FC = () => {
                     {workspaceError && (
                       <Alert
                         type="error"
-                        message="Lỗi tải danh sách không gian làm việc"
+                        title="Lỗi tải danh sách không gian làm việc"
                         description={workspaceError}
                         showIcon
                         style={{ marginBottom: 16 }}
@@ -520,7 +520,7 @@ export const ProfilePage: React.FC = () => {
                       <Alert
                         type="info"
                         showIcon
-                        message="Digest chỉ gửi khi bạn có việc cần làm"
+                        title="Digest chỉ gửi khi bạn có việc cần làm"
                         description="Nếu không có thẻ nào đang mở, hệ thống sẽ không gửi email — bạn sẽ không nhận thư rỗng."
                       />
                     </Flex>

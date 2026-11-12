@@ -647,7 +647,7 @@ Fan-out giữ nguyên "1 row / 1 người nhận".
 - Seed dữ liệu nền trong migration/`OnModelCreating`: 3 role `Admin`, `Manager`, `Member`.
 - Migration áp dụng lên PostgreSQL local để dev, sau đó lên Neon/Supabase (theo `phase-1-auth.md` §2.1).
 
-**Chuỗi migration đã áp dụng (tính tới Giai đoạn 15 — 15 migrations, 27 bảng nghiệp vụ + 7 bảng Identity):**
+**Chuỗi migration đã áp dụng (tính tới đợt khắc phục sau Giai đoạn 15 — 16 migrations, 27 bảng nghiệp vụ + 7 bảng Identity + 1 bảng hạ tầng DataProtection):**
 
 | # | Migration | Giai đoạn | Nội dung |
 |---|---|---|---|
@@ -666,8 +666,11 @@ Fan-out giữ nguyên "1 row / 1 người nhận".
 | 13 | `Phase147AgentPersonas` | 14.7B | Thêm `workspace_members.persona_key` + CHECK whitelist + thay `uq_workspace_members_ai_agent` bằng `uq_workspace_members_ai_persona` |
 | 14 | `Phase147KnowledgeBase` | 14.7B | `CREATE EXTENSION vector;` + thêm `workspace_knowledge_documents` & `workspace_knowledge_chunks` (`vector(1536)` + HNSW index) |
 | 15 | `Phase15ExternalIntegrations` | 15.1 | Thêm **6 bảng** (`task_numbers`, `workspace_webhook_endpoints`, `webhook_delivery_outbox`, `workspace_github_integrations`, `github_webhook_deliveries`, `task_external_links`), 4 cột mở rộng (`users.is_system`, `workspaces.next_task_number`, `board_columns.is_in_review`, `tasks.task_number`), backfill `TN-123` & seed `GitHub Bot` |
+| 16 | `Phase15DataProtectionKeyRing` | 15 (remediation) | Thêm **1 bảng hạ tầng** `data_protection_keys` (`id` identity PK, `friendly_name`, `xml`) — key ring DataProtection bền vững trên PostgreSQL thay cho filesystem tạm của Render (TASK-DP-01) |
 
-> Dùng `dotnet ef migrations list` để đối chiếu — hiện tại là **15** migrations (**27** bảng nghiệp vụ + **7** bảng Identity = **34** bảng vật lý), `has-pending-model-changes` sạch.
+> Dùng `dotnet ef migrations list` để đối chiếu — hiện tại là **16** migrations (**27** bảng nghiệp vụ + **7** bảng Identity + **1** bảng hạ tầng `data_protection_keys` = **35** bảng vật lý), `has-pending-model-changes` sạch.
+>
+> `data_protection_keys` là bảng **hạ tầng** do `Microsoft.AspNetCore.DataProtection.EntityFrameworkCore` quản lý; nó không có FK tới domain, không nằm trong ERD nghiệp vụ và **không** bị `TestScenario` truncate (key ring của test host phải sống qua các scenario).
 
 > **Giai đoạn 14 — KHÔNG có migration nào (10 → 11 là do Giai đoạn 14.5, không phải 14).** Cả ba tính năng
 > của 14 đều không cần schema: xem §7 bên dưới. Đây là điểm **khác** Giai đoạn 13 (giai đoạn đó có 1 cột additive).

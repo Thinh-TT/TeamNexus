@@ -121,7 +121,7 @@ export const TaskCalendar: React.FC<TaskCalendarProps> = ({
                   backgroundColor: overdue ? '#fef2f2' : '#f8fafc',
                   border: `1px solid ${overdue ? '#fecaca' : '#e2e8f0'}`,
                   color: isDone ? '#94a3b8' : '#1e293b',
-                  textDecoration: isDone ? 'line-through' : 'none',
+                  opacity: isDone ? 0.85 : 1,
                 }}
               >
                 <span

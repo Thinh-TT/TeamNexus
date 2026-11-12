@@ -142,7 +142,7 @@ export const SmartSetupModal: React.FC<SmartSetupModalProps> = ({
           {error && (
             <Alert
               type="error"
-              message={error}
+              title={error}
               showIcon
               closable
               style={{ marginBottom: 16, borderRadius: 8 }}
@@ -358,7 +358,7 @@ export const SmartSetupModal: React.FC<SmartSetupModalProps> = ({
           {error && (
             <Alert
               type="error"
-              message={
+              title={
                 httpStatus === 403
                   ? 'Không đủ quyền thực hiện'
                   : 'Không thể xác nhận đề xuất'
@@ -527,7 +527,7 @@ export const SmartSetupModal: React.FC<SmartSetupModalProps> = ({
         {/* Error Alert if any */}
         {error && (
           <Alert
-            message={
+            title={
               httpStatus === 403
                 ? 'Không đủ quyền thực hiện'
                 : httpStatus === 502

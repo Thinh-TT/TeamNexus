@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +12,7 @@ namespace TeamNexus.Persistence.Data;
 /// Column/table names follow snake_case via the EFCore.NamingConventions package.
 /// </summary>
 public class TeamNexusDbContext
-    : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
+    : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>, IDataProtectionKeyContext
 {
     public TeamNexusDbContext(DbContextOptions<TeamNexusDbContext> options)
         : base(options)
@@ -82,6 +83,10 @@ public class TeamNexusDbContext
     public DbSet<GitHubWebhookDelivery> GitHubWebhookDeliveries => Set<GitHubWebhookDelivery>();
 
     public DbSet<TaskExternalLink> TaskExternalLinks => Set<TaskExternalLink>();
+
+    // TASK-DP-01: durable DataProtection key ring. The framework repository reads/writes this set;
+    // snake_case naming conventions map it to `data_protection_keys` (infrastructure table, no domain ERD).
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

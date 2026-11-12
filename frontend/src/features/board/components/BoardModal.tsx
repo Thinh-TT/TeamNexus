@@ -51,7 +51,7 @@ export const BoardModal: React.FC<BoardModalProps> = ({
       cancelText="Huỷ"
       onCancel={onClose}
       onOk={() => form.submit()}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical" onFinish={handleFinish} style={{ marginTop: 16 }}>
         <Form.Item

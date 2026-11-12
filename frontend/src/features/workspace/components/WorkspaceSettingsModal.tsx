@@ -315,7 +315,7 @@ export const WorkspaceSettingsModal: React.FC<WorkspaceSettingsModalProps> = ({
       title="Cài đặt không gian làm việc"
       footer={null}
       width={680}
-      destroyOnClose
+      destroyOnHidden
     >
       <Tabs activeKey={activeTab} onChange={setActiveTab} items={items} />
     </Modal>

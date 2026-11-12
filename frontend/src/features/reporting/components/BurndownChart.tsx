@@ -86,7 +86,7 @@ export const BurndownChart: React.FC<BurndownChartProps> = ({ series, loading = 
           type="warning"
           showIcon
           style={{ marginBottom: 12 }}
-          message={`Khoảng thời gian quá dài nên chỉ hiển thị ${series.truncated.maxBuckets} mốc gần nhất.`}
+          title={`Khoảng thời gian quá dài nên chỉ hiển thị ${series.truncated.maxBuckets} mốc gần nhất.`}
         />
       )}
 
@@ -95,7 +95,7 @@ export const BurndownChart: React.FC<BurndownChartProps> = ({ series, loading = 
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message={`Biểu đồ chỉ vẽ ${MAX_CHART_BUCKETS} mốc gần nhất; ${hiddenCount} mốc trước đó không hiển thị.`}
+          title={`Biểu đồ chỉ vẽ ${MAX_CHART_BUCKETS} mốc gần nhất; ${hiddenCount} mốc trước đó không hiển thị.`}
         />
       )}
 

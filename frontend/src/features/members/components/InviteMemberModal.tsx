@@ -91,7 +91,7 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
       open={open}
       onCancel={handleCancel}
       footer={null}
-      destroyOnClose
+      destroyOnHidden
     >
       <div style={{ marginTop: 16 }}>
         {failedInvitation && (
@@ -99,7 +99,7 @@ export const InviteMemberModal: React.FC<InviteMemberModalProps> = ({
             type="warning"
             showIcon
             style={{ marginBottom: 16 }}
-            message="Đã tạo lời mời nhưng gửi email thất bại"
+            title="Đã tạo lời mời nhưng gửi email thất bại"
             description={
               <div>
                 <Typography.Paragraph style={{ fontSize: 13, marginBottom: 8 }}>
