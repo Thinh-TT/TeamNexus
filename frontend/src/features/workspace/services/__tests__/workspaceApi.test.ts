@@ -5,6 +5,7 @@ import { workspaceApi } from '../workspaceApi'
 vi.mock('../../../../shared/api/httpClient', () => ({
   httpClient: {
     get: vi.fn(),
+    post: vi.fn(),
     put: vi.fn(),
     delete: vi.fn(),
   },
@@ -24,6 +25,26 @@ describe('workspaceApi service', () => {
     const result = await workspaceApi.list()
     expect(httpClient.get).toHaveBeenCalledWith('/workspaces')
     expect(result).toEqual(mockData)
+  })
+
+  it('create: calls POST /workspaces with the request body and returns the created workspace', async () => {
+    const created = {
+      id: 'ws-new',
+      name: 'Dự án Beta',
+      description: 'Mô tả Beta',
+      role: 'Admin',
+      ownerId: 'u-1',
+      isOwner: true,
+    }
+    vi.mocked(httpClient.post).mockResolvedValueOnce({ data: created })
+
+    const result = await workspaceApi.create({ name: 'Dự án Beta', description: 'Mô tả Beta' })
+
+    expect(httpClient.post).toHaveBeenCalledWith('/workspaces', {
+      name: 'Dự án Beta',
+      description: 'Mô tả Beta',
+    })
+    expect(result).toEqual(created)
   })
 
   it('get: calls GET /workspaces/{id}', async () => {

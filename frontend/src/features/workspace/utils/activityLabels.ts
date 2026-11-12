@@ -7,6 +7,7 @@ export const KNOWN_ACTIVITY_ACTIONS: Record<string, string> = {
   TaskCompleted: 'đã hoàn thành thẻ',
   TaskDeleted: 'đã xoá thẻ',
   CommentAdded: 'đã bình luận',
+  WorkspaceCreated: 'đã tạo workspace',
   WorkspaceUpdated: 'đã cập nhật workspace',
   WorkspaceOwnerTransferred: 'đã chuyển quyền sở hữu',
   WorkspaceDeleted: 'đã xoá workspace',

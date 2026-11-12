@@ -42,6 +42,8 @@ Tách biệt rõ ràng hai lớp phân quyền: **Identity Role toàn cục** (`
 ### 9. Nâng cao Task & Workspace UX — Giai đoạn 10
 Hoàn thiện UI cho các field task đã có schema: **Due Date** (hiển thị badge đỏ khi quá hạn, kết nối AI Observer), **Priority** (badge màu Low/Medium/High/Urgent), **Description** (markdown cơ bản). Thêm **Workspace Settings** cho Admin (sửa tên/mô tả, chuyển ownership, xóa workspace) và **Activity Log UI** cho Manager/Admin (lịch sử ai làm gì trong workspace).
 
+- **Tạo không gian làm việc chủ động (bổ sung sau Giai đoạn 15.5):** `POST /api/workspaces` (đăng nhập + CSRF) tạo workspace và membership `Admin` cho người gọi trong **một** lần ghi, ghi `activity_logs` action `WorkspaceCreated` (`board_id = NULL`), trả `201` kèm `WorkspaceSummaryResponse` (append-only, không đổi payload `GET /api/workspaces`). Trang `/` có nút **"Tạo không gian làm việc"** mở modal (tên 1–120 ký tự, mô tả ≤ 2000 ký tự) rồi điều hướng tới `/workspaces/{id}/boards`. **Không** migration; workspace mới bắt đầu rỗng — board do người dùng tạo tiếp, taxonomy seed lazy, AI Agent do resolver tạo lazy như workspace mặc định.
+
 ### 10. Quản lý Member & Profile — Giai đoạn 11 ✅
 - **Mời member qua email:** Manager/Admin nhập email → hệ thống lưu token băm SHA-256 an toàn trong DB và gửi link mời qua Postmark / MailKit → người nhận click link, tham gia workspace đúng vai trò chỉ định.
 - **Quy trình chấp nhận lời mời:** Truy cập `/invitations/accept?token=...`; nếu chưa đăng nhập, hệ thống lưu tạm token tại `sessionStorage` (`pending_invite_token`) và điều hướng tới `/login`, sau khi đăng nhập/đăng ký thành công sẽ tự động quay lại chấp nhận. Ghi nhận thành viên mới và lưu vết vào Activity Log.

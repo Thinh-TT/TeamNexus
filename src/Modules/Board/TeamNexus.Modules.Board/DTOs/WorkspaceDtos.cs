@@ -36,6 +36,12 @@ public sealed record WorkspaceDetailResponse(
     int BoardCount,
     string CurrentUserRole);
 
+/// <summary>
+/// Create a workspace (POST /api/workspaces). The caller owns it and becomes its Admin; the same
+/// 1–120 character name rule as <see cref="UpdateWorkspaceRequest"/> applies.
+/// </summary>
+public sealed record CreateWorkspaceRequest(string Name, string? Description);
+
 /// <summary>Full metadata update (PUT). Same 1–120 character rule as board names.</summary>
 public sealed record UpdateWorkspaceRequest(string Name, string? Description);
 

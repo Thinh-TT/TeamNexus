@@ -80,6 +80,7 @@ jobs:
       #   khi chưa chọn board, unit test cho request builder (EMPTY_GUID/"").
       # Đợt khắc phục sau nghiệm thu 14/15 (2026-11-12) = 791 (128 file): GitHub Bot theo authorId, ColumnModal
       #   không unhandled rejection, TN-prefix search, strip one-time secret, lazy-load tab Tích hợp, line-through.
+      # Tạo workspace chủ động (2026-11-12) = 799 (129 file): create API + modal + DashboardPage + nhãn activity.
       - name: Assert test count did not regress
         shell: pwsh
         run: |
@@ -88,7 +89,7 @@ jobs:
           $failed = [int]$report.numFailedTests
           Write-Host "vitest: total=$total failed=$failed"
           if ($failed -ne 0) { throw "vitest reported $failed failing tests" }
-          if ($total -lt 791) { throw "Số test đã tụt: $total (baseline hiện tại là 791, sau đợt khắc phục nghiệm thu 14/15 2026-11-12)" }
+          if ($total -lt 799) { throw "Số test đã tụt: $total (baseline hiện tại là 799, sau khi thêm tạo workspace chủ động 2026-11-12)" }
 
       - name: Build (vite)
         run: npm run build

@@ -14,6 +14,7 @@ describe('activityLabels utils', () => {
     expect(getActivityActionLabel('TaskCompleted')).toBe('đã hoàn thành thẻ')
     expect(getActivityActionLabel('TaskDeleted')).toBe('đã xoá thẻ')
     expect(getActivityActionLabel('CommentAdded')).toBe('đã bình luận')
+    expect(getActivityActionLabel('WorkspaceCreated')).toBe('đã tạo workspace')
     expect(getActivityActionLabel('WorkspaceUpdated')).toBe('đã cập nhật workspace')
     expect(getActivityActionLabel('WorkspaceOwnerTransferred')).toBe('đã chuyển quyền sở hữu')
     expect(getActivityActionLabel('WorkspaceDeleted')).toBe('đã xoá workspace')

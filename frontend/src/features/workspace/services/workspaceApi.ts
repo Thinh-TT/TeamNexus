@@ -1,5 +1,6 @@
 import { httpClient } from '../../../shared/api/httpClient'
 import type {
+  CreateWorkspaceRequest,
   GetWorkspaceActivityParams,
   TransferOwnershipRequest,
   UpdateWorkspaceRequest,
@@ -12,6 +13,12 @@ export const workspaceApi = {
   /** Lấy danh sách workspace người dùng tham gia */
   list: async (): Promise<WorkspaceSummary[]> => {
     const res = await httpClient.get<WorkspaceSummary[]>('/workspaces')
+    return res.data
+  },
+
+  /** Tạo không gian làm việc mới; người gọi trở thành Owner + Admin */
+  create: async (data: CreateWorkspaceRequest): Promise<WorkspaceSummary> => {
+    const res = await httpClient.post<WorkspaceSummary>('/workspaces', data)
     return res.data
   },
 

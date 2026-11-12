@@ -24,6 +24,9 @@ public static class ObserverActivityActions
     // Recorded with board_id = NULL — ActivityLog documents that as "workspace-level events".
     // action is free text, so these need no schema change and no CHECK update.
 
+    /// <summary>Workspace created on purpose by a signed-in user (POST /api/workspaces).</summary>
+    public const string WorkspaceCreated = "WorkspaceCreated";
+
     /// <summary>Workspace name and/or description changed (Manager+).</summary>
     public const string WorkspaceUpdated = "WorkspaceUpdated";
 
