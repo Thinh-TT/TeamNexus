@@ -59,7 +59,7 @@ export const AgentRunPanel: React.FC<AgentRunPanelProps> = ({
   if (loading && !currentRun) {
     return (
       <Flex justify="center" align="center" style={{ padding: '32px 0' }}>
-        <Spin tip="Đang tải dữ liệu Agent..." />
+        <Spin description="Đang tải dữ liệu Agent..." />
       </Flex>
     )
   }
@@ -171,17 +171,17 @@ export const AgentRunPanel: React.FC<AgentRunPanelProps> = ({
             <Statistic
               title={<span style={{ fontSize: 11.5, color: '#64748b' }}>Lượt gọi Tool</span>}
               value={currentRun.toolCallCount}
-              valueStyle={{ fontSize: 16, fontWeight: 600, color: '#334155' }}
+              styles={{ content: { fontSize: 16, fontWeight: 600, color: '#334155' } }}
             />
             <Statistic
               title={<span style={{ fontSize: 11.5, color: '#64748b' }}>Tổng Token</span>}
               value={currentRun.totalTokens}
-              valueStyle={{ fontSize: 16, fontWeight: 600, color: '#334155' }}
+              styles={{ content: { fontSize: 16, fontWeight: 600, color: '#334155' } }}
             />
             <Statistic
               title={<span style={{ fontSize: 11.5, color: '#64748b' }}>Lượt gọi LLM</span>}
               value={currentRun.llmCallCount}
-              valueStyle={{ fontSize: 16, fontWeight: 600, color: '#334155' }}
+              styles={{ content: { fontSize: 16, fontWeight: 600, color: '#334155' } }}
             />
           </Flex>
         )}
@@ -193,7 +193,7 @@ export const AgentRunPanel: React.FC<AgentRunPanelProps> = ({
           type="warning"
           showIcon
           icon={<QuestionCircleOutlined />}
-          message={
+          title={
             <Typography.Text strong style={{ color: '#b45309', fontSize: 13 }}>
               Agent đang cần làm rõ thông tin:
             </Typography.Text>
@@ -259,7 +259,7 @@ export const AgentRunPanel: React.FC<AgentRunPanelProps> = ({
           type="error"
           showIcon
           icon={<AlertOutlined />}
-          message="Tác vụ AI Agent gặp sự cố"
+          title="Tác vụ AI Agent gặp sự cố"
           description={getStopReasonMessage(currentRun.stopReason, currentRun.error)}
           style={{ borderRadius: 8 }}
           data-testid="agent-error-alert"
@@ -307,7 +307,7 @@ export const AgentRunPanel: React.FC<AgentRunPanelProps> = ({
                   {currentRun?.traceTruncated && (
                     <Alert
                       type="warning"
-                      message="Nhật ký tool call đã bị cắt ngắn do vượt quá giới hạn lưu trữ."
+                      title="Nhật ký tool call đã bị cắt ngắn do vượt quá giới hạn lưu trữ."
                       style={{ marginBottom: 12, borderRadius: 6, fontSize: 11.5 }}
                     />
                   )}
@@ -315,7 +315,8 @@ export const AgentRunPanel: React.FC<AgentRunPanelProps> = ({
                     items={trace.map((entry, idx) => ({
                       key: idx,
                       color: entry.isError ? 'red' : '#6366f1',
-                      children: (
+                      // AntD v6 deprecated `items.children` in favour of `items.content`.
+                      content: (
                         <div style={{ fontSize: 12 }}>
                           <Flex justify="space-between" align="center">
                             <Typography.Text strong style={{ color: entry.isError ? '#dc2626' : '#1e293b' }}>

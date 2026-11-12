@@ -42,7 +42,7 @@ describe('TaskCard', () => {
     expect(screen.getByText('A')).toBeInTheDocument() // avatar letter
   })
 
-  it('renders completed styling when completedAt is set or in done column', () => {
+  it('renders completed styling with a check icon and muted title (never line-through)', () => {
     const completedTask: TaskResponse = {
       ...baseTask,
       completedAt: '2026-09-09T10:00:00Z',
@@ -51,7 +51,15 @@ describe('TaskCard', () => {
     const { container } = renderWithDnd(<TaskCard task={completedTask} isDoneColumn={true} />)
 
     expect(container.querySelector('.anticon-check-circle')).toBeInTheDocument()
-    expect(container.querySelector('del')).toBeInTheDocument()
+
+    // AGENTS §4.2: line-through obscures Vietnamese diacritics. The title must be muted instead,
+    // and the DOM must not contain the `<del>` element AntD's `delete` prop renders.
+    expect(container.querySelector('del')).not.toBeInTheDocument()
+    const title = screen
+      .getByText('Implement Auth Service')
+      .closest('.ant-typography') as HTMLElement
+    expect(title).not.toBeNull()
+    expect(title).toHaveStyle({ color: '#94a3b8', opacity: '0.85' })
   })
 
   it('renders unassigned placeholder when assigneeName is null', () => {

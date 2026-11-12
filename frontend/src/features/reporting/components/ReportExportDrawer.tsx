@@ -85,7 +85,7 @@ export const ReportExportDrawer: React.FC<ReportExportDrawerProps> = ({
           <Alert
             type="error"
             showIcon
-            message="Không thể xuất báo cáo"
+            title="Không thể xuất báo cáo"
             description={error}
           />
         )}

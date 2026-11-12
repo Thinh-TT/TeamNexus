@@ -14,7 +14,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   if (isLoading) {
     return (
       <Flex align="center" justify="center" style={{ minHeight: '100vh', width: '100%' }}>
-        <Spin size="large" tip="Đang kiểm tra đăng nhập..." />
+        <Spin size="large" description="Đang kiểm tra đăng nhập..." />
       </Flex>
     )
   }

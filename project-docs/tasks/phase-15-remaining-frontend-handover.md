@@ -17,8 +17,8 @@
 | 15.4 Issue → Task + Jev Triage + Comment sync | ✅ Xong, **15/15** test sau khắc phục |
 | Khắc phục review R1–R4 (14 lỗi F1–F16) | ✅ Xong — xem §3 |
 | 15.5 Frontend (badge `TN-123`, chip PR, tab Tích hợp, E2E) | ⏳ **Chưa bắt đầu** — xem §5 |
-| Migration | Đúng **1 migration** Phase 15 (`Phase15ExternalIntegrations`), không drift |
-| Cổng kiểm thử | Build `0/0`; backend **1.329 passed / 0 failed / 0 skipped**; frontend **786 passed / 127 files**; Pure **665** |
+| Migration | Phase 15 gốc: 1 (`Phase15ExternalIntegrations`); sau TASK-DP-01: thêm #16 `Phase15DataProtectionKeyRing` (tổng 16), không drift |
+| Cổng kiểm thử (2026-11-12) | Build `0/0`; backend **1.332 passed / 0 failed / 0 skipped**; frontend **791 passed / 128 files**; Pure **666** |
 | Git | `develop` ahead `origin/develop` **36 commit**; `backup/main-before-reset-26382b6` đã merge, không còn file rác `sqlite_mcp_server.db` |
 
 ---
@@ -30,16 +30,16 @@ Người dùng đã khai báo trên môi trường deploy (2026-11-11):
 | Biến môi trường | Giá trị | Tác dụng |
 | :--- | :--- | :--- |
 | `Integrations__PublicApiBaseUrl` | `https://api.teamnexus.cloud` | Dựng `WebhookPayloadUrl` trả cho UI; tránh rơi về host SPA `app.teamnexus.cloud` (Vercel rewrite về `index.html`) |
-| `Integrations__DataProtection__KeysPath` | `/var/data/dataprotection-keys` | Key ring bền cho `GitHubSecretProtector`; `/var/data` phải là **persistent disk** của Render/VPS |
+| `Integrations__DataProtection__CertPath` | *(tuỳ chọn, VPS)* | Mã hoá key ring at-rest bằng PFX; Render để trống |
 
-`Program.cs` (`8891bac`) cho phép **dùng đồng thời** `KeysPath` (độ bền) và `CertPath`/`CertPassword` (mã hoá key ring at-rest). Render hiện chỉ có `KeysPath` ⇒ key ring lưu **không mã hoá at-rest** (log sẽ có cảnh báo *"No XML encryptor configured"*); VPS nên đặt thêm `CertPath` + `CertPassword` và mount cả hai đường dẫn.
+`Program.cs` (TASK-DP-01) **luôn** dùng `PersistKeysToDbContext<TeamNexusDbContext>()` → bảng `data_protection_keys`. `Integrations__DataProtection__KeysPath` đã bị loại bỏ: Render free-tier không có persistent disk nên key ring file sẽ chết sau mỗi lần redeploy. `CertPath`/`CertPassword` vẫn là tuỳ chọn cho VPS.
 
 **Checklist xác minh sau deploy/merge (làm 1 lần):**
 1. `GET https://api.teamnexus.cloud/api/health` → `200`.
-2. `GET /api/workspaces/{id}/integrations/github` (Manager) → `webhookPayloadUrl` bắt đầu bằng `https://api.teamnexus.cloud/api/webhooks/github/`. Nếu vẫn là `app.teamnexus.cloud` ⇒ biến env chưa được nạp (kiểm tra restart service).
-3. Bấm **Ping** trên GitHub (hoặc gửi `ping`) → `200`, delivery `Processed`.
-4. **Restart/redeploy** service → gửi `ping` lần nữa: vẫn `200` ⇒ key ring bền đúng; nếu `401` ⇒ `KeysPath` không nằm trên volume bền.
-5. Kiểm tra `ls /var/data/dataprotection-keys/key-*.xml` có file sau lần dùng đầu.
+2. Chạy migration `Phase15DataProtectionKeyRing` lên Neon **trước** khi deploy API (xem `04-database-design.md` §6); kiểm tra `select count(*) from data_protection_keys;` trả 0 dòng ban đầu.
+3. `GET /api/workspaces/{id}/integrations/github` (Manager) → `webhookPayloadUrl` bắt đầu bằng `https://api.teamnexus.cloud/api/webhooks/github/`. Nếu vẫn là `app.teamnexus.cloud` ⇒ biến env chưa được nạp (kiểm tra restart service).
+4. **Rotate Secret 1 lần** sau khi chuyển key ring (ciphertext cũ tạo bởi key ring file/default không giải mã được): Workspace Settings → GitHub Integration → Rotate Secret → cập nhật secret trong GitHub Webhook → Ping → `200`.
+5. **Restart/redeploy** service → gửi `ping` lần nữa: vẫn `200` ⇒ key ring DB bền đúng. Kiểm tra `select count(*) from data_protection_keys;` > 0.
 6. (Tuỳ chọn) Sai chữ ký → `401`; payload > 256 KB → `413`; xoá board mặc định rồi gửi `issues` → `502` + delivery `Failed`.
 
 > **Lưu ý Render free-tier:** GitHub không tự retry khi service ngủ (đã ghi ở thiết kế §13.2). Delivery `Failed` giờ trả `502` để GitHub coi là thất bại và có thể redeliver thủ công.
@@ -51,12 +51,12 @@ Người dùng đã khai báo trên môi trường deploy (2026-11-11):
 | Commit | Nội dung |
 | :--- | :--- |
 | `2087e24` | Merge nhánh review; xoá `sqlite_mcp_server.db`; thêm `.gitignore` cho artifact MCP |
-| `3fa1bc9` | **R1** — sửa test Undo (stale `DbContext`); `Integrations:PublicApiBaseUrl` + resolver; key ring `KeysPath`/`CertPath` + cảnh báo production |
+| `3fa1bc9` | **R1** — sửa test Undo (stale `DbContext`); `Integrations:PublicApiBaseUrl` + resolver; key ring `KeysPath`/`CertPath` + cảnh báo production (**đã được TASK-DP-01 thay thế bằng key ring PostgreSQL**) |
 | `a32b35f` | **R2** — `Degraded` dùng chung (`Usage is null`); auto-link chỉ `TN-`; SignalR `TaskUpdated` khi issue đóng/mở; audit log trước Jev (fail-soft); Undo khôi phục vị trí/`CompletedAt` |
 | `6595eb1` | **R3** — body limit 256 KB khi đọc (`413`); `Failed` → `502`; validate `IssueLabelFilter` (`400`); guard `sender`/`labels` |
 | `0bd1aab` | **R4** — nhãn tiếng Việt cho action GitHub + basis GitHub + ẩn "0 tasks" trong `AiActionLogItem` |
 | `a083d5d` | Cập nhật 15.0/15.3/15.4/roadmap + nâng CI baseline **1.329 / 747** + báo cáo review |
-| `8891bac` | (Người dùng) `KeysPath` và `CertPath` độc lập, có thể bật đồng thời |
+| `8891bac` | (Người dùng) `KeysPath` và `CertPath` độc lập, có thể bật đồng thời (**lịch sử**; TASK-DP-01 đã bỏ `KeysPath`) |
 
 Chi tiết từng lỗi (bằng chứng file:line, cách sửa, test): [`report/phase-15-3-15-4-code-review-and-remediation-plan.md`](../report/phase-15-3-15-4-code-review-and-remediation-plan.md) §4 + §9.
 
@@ -103,7 +103,7 @@ DB test phải là `pgvector/pgvector:pg18` (container `:5433` trong phiên này
 1. **Mô hình 1 tích hợp GitHub / workspace** (không có bảng repo/PAT, không liên kết URL thủ công) — hệ quả schema 15.1, đã ghi `L2`; đa repo/PAT để Phase 16.
 2. **Chưa allow-list repo** — token+secret là capability; repo nào giữ đúng token đều điều khiển được workspace.
 3. **Dedupe Issue chưa tuyệt đối khi 2 delivery song song** — unique index hiện `(task_id, provider, link_type, external_id)`; đề xuất Phase 16: `(workspace_id, provider, link_type, external_id)`.
-4. **Key ring at-rest chưa mã hoá trên Render** — chấp nhận nếu volume được bảo vệ; VPS nên đặt `CertPath`.
+4. **Key ring at-rest trên Render:** TASK-DP-01 chuyển ring vào PostgreSQL `data_protection_keys`; Render không có `CertPath` nên XML key nằm trong DB (ai đọc DB đọc được key ring). VPS nên đặt `CertPath` + `CertPassword`.
 5. **Render free-tier ngủ** ⇒ có thể mất event GitHub (không tự retry).
 6. **Push/PR:** `develop` chưa push (`ahead 36`). Người dùng đang chuẩn bị push + PR + merge; không có thay đổi cục bộ nào chưa commit.
 7. **CI baseline** đã nâng lên `1.329`/`747`; nếu bỏ test nào vì lý do chính đáng thì phải hạ baseline kèm lý do trong PR.
@@ -116,3 +116,12 @@ DB test phải là `pgvector/pgvector:pg18` (container `:5433` trong phiên này
 - Thi hành đủ 4 bước trên nhánh `fix/phase15-review`, merge fast-forward vào `develop`.
 - Số đo cuối: backend **1.329/0/0**, Pure **665**, frontend **747**, build `0/0`, drift sạch.
 - Ghi chú trung thực: một lần chạy Vitest đầu tiên có **1 test flake**, chạy lại toàn bộ xanh `747/747` (không tái hiện); không xác định được tên test do reporter lần đó không in ra.
+
+---
+
+## 8. Cập nhật 2026-11-12 — sau nghiệm thu Live 14/15
+
+- **TASK-DP-01:** key ring DataProtection chuyển sang PostgreSQL `data_protection_keys` (migration **#16** `Phase15DataProtectionKeyRing`); `Integrations__DataProtection__KeysPath` bị loại bỏ; `CertPath` chỉ còn là tuỳ chọn VPS. Runbook bắt buộc **Rotate Secret 1 lần** sau deploy.
+- **Frontend:** sửa BUG-P3-2/3/4/5/6 + `TaskCalendar` line-through; lazy-load tab Tích hợp; text cold-start; dọn deprecation AntD v6 (trừ `antd.List`/`Listy` — tồn đọng ngoài phạm vi).
+- **Số đo thật:** backend build `0/0`, drift sạch, Pure **666**, full **1.332 / 0 / 0**; frontend lint `0/0`, `tsc` exit 0, Vitest **791/791 (128 file)**, build exit 0; CI baseline **1.332 / 791**.
+- Chi tiết: [`report/phase-14-15-acceptance-test-and-remediation-report.md`](../report/phase-14-15-acceptance-test-and-remediation-report.md) §6.

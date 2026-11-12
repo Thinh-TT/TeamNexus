@@ -22,7 +22,7 @@
   <img src="https://img.shields.io/badge/React-19.2-61DAFB?logo=react&logoColor=black" alt="React 19"/>
   <img src="https://img.shields.io/badge/TypeScript-6.0-3178C6?logo=typescript&logoColor=white" alt="TypeScript"/>
   <img src="https://img.shields.io/badge/PostgreSQL-Neon_Serverless-4169E1?logo=postgresql&logoColor=white" alt="PostgreSQL"/>
-  <img src="https://img.shields.io/badge/Tests-912_BE_%7C_657_FE_PASS-brightgreen?logo=checkmarx" alt="Test Suites"/>
+  <img src="https://img.shields.io/badge/Tests-1332_BE_%7C_791_FE_PASS-brightgreen?logo=checkmarx" alt="Test Suites"/>
   <img src="https://img.shields.io/badge/Architecture-Modular_Monolith-orange" alt="Architecture"/>
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"/>
 </p>
@@ -38,7 +38,7 @@ Hệ sinh thái TeamNexus đã được triển khai hoàn chỉnh trên môi tr
 | 🌐 **Web Application** | [https://app.teamnexus.cloud](https://app.teamnexus.cloud) | Hosted trên **Vercel**, DNS & WAF quản lý qua **Cloudflare** (SSL Full Strict) |
 | ⚙️ **API Backend Service** | [https://api.teamnexus.cloud](https://api.teamnexus.cloud) | Containerized Docker trên **Render** (.NET 10 Web API, Base: `/api`) |
 | 📖 **Tài liệu API (Scalar UI)** | [https://api.teamnexus.cloud/scalar](https://api.teamnexus.cloud/scalar) | Giao diện OpenAPI / Scalar tương tác trực quan cho toàn bộ endpoints |
-| 🗄️ **Cơ sở dữ liệu** | Neon Serverless PostgreSQL | Singapore region (`ap-southeast-1`), **12/12** EF Core migrations sạch |
+| 🗄️ **Cơ sở dữ liệu** | Neon Serverless PostgreSQL | Singapore region (`ap-southeast-1`), **16/16** EF Core migrations sạch |
 | ✉️ **Transactional Email** | `TeamNexus <noreply@teamnexus.cloud>` | Cloudflare DNS xác thực SPF, DKIM, DMARC + **Resend API** |
 
 > 💡 **Hướng dẫn Trải nghiệm 1-Click (OAuth Login)**:
@@ -145,11 +145,11 @@ flowchart TB
         end
 
         Shared["TeamNexus.Shared\n(Contracts, Helpers, Risk Rules)"]
-        Persist["TeamNexus.Persistence\n(Single DbContext, 12 EF Migrations)"]
+        Persist["TeamNexus.Persistence\n(Single DbContext, 16 EF Migrations)"]
     end
 
     subgraph ExternalServices ["Dịch Vụ Ngoại Vi & AI Cloud"]
-        NeonDB[("Neon Serverless PostgreSQL\n(12 Migrations)")]
+        NeonDB[("Neon Serverless PostgreSQL\n(16 Migrations)")]
         JevAPI["TypeSafe Jev Decisions API\n(System 1 - Decision Engine)"]
         DeepSeekAPI["DeepSeek Chat API\n(System 2 - Language Reasoning)"]
         TavilyAPI["Tavily Search API\n(Web Knowledge Tool)"]
@@ -174,7 +174,7 @@ flowchart TB
 TeamNexus/
 ├── src/                                         # Backend (.NET 10 C#)
 │   ├── TeamNexus.Api/                          #   Điểm khởi chạy: Program.cs, middleware, CORS, OpenAPI
-│   ├── TeamNexus.Persistence/                  #   DbContext duy nhất, cấu hình Entity, 12 EF migrations
+│   ├── TeamNexus.Persistence/                  #   DbContext duy nhất, cấu hình Entity, 16 EF migrations
 │   ├── Modules/
 │   │   ├── Auth/TeamNexus.Modules.Auth/         #   Xác thực: Google/GitHub OAuth, JWT, Quản lý tài khoản
 │   │   ├── Board/TeamNexus.Modules.Board/       #   Nghiệp vụ Kanban, Real-time SignalR, Sức khỏe dự án
@@ -202,7 +202,7 @@ TeamNexus/
 |---|---|---|
 | **Backend Core** | .NET (C#) | **.NET 10.0**, C# 13, ASP.NET Core Minimal APIs / Controllers |
 | **Kiến trúc** | Modular Monolith | Tách module sạch, giao tiếp in-process qua Interface / DTO |
-| **Cơ sở dữ liệu** | PostgreSQL & EF Core | **EF Core 10**, Neon Serverless PostgreSQL, 12 Migrations |
+| **Cơ sở dữ liệu** | PostgreSQL & EF Core | **EF Core 10**, Neon Serverless PostgreSQL, 16 Migrations |
 | **Real-time** | ASP.NET Core SignalR | Hub group theo boardId, tự động reconnect, payload gọn nhẹ |
 | **AI System 1** | TypeSafe Jev | **Jev 1.13** qua OpenRouter Decisions API (`Choice`, `Score`, `Noul`) |
 | **AI System 2** | DeepSeek Chat | LLM API, Function Calling, SSE streaming (`text/event-stream`) |
@@ -223,17 +223,17 @@ Dự án duy trì kỷ luật mã nguồn nghiêm ngặt với cổng chất lư
 
 ```
 [GitHub Actions CI]
-  ├── Backend Pipeline: dotnet test (912 PASS / 0 FAIL / 0 SKIP)
+  ├── Backend Pipeline: dotnet test (1332 PASS / 0 FAIL / 0 SKIP)
   │                      dotnet build -warnaserror (0 Warning / 0 Error)
   │                      EF Core Migration Drift Check (has-pending-model-changes: CLEAN)
-  └── Frontend Pipeline: vitest run (657 PASS / 0 FAIL across 107 test files)
+  └── Frontend Pipeline: vitest run (791 PASS / 0 FAIL across 128 test files)
                          oxlint (0 Warning / 0 Error)
                          tsc -b (TypeScript build exit code: 0)
 ```
 
-- **912 Backend Tests**: Bao gồm Pure Unit Tests (logic nghiệp vụ, thuật toán tính điểm sức khỏe, sanitization), Integration Tests với InMemory/PostgreSQL Database, Fake AI Providers và Architecture Boundary Tests bảo vệ tính độc lập của các module.
-- **657 Frontend Tests**: Kiểm thử toàn diện từ components, custom hooks, tương tác kéo thả đến tích hợp xử lý stream SSE và đồng bộ SignalR.
-- **12 Migrations Tuyệt Đối Sạch**: Chuỗi migration tuyến tính duy nhất, bảo đảm tính toàn vẹn dữ liệu từ giai đoạn sơ khai đến nền tảng Autonomous Agent hiện đại.
+- **1332 Backend Tests**: Bao gồm Pure Unit Tests (logic nghiệp vụ, thuật toán tính điểm sức khỏe, sanitization), Integration Tests với InMemory/PostgreSQL Database, Fake AI Providers và Architecture Boundary Tests bảo vệ tính độc lập của các module.
+- **791 Frontend Tests**: Kiểm thử toàn diện từ components, custom hooks, tương tác kéo thả đến tích hợp xử lý stream SSE và đồng bộ SignalR.
+- **16 Migrations Tuyệt Đối Sạch**: Chuỗi migration tuyến tính duy nhất, bảo đảm tính toàn vẹn dữ liệu từ giai đoạn sơ khai đến nền tảng Autonomous Agent hiện đại.
 
 ---
 
@@ -267,7 +267,7 @@ dotnet user-secrets set --project src/TeamNexus.Api "Tavily:ApiKey" "your_tavily
 *(Ghi chú: Nếu để trống API Key của Jev hoặc DeepSeek, hệ thống sẽ tự động kích hoạt `FakeJevDecisionProvider` và `FakeAiProvider` phục vụ kiểm thử offline tất định mà không tiêu tốn token).*
 
 ### 3. Cập nhật Cơ sở Dữ liệu (Migrations)
-Áp dụng toàn bộ 12 migrations lên database:
+Áp dụng toàn bộ 16 migrations lên database:
 ```bash
 dotnet ef database update --project src/TeamNexus.Persistence --startup-project src/TeamNexus.Api
 ```
@@ -300,10 +300,10 @@ Truy cập trình duyệt tại địa chỉ `http://localhost:5173` để bắt
 
 ### 5. Chạy Kiểm Thử Tự Động (Test Suite)
 ```bash
-# Chạy toàn bộ 912 backend tests:
+# Chạy toàn bộ 1332 backend tests:
 dotnet test TeamNexus.sln
 
-# Chạy toàn bộ 657 frontend tests:
+# Chạy toàn bộ 791 frontend tests:
 cd frontend
 npm test
 ```
@@ -317,7 +317,7 @@ Hệ thống tài liệu thiết kế chi tiết được tổ chức khoa học
 - 📋 [01-system-specification.md](file:///e:/TeamNexus/project-docs/01-system-specification.md): Đặc tả yêu cầu kỹ thuật, phân tích nghiệp vụ và ranh giới hệ thống từ Giai đoạn 1 đến 14.7.
 - 📐 [02-tech-stack-decisions.md](file:///e:/TeamNexus/project-docs/02-tech-stack-decisions.md): Các quyết định lựa chọn kiến trúc (ADR), Modular Monolith, JWT, SignalR và Anti-Hallucination.
 - 🗺️ [03-roadmap.md](file:///e:/TeamNexus/project-docs/03-roadmap.md): Lộ trình tiến độ tổng thể 16 giai đoạn (từ nền tảng đến Mobile Flutter).
-- 🗄️ [04-database-design.md](file:///e:/TeamNexus/project-docs/04-database-design.md): Sơ đồ quan hệ thực thể (ERD), chiến lược phân vùng, chỉ mục và lịch sử 12 EF migrations.
+- 🗄️ [04-database-design.md](file:///e:/TeamNexus/project-docs/04-database-design.md): Sơ đồ quan hệ thực thể (ERD), chiến lược phân vùng, chỉ mục và lịch sử 16 EF migrations.
 - 🎓 [05-capstone-and-itgottalent.md](file:///e:/TeamNexus/project-docs/05-capstone-and-itgottalent.md): Bối cảnh chuyển giao học thuật, định hướng Đồ án Chuyên ngành và bài dự thi IT got Talent.
 - ⚡ [06-adjust-and-upgrade-with-jev.md](file:///e:/TeamNexus/project-docs/06-adjust-and-upgrade-with-jev.md): Kiến trúc chuyên sâu về Hybrid AI: Mô hình ra quyết định không sinh văn bản Jev System 1 kết hợp DeepSeek System 2.
 - 📝 [tasks/](file:///e:/TeamNexus/project-docs/tasks/): Kế hoạch thi hành, checklist nghiệm thu DoD chi tiết của từng giai đoạn phát triển.

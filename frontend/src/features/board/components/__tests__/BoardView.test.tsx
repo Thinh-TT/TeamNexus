@@ -47,6 +47,7 @@ const mockTasks: TaskResponse[] = [
     createdAt: '2026-09-09T00:00:00Z',
     updatedAt: '2026-09-09T00:00:00Z',
     commentCount: 0,
+    taskNumber: 2,
   },
   {
     id: 'task-2',
@@ -61,6 +62,7 @@ const mockTasks: TaskResponse[] = [
     createdAt: '2026-09-09T00:00:00Z',
     updatedAt: '2026-09-09T00:00:00Z',
     commentCount: 0,
+    taskNumber: 27,
   },
 ]
 
@@ -180,6 +182,26 @@ describe('BoardView', () => {
 
     // Search by assignee
     fireEvent.change(searchInput, { target: { value: 'Jane' } })
+    expect(screen.queryByText('Deploy to Staging')).not.toBeInTheDocument()
+    expect(screen.getByText('Write Documentation')).toBeInTheDocument()
+  })
+
+  it('matches task codes by prefix, and an incomplete "tn" query no longer pulls every TN card', () => {
+    renderComponent()
+
+    const searchInput = screen.getByPlaceholderText('Tìm kiếm thẻ, nhãn, người...')
+
+    // "tn" is not a code query: previously `includes` matched every TN-numbered task.
+    fireEvent.change(searchInput, { target: { value: 'tn' } })
+    expect(screen.queryByText('Deploy to Staging')).not.toBeInTheDocument()
+    expect(screen.queryByText('Write Documentation')).not.toBeInTheDocument()
+
+    // Prefix search still works: TN-2 and TN-27 both start with "tn-2".
+    fireEvent.change(searchInput, { target: { value: 'tn-2' } })
+    expect(screen.getByText('Deploy to Staging')).toBeInTheDocument()
+    expect(screen.getByText('Write Documentation')).toBeInTheDocument()
+
+    fireEvent.change(searchInput, { target: { value: 'tn-27' } })
     expect(screen.queryByText('Deploy to Staging')).not.toBeInTheDocument()
     expect(screen.getByText('Write Documentation')).toBeInTheDocument()
   })

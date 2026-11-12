@@ -106,7 +106,7 @@ export const LoginPage: React.FC = () => {
 
         {isAuthError && (
           <Alert
-            message="Lỗi đăng nhập"
+            title="Lỗi đăng nhập"
             description="Đăng nhập không thành công hoặc bị hủy. Vui lòng thử lại."
             type="error"
             showIcon

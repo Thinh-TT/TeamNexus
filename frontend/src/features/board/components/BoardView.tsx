@@ -358,6 +358,10 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
   const filteredTasksByColumn = useMemo(() => {
     const result: Record<string, TaskResponse[]> = {}
     const query = searchQuery.trim().toLowerCase()
+    // Only treat the query as a task-code search when it actually looks like one (`tn-` + digits).
+    // A plain `includes` made short queries such as "n" match every TN-numbered card, drowning the
+    // title/description/assignee matches; `===` (the original proposal) would lose prefix search.
+    const codeQuery = /^tn-\d+$/.test(query)
 
     for (const [colId, tasks] of Object.entries(tasksByColumn)) {
       result[colId] = tasks.filter((t) => {
@@ -375,9 +379,10 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
           l.name.toLowerCase().includes(query)
         ) ?? false
         const taskCodeMatch =
-          typeof t.taskNumber === 'number' && t.taskNumber > 0
-            ? `tn-${t.taskNumber}`.includes(query)
-            : false
+          codeQuery &&
+          typeof t.taskNumber === 'number' &&
+          t.taskNumber > 0 &&
+          `tn-${t.taskNumber}`.startsWith(query)
 
         return titleMatch || descMatch || assigneeMatch || labelMatch || taskCodeMatch
       })

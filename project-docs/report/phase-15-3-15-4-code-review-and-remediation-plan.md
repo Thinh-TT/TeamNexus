@@ -101,6 +101,7 @@ Môi trường: Windows, .NET SDK 10, EF Core 10, Node 24.15 / npm 11.12; Postgr
   1. **Nhanh, không đổi schema (khuyến nghị cho 15.x):** `AddDataProtection().SetApplicationName("TeamNexus").PersistKeysToFileSystem(new DirectoryInfo(path))` với `path` lấy từ env + volume bền (hoặc mount secret), ghi log cảnh báo nếu path không tồn tại.
   2. **Bền vững đúng thiết kế:** `PersistKeysToDbContext` (bảng `data_protection_keys`) ⇒ **cần migration #16**, tức phá vỡ "đúng 1 migration của Phase 15" ⇒ phải được duyệt tường minh và ghi vào nhật ký phase, hoặc hoãn sang Phase 16.
 - **Bổ sung:** thêm health check / log `Error` khi `Unprotect` thất bại kèm hướng dẫn `rotate-secret`, để sự cố không im lặng.
+- **Cập nhật sau nghiệm thu 14/15 (TASK-DP-01):** chủ dự án đã duyệt **phương án 2** — key ring lưu PostgreSQL qua `PersistKeysToDbContext<TeamNexusDbContext>()`, migration #16 `Phase15DataProtectionKeyRing`, bỏ hẳn `KeysPath`; `CertPath` còn là tuỳ chọn at-rest cho VPS. Vì đổi nguồn key ring, ciphertext cũ không giải mã được ⇒ runbook bắt buộc **rotate secret 1 lần** sau deploy (xem `tasks/phase-15-remaining-frontend-handover.md`).
 
 ---
 
@@ -293,7 +294,7 @@ npm test
 | Bước | Commit | Nội dung | Kết quả |
 | :--- | :--- | :--- | :--- |
 | 0 | `2087e24` | Merge nhánh review, xoá `sqlite_mcp_server.db`, thêm rule `.gitignore` cho artifact MCP, commit báo cáo review | ✅ |
-| 1 | `3fa1bc9` | F1 (test Undo dùng context mới), F2 (`Integrations:PublicApiBaseUrl` + resolver + 6 test), F3 (key ring `KeysPath`/`CertPath` + 3 test + cảnh báo production) | ✅ |
+| 1 | `3fa1bc9` | F1 (test Undo dùng context mới), F2 (`Integrations:PublicApiBaseUrl` + resolver + 6 test), F3 (key ring `KeysPath`/`CertPath` + 3 test + cảnh báo production) — **F3 đã được TASK-DP-01 thay bằng key ring PostgreSQL** | ✅ |
 | 2 | `a32b35f` | F4 (helper `IsProviderDegraded` dùng chung), F5 (`requireTnPrefix`), F6 (`ITaskAutomation.NotifyTaskUpdatedAsync` + recorder test), F7 (audit log trước Jev + fail-soft), F8 (Undo khôi phục vị trí/CompletedAt) | ✅ |
 | 3 | `6595eb1` | F10 (body limit khi đọc), F11 (`Failed` → 502), F12 (validate `IssueLabelFilter`), F13 (guard `sender`/`labels`), F14 ghi L2 trong tài liệu 15.3 | ✅ |
 | 4 | (commit kế tiếp) | F9 (nhãn tiếng Việt + basis GitHub + ẩn "0 tasks" + 3 Vitest test), cập nhật 15.0/15.3/15.4/roadmap, nâng CI baseline **1.329**/**747** | ✅ |

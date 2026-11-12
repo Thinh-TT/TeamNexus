@@ -104,10 +104,10 @@ export const AiActionHistoryDrawer: React.FC<AiActionHistoryDrawerProps> = ({
         </Flex>
       }
       placement="right"
-      width={520}
+      size={520}
       open={open}
       onClose={onClose}
-      destroyOnClose={false}
+      destroyOnHidden={false}
       styles={{
         body: { padding: '16px', backgroundColor: '#f8fafc' },
       }}
@@ -146,7 +146,7 @@ export const AiActionHistoryDrawer: React.FC<AiActionHistoryDrawerProps> = ({
         {error && (
           <Alert
             type="error"
-            message={error}
+            title={error}
             showIcon
             closable
             style={{ borderRadius: 8 }}
@@ -156,7 +156,7 @@ export const AiActionHistoryDrawer: React.FC<AiActionHistoryDrawerProps> = ({
         {/* List Content */}
         {isLoading && logs.length === 0 ? (
           <Flex align="center" justify="center" style={{ padding: '60px 0' }}>
-            <Spin tip="Đang tải lịch sử hành động AI..." />
+            <Spin description="Đang tải lịch sử hành động AI..." />
           </Flex>
         ) : logs.length === 0 ? (
           <Empty

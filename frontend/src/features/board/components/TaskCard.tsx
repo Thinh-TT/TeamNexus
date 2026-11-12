@@ -321,7 +321,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
             )}
             <Typography.Text
               strong
-              delete={isCompleted}
               style={{
                 fontSize: 13.5,
                 lineHeight: 1.45,

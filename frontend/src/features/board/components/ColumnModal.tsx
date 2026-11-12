@@ -43,12 +43,18 @@ export const ColumnModal: React.FC<ColumnModalProps> = ({
     isDone: boolean
     isInReview?: boolean
   }) => {
-    await onSubmit({
-      name: values.name.trim(),
-      isDone: isClarificationColumn ? false : Boolean(values.isDone),
-      isInReview: isClarificationColumn ? false : Boolean(values.isInReview),
-    })
-    onClose()
+    try {
+      await onSubmit({
+        name: values.name.trim(),
+        isDone: isClarificationColumn ? false : Boolean(values.isDone),
+        isInReview: isClarificationColumn ? false : Boolean(values.isInReview),
+      })
+      onClose()
+    } catch {
+      // The parent (useBoard.create/updateColumn) already surfaces the API error via message.error.
+      // AntD Form does not await onFinish, so swallowing here is what prevents an unhandled rejection
+      // (e.g. the 409 raised when another In Review column already exists); the modal stays open.
+    }
   }
 
   return (

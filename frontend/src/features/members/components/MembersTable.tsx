@@ -153,7 +153,7 @@ export const MembersTable: React.FC<MembersTableProps> = ({
           return <Tag color="purple">Hệ thống AI</Tag>
         }
         return (
-          <Space direction="vertical" size={2}>
+          <Space orientation="vertical" size={2}>
             {record.primaryRole && (
               <Typography.Text strong style={{ fontSize: 12 }}>
                 {record.primaryRole}

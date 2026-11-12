@@ -202,7 +202,7 @@ export const WorkspaceActivityPage: React.FC = () => {
         {/* Activity List */}
         {activityLoading ? (
           <Flex align="center" justify="center" style={{ padding: '64px 0' }}>
-            <Spin size="large" tip="Đang tải lịch sử hoạt động..." />
+            <Spin size="large" description="Đang tải lịch sử hoạt động..." />
           </Flex>
         ) : items.length === 0 ? (
           <Card style={{ borderRadius: 12, padding: 48, textAlign: 'center' }}>

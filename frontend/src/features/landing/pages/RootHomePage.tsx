@@ -26,6 +26,11 @@ export const RootHomePage: React.FC = () => {
         <Typography.Text style={{ color: '#64748b', fontSize: 14 }}>
           Đang khởi động TeamNexus...
         </Typography.Text>
+        <Typography.Text
+          style={{ color: '#94a3b8', fontSize: 13, textAlign: 'center', maxWidth: 360 }}
+        >
+          Lần đầu mở có thể mất 30–60 giây khi máy chủ vừa thức dậy. Dữ liệu của bạn vẫn an toàn.
+        </Typography.Text>
       </Flex>
     )
   }

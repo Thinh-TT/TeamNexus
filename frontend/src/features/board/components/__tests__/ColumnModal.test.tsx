@@ -92,4 +92,23 @@ describe('ColumnModal', () => {
     ) as HTMLInputElement
     expect(inReviewCheckbox.checked).toBe(true)
   })
+
+  it('keeps the modal open when onSubmit rejects (e.g. 409 duplicate In Review column)', async () => {
+    vi.mocked(onSubmit).mockRejectedValueOnce(new Error('409 conflict'))
+
+    render(<ColumnModal open={true} onClose={onClose} onSubmit={onSubmit} />)
+
+    fireEvent.change(
+      screen.getByPlaceholderText('Ví dụ: Cần làm, Đang làm, Đang duyệt PR, Đã xong...'),
+      { target: { value: 'Review trùng' } }
+    )
+    fireEvent.click(screen.getByTestId('column-is-in-review-checkbox'))
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo cột' }))
+
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalled()
+    })
+
+    expect(onClose).not.toHaveBeenCalled()
+  })
 })

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using TeamNexus.Modules.Ai.Services.Integrations;
 using TeamNexus.Modules.Board.Endpoints;
 using TeamNexus.Persistence.Data;
@@ -34,6 +35,7 @@ public static class GitHubWebhookEndpoints
         IGitHubSecretProtector protector,
         IGitHubSignatureValidator validator,
         IGitHubWebhookService webhookService,
+        ILoggerFactory loggerFactory,
         CancellationToken ct)
     {
         var request = context.Request;
@@ -96,8 +98,16 @@ public static class GitHubWebhookEndpoints
         {
             secret = protector.Unprotect(integration.SecretCiphertext);
         }
-        catch
+        catch (Exception ex)
         {
+            // TASK-DP-01: the key ring moved from an ephemeral file/machine store into PostgreSQL. A ciphertext
+            // written under an older ring cannot be recovered — the operator must rotate the webhook secret
+            // once. Log the reason (never the ciphertext or the secret) so a 401 storm is diagnosable.
+            loggerFactory.CreateLogger("TeamNexus.Modules.Ai.Endpoints.GitHubWebhookEndpoints").LogError(
+                ex,
+                "Không giải mã được GitHub webhook secret cho tích hợp {IntegrationId}. "
+                + "Key ring đã đổi/hỏng — cần Rotate Secret trong Workspace Settings và cập nhật GitHub webhook.",
+                integration.Id);
             return Results.Unauthorized();
         }
 

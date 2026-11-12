@@ -948,8 +948,9 @@ public sealed class Phase147KnowledgeTests : IClassFixture<DatabaseFixture>
             var count = await ScalarLongAsync(connection,
                 "select count(*) from \"__EFMigrationsHistory\"");
 
-            // Fifteen applied migrations after Phase 15.1 added Phase15ExternalIntegrations (14 in Phase 14.7 Track B).
-            Assert.Equal(15, count);
+            // Sixteen applied migrations: Phase 15.1 added Phase15ExternalIntegrations (15),
+            // then TASK-DP-01 added Phase15DataProtectionKeyRing (16).
+            Assert.Equal(16, count);
 
             // Read as one delimited scalar rather than a multi-row reader: `ExecuteScalar` is the shape every
             // other probe in this suite uses, and it keeps the assertion a single string comparison.

@@ -118,15 +118,19 @@ describe('TaskCalendar', () => {
     expect(day22?.textContent).toContain('Việc ngày 22')
   })
 
-  it('thẻ ở cột is_done có nhãn "đã xong"', () => {
+  it('thẻ ở cột is_done có icon hoàn thành và không dùng gạch ngang', () => {
     const { container } = renderCalendar([
       task({ id: 'done', title: 'Đã hoàn thành', columnId: 'col-done' }),
     ])
 
-    // `isTaskCompleted` đọc cờ `isDone` của cột ⇒ gạch ngang + icon check.
+    // AGENTS §4.2: completed titles are muted with a green check, never line-through.
     const node = cell(container, '2026-06-20')
     expect(node).not.toBeNull()
     expect(node?.querySelector('.anticon-check-circle')).not.toBeNull()
+
+    const chip = container.querySelector('[data-testid="calendar-task-done"]') as HTMLElement
+    expect(chip).not.toBeNull()
+    expect(chip.style.textDecoration).not.toBe('line-through')
   })
 
   it('gộp phần tràn thành "+N thẻ khác"', () => {

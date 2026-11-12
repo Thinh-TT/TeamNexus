@@ -200,6 +200,43 @@ public sealed class GitHubWebhookPrTests : IClassFixture<DatabaseFixture>
     }
 
     [Fact]
+    public async Task Webhook_WithCorruptedSecretCiphertext_Returns401_AndWritesNoDelivery()
+    {
+        // TASK-DP-01: a ciphertext written under a previous (ephemeral) key ring is unrecoverable. The
+        // endpoint must reject it without leaking why, and the new log line tells the operator to rotate.
+        await using var s = await _database.CreateScenarioAsync();
+        var admin = await s.CreateUserAsync("Admin WS");
+        var ws = await s.CreateWorkspaceAsync(admin, "Workspace GH corrupted key");
+        using var client = await s.AsUserAsync(admin);
+
+        var putRes = await client.PutJsonAsync(
+            BaseUrl(ws.Id),
+            new UpsertWorkspaceGitHubIntegrationRequest(IsEnabled: true));
+        var integration = await putRes.Content.ReadFromJsonAsync<WorkspaceGitHubIntegrationResponse>();
+        Assert.NotNull(integration);
+
+        await s.WithDbContextAsync(async db =>
+        {
+            var entity = await db.WorkspaceGitHubIntegrations.SingleAsync(x => x.Id == integration!.Id);
+            entity.SecretCiphertext = "not-a-valid-data-protection-payload";
+            await db.SaveChangesAsync();
+        });
+
+        var req = CreateWebhookRequest(
+            integration!.WebhookToken,
+            "ping",
+            Guid.NewGuid().ToString(),
+            integration.WebhookSecretPlaintext!,
+            "{}");
+
+        var res = await s.Factory.CreateClient().SendAsync(req);
+        Assert.Equal(HttpStatusCode.Unauthorized, res.StatusCode);
+
+        await using var verify = s.NewDbContext();
+        Assert.Equal(0, await verify.GitHubWebhookDeliveries.CountAsync(d => d.WorkspaceId == ws.Id));
+    }
+
+    [Fact]
     public async Task Webhook_UnknownOrDisabledToken_Returns404()
     {
         await using var s = await _database.CreateScenarioAsync();

@@ -103,7 +103,8 @@
 
 ## 6. Checklist Xác minh Production Sau Deploy (từ Handover 15.5)
 
-Các biến môi trường hạ tầng đã được thiết lập trước khi bàn giao (`Integrations__PublicApiBaseUrl=https://api.teamnexus.cloud`, `Integrations__DataProtection__KeysPath=/var/data/dataprotection-keys`). Khi triển khai bản Frontend 15.5 cùng Backend 15.1–15.4 lên môi trường thật, thực hiện lần lượt:
+Các biến môi trường hạ tầng đã được thiết lập trước khi bàn giao (`Integrations__PublicApiBaseUrl=https://api.teamnexus.cloud`). `Integrations__DataProtection__KeysPath` **đã bị loại bỏ** bởi TASK-DP-01: key ring lưu PostgreSQL `data_protection_keys` (migration #16 `Phase15DataProtectionKeyRing`). Khi triển khai bản Frontend 15.5 cùng Backend 15.1–15.4 lên môi trường thật, thực hiện lần lượt:
+0. Chạy migration #16 lên Neon **trước** khi deploy API; verify `data_protection_keys` tồn tại. Sau deploy, **Rotate Secret 1 lần** (ciphertext cũ không giải mã được bằng key ring DB) rồi cập nhật secret trong GitHub Webhook. Restart/redeploy và Ping lại phải vẫn `200`.
 1. Mở `/workspaces/{id}/settings` → tab **Tích hợp (Slack / Discord / GitHub)** → tạo Slack/Discord webhook → bấm **Gửi thử** → kiểm tra `200 OK` và Drawer lịch sử Outbox.
 2. Lưu cấu hình **GitHub Integration** → xác nhận `Webhook Payload URL` có tiền tố `https://api.teamnexus.cloud/api/webhooks/github/...`, copy **`Webhook Secret`** hiển thị 1 lần và reload lại trang để chắc chắn chỉ còn `SecretHint`.
 3. Tạo PR nháp / PR sẵn sàng gắn mã `TN-...` → xác nhận thẻ tự chuyển cột **`Đang duyệt PR`** (`isInReview`), gắn chip `PR #... · Open/Merged`, và có thể bấm **Hoàn tác** trong `Lịch sử Hành động AI`.

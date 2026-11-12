@@ -58,7 +58,7 @@ export const ObserverAlertsPanel: React.FC<ObserverAlertsPanelProps> = ({ worksp
           </Flex>
         ) : unreadCount > 0 ? (
           <Alert
-            message={
+            title={
               <Typography.Text strong>
                 Có {unreadCount} cảnh báo AI Observer chưa đọc
               </Typography.Text>

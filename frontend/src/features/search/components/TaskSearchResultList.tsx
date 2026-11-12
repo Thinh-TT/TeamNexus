@@ -54,7 +54,7 @@ export const TaskSearchResultList: React.FC<TaskSearchResultListProps> = ({
   if (loading && items.length === 0) {
     return (
       <Flex align="center" justify="center" style={{ height: 300 }}>
-        <Spin size="large" tip="Đang tìm kiếm thẻ..." />
+        <Spin size="large" description="Đang tìm kiếm thẻ..." />
       </Flex>
     )
   }

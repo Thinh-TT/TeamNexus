@@ -322,7 +322,7 @@ export const WorkspaceMembersPage: React.FC = () => {
         {error && (
           <Alert
             type="error"
-            message="Lỗi tải dữ liệu"
+            title="Lỗi tải dữ liệu"
             description={error}
             showIcon
             closable

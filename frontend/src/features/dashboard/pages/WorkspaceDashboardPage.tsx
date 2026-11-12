@@ -68,7 +68,7 @@ export const WorkspaceDashboardPage: React.FC = () => {
       <Content style={{ padding: '28px 24px', maxWidth: 1360, margin: '0 auto', width: '100%' }}>
         {status === 'loading' ? (
           <Flex align="center" justify="center" style={{ height: 350 }}>
-            <Spin size="large" tip="Đang tải dữ liệu tổng quan..." />
+            <Spin size="large" description="Đang tải dữ liệu tổng quan..." />
           </Flex>
         ) : status === 'error' ? (
           <Result
@@ -180,7 +180,7 @@ export const WorkspaceDashboardPage: React.FC = () => {
                     title={<span style={{ fontWeight: 600, color: '#475569', fontSize: 12 }}>Tổng số thẻ</span>}
                     value={dashboard.summary.totalTasks}
                     prefix={<ProjectOutlined style={{ color: '#4f46e5' }} />}
-                    valueStyle={{ color: '#0f172a', fontWeight: 700 }}
+                    styles={{ content: { color: '#0f172a', fontWeight: 700 } }}
                   />
                 </Card>
               </Col>
@@ -197,7 +197,7 @@ export const WorkspaceDashboardPage: React.FC = () => {
                     title={<span style={{ fontWeight: 600, color: '#475569', fontSize: 12 }}>Thẻ đã hoàn thành</span>}
                     value={dashboard.summary.doneTasks}
                     prefix={<CheckCircleOutlined style={{ color: '#10b981' }} />}
-                    valueStyle={{ color: '#10b981', fontWeight: 700 }}
+                    styles={{ content: { color: '#10b981', fontWeight: 700 } }}
                   />
                 </Card>
               </Col>
@@ -214,7 +214,7 @@ export const WorkspaceDashboardPage: React.FC = () => {
                     title={<span style={{ fontWeight: 600, color: '#475569', fontSize: 12 }}>Thẻ đang mở</span>}
                     value={dashboard.summary.openTasks}
                     prefix={<ClockCircleOutlined style={{ color: '#3b82f6' }} />}
-                    valueStyle={{ color: '#3b82f6', fontWeight: 700 }}
+                    styles={{ content: { color: '#3b82f6', fontWeight: 700 } }}
                   />
                 </Card>
               </Col>
@@ -232,9 +232,11 @@ export const WorkspaceDashboardPage: React.FC = () => {
                     title={<span style={{ fontWeight: 600, color: '#475569', fontSize: 12 }}>Thẻ quá hạn</span>}
                     value={dashboard.summary.overdueTasks}
                     prefix={<ExclamationCircleOutlined style={{ color: '#ef4444' }} />}
-                    valueStyle={{
-                      color: dashboard.summary.overdueTasks > 0 ? '#ef4444' : '#0f172a',
-                      fontWeight: 700,
+                    styles={{
+                      content: {
+                        color: dashboard.summary.overdueTasks > 0 ? '#ef4444' : '#0f172a',
+                        fontWeight: 700,
+                      },
                     }}
                   />
                 </Card>
@@ -252,7 +254,7 @@ export const WorkspaceDashboardPage: React.FC = () => {
                     title={<span style={{ fontWeight: 600, color: '#475569', fontSize: 12 }}>Thẻ mở của tôi</span>}
                     value={dashboard.summary.myOpenTasks}
                     prefix={<UserOutlined style={{ color: '#7c3aed' }} />}
-                    valueStyle={{ color: '#7c3aed', fontWeight: 700 }}
+                    styles={{ content: { color: '#7c3aed', fontWeight: 700 } }}
                   />
                 </Card>
               </Col>

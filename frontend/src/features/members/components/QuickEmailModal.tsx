@@ -69,7 +69,7 @@ export const QuickEmailModal: React.FC<QuickEmailModalProps> = ({
       open={open}
       onCancel={handleClose}
       footer={null}
-      destroyOnClose
+      destroyOnHidden
       width={600}
     >
       <div style={{ marginTop: 16 }}>
@@ -78,7 +78,7 @@ export const QuickEmailModal: React.FC<QuickEmailModalProps> = ({
             type={result.failed > 0 ? 'warning' : 'success'}
             showIcon
             style={{ marginBottom: 16 }}
-            message={`Đã gửi thành công ${result.sent}/${result.requested} email`}
+            title={`Đã gửi thành công ${result.sent}/${result.requested} email`}
             description={
               result.errors.length > 0 ? (
                 <div>
