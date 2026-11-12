@@ -17,36 +17,50 @@ interface AgentChatFabProps {
  * own close control) but stays mounted, so the badge state survives a toggle.</p>
  */
 export const AgentChatFab: React.FC<AgentChatFabProps> = ({ open, attachedCount, onToggle }) => (
-  <Tooltip title={open ? '' : 'Mở AI Agent Chat của bảng'} placement="left">
-    <Badge
-      count={open ? 0 : attachedCount}
-      offset={[-2, 4]}
-      data-testid="agent-chat-fab-badge"
-      style={{ display: open ? 'none' : undefined }}
+  <div
+    style={{
+      position: 'fixed',
+      right: 24,
+      bottom: 24,
+      zIndex: 30,
+      width: 52,
+      height: 52,
+      opacity: open ? 0 : 1,
+      transform: open ? 'scale(0.85)' : 'scale(1)',
+      pointerEvents: open ? 'none' : 'auto',
+      transition: 'opacity 0.18s ease, transform 0.18s ease',
+    }}
+  >
+    <Tooltip
+      title={open ? '' : 'Mở AI Agent Chat của bảng'}
+      placement="left"
+      open={open ? false : undefined}
+      getPopupContainer={(triggerNode) => triggerNode.parentElement ?? document.body}
+      styles={{ root: { whiteSpace: 'nowrap', maxWidth: 'none' } }}
     >
-      <Button
-        type="primary"
-        shape="circle"
-        size="large"
-        icon={open ? <CloseOutlined /> : <RobotOutlined />}
-        onClick={onToggle}
-        data-testid="agent-chat-fab"
-        aria-label={open ? 'Đóng AI Agent Chat' : 'Mở AI Agent Chat của bảng'}
-        style={{
-          position: 'fixed',
-          right: 24,
-          bottom: 24,
-          zIndex: 30,
-          width: open ? 0 : 52,
-          height: open ? 0 : 52,
-          opacity: open ? 0 : 1,
-          pointerEvents: open ? 'none' : 'auto',
-          overflow: 'hidden',
-          backgroundColor: '#6366f1',
-          boxShadow: open ? 'none' : '0 6px 16px rgba(99, 102, 241, 0.35)',
-          transition: 'opacity 0.18s ease, transform 0.18s ease',
-        }}
-      />
-    </Badge>
-  </Tooltip>
+      <Badge
+        count={open ? 0 : attachedCount}
+        offset={[-2, 4]}
+        data-testid="agent-chat-fab-badge"
+      >
+        <Button
+          type="primary"
+          shape="circle"
+          size="large"
+          icon={open ? <CloseOutlined /> : <RobotOutlined />}
+          onClick={onToggle}
+          data-testid="agent-chat-fab"
+          aria-label={open ? 'Đóng AI Agent Chat' : 'Mở AI Agent Chat của bảng'}
+          aria-hidden={open}
+          tabIndex={open ? -1 : 0}
+          style={{
+            width: 52,
+            height: 52,
+            backgroundColor: '#6366f1',
+            boxShadow: open ? 'none' : '0 6px 16px rgba(99, 102, 241, 0.35)',
+          }}
+        />
+      </Badge>
+    </Tooltip>
+  </div>
 )

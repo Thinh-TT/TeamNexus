@@ -219,4 +219,26 @@ describe('BoardView — AI Agent Chat', () => {
     expect(await screen.findByTestId('agent-chat-attachment-task-1')).toBeInTheDocument()
     expect(moveTask).not.toHaveBeenCalled()
   })
+
+  it('AGENTCHAT_FE7_keepsFixedFabWrapperAndNonShrinkingResizerToPreventLayoutShift', async () => {
+    renderComponent()
+
+    const fab = screen.getByTestId('agent-chat-fab')
+    const fabWrapper = fab.closest('div[style*="position: fixed"]') as HTMLElement | null
+    expect(fabWrapper).not.toBeNull()
+    expect(fabWrapper?.style.width).toBe('52px')
+    expect(fabWrapper?.style.height).toBe('52px')
+    expect(fabWrapper?.style.pointerEvents).toBe('auto')
+
+    fireEvent.click(fab)
+    await screen.findByTestId('agent-chat-panel')
+
+    expect(fabWrapper?.style.width).toBe('52px')
+    expect(fabWrapper?.style.opacity).toBe('0')
+    expect(fabWrapper?.style.pointerEvents).toBe('none')
+
+    const resizer = screen.getByTestId('agent-chat-resizer')
+    expect(resizer.style.flexShrink).toBe('0')
+    expect(resizer.style.userSelect).toBe('none')
+  })
 })

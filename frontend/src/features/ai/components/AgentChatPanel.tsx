@@ -12,6 +12,7 @@ import {
   Popover,
   Select,
   Space,
+  Spin,
   Tag,
   Tooltip,
   Typography,
@@ -250,6 +251,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         backgroundColor: '#ffffff',
         borderLeft: '1px solid #e2e8f0',
         boxShadow: '-2px 0 6px rgba(15, 23, 42, 0.03)',
+        userSelect: 'none',
       }}
     >
       {/* Header */}
@@ -423,9 +425,33 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
           ref={scrollRef}
           onScroll={handleScroll}
           data-testid="agent-chat-messages"
-          style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            scrollbarGutter: 'stable',
+            userSelect: 'text',
+            padding: '12px 14px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12,
+          }}
         >
-          {messages.length === 0 && !streamingAnswer && (
+          {status === 'loading' && messages.length === 0 && !streamingAnswer && (
+            <Flex
+              align="center"
+              justify="center"
+              gap={8}
+              data-testid="agent-chat-loading"
+              style={{ flex: 1, padding: 24 }}
+            >
+              <Spin size="small" />
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                Đang tải hội thoại...
+              </Text>
+            </Flex>
+          )}
+
+          {status !== 'loading' && messages.length === 0 && !streamingAnswer && (
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={

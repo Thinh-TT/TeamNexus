@@ -284,15 +284,29 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
 
       const startX = event.clientX
       const startWidth = agentChatWidth
+      let rafId: number | null = null
+      let latestClientX = startX
 
-      const onMove = (moveEvent: PointerEvent) => {
-        const next = startWidth - (moveEvent.clientX - startX)
+      const flushWidth = () => {
+        rafId = null
+        const next = startWidth - (latestClientX - startX)
         setAgentChatWidth(
           Math.round(Math.max(AGENT_CHAT_MIN_WIDTH, Math.min(next, AGENT_CHAT_MAX_WIDTH)))
         )
       }
 
+      const onMove = (moveEvent: PointerEvent) => {
+        latestClientX = moveEvent.clientX
+        if (rafId === null) {
+          rafId = window.requestAnimationFrame(flushWidth)
+        }
+      }
+
       const onUp = () => {
+        if (rafId !== null) {
+          window.cancelAnimationFrame(rafId)
+          flushWidth()
+        }
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
       }
@@ -868,7 +882,14 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
             aria-label="Kéo để đổi kích thước AI Agent Chat"
             data-testid="agent-chat-resizer"
             onPointerDown={handleAgentChatResizeStart}
-            style={{ width: 6, cursor: 'col-resize', backgroundColor: 'transparent' }}
+            style={{
+              width: 6,
+              flexShrink: 0,
+              cursor: 'col-resize',
+              backgroundColor: 'transparent',
+              userSelect: 'none',
+              touchAction: 'none',
+            }}
           />
           <AgentChatPanel
             boardId={boardId}

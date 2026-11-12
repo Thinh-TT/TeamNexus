@@ -205,4 +205,23 @@ describe('AgentChatPanel', () => {
     // Text the user already received is not thrown away.
     expect(screen.getByText('Dở dang')).toBeInTheDocument()
   })
+
+  it('shows loading state instead of flashing empty state while session and history load', async () => {
+    let resolveSession!: (val: { boardId: string; hasMessages: boolean; model: string }) => void
+    let resolveMessages!: (val: []) => void
+    mocked.getSession.mockReturnValueOnce(new Promise((r) => { resolveSession = r }))
+    mocked.listMessages.mockReturnValueOnce(new Promise((r) => { resolveMessages = r }))
+
+    renderPanel()
+
+    expect(screen.getByTestId('agent-chat-loading')).toBeInTheDocument()
+    expect(screen.queryByText('Hỏi AI về cả bảng này')).not.toBeInTheDocument()
+    expect(screen.getByTestId('agent-chat-messages').style.scrollbarGutter).toBe('stable')
+
+    resolveSession({ boardId: 'b1', hasMessages: false, model: 'deepseek-chat' })
+    resolveMessages([])
+
+    expect(await screen.findByText('Hỏi AI về cả bảng này')).toBeInTheDocument()
+    expect(screen.queryByTestId('agent-chat-loading')).not.toBeInTheDocument()
+  })
 })

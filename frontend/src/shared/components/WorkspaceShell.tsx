@@ -121,8 +121,9 @@ export const WorkspaceShell: React.FC = () => {
     <div
       style={{
         display: 'flex',
-        minHeight: '100vh',
+        height: '100vh',
         width: '100%',
+        overflow: 'hidden',
         backgroundColor: 'var(--tn-bg-canvas, #f8fafc)',
       }}
       data-testid="workspace-shell"
@@ -522,6 +523,9 @@ export const WorkspaceShell: React.FC = () => {
         style={{
           flex: 1,
           minWidth: 0,
+          height: '100vh',
+          overflowY: 'auto',
+          overflowX: 'hidden',
           display: 'flex',
           flexDirection: 'column',
         }}
