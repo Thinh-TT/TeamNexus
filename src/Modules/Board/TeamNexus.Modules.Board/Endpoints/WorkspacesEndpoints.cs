@@ -32,6 +32,8 @@ public static class WorkspacesEndpoints
             .AddEndpointFilter<DomainExceptionFilter>();
 
         group.MapGet("/", GetWorkspacesAsync).RequireAuthorization();
+        group.MapPost("/", CreateWorkspaceAsync).RequireAuthorization()
+            .AddEndpointFilter<AntiforgeryValidationEndpointFilter>();
         group.MapGet("/{workspaceId:guid}", GetWorkspaceAsync).RequireAuthorization();
         group.MapPut("/{workspaceId:guid}", UpdateWorkspaceAsync).RequireAuthorization()
             .AddEndpointFilter<AntiforgeryValidationEndpointFilter>();
@@ -53,6 +55,18 @@ public static class WorkspacesEndpoints
     {
         var result = await workspaces.ListForUserAsync(http.RequireUserId(), ct);
         return Results.Ok(result);
+    }
+
+    private static async Task<IResult> CreateWorkspaceAsync(
+        CreateWorkspaceRequest request,
+        HttpContext http,
+        IWorkspaceService workspaces,
+        CancellationToken ct)
+    {
+        // Any signed-in user may create a workspace: there is no membership to authorize against
+        // yet, and the service makes the caller its owner + Admin in the same write.
+        var created = await workspaces.CreateAsync(request, http.RequireUserId(), ct);
+        return Results.Created($"/api/workspaces/{created.Id}", created);
     }
 
     private static async Task<IResult> GetWorkspaceAsync(

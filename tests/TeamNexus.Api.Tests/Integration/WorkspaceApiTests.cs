@@ -104,6 +104,237 @@ public sealed class WorkspaceApiTests : IClassFixture<DatabaseFixture>
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    // ---- create (POST /api/workspaces) --------------------------------------
+
+    [Fact]
+    public async Task CreateWorkspace_Returns201AndMakesTheCallerAdminOwner()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var user = await scenario.CreateUserAsync("Người tạo");
+        using var client = await scenario.AsUserAsync(user);
+
+        var response = await client.PostJsonAsync(
+            "/api/workspaces",
+            new { name = "  Dự án Beta  ", description = "  Mô tả Beta  " });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var created = await response.Content.ReadFromJsonAsync<WorkspaceSummaryDto>();
+        Assert.NotNull(created);
+        Assert.Equal($"/api/workspaces/{created!.Id}", response.Headers.Location?.OriginalString);
+        Assert.Equal("Dự án Beta", created.Name);
+        Assert.Equal("Mô tả Beta", created.Description);
+        Assert.Equal("Admin", created.Role);
+        Assert.Equal(user.Id, created.OwnerId);
+        Assert.True(created.IsOwner);
+
+        await using var db = scenario.NewDbContext();
+        var workspace = await db.Workspaces.AsNoTracking().SingleAsync(w => w.Id == created.Id);
+        Assert.Equal(user.Id, workspace.OwnerId);
+
+        var membership = await db.WorkspaceMembers.AsNoTracking()
+            .SingleAsync(wm => wm.WorkspaceId == created.Id && wm.UserId == user.Id);
+        Assert.Equal(WorkspaceRole.Admin, membership.Role);
+
+        // A human POST must never mint an AI Agent pseudo-member.
+        Assert.Equal(MemberType.Human, membership.MemberType);
+    }
+
+    [Fact]
+    public async Task CreateWorkspace_WithABlankDescription_StoresNull()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var user = await scenario.CreateUserAsync("Người tạo");
+        using var client = await scenario.AsUserAsync(user);
+
+        var created = await CreateWorkspaceAsync(client, "Chỉ có tên", "   ");
+
+        Assert.Null(created.Description);
+    }
+
+    [Fact]
+    public async Task CreateWorkspace_AppearsInTheListAndSuppressesTheDefaultWorkspace()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var user = await scenario.CreateUserAsync("Người tạo");
+        using var client = await scenario.AsUserAsync(user);
+
+        var created = await CreateWorkspaceAsync(client, "Dự án Gamma");
+
+        var listed = await client.GetJsonAsync<List<WorkspaceSummaryDto>>("/api/workspaces");
+
+        Assert.NotNull(listed);
+        var only = Assert.Single(listed!);
+        Assert.Equal(created.Id, only.Id);
+        Assert.Equal("Dự án Gamma", only.Name);
+
+        // The lazy default workspace must not appear: the caller already has a membership.
+        Assert.DoesNotContain(listed!, w => w.Name == "Không Gian Làm Việc Chính");
+    }
+
+    [Fact]
+    public async Task CreateWorkspace_SecondWorkspace_KeepsBothOwnedByTheCaller()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var user = await scenario.CreateUserAsync("Người tạo");
+        using var client = await scenario.AsUserAsync(user);
+
+        var first = await CreateWorkspaceAsync(client, "Không gian A");
+        var second = await CreateWorkspaceAsync(client, "Không gian B");
+
+        var listed = await client.GetJsonAsync<List<WorkspaceSummaryDto>>("/api/workspaces");
+
+        Assert.NotNull(listed);
+        Assert.Equal(2, listed!.Count);
+        Assert.Contains(listed!, w => w.Id == first.Id);
+        Assert.Contains(listed!, w => w.Id == second.Id);
+        Assert.All(listed!, w => Assert.Equal("Admin", w.Role));
+        Assert.All(listed!, w => Assert.True(w.IsOwner));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CreateWorkspace_WithABlankName_Returns400(string name)
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var user = await scenario.CreateUserAsync("Người tạo");
+        using var client = await scenario.AsUserAsync(user);
+
+        var response = await client.PostJsonAsync(
+            "/api/workspaces",
+            new { name, description = (string?)null });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, await scenario.CountAsync<Workspace>());
+    }
+
+    [Fact]
+    public async Task CreateWorkspace_NameLengthBoundaryIs120()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var user = await scenario.CreateUserAsync("Người tạo");
+        using var client = await scenario.AsUserAsync(user);
+
+        var accepted = await client.PostJsonAsync(
+            "/api/workspaces",
+            new { name = new string('a', 120), description = (string?)null });
+        Assert.Equal(HttpStatusCode.Created, accepted.StatusCode);
+
+        var rejected = await client.PostJsonAsync(
+            "/api/workspaces",
+            new { name = new string('a', 121), description = (string?)null });
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+
+        Assert.Equal(1, await scenario.CountAsync<Workspace>(w => w.OwnerId == user.Id));
+    }
+
+    [Fact]
+    public async Task CreateWorkspace_WithTooLongDescription_Returns400()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var user = await scenario.CreateUserAsync("Người tạo");
+        using var client = await scenario.AsUserAsync(user);
+
+        var response = await client.PostJsonAsync(
+            "/api/workspaces",
+            new { name = "Mô tả dài", description = new string('x', 2001) });
+
+        // 400 rather than a 500 from the varchar(2000) column.
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, await scenario.CountAsync<Workspace>());
+    }
+
+    [Fact]
+    public async Task CreateWorkspace_WithoutTheAntiforgeryHeader_Returns403()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var user = await scenario.CreateUserAsync("Người tạo");
+        using var client = await scenario.AsUserAsync(user);
+
+        client.RemoveAntiforgeryHeader();
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/workspaces")
+        {
+            Content = JsonContent.Create(new { name = "Không có CSRF", description = (string?)null }),
+        };
+
+        var response = await client.Http.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Equal(0, await scenario.CountAsync<Workspace>());
+    }
+
+    [Fact]
+    public async Task CreateWorkspace_RequiresAuthentication()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        using var anonymous = await scenario.AnonymousAsync();
+
+        var response = await anonymous.PostJsonAsync(
+            "/api/workspaces",
+            new { name = "Một mình", description = (string?)null });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(0, await scenario.CountAsync<Workspace>());
+    }
+
+    [Fact]
+    public async Task CreateWorkspace_RecordsWorkspaceCreatedActivity()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var user = await scenario.CreateUserAsync("Người tạo");
+        using var client = await scenario.AsUserAsync(user);
+
+        var created = await CreateWorkspaceAsync(client, "Có nhật ký");
+
+        var log = Assert.Single(
+            await ReadActivityAsync(scenario, created.Id, ObserverActivityActions.WorkspaceCreated));
+
+        Assert.Equal(ObserverEntityTypes.Workspace, log.EntityType);
+        Assert.Equal(created.Id, log.EntityId);
+        Assert.Equal(user.Id, log.UserId);
+        Assert.Null(log.BoardId);   // workspace-level event
+        Assert.NotNull(log.Payload);
+        Assert.Contains("Có nhật ký", log.Payload!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CreateWorkspace_IsNotVisibleToOtherUsers()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var owner = await scenario.CreateUserAsync("Người tạo");
+        using var client = await scenario.AsUserAsync(owner);
+        var created = await CreateWorkspaceAsync(client, "Không gian riêng");
+
+        var outsider = await scenario.CreateUserAsync("Người ngoài");
+        using var outsiderClient = await scenario.AsUserAsync(outsider);
+
+        var listed = await outsiderClient.GetJsonAsync<List<WorkspaceSummaryDto>>("/api/workspaces");
+
+        Assert.NotNull(listed);
+        Assert.DoesNotContain(listed!, w => w.Id == created.Id);
+    }
+
+    [Fact]
+    public async Task GetWorkspace_AfterCreate_ReturnsMemberCountOneAndBoardCountZero()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var user = await scenario.CreateUserAsync("Người tạo");
+        using var client = await scenario.AsUserAsync(user);
+        var created = await CreateWorkspaceAsync(client, "Chi tiết");
+
+        var detail = await client.GetJsonAsync<WorkspaceDetailDto>($"/api/workspaces/{created.Id}");
+
+        Assert.NotNull(detail);
+        Assert.Equal("Chi tiết", detail!.Name);
+        Assert.Equal(user.Id, detail.OwnerId);
+        Assert.Equal(user.DisplayName, detail.OwnerDisplayName);
+        Assert.Equal(1, detail.MemberCount);
+        Assert.Equal(0, detail.BoardCount);
+        Assert.Equal("Admin", detail.CurrentUserRole);
+    }
+
     // ---- workspace detail ---------------------------------------------------
 
     [Fact]
@@ -244,6 +475,23 @@ public sealed class WorkspaceApiTests : IClassFixture<DatabaseFixture>
             $"/api/workspaces/{workspace.Id}",
             new { name = new string('a', 121), description = (string?)null });
         Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateWorkspace_WithTooLongDescription_Returns400()
+    {
+        await using var scenario = await _database.CreateScenarioAsync();
+        var (owner, workspace, _, _, _) = await SeedAsync(scenario);
+        using var client = await scenario.AsUserAsync(owner);
+
+        var response = await client.PutJsonAsync(
+            $"/api/workspaces/{workspace.Id}",
+            new { name = "Vẫn hợp lệ", description = new string('x', 2001) });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var unchanged = await scenario.FindAsync<Workspace>(workspace.Id);
+        Assert.Equal("Workspace A", unchanged!.Name);
     }
 
     [Fact]
@@ -746,6 +994,21 @@ public sealed class WorkspaceApiTests : IClassFixture<DatabaseFixture>
     }
 
     // ---- helpers ------------------------------------------------------------
+
+    /// <summary>POSTs a new workspace and returns the created summary (asserting 201 on the way).</summary>
+    private static async Task<WorkspaceSummaryDto> CreateWorkspaceAsync(
+        TestHttpClient client, string name, string? description = null)
+    {
+        var response = await client.PostJsonAsync(
+            "/api/workspaces",
+            new { name, description });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var created = await response.Content.ReadFromJsonAsync<WorkspaceSummaryDto>();
+        Assert.NotNull(created);
+        return created!;
+    }
 
     private static async Task<(ApplicationUser User, Workspace Workspace, Board Board, BoardColumn Todo, BoardColumn Done)>
         SeedAsync(TestScenario scenario)

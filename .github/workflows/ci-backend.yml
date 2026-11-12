@@ -128,8 +128,8 @@ jobs:
           # Cận dưới, không phải bằng đúng (giống ci-web.yml): điều cần chặn là ai đó XOÁ BỚT test. Ghim một con
           # số tuyệt đối biến mọi lần thêm test hợp lệ thành một lần sửa CI, và làm người ta có xu hướng hạ con số
           # thay vì điều tra lý do nó tụt.
-          if ($total -lt 1332) {
-            throw "Số test backend đã tụt: $total (baseline hiện tại là 1332, sau đợt khắc phục nghiệm thu 14/15 2026-11-12). Nếu là chủ ý, cập nhật con số này và tài liệu."
+          if ($total -lt 1346) {
+            throw "Số test backend đã tụt: $total (baseline hiện tại là 1346, sau khi thêm tạo workspace chủ động 2026-11-12). Nếu là chủ ý, cập nhật con số này và tài liệu."
           }
 
       - name: Upload test results

@@ -27,6 +27,12 @@ export interface UpdateWorkspaceRequest {
   description: string | null
 }
 
+/** Tạo không gian làm việc mới (POST /api/workspaces). */
+export interface CreateWorkspaceRequest {
+  name: string
+  description: string | null
+}
+
 export interface TransferOwnershipRequest {
   newOwnerId: string
 }

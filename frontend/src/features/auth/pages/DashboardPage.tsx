@@ -4,6 +4,7 @@ import {
   BarChartOutlined,
   CheckCircleOutlined,
   DashboardOutlined,
+  PlusOutlined,
   ProjectOutlined,
   RobotOutlined,
   SearchOutlined,
@@ -25,11 +26,13 @@ import {
   Tag,
   Tooltip,
   Typography,
+  message,
 } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { workspaceApi } from '../../workspace/services/workspaceApi'
-import type { WorkspaceSummary } from '../../workspace/types/workspace.types'
+import { WorkspaceCreateModal } from '../../workspace/components/WorkspaceCreateModal'
+import type { CreateWorkspaceRequest, WorkspaceSummary } from '../../workspace/types/workspace.types'
 import { AppHeader } from '../../../shared/components/AppHeader'
 
 const { Content } = Layout
@@ -38,6 +41,7 @@ export const DashboardPage: React.FC = () => {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
+  const [createOpen, setCreateOpen] = useState(false)
 
   useEffect(() => {
     workspaceApi
@@ -49,6 +53,24 @@ export const DashboardPage: React.FC = () => {
       })
       .catch(() => {})
   }, [])
+
+  const handleCreateWorkspace = async (data: CreateWorkspaceRequest) => {
+    try {
+      const created = await workspaceApi.create(data)
+      setWorkspaces((prev) => [...prev, created])
+      message.success(`Đã tạo không gian làm việc "${created.name}"`)
+      // Không gian mới hoàn toàn rỗng: đưa người dùng tới trang bảng Kanban, nơi có sẵn
+      // empty state "Tạo bảng đầu tiên" — đúng hành động tiếp theo.
+      navigate(`/workspaces/${created.id}/boards`)
+    } catch (err: unknown) {
+      const errorMsg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        'Tạo không gian làm việc thất bại'
+      message.error(errorMsg)
+      // Ném lại để modal giữ trạng thái mở và người dùng sửa được dữ liệu.
+      throw err
+    }
+  }
 
   const getGreeting = () => {
     const hour = new Date().getHours()
@@ -200,9 +222,26 @@ export const DashboardPage: React.FC = () => {
                     Workspace của bạn
                   </span>
                 </Flex>
-                <Tag color="indigo" style={{ borderRadius: 10 }}>
-                  {workspaces.length} Không gian
-                </Tag>
+                <Space wrap size={8}>
+                  <Tag color="indigo" style={{ borderRadius: 10 }}>
+                    {workspaces.length} Không gian
+                  </Tag>
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    data-testid="create-workspace-btn"
+                    onClick={() => setCreateOpen(true)}
+                    style={{
+                      backgroundColor: '#4f46e5',
+                      borderColor: '#4f46e5',
+                      borderRadius: 8,
+                      fontWeight: 600,
+                      boxShadow: '0 2px 6px rgba(79, 70, 229, 0.25)',
+                    }}
+                  >
+                    Tạo không gian làm việc
+                  </Button>
+                </Space>
               </Flex>
             }
             style={{ borderRadius: 14, boxShadow: '0 4px 16px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0' }}
@@ -215,7 +254,17 @@ export const DashboardPage: React.FC = () => {
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description="Bạn chưa tham gia Không gian làm việc nào"
-              />
+              >
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  data-testid="create-workspace-empty-btn"
+                  onClick={() => setCreateOpen(true)}
+                  style={{ backgroundColor: '#4f46e5', marginTop: 12 }}
+                >
+                  Tạo không gian làm việc
+                </Button>
+              </Empty>
             ) : (
               <Row gutter={[20, 20]}>
                 {workspaces.map((ws) => (
@@ -408,6 +457,12 @@ export const DashboardPage: React.FC = () => {
           </Card>
         </Flex>
       </Content>
+
+      <WorkspaceCreateModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreateWorkspace}
+      />
     </Layout>
   )
 }

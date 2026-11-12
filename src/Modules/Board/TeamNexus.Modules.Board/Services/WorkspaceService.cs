@@ -29,6 +29,15 @@ public interface IWorkspaceService
     /// </summary>
     Task<IReadOnlyList<WorkspaceSummaryResponse>> ListForUserAsync(Guid userId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Creates a workspace on purpose (POST /api/workspaces). The caller becomes its
+    /// <see cref="WorkspaceRole.Admin"/> and owner in one write; no workspace role is required
+    /// beforehand because none can exist yet. Validates the name (1–120) and the description
+    /// (≤ 2000) and records a <c>WorkspaceCreated</c> activity row.
+    /// </summary>
+    Task<WorkspaceSummaryResponse> CreateAsync(
+        CreateWorkspaceRequest request, Guid userId, CancellationToken ct = default);
+
     Task<WorkspaceDetailResponse> GetAsync(Guid workspaceId, Guid userId, CancellationToken ct = default);
 
     /// <summary>Manager+ only. Validates the name (1–120 characters) and records activity.</summary>
@@ -46,6 +55,12 @@ public sealed class WorkspaceService : IWorkspaceService
 {
     /// <summary>Matches <c>workspaces.name</c> varchar(120) and <c>BoardService.ValidateBoardName</c>.</summary>
     private const int MaxNameLength = 120;
+
+    /// <summary>
+    /// Matches <c>workspaces.description</c> varchar(2000). Validated before saving: an overlength
+    /// value would otherwise surface as a database error (500) instead of a 400 the client can fix.
+    /// </summary>
+    private const int MaxDescriptionLength = 2000;
 
     private const string OwnerUnknown = "Không xác định";
 
@@ -86,6 +101,57 @@ public sealed class WorkspaceService : IWorkspaceService
             .ToList();
     }
 
+    public async Task<WorkspaceSummaryResponse> CreateAsync(
+        CreateWorkspaceRequest request, Guid userId, CancellationToken ct = default)
+    {
+        var name = RequireValidName(request.Name);
+        var description = RequireValidDescription(request.Description);
+
+        var workspace = new Workspace
+        {
+            Id = Guid.NewGuid(),
+            Name = name,
+            Description = description,
+            OwnerId = userId,
+        };
+
+        // The creator is an Admin by construction. MemberType is set explicitly (not left to the
+        // default) so an AI Agent row can never be produced by this path: the agent is a
+        // pseudo-member created lazily by IAiAgentResolver, not by a human's POST.
+        var membership = new WorkspaceMember
+        {
+            WorkspaceId = workspace.Id,
+            UserId = userId,
+            Role = WorkspaceRole.Admin,
+            MemberType = MemberType.Human,
+            Workspace = workspace,
+        };
+
+        _db.Workspaces.Add(workspace);
+        _db.WorkspaceMembers.Add(membership);
+
+        // One SaveChangesAsync == one transaction: a workspace without its Admin membership can
+        // never be observed. No explicit transaction is opened (same rule as the mutation paths).
+        await _db.SaveChangesAsync(ct);
+
+        // Recorded after the write so the log reflects what actually happened; IActivityLogWriter
+        // is best-effort by contract and can never fail the request the caller asked for.
+        await RecordWorkspaceActivityAsync(
+            workspace.Id,
+            userId,
+            ObserverActivityActions.WorkspaceCreated,
+            new { name },
+            ct);
+
+        return new WorkspaceSummaryResponse(
+            workspace.Id,
+            workspace.Name,
+            workspace.Description,
+            membership.Role.ToString(),
+            userId,
+            IsOwner: true);
+    }
+
     public async Task<WorkspaceDetailResponse> GetAsync(
         Guid workspaceId, Guid userId, CancellationToken ct = default)
     {
@@ -120,7 +186,7 @@ public sealed class WorkspaceService : IWorkspaceService
         await _access.RequireManagerAsync(workspaceId, userId, ct);
 
         var name = RequireValidName(request.Name);
-        var description = TrimToNull(request.Description);
+        var description = RequireValidDescription(request.Description);
 
         // Captured before mutating: the payload reports whether anything actually changed rather
         // than storing the (potentially long) description text — same rule as Phase 5 §2.3.
@@ -307,6 +373,23 @@ public sealed class WorkspaceService : IWorkspaceService
     {
         var trimmed = value?.Trim();
         return string.IsNullOrEmpty(trimmed) ? null : trimmed;
+    }
+
+    /// <summary>
+    /// Trims a description, maps an empty string to <c>null</c>, and rejects anything longer than
+    /// <see cref="MaxDescriptionLength"/> with 400 rather than letting PostgreSQL raise a 22001 that
+    /// would surface as an unhandled 500.
+    /// </summary>
+    private static string? RequireValidDescription(string? description)
+    {
+        var trimmed = TrimToNull(description);
+        if (trimmed is { Length: > MaxDescriptionLength })
+        {
+            throw new BadRequestException(
+                $"Workspace description must be at most {MaxDescriptionLength} characters.");
+        }
+
+        return trimmed;
     }
 
     /// <summary>
