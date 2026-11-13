@@ -238,6 +238,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
 
   return (
     <aside
+      ref={setNodeRef}
       data-testid="agent-chat-panel"
       data-board-id={boardId}
       aria-label="AI Agent Chat của bảng"
@@ -249,9 +250,12 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         display: 'flex',
         flexDirection: 'column',
         backgroundColor: '#ffffff',
-        borderLeft: '1px solid #e2e8f0',
-        boxShadow: '-2px 0 6px rgba(15, 23, 42, 0.03)',
+        borderLeft: isOver ? '2px dashed #7c3aed' : '1px solid #e2e8f0',
+        boxShadow: isOver
+          ? '-4px 0 14px rgba(124, 58, 237, 0.15)'
+          : '-2px 0 6px rgba(15, 23, 42, 0.03)',
         userSelect: 'none',
+        transition: 'border-left 0.15s ease-in-out, box-shadow 0.15s ease-in-out',
       }}
     >
       {/* Header */}
@@ -351,7 +355,6 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
 
       {/* Attached tasks: the drop target */}
       <div
-        ref={setNodeRef}
         data-testid="agent-chat-attach-list"
         style={{
           padding: '10px 14px',

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  type CollisionDetection,
   DndContext,
   type DragEndEvent,
   type DragOverEvent,
@@ -8,6 +9,7 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCorners,
+  pointerWithin,
   useSensor,
   useSensors,
 } from '@dnd-kit/core'
@@ -366,6 +368,27 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     })
+  )
+
+  /**
+   * Custom collision detection (Phase 14.5 / 14.6 fix): prioritize the Agent Chat dropzone
+   * when pointer is inside it, otherwise fallback to closestCorners for Kanban columns and cards.
+   */
+  const boardCollisionDetection: CollisionDetection = useCallback(
+    (args) => {
+      if (agentChatOpen) {
+        const pointerCollisions = pointerWithin(args)
+        const chatCollision = pointerCollisions.find(
+          (c) => c.id === AGENT_CHAT_DROPZONE_ID
+        )
+        if (chatCollision) {
+          return [chatCollision]
+        }
+      }
+
+      return closestCorners(args)
+    },
+    [agentChatOpen]
   )
 
   // Filter tasks per column based on search & priority
@@ -785,76 +808,112 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
          One flex row: the canvas flexes, the panel keeps its width. This is what makes "drag a card into
          the chat" possible at all — the cards stay visible and draggable while the drop target is docked. */
       <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden' }}>
-      <div
-        ref={canvasRef}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          padding: '20px 24px',
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          display: 'flex',
-          gap: 16,
-          alignItems: 'flex-start',
-        }}
-      >
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners}
+          collisionDetection={boardCollisionDetection}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          {columns.map((column) => (
-            <KanbanColumn
-              key={column.id}
-              column={column}
-              tasks={filteredTasksByColumn[column.id] || []}
-              workspaceMembers={workspaceMembers}
-              onTaskClick={(task) => setActiveTask(task)}
-              onEditColumn={(col) => {
-                setEditingColumn(col)
-                setColumnModalOpen(true)
-              }}
-              onDeleteColumn={deleteColumn}
-              onCreateTask={createTask}
-              onSendToAiChat={sendTaskToAgentChat}
-            />
-          ))}
-
-          {/* "+ Thêm cột" Button Card at the end of columns */}
           <div
+            ref={canvasRef}
             style={{
-              minWidth: 260,
-              width: 260,
-              borderRadius: 14,
-              border: '1.5px dashed #cbd5e1',
-              padding: '16px',
-              textAlign: 'center',
-              backgroundColor: '#ffffff80',
-              cursor: 'pointer',
-              transition: 'all 0.18s ease-in-out',
-            }}
-            onClick={() => {
-              setEditingColumn(null)
-              setColumnModalOpen(true)
+              flex: 1,
+              minWidth: 0,
+              padding: '20px 24px',
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              display: 'flex',
+              gap: 16,
+              alignItems: 'flex-start',
             }}
           >
-            <Button
-              type="dashed"
-              block
-              icon={<PlusOutlined />}
+            {columns.map((column) => (
+              <KanbanColumn
+                key={column.id}
+                column={column}
+                tasks={filteredTasksByColumn[column.id] || []}
+                workspaceMembers={workspaceMembers}
+                onTaskClick={(task) => setActiveTask(task)}
+                onEditColumn={(col) => {
+                  setEditingColumn(col)
+                  setColumnModalOpen(true)
+                }}
+                onDeleteColumn={deleteColumn}
+                onCreateTask={createTask}
+                onSendToAiChat={sendTaskToAgentChat}
+              />
+            ))}
+
+            {/* "+ Thêm cột" Button Card at the end of columns */}
+            <div
               style={{
-                borderRadius: 8,
-                height: 38,
-                borderColor: '#cbd5e1',
-                color: '#64748b',
-                fontWeight: 500,
+                minWidth: 260,
+                width: 260,
+                borderRadius: 14,
+                border: '1.5px dashed #cbd5e1',
+                padding: '16px',
+                textAlign: 'center',
+                backgroundColor: '#ffffff80',
+                cursor: 'pointer',
+                transition: 'all 0.18s ease-in-out',
+              }}
+              onClick={() => {
+                setEditingColumn(null)
+                setColumnModalOpen(true)
               }}
             >
-              Thêm cột mới
-            </Button>
+              <Button
+                type="dashed"
+                block
+                icon={<PlusOutlined />}
+                style={{
+                  borderRadius: 8,
+                  height: 38,
+                  borderColor: '#cbd5e1',
+                  color: '#64748b',
+                  fontWeight: 500,
+                }}
+              >
+                Thêm cột mới
+              </Button>
+            </div>
           </div>
+
+          {/* Docked AI Agent Chat (Phase 14.5 §B). Mounted only while open: that is what makes the panel load
+              the stored transcript on open (and re-load when the board changes) instead of on every board view. */}
+          {agentChatOpen && (
+            <>
+              {/* Resize handle: a 6px column the user drags to widen or narrow the panel. */}
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Kéo để đổi kích thước AI Agent Chat"
+                data-testid="agent-chat-resizer"
+                onPointerDown={handleAgentChatResizeStart}
+                style={{
+                  width: 6,
+                  flexShrink: 0,
+                  cursor: 'col-resize',
+                  backgroundColor: 'transparent',
+                  userSelect: 'none',
+                  touchAction: 'none',
+                }}
+              />
+              <AgentChatPanel
+                boardId={boardId}
+                columns={columns}
+                width={agentChatWidth}
+                onClose={() => setAgentChatOpen(false)}
+                attachRequest={agentChatAttachRequest}
+                onAttachmentsChange={setAgentChatAttachedCount}
+                // Phase 14.6 §A1: the picker searches EVERY card of the board, not just the ones the board's own
+                // search box currently shows — "which card do I mean?" is a different question, and inheriting
+                // that filter would hide cards exactly when the user goes looking for them.
+                tasks={allBoardTasks}
+              />
+            </>
+          )}
 
           {/* Drag Overlay for smooth card pickup ghost preview */}
           <DragOverlay>
@@ -869,42 +928,6 @@ export const BoardView: React.FC<BoardViewProps> = ({ workspaceId, boardId }) =>
             ) : null}
           </DragOverlay>
         </DndContext>
-      </div>
-
-      {/* Docked AI Agent Chat (Phase 14.5 §B). Mounted only while open: that is what makes the panel load
-          the stored transcript on open (and re-load when the board changes) instead of on every board view. */}
-      {agentChatOpen && (
-        <>
-          {/* Resize handle: a 6px column the user drags to widen or narrow the panel. */}
-          <div
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Kéo để đổi kích thước AI Agent Chat"
-            data-testid="agent-chat-resizer"
-            onPointerDown={handleAgentChatResizeStart}
-            style={{
-              width: 6,
-              flexShrink: 0,
-              cursor: 'col-resize',
-              backgroundColor: 'transparent',
-              userSelect: 'none',
-              touchAction: 'none',
-            }}
-          />
-          <AgentChatPanel
-            boardId={boardId}
-            columns={columns}
-            width={agentChatWidth}
-            onClose={() => setAgentChatOpen(false)}
-            attachRequest={agentChatAttachRequest}
-            onAttachmentsChange={setAgentChatAttachedCount}
-            // Phase 14.6 §A1: the picker searches EVERY card of the board, not just the ones the board's own
-            // search box currently shows — "which card do I mean?" is a different question, and inheriting
-            // that filter would hide cards exactly when the user goes looking for them.
-            tasks={allBoardTasks}
-          />
-        </>
-      )}
       </div>
       )}
 
