@@ -128,7 +128,7 @@
 
 ## 5. Khắc phục sau Review (2026-11-11)
 
-> **Nguồn:** [`phase-15-3-15-4-code-review-and-remediation-plan.md`](../report/phase-15-3-15-4-code-review-and-remediation-plan.md). Không phát sinh migration mới.
+> **Nguồn:** [`phase-15-3-15-4-code-review-and-remediation-plan.md`](../report/reviews/phase-15-3-15-4-code-review-and-remediation-plan.md). Không phát sinh migration mới.
 
 | Mã | Lỗi gốc | Thay đổi | Kiểm chứng |
 | :--- | :--- | :--- | :--- |

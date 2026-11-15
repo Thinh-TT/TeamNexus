@@ -37,7 +37,7 @@
 
 ### 0.4. Việc còn lại của 15.5
 
-Toàn bộ `T15.5.1` → `T15.5.5` bên dưới, **trừ** phần nhãn `AiActionLogItem` (đã xong). Checklist bàn giao đầy đủ (gồm env deploy + xác minh sau deploy): [`phase-15-remaining-frontend-handover.md`](./phase-15-remaining-frontend-handover.md).
+Toàn bộ `T15.5.1` → `T15.5.5` bên dưới, **trừ** phần nhãn `AiActionLogItem` (đã xong). Checklist bàn giao đầy đủ (gồm env deploy + xác minh sau deploy): [`handovers/phase-15-remaining-frontend-handover.md`](./handovers/phase-15-remaining-frontend-handover.md).
 
 ---
 

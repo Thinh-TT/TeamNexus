@@ -4,7 +4,7 @@
 > **Nhánh review:** `origin/SNHau` @ `2d2b520` — *feat: implement frontend webhooks integration and GitHub linkage for Kanban tasks and workspace settings*
 > **Base:** `develop` @ `4c929d5` (sau đợt khắc phục review 15.3/15.4 + bàn giao). `develop` là **ancestor** ⇒ merge `--ff-only` được.
 > **Phạm vi diff:** 29 files, **+3.679 / −121** dòng; **0 thay đổi backend** (`git diff develop...HEAD -- src tests` rỗng), không thêm npm package, không migration.
-> **Đối chiếu:** [`phase-15-5`](../tasks/phase-15-5-frontend-integrations-and-e2e-verification.md), [`phase-15-0`](../tasks/phase-15-0-external-integrations-master-plan.md), [`AGENTS.md`](../../AGENTS.md), [báo cáo 15.5 do dev viết](../report/phase-15-external-integrations-test-report.md).
+> **Đối chiếu:** [`phase-15-5`](../../tasks/phase-15-5-frontend-integrations-and-e2e-verification.md), [`phase-15-0`](../../tasks/phase-15-0-external-integrations-master-plan.md), [`AGENTS.md`](../../../AGENTS.md), [báo cáo 15.5 do dev viết](../phase-15-external-integrations-test-report.md).
 
 ---
 
@@ -62,7 +62,7 @@ Có **3 lỗi P2 nên sửa trước khi merge** (đều nhỏ, ~0,5 ngày công
 
 ### F1 — **[P2] Báo cáo 15.5 khai báo có test "clear `DefaultBoardId`/`IssueLabelFilter`" nhưng test không tồn tại**
 
-- **Bằng chứng:** [`phase-15-external-integrations-test-report.md:74`](../report/phase-15-external-integrations-test-report.md) ghi *"…lưu clear `DefaultBoardId`/`IssueLabelFilter`, Rotate Secret & Refresh deliveries"*. Đọc hết 8 test trong [`WorkspaceIntegrations.test.tsx`](../../frontend/src/features/workspace/components/__tests__/WorkspaceIntegrations.test.tsx) **không có test nào** xoá board/nhãn — test "saves updated GitHub configuration" chỉ đổi label filter sang `backend, urgent` và giữ `b-1`.
+- **Bằng chứng:** [`phase-15-external-integrations-test-report.md:74`](../report/phase-15-external-integrations-test-report.md) ghi *"…lưu clear `DefaultBoardId`/`IssueLabelFilter`, Rotate Secret & Refresh deliveries"*. Đọc hết 8 test trong [`WorkspaceIntegrations.test.tsx`](../../../frontend/src/features/workspace/components/__tests__/WorkspaceIntegrations.test.tsx) **không có test nào** xoá board/nhãn — test "saves updated GitHub configuration" chỉ đổi label filter sang `backend, urgent` và giữ `b-1`.
 - **Tác động:** (a) hành vi quan trọng `EMPTY_GUID`/`""` (K1 của 15.5) không được khoá bằng test, dễ regress; (b) báo cáo nghiệm thu không trung thực về độ phủ — vi phạm quy tắc "không làm giả số đo" của `AGENTS.md`.
 - **Sửa:** thêm 2 test:
   1. Xoá board (`allowClear`) ⇒ `upsertGitHubIntegration` nhận `defaultBoardId: '00000000-0000-0000-0000-000000000000'`.
@@ -72,7 +72,7 @@ Có **3 lỗi P2 nên sửa trước khi merge** (đều nhỏ, ~0,5 ngày công
 
 ### F2 — **[P2] Nút Copy báo "thành công" dù không copy được gì khi `navigator.clipboard` không khả dụng**
 
-- **Bằng chứng:** [`TaskDetailModal.tsx:367`](../../frontend/src/features/board/components/TaskDetailModal.tsx) và [`GitHubIntegrationSection.tsx:100`](../../frontend/src/features/workspace/components/GitHubIntegrationSection.tsx) dùng `await navigator.clipboard?.writeText(...)`. Khi `navigator.clipboard` là `undefined` (trang không secure-context, webview nhúng, chính sách trình duyệt), optional chaining trả `undefined`, `await undefined` **thành công** ⇒ hiện toast *"Đã sao chép…"* nhưng clipboard rỗng.
+- **Bằng chứng:** [`TaskDetailModal.tsx:367`](../../../frontend/src/features/board/components/TaskDetailModal.tsx) và [`GitHubIntegrationSection.tsx:100`](../../../frontend/src/features/workspace/components/GitHubIntegrationSection.tsx) dùng `await navigator.clipboard?.writeText(...)`. Khi `navigator.clipboard` là `undefined` (trang không secure-context, webview nhúng, chính sách trình duyệt), optional chaining trả `undefined`, `await undefined` **thành công** ⇒ hiện toast *"Đã sao chép…"* nhưng clipboard rỗng.
 - **Tác động:** luồng onboarding quan trọng nhất là **copy Webhook Secret / Payload URL**; người dùng tin toast, dán chuỗi rỗng/sai vào GitHub ⇒ webhook không hoạt động mà không có cảnh báo.
 - **Sửa:** kiểm tra tồn tại trước khi copy và báo lỗi thật:
   ```ts
@@ -82,37 +82,37 @@ Có **3 lỗi P2 nên sửa trước khi merge** (đều nhỏ, ~0,5 ngày công
 
 ### F3 — **[P2] "Kích hoạt tích hợp GitHub" tự chọn bảng đầu tiên và bật tạo thẻ từ **mọi** Issue**
 
-- **Bằng chứng:** khi chưa có cấu hình, form tự điền [`GitHubIntegrationSection.tsx:87-94`](../../frontend/src/features/workspace/components/GitHubIntegrationSection.tsx): `isEnabled: true`, `defaultBoardId: boards[0]?.id`, `issueLabelFilter: ''`, `autoCreateTasksFromIssues: true`. Backend cũng mặc định bật auto-create khi nhận request đầu tiên.
+- **Bằng chứng:** khi chưa có cấu hình, form tự điền [`GitHubIntegrationSection.tsx:87-94`](../../../frontend/src/features/workspace/components/GitHubIntegrationSection.tsx): `isEnabled: true`, `defaultBoardId: boards[0]?.id`, `issueLabelFilter: ''`, `autoCreateTasksFromIssues: true`. Backend cũng mặc định bật auto-create khi nhận request đầu tiên.
 - **Tác động:** manager chỉ muốn "kết nối GitHub" bấm một nút là integration **đã bật** và tự tạo thẻ cho **tất cả Issue** của repo vào bảng đầu tiên (có thể là Backlog/Sprint không mong muốn) — nguy cơ làm ngập board bằng dữ liệu ngoài ý muốn (dù có thể Undo từng thẻ / xoá integration).
 - **Sửa:** không preselect board; chỉ bật nút lưu khi đã chọn board (hoặc mặc định `autoCreateTasksFromIssues = false` cho tới khi có board + cảnh báo "mọi Issue sẽ tạo thẻ"). Thêm test: chưa chọn board ⇒ nút disabled / auto-create tắt.
 
 ### F4 — **[P3] `applyColumnUpdated` làm rơi `isInReview` khi payload thiếu field**
 
-- **Bằng chứng:** [`boardStore.ts:319`](../../frontend/src/features/board/stores/boardStore.ts) — `isInReview: column.isInReview ?? false`, trong khi `isClarification` dùng `?? c.isClarification` (giữ giá trị cũ).
+- **Bằng chứng:** [`boardStore.ts:319`](../../../frontend/src/features/board/stores/boardStore.ts) — `isInReview: column.isInReview ?? false`, trong khi `isClarification` dùng `?? c.isClarification` (giữ giá trị cũ).
 - **Tác động:** một payload `ColumnUpdated` cũ/partial (rolling deploy, fixture cũ) sẽ **âm thầm xoá** trạng thái In Review trong store; tag biến mất dù DB vẫn đúng.
 - **Sửa:** `isInReview: column.isInReview ?? c.isInReview`.
 
 ### F5 — **[P3] `ColumnModal` không bắt rejection khi backend từ chối cột In Review thứ hai**
 
-- **Bằng chứng:** [`ColumnModal.tsx:41-50`](../../frontend/src/features/board/components/ColumnModal.tsx) `await onSubmit(...)` không `try/catch`; `useBoard` đã hiện toast lỗi rồi **rethrow**; backend trả `409` khi đã có cột `is_in_review` khác (`ColumnService.EnsureSingleInReviewColumnAsync`) hoặc `400` khi vi phạm loại trừ.
+- **Bằng chứng:** [`ColumnModal.tsx:41-50`](../../../frontend/src/features/board/components/ColumnModal.tsx) `await onSubmit(...)` không `try/catch`; `useBoard` đã hiện toast lỗi rồi **rethrow**; backend trả `409` khi đã có cột `is_in_review` khác (`ColumnService.EnsureSingleInReviewColumnAsync`) hoặc `400` khi vi phạm loại trừ.
 - **Tác động:** toast lỗi hiện đúng, modal giữ nguyên (tốt), nhưng phát sinh **unhandled promise rejection** (console/error boundary) — không sạch.
 - **Sửa:** bọc `try { await onSubmit(...) ; onClose() } catch { /* toast đã hiện */ }`.
 
 ### F6 — **[P3] Settings page tải trước toàn bộ dữ liệu tích hợp dù đang ở tab "Cài đặt chung"; không huỷ request cũ**
 
-- **Bằng chứng:** [`useWorkspaceIntegrations.ts:41-81`](../../frontend/src/features/workspace/hooks/useWorkspaceIntegrations.ts) — `Promise.all` 3 endpoint + gọi nối tiếp `getGitHubDeliveries`; effect chạy ngay khi page mount (test [`WorkspaceIntegrations.test.tsx:187-189`](../../frontend/src/features/workspace/components/__tests__/WorkspaceIntegrations.test.tsx) còn khẳng định điều này). `ignore` chỉ chặn setState **sau unmount**, không chặn response cũ ghi đè khi đổi workspace nhanh.
+- **Bằng chứng:** [`useWorkspaceIntegrations.ts:41-81`](../../../frontend/src/features/workspace/hooks/useWorkspaceIntegrations.ts) — `Promise.all` 3 endpoint + gọi nối tiếp `getGitHubDeliveries`; effect chạy ngay khi page mount (test [`WorkspaceIntegrations.test.tsx:187-189`](../../../frontend/src/features/workspace/components/__tests__/WorkspaceIntegrations.test.tsx) còn khẳng định điều này). `ignore` chỉ chặn setState **sau unmount**, không chặn response cũ ghi đè khi đổi workspace nhanh.
 - **Tác động:** 4 request thừa mỗi lần mở Settings; race condition nhẹ khi chuyển workspace liên tiếp.
 - **Sửa:** chỉ load khi `activeTab === 'integrations'` (truyền `enabled` theo tab), hoặc dùng `AbortController`/request-id trong `reload`, và gộp `getGitHubDeliveries` vào `Promise.all`.
 
 ### F7 — **[P3] Nhận diện "GitHub Bot" dựa cả vào tên hiển thị**
 
-- **Bằng chứng:** [`TaskDetailModal.tsx:790-793`](../../frontend/src/features/board/components/TaskDetailModal.tsx) — `comment.authorName === 'GitHub Bot' || authorId === GITHUB_BOT_USER_ID || legacyUserId === …`.
+- **Bằng chứng:** [`TaskDetailModal.tsx:790-793`](../../../frontend/src/features/board/components/TaskDetailModal.tsx) — `comment.authorName === 'GitHub Bot' || authorId === GITHUB_BOT_USER_ID || legacyUserId === …`.
 - **Tác động:** một thành viên đặt tên hiển thị "GitHub Bot" sẽ bị gắn avatar/tag GITHUB BOT, comment của họ bị render markdown và **không sửa/xoá được** (`isAuthor` bị loại).
 - **Sửa:** chỉ nhận theo `authorId`/`userId` (ID hệ thống), bỏ so sánh tên; giữ fallback ID cho payload legacy.
 
 ### F8 — **[P3] Sửa webhook có thể âm thầm xoá các subscription key ngoài catalog UI**
 
-- **Bằng chứng:** [`OutboundWebhooksSection.tsx:117-141`](../../frontend/src/features/workspace/components/OutboundWebhooksSection.tsx) khởi tạo checkbox từ `subscribedEvents` nhưng `Checkbox.Group` chỉ render `WEBHOOK_EVENT_CATALOG`; khi lưu chỉ gửi các key đang check. Endpoint tạo qua API với key fine-grained (`OverdueTask`, `CommentMention`, …) sẽ mất các key này lần đầu được sửa qua UI.
+- **Bằng chứng:** [`OutboundWebhooksSection.tsx:117-141`](../../../frontend/src/features/workspace/components/OutboundWebhooksSection.tsx) khởi tạo checkbox từ `subscribedEvents` nhưng `Checkbox.Group` chỉ render `WEBHOOK_EVENT_CATALOG`; khi lưu chỉ gửi các key đang check. Endpoint tạo qua API với key fine-grained (`OverdueTask`, `CommentMention`, …) sẽ mất các key này lần đầu được sửa qua UI.
 - **Sửa:** giữ các key không thuộc catalog dưới dạng hidden/disabled và gửi lại khi save, hoặc normalize fine-grained → canonical khi đọc (backend đã có `MapToCanonicalCategory`).
 
 ### F9 — **[P3] Ghi chú nghiệm thu production còn thiếu**
@@ -122,17 +122,17 @@ Có **3 lỗi P2 nên sửa trước khi merge** (đều nhỏ, ~0,5 ngày công
 
 ### F10 — **[P3] Tìm kiếm `tn-` trên Kanban so khớp chuỗi con**
 
-- **Bằng chứng:** [`BoardView.tsx:377-381`](../../frontend/src/features/board/components/BoardView.tsx) — `tn-${taskNumber}`.includes(query). Nhập `tn-1` khớp cả `TN-1`, `TN-10…TN-19`, `TN-100…`; nhập `tn` khớp mọi thẻ có số.
+- **Bằng chứng:** [`BoardView.tsx:377-381`](../../../frontend/src/features/board/components/BoardView.tsx) — `tn-${taskNumber}`.includes(query). Nhập `tn-1` khớp cả `TN-1`, `TN-10…TN-19`, `TN-100…`; nhập `tn` khớp mọi thẻ có số.
 - **Sửa:** nếu query khớp `^tn-\d+$` thì so sánh chính xác `===`; ngược lại giữ `includes` cho tìm theo tiêu đề/mô tả.
 
 ### F11 — **[P3] Plaintext secret còn nằm trong state cấu hình sau khi lưu**
 
-- **Bằng chứng:** [`useWorkspaceIntegrations.ts:169-172`](../../frontend/src/features/workspace/hooks/useWorkspaceIntegrations.ts) — `setGithubIntegration(saved)` giữ nguyên `webhookSecretPlaintext` (ngoài `oneTimeSecret`).
+- **Bằng chứng:** [`useWorkspaceIntegrations.ts:169-172`](../../../frontend/src/features/workspace/hooks/useWorkspaceIntegrations.ts) — `setGithubIntegration(saved)` giữ nguyên `webhookSecretPlaintext` (ngoài `oneTimeSecret`).
 - **Sửa:** destructure bỏ `webhookSecretPlaintext` trước khi set state (`const { webhookSecretPlaintext, ...config } = saved`), chỉ giữ trong `oneTimeSecret` và xoá khi dismiss. Phòng thủ theo chiều sâu (không phải lỗi rò rỉ hiện tại vì không render field này).
 
 ### F12 — **[P3] `TaskCard` vẫn truyền `delete={isCompleted}` rồi vô hiệu bằng `textDecoration: 'none'`**
 
-- **Bằng chứng:** [`TaskCard.tsx:324,330`](../../frontend/src/features/board/components/TaskCard.tsx). `AGENTS.md` §4.2 cấm gạch ngang tiêu đề thẻ hoàn thành (che dấu tiếng Việt); hiện inline style đè nên **không có gạch ngang thực tế**, nhưng prop `delete` là code chết/mâu thuẫn và dev ghi trong L1 là giữ nó "để tôn trọng assertion test cũ".
+- **Bằng chứng:** [`TaskCard.tsx:324,330`](../../../frontend/src/features/board/components/TaskCard.tsx). `AGENTS.md` §4.2 cấm gạch ngang tiêu đề thẻ hoàn thành (che dấu tiếng Việt); hiện inline style đè nên **không có gạch ngang thực tế**, nhưng prop `delete` là code chết/mâu thuẫn và dev ghi trong L1 là giữ nó "để tôn trọng assertion test cũ".
 - **Sửa:** bỏ `delete`, giữ màu muted `#94a3b8` + `opacity 0.85` + icon ✔ (đúng chuẩn), cập nhật assertion cũ nếu nó phụ thuộc prop này.
 
 ---
@@ -163,7 +163,7 @@ Nếu thêm test frontend, nâng baseline `ci-web.yml` tương ứng (chỉ khi 
 
 ## 6. Việc còn lại (không phải lỗi code)
 
-1. **Chưa chạy E2E/live verification trên production** — checklist ở [`report §6`](../report/phase-15-external-integrations-test-report.md) cần thực hiện sau deploy: tab Tích hợp → tạo Slack/Discord + Gửi thử; GitHub Payload URL/Secret; PR `TN-…` → cột Đang duyệt PR + chip; Issue → thẻ + GitHub Bot comment.
+1. **Chưa chạy E2E/live verification trên production** — checklist ở [`report §6`](../phase-15-external-integrations-test-report.md) cần thực hiện sau deploy: tab Tích hợp → tạo Slack/Discord + Gửi thử; GitHub Payload URL/Secret; PR `TN-…` → cột Đang duyệt PR + chip; Issue → thẻ + GitHub Bot comment.
 2. **Push/PR:** `develop` local đang đi trước `origin/develop`; nhánh `origin/SNHau` có thể merge `--ff-only` sau khi các commit trên nằm trong `develop` (nếu áp dụng R1–R3 trên nhánh mới thì merge theo thứ tự).
 3. **Nhánh `backup/main-before-reset-26382b6`** đã merge trước đó; không cần dùng lại.
 

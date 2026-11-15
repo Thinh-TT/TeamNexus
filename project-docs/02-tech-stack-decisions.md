@@ -1,148 +1,135 @@
-# TeamNexus – Quyết định Công nghệ & Lưu ý Phát triển
+# TeamNexus – Quyết định Công nghệ & Lưu ý Phát triển (Tech Stack & ADRs)
 
-> Tài liệu này chốt lựa chọn công nghệ cho dự án TeamNexus và các lưu ý cần tuân theo trong quá trình phát triển. Bối cảnh: dự án làm solo (full-stack), mục tiêu portfolio/CV cá nhân (có thể mở rộng thành đồ án tốt nghiệp), deadline dài, triển khai Web trước — Mobile (Flutter) sau, deploy trên hạ tầng cloud free-tier/chi phí thấp.
+> Tài liệu này ghi nhận các Quyết định Kiến trúc (Architectural Decision Records – ADRs), lựa chọn công nghệ và các nguyên tắc kỹ thuật cốt lõi của dự án **TeamNexus**.
+
+---
 
 ## 1. Kiến trúc tổng thể
 
-**Modular Monolith trên ASP.NET Core** — không tách microservices.
+**Modular Monolith trên nền tảng ASP.NET Core (.NET 10)** — không tách microservices.
 
-- Tách code theo module domain: `Auth`, `Board` (Kanban), `Ai` (Smart Setup + Observer + Accountability), `Reporting`.
-- Lý do: dễ deploy trên free-tier, dễ bảo trì một mình, vẫn thể hiện được năng lực tổ chức kiến trúc cho portfolio mà không rơi vào bẫy "over-architecture".
+- Phân tách mã nguồn thành **4 module nghiệp vụ độc lập**: `Auth`, `Board` (Kanban & Workspace), `Ai` (Hybrid AI Jev/DeepSeek, Accountability Layer, Observer, Agent Executor, RAG, Email & External Integrations), và `Reporting`.
+- **Chiều phụ thuộc nghiêm ngặt (`Ai → Board` một chiều):** Module `Board` tuyệt đối không tham chiếu `Ai`. Khi `Board` cần kích hoạt khả năng do `Ai` cài đặt (như ghi nhật ký hoạt động, gửi thông báo, gửi email, giải quyết danh tính AI Agent), `Board` khai báo giao diện cổng (Port) kèm bản cài đặt mặc định an toàn (`Null*`), và `AiModule` đăng ký ghi đè (Override) trong Dependency Injection. Khi `Ai` cần tác động ngược vào thực thể của `Board`, `Board` mở các cổng dịch vụ hẹp (`ITaskService`, `ITaskAutomation`).
+- **Lý do lựa chọn:** Dễ dàng triển khai và vận hành trên hạ tầng đám mây chi phí thấp, loại bỏ độ trễ mạng nội bộ giữa các dịch vụ nhưng vẫn giữ ranh giới miền (Bounded Contexts) rõ ràng, sạch sẽ.
 
-## 2. Tech Stack theo từng tính năng
+---
 
-### 2.1. Auth & RBAC
-- **Công nghệ:** ASP.NET Core Identity + OAuth handlers built-in (Google/GitHub), tự issue JWT + refresh token qua HttpOnly Cookie.
-- **Không dùng:** Keycloak tự host — tránh tốn thêm hạ tầng/RAM không cần thiết ở quy mô solo + free-tier.
-- **Mô hình phân quyền hai lớp (Giai đoạn 9):**
-  - **Identity Role toàn cục** (`Admin` / `User`): gắn vào JWT claim. `User` là default cho mọi user đăng ký OAuth. `Admin` chỉ assign thủ công cho system administrator của nền tảng (platform-level: xem toàn bộ users, can thiệp workspace vi phạm...).
-  - **Workspace Role** (`Admin` / `Manager` / `Member`): lưu trong `workspace_members.role`, kiểm tra tại service layer cho mọi nghiệp vụ trong workspace. Đây là lớp phân quyền thực sự — một user có thể là `Admin` ở workspace A và `Member` ở workspace B.
-  - **Nguyên tắc:** mọi endpoint workspace dùng `.RequireAuthorization()` (user hợp lệ) + kiểm `workspace_members.role` trong service; chỉ endpoint platform-level dùng `SystemAdminPolicy` (Identity = Admin).
+## 2. Tech Stack theo từng phân hệ
+
+### 2.1. Xác thực & Phân quyền (Auth & Two-Layer RBAC)
+- **Công nghệ:** ASP.NET Core Identity + OAuth 2.0 handlers tích hợp sẵn (Google / GitHub), cấp phát JWT Access Token + Refresh Token qua `HttpOnly Cookie`.
+- **Không dùng:** Keycloak tự host — tránh tiêu tốn tài nguyên RAM/hạ tầng không cần thiết.
+- **Mô hình phân quyền hai lớp:**
+  - **Identity Role toàn cục (`Admin` / `User`):** Gắn vào JWT claim. `User` là mặc định cho mọi tài khoản đăng ký qua OAuth. `Admin` chỉ gán cho quản trị viên hệ thống (`SystemAdminPolicy`).
+  - **Workspace Role (`Admin` / `Manager` / `Member`):** Lưu trong `workspace_members.role`, kiểm tra tại tầng dịch vụ (`IWorkspaceAccess`) cho mọi nghiệp vụ trong không gian làm việc. Một người dùng có thể là `Admin` ở workspace A nhưng là `Member` ở workspace B.
+- **Lưu ý bảo mật:**
+  - Cấu hình Cookie `SameSite=Lax/None` + `Secure` + `HttpOnly`.
+  - Áp dụng bộ lọc chống CSRF (`AntiforgeryValidationEndpointFilter` kiểm tra header `X-XSRF-TOKEN`) trên toàn bộ các endpoint thay đổi dữ liệu dùng xác thực cookie.
+  - Xoay vòng (rotate) Refresh Token mỗi lần sử dụng và thu hồi toàn bộ chuỗi nếu phát hiện sử dụng lại token đã thu hồi (chống replay).
+  - Chặn hoàn toàn tài khoản hệ thống (`users.is_system = true`) và tài khoản thành viên ảo (`ai_agent`) khỏi luồng đăng nhập OAuth/JWT và làm mới token.
+
+### 2.2. Bảng điều khiển Kanban Thời gian thực (Real-time Kanban)
+- **Công nghệ:** ASP.NET Core SignalR (`BoardHub`).
 - **Lưu ý kỹ thuật:**
-  - Cookie cần cấu hình `SameSite=Strict/Lax` + `Secure`.
-  - Vì dùng cookie-based auth nên cần cơ chế chống CSRF riêng (anti-forgery token).
-  - Refresh token nên rotate mỗi lần sử dụng (tránh replay).
+  - Sử dụng SignalR Group theo từng bảng (`board-{boardId}`) và kiểm tra quyền thành viên workspace mỗi khi client gọi `JoinBoard`, đảm bảo cô lập dữ liệu tuyệt đối giữa các nhóm.
+  - Giao diện Web áp dụng cập nhật lạc quan (Optimistic UI) khi kéo-thả và đồng bộ lại khi máy chủ xác nhận; xung đột chỉnh sửa đồng thời xử lý theo chiến lược *last-write-wins*.
+  - Tích hợp cơ chế tự động kết nối lại (`withAutomaticReconnect`) và thông báo trạng thái kết nối thân thiện để thích ứng với hiện tượng ngủ (cold-start) trên hạ tầng cloud free-tier.
 
-### 2.2. Kanban Board Real-time
-- **Công nghệ:** SignalR (native trong ASP.NET Core).
-- **Lưu ý:**
-  - Free-tier hosting (Render/Railway free) thường sleep sau vài phút không hoạt động → kết nối SignalR có thể bị rớt, cần xử lý auto-reconnect ở client.
-  - Dùng SignalR Group theo `boardId` để chỉ broadcast đến đúng người đang xem board đó, tránh gửi thừa.
-  - Cập nhật optimistic ở frontend, đồng bộ lại khi server xác nhận; xung đột chỉnh sửa đồng thời chấp nhận chiến lược last-write-wins ở giai đoạn này.
+### 2.3. AI Smart Setup, AI Board Template & AI Observer (System 2 LLM)
+- **Công nghệ:** DeepSeek API (chuẩn giao thức OpenAI-compatible), gọi qua `HttpClient` định danh riêng.
+- **Trừu tượng hóa Provider:** Bọc toàn bộ giao tiếp LLM qua 3 giao diện cổng tách biệt theo mục đích:
+  1. `IAiProvider` (`CompleteAsync`): Sinh kết quả đơn lượt kèm ép khuôn `json_object` (dùng cho Smart Setup, Board Template, Observer Summarizer).
+  2. `IAiToolCallingProvider` (`ChatAsync`): Hỗ trợ vòng lặp gọi hàm nhiều bước (dùng cho AI Agent Executor).
+  3. `IAiStreamingProvider` (`StreamAsync`): Truyền tải luồng văn bản theo thời gian thực qua Server-Sent Events (dùng cho Task Chat & Board Agent Chat).
+- **Xử lý ngoại lệ & Chế độ Ngoại tuyến:** Khi khóa `DeepSeek:ApiKey` để trống, hệ thống tự động đăng ký `FakeAiProvider` (hoạt động tất định, không cần mạng, 0 tốn token) phục vụ phát triển cục bộ và kiểm thử tự động CI/CD.
 
-### 2.3. AI Smart Setup & AI Observer
-- **Công nghệ:** DeepSeek API (schema tương thích OpenAI), gọi qua `HttpClient` riêng.
-- **Lưu ý kiến trúc:** Bọc lời gọi AI qua interface `IAiProvider` để dễ đổi/thêm provider sau này mà không sửa logic nghiệp vụ.
-- **Smart Setup:**
-  - Ép output trả về đúng JSON schema cố định (dùng `response_format`/system prompt chặt), validate trước khi ghi DB.
-  - Không tự động ghi thẳng vào DB — luôn qua bước xác nhận của con người (liên kết với Accountability Layer).
-- **Observer:**
-  - Chạy nền bằng `BackgroundService` (built-in .NET) — không cần Hangfire/Redis ở quy mô này.
-  - Quét log định kỳ (ví dụ mỗi 15–30 phút), tóm tắt log trước khi gửi cho AI để giảm token/chi phí gọi API.
-  - Kết quả cảnh báo gửi riêng cho Manager, không public toàn team.
+### 2.4. Lớp Giải trình AI (Accountability Layer)
+- **Công nghệ:** Bảng quan hệ `ai_action_logs` trong PostgreSQL kết hợp mẫu thiết kế Strategy (`IAiActionApplier` cho từng loại hành động).
+- **Nguyên tắc bất biến:**
+  - Mọi đề xuất ghi dữ liệu của AI phải đi qua `AiActionService`: khởi tạo ở trạng thái `Pending`, chỉ thực thi vào bảng nghiệp vụ khi Quản lý bấm `Approve` (sử dụng cơ chế Compare-And-Swap chống duyệt trùng), và hỗ trợ hoàn tác (`Undo`) dựa trên `before_snapshot` / `applied_snapshot`.
+  - Quản lý giao dịch (Transaction) tập trung tại `AiActionService`: các lớp `IAiActionApplier` thực thi bên trong giao dịch sẵn có của `AiActionService` và tuyệt đối không mở giao dịch lồng nhau.
 
-### 2.4. Accountability Layer
-- **Công nghệ:** Bảng quan hệ `AiActionLog` trong PostgreSQL (không cần event sourcing).
-- **Cấu trúc log:** action, input/basis (tóm tắt prompt/dữ liệu đầu vào), timestamp, trạng thái (`Pending/Approved/Rejected/Undone`), actor liên quan.
-- **Lưu ý:**
-  - Mọi hành động ghi dữ liệu do AI khởi tạo phải đi qua một service duy nhất (`AiActionService`): log trước ở trạng thái `Pending`, chỉ áp dụng thật vào dữ liệu sau khi người dùng xác nhận.
-  - Hỗ trợ Undo: lưu đủ thông tin để revert (soft-delete hoặc lưu diff trước/sau).
+### 2.5. Xuất báo cáo Đa định dạng (PDF / Excel)
+- **PDF:** QuestPDF (Community License — kết xuất đồ họa vector sắc nét, hỗ trợ đầy đủ tiếng Việt).
+- **Excel:** ClosedXML (MIT License — tạo bảng tính `.xlsx` gồm nhiều trang kèm định dạng thanh dữ liệu, bộ lọc tự động và cố định dòng tiêu đề).
+- **Lưu ý:** Khởi tạo tệp theo yêu cầu trực tiếp trong bộ nhớ RAM (`byte[]`), không lưu tệp vật lý trên ổ đĩa máy chủ.
 
-### 2.5. Xuất báo cáo (PDF/Excel)
-- **PDF:** QuestPDF (license Community — miễn phí cho cá nhân/công ty nhỏ).
-- **Excel:** ClosedXML (MIT license, hoàn toàn miễn phí — tránh EPPlus do đã đổi sang license thương mại).
-- **Lưu ý:** Generate file theo yêu cầu (on-demand), không lưu trữ lâu dài trên server để tiết kiệm dung lượng free-tier.
+### 2.6. Giao diện Web (Frontend SPA)
+- **Công nghệ cốt lõi:** React 19.2 + TypeScript 6.0 + Vite 8.2.
+- **Hệ thống Thiết kế & UI Kit:** Ant Design v6 (`antd`) kết hợp bộ quy chuẩn thiết kế **Luminous Enterprise v4.2** (quản lý qua biến CSS `--tn-*`, phông chữ *Be Vietnam Pro* tối ưu dấu tiếng Việt và *JetBrains Mono* cho các định danh kỹ thuật/số liệu). Không sử dụng Tailwind CSS và không dùng `dangerouslySetInnerHTML`.
+- **Quản lý trạng thái & Kéo-thả:** Zustand cho trạng thái bảng Kanban/phiên đăng nhập, `@dnd-kit/core` + `@dnd-kit/sortable` cho thao tác kéo-thả thẻ trên bảng và kéo thẻ thả trực tiếp vào khung AI Agent Chat.
+- **Giao tiếp API & SSE Streaming:** Axios (`httpClient` tự động đính kèm cookie và header `X-XSRF-TOKEN`) cho REST API; sử dụng `fetch` + `ReadableStream` + `TextDecoder` cho các luồng SSE `POST` (do `EventSource` mặc định của trình duyệt không hỗ trợ phương thức `POST` và header CSRF).
 
-### 2.6. Frontend Web
-- **Công nghệ:** React + TypeScript + Vite, UI kit Ant Design
-- **Kéo-thả Kanban:** `@dnd-kit/core`
+### 2.7. Ứng dụng Di động (Mobile — Giai đoạn 16)
+- **Công nghệ:** Flutter 3.x / Dart 3.x, giao diện Material 3, tái sử dụng chung toàn bộ hệ thống REST API và hợp đồng DTO append-only với bản Web.
+- **Lưu ý kỹ thuật:** Sử dụng `signalr_netcore` để đồng bộ thời gian thực với `BoardHub` và `flutter_secure_storage` (KeyStore / Keychain) để bảo vệ phiên đăng nhập trên thiết bị di động.
 
-### 2.7. Mobile (giai đoạn sau)
-- **Công nghệ:** Flutter, gọi chung API với web.
-- **Lưu ý:** Khi triển khai, dùng package `signalr_netcore` để kết nối SignalR từ Flutter; áp dụng lại kinh nghiệm cấu hình network (LAN config, cleartext HTTP cho môi trường dev) đã từng xử lý ở UniShare nếu cần test trên thiết bị thật.
+### 2.8. AI Agent Executor & Đội ngũ Chuyên gia (Multi-Agent Personas)
+- **Định danh thành viên ảo:** Biểu diễn bằng bản ghi `users` kết hợp `workspace_members` có `member_type = 'ai_agent'` và `persona_key` (`general`, `scrum_master`, `tech_lead`, `qa_security`), khởi tạo tự động (lazy) cho từng workspace.
+- **Bộ 7 công cụ ReAct (Whitelist):** `SearchSystemData`, `WebSearch` (qua **Tavily Search API**), `DraftOutput`, `RequestClarification`, `InspectMemberWorkload`, `MatchSkills`, và `ValidateAcceptanceCriteria`.
+- **Theo dõi tiến trình & Guardrails:** Ghi nhật ký từng lượt chạy tại bảng append-only `agent_runs` (`tool_call_trace`, lượng token tiêu thụ, nguyên nhân dừng), phát sóng tiến độ qua SignalR (`AgentRunProgress`) và cưỡng chế giới hạn an toàn: tối đa **15 tool-call**, **20 lượt gọi LLM**, **5 phút** chạy và **~50.000 token** mỗi lượt. Có tiến trình `AgentRunReaper` tự động thu dọn các lượt chạy mồ côi khi máy chủ khởi động lại.
 
-### 2.9. Email Transactional (Giai đoạn 11)
-- **Công nghệ:** [Resend](https://resend.com) API — free 3.000 email/tháng, không cần thẻ tín dụng, gọi qua HTTP REST Client nhẹ nhàng.
-- **Dùng cho:** email mời member vào workspace (link token), gửi email nhanh từ Manager đến member(s).
-- **Domain & Xác thực:** Đã cấu hình xác thực tên miền chính thức `teamnexus.cloud` qua Cloudflare DNS (SPF, DKIM, DMARC), gửi mail đại diện dưới danh nghĩa `TeamNexus <noreply@teamnexus.cloud>` tới bất kỳ địa chỉ email nào (không bị giới hạn tài khoản dev).
-- **Lưu ý:** API key lưu trong User Secrets (local) và environment variable `Email__ApiKey` (production Render); không commit vào repo.
+### 2.9. Dịch vụ Email Giao dịch & Daily Digest
+- **Công nghệ:** [Resend](https://resend.com) REST API (tích hợp xác thực tên miền `teamnexus.cloud` qua Cloudflare DNS với đầy đủ SPF, DKIM, DMARC, gửi từ `TeamNexus <noreply@teamnexus.cloud>`). Khi thiếu khóa API, hệ thống tự động dùng `NullEmailSender` an toàn.
+- **Phạm vi sử dụng:** Gửi email lời mời tham gia workspace, gửi thông báo nhanh từ Quản lý tới thành viên, và gửi bản tin tóm tắt công việc hàng ngày (**Daily Email Digest** — có cơ chế chống gửi trùng ở tầng CSDL theo khóa `(kind = 'DailyDigest', to_email, ngày UTC)` và mặc định tắt `Digest:Enabled = false` ở môi trường dev/CI).
 
-### 2.8. AI Agent Executor (Phase 7)- **Gán task cho Agent:** thêm pseudo-member `member_type = 'ai_agent'` trong `workspace_members` — gán qua đúng dropdown/kéo-thả assignee hiện có, không xây UI riêng.
-- **Vòng lặp thực thi:** mở rộng `IAiProvider`/`DeepSeekAiProvider` để hỗ trợ function-calling (tool-calling loop: plan → gọi tool → quan sát → lặp), khác với luồng gọi 1 lần của Smart Setup.
-- **Bộ tool (whitelist, không cho tool tự do):**
-  - `SearchSystemData` — truy vấn task/comment/board nội bộ.
-  - `WebSearch` — qua **Tavily API** (free tier 1.000 credit/tháng, không cần thẻ, output đã tối ưu sẵn cho LLM agent nên không cần thêm bước scrape riêng).
-  - `DraftOutput` — sinh nội dung kết quả (comment hoặc file tuỳ độ dài).
-  - `RequestClarification` — chuyển task sang trạng thái chờ làm rõ kèm câu hỏi.
-- **Trạng thái task mới:** thêm `Chờ làm rõ` vào enum trạng thái của module `Board`. Khi trưởng nhóm trả lời (comment), Agent **không** tự động chạy lại — cần thao tác thủ công nút "Chạy lại" để tránh việc mọi comment vô tình trigger AI.
-- **Kết quả đầu ra & duyệt:** tái dùng Accountability Layer (mục 2.4) — thêm 2 applier mới `PostCommentApplier` (nội dung ngắn) và `PostAttachmentApplier` (nội dung dài dưới dạng file), đi qua đúng luồng Pending → Approve/Reject/Undo đã có, không xây accountability riêng cho Agent.
-- **Theo dõi tiến trình thực thi:** bảng mới `agent_runs` (tách khỏi `ai_action_logs` vì mục đích khác — theo dõi tiến trình chạy, không phải log quyết định ghi dữ liệu): `task_id`, `status` (`Running/AwaitingClarification/AwaitingApproval/Completed/Failed`), `tool_call_trace` (jsonb), `tokens_used`, `started_at`/`finished_at`.
-- **Guardrail bắt buộc (mặc định, cấu hình được qua `appsettings`):**
-  - Tối đa **15 tool-call** mỗi lượt chạy.
-  - Timeout **5 phút** wall-clock mỗi task.
-  - Ngân sách **~50.000 token** mỗi lượt chạy.
-  - Vượt ngưỡng → tự dừng, log `BudgetExceeded`, thông báo cho trưởng nhóm qua hệ thống `notifications` sẵn có — không lặp vô hạn.
-- **Real-time:** broadcast thay đổi trạng thái `agent_runs` qua `BoardHub` (SignalR) đã có, để trưởng nhóm thấy card đổi trạng thái ngay khi Agent bắt đầu/dừng/hỏi lại.
+### 2.10. Kiến trúc Hybrid AI: Mô hình Quyết định Jev (System 1) & Embeddings
+- **Công nghệ System 1:** Mô hình quyết định không sinh văn bản **TypeSafe Jev (`typesafe/jev-1.13`)** gọi qua **OpenRouter Decisions API** (`POST {Jev:BaseUrl}{Jev:DecisionsPath}`, mặc định `/api/alpha/decisions`).
+- **Đặc điểm kỹ thuật:**
+  - Khác biệt hoàn toàn với `/chat/completions`: nhận `{ model, state, questions }` và trả về dữ liệu có kiểu tĩnh (`choice` kèm phân phối xác suất & `confidence`, `score` trên thang đo thứ tự, `noul` cho câu hỏi nhị phân). Được cài đặt qua client riêng `JevDecisionHttpProvider` (và `FakeJevDecisionProvider` khi chạy ngoại tuyến).
+  - **Cưỡng chế rẽ nhánh trong mã nguồn (`ConfidenceRouting`):** `≥ 0.85` → `DirectAssign`; `0.50 .. < 0.85` → `OfferChoices`; `< 0.50` → `ManualRequired` (xóa trắng các trường gợi ý để tránh áp đặt khi độ tự tin thấp).
+  - **Bảo mật định danh tuyệt đối:** Không bao giờ gửi địa chỉ email hay mã `Guid` thật cho Jev (ánh xạ ứng viên sang nhãn ẩn danh `cand-1`, `cand-2` do máy chủ quản lý).
+- **Dịch vụ Nhúng Vector (`Embeddings`):** Tách cấu hình độc lập (`OpenRouterEmbeddingProvider` tương thích chuẩn OpenAI `POST /embeddings` + `FakeEmbeddingProvider` băm tất định SHA-256 khi ngoại tuyến). Cưỡng chế kiểm tra số chiều `Embeddings:Dimensions = 1536` ngay lúc khởi động (`ValidateOnStart`) để khớp tuyệt đối với cột `vector(1536)` trong CSDL.
 
-### 2.10. Jev — System One Decision Model qua OpenRouter (Giai đoạn 14.7 Track A)
-- **Công nghệ:** [Jev](https://openrouter.ai/docs/guides/community/jev) (TypeSafe) gọi qua **OpenRouter**. Dùng **chung** OpenRouter API key nhưng **section cấu hình RIÊNG** (`Jev`), vì route khác hẳn DeepSeek.
-- **⚠️ Khác biệt kiến trúc quan trọng nhất:** Jev **KHÔNG** đi qua `/chat/completions`. Nó có **Decisions API** riêng: `POST /api/alpha/decisions` với body `{ model, state, questions }` → response `{ answers, usage }` trong đó `answers` là **dữ liệu có kiểu** (`noul` = xác suất "có"; `choice` = nhãn + phân phối + `confidence`; `score` = vị trí trên thang có thứ tự). **Hệ quả:** `DeepSeekAiProvider` hiện có **không thể tái dùng kể cả khi chỉ đổi `BaseUrl`** ⇒ cần `JevDecisionHttpProvider` riêng.
-- **Model & giá:** `typesafe/jev-1.13` (alias `~typesafe/jev-latest`), context **32 000 token input**, **output token miễn phí** (chỉ tính input token). Response trả `usage.cost` **thật** bằng USD.
-  - ⚠️ **Đừng so sánh chuỗi `response.model` với `request.model`**: response thường mang id có hậu tố ngày (`typesafe/jev-1.13-20260917`).
-  - ⚠️ **`GET /api/v1/models` KHÔNG liệt kê Jev** (trừ `typesafe/jev-router`) — đừng dùng nó để kiểm tra model id.
-- **Bề mặt alpha ⇒ URL là knob cấu hình:** `Jev:BaseUrl` + `Jev:DecisionsPath`. Bề mặt thay thế tương thích schema là `/api/v1/systemone`. Đổi bằng biến môi trường, **không cần rebuild**.
-- **Fail-soft bắt buộc:** mọi thất bại của Jev map sang `JevDecisionException` (→ 502) giống tiền lệ `AiProviderException`, **nhưng** mọi **caller** phải suy giảm an toàn (`ManualRequired`, `degraded:true`) chứ không làm hỏng luồng người dùng. **Không retry** (tiền lệ `DeepSeekAiProvider`).
-- **Offline:** `Jev:ApiKey` rỗng ⇒ `FakeJevDecisionProvider` — tất định, **0 mạng, 0 token**, chọn kịch bản bằng sentinel `FAKE:JEV_*` trong `state`. Nhờ đó toàn bộ pipeline (rẽ nhánh confidence, Observer routing, Recovery Plan) verify được ngoại tuyến.
-- **`Embeddings` (Giai đoạn 14.7 Track B §B3 — ĐÃ DÙNG):** section riêng trỏ `https://openrouter.ai/api/v1/embeddings`, hợp đồng OpenAI-compatible (`POST {BaseUrl}/embeddings`, đọc `data[].index`/`data[].embedding`). **Cố ý tách khỏi `Jev`** vì endpoint khác và nhà cung cấp có thể không phải OpenRouter (đổi `BaseUrl` + `Model` là xong, **0 dòng code**). `Enabled=false` mặc định; `Dimensions = 1536` **phải** khớp số chiều cột `vector` trong schema và được **kiểm tra lúc khởi động** (`ValidateOnStart`) vì lệch số chiều sẽ làm mọi insert lỗi ở runtime. `ApiKey` rỗng ⇒ `FakeEmbeddingProvider` (vector tất định từ SHA-256, cùng chuỗi ⇒ cùng vector, không gọi mạng).
-- **⚠️ Ngoại lệ `noul`:** shape `noul` của Jev **không có** trường `confidence` (chỉ `{ type, noul }`). Độ chắc chắn cho tool `ValidateAcceptanceCriteria` vì vậy được **suy ra** từ khoảng cách của xác suất tới ngưỡng 0.5 và được ghi rõ là suy ra trong code — không được trình bày như một số đo.
-- **Lưu ý:** key lưu bằng User Secrets (local) hoặc `Jev__ApiKey` / `Embeddings__ApiKey` (Render); **không** commit, **không** log. Có test khẳng định key không xuất hiện trong message ngoại lệ.
+### 2.11. Tìm kiếm Ngữ nghĩa Vector với `pgvector`
+- **Công nghệ:** Extension `pgvector` trên PostgreSQL 18 kết hợp gói thư viện **`Pgvector.EntityFrameworkCore` (0.3.0)** trong `TeamNexus.Persistence` (đăng ký qua `npgsql => npgsql.UseVector()`).
+- **Thiết kế lưu trữ & Truy vấn:**
+  - Sử dụng cột cố định số chiều `vector(1536)` trên bảng `workspace_knowledge_chunks` để cơ sở dữ liệu chặn mọi vector sai số chiều.
+  - Truy vấn độ tương đồng ngữ nghĩa bằng khoảng cách cosine (`.CosineDistance(...)` sinh toán tử `<=>`), đi kèm chỉ mục **HNSW** khai báo đúng họ toán tử **`vector_cosine_ops`**.
+  - Quá trình cắt đoạn và nhúng vector được tách ra tiến trình nền (`KnowledgeEmbeddingRunner`), đảm bảo thao tác bấm phê duyệt tài liệu của Quản lý luôn phản hồi tức thời mà không phụ thuộc độ trễ mạng của nhà cung cấp embedding.
 
-### 2.11. pgvector + `Pgvector.EntityFrameworkCore` (Giai đoạn 14.7 Track B §B3)
-- **Công nghệ:** [pgvector](https://github.com/pgvector/pgvector) là **extension bên thứ ba** của PostgreSQL (⚠️ **không phải** contrib module ⇒ image `postgres:18` chính thức **không** có nó).
-- **Phía .NET:** package **`Pgvector.EntityFrameworkCore` 0.3.0** (+ `Pgvector` 0.3.2) trong `TeamNexus.Persistence`.
-  - Đăng ký **bắt buộc**: `options.UseNpgsql(connectionString, npgsql => npgsql.UseVector())` trong `AddTeamNexusPersistence` — thiếu dòng này thì provider từ chối kiểu CLR `Vector?` ngay khi dựng model.
-  - Lưu ý tương thích: package chỉ phát hành assembly `net8.0` nhưng README ghi rõ bản mới nhất chạy với **EF Core 9 và 10**, và sàn phụ thuộc là `Npgsql.EntityFrameworkCore.PostgreSQL >= 9.0.1` (repo dùng **10.0.1**). Đã build sạch **0 warning / 0 error**.
-  - **Đường lui nếu một bản EF tương lai phá vỡ tương thích nhị phân:** bỏ package, lưu vector bằng `string` + `ValueConverter`, và viết toán tử cosine bằng SQL thô. Ghi ở đây để quyết định đó không phải suy nghĩ lại từ đầu.
-- **Cột có số chiều cố định `vector(1536)`** (không phải `vector` không chiều): cột không chiều đẩy việc kiểm tra số chiều sang tầng ứng dụng ⇒ dễ sinh lỗi im lặng khi đổi model embedding. Đánh đổi: đổi sang model khác số chiều cần `ALTER COLUMN … TYPE vector(N)` **+ re-embed toàn bộ**.
-- **Truy vấn:** EF `.CosineDistance(...)` sinh toán tử `<=>` (cosine). Index **HNSW** phải khai báo đúng **operator class `vector_cosine_ops`** — index dựng cho `vector_l2_ops` vẫn tồn tại, vẫn đúng cú pháp, nhưng **không bao giờ được dùng** cho truy vấn cosine.
-- **Index biểu thức cho persona:** `CREATE UNIQUE INDEX uq_workspace_members_ai_persona ON workspace_members (workspace_id, COALESCE(persona_key, 'general')) WHERE member_type = 'ai_agent'` — viết bằng **SQL thô trong migration** vì EF Core không có API cho expression index, và vì unique index trên `(workspace_id, persona_key)` **không** chặn được nhiều row `NULL` (PostgreSQL coi mọi `NULL` là khác nhau).
-- **`CREATE EXTENSION IF NOT EXISTS vector;` cũng viết tay trong migration**, đặt **trước** mọi cột `vector`: `modelBuilder.HasPostgresExtension("vector")` chỉ được EF ghi thành **annotation** trên `AlterDatabase()` và **không** phát ra câu lệnh.
+### 2.12. Tích hợp Bên ngoài: Data Protection, Transactional Outbox & Bảo mật Webhook
+- **Giữ nguyên kiến trúc 4 Modules:** Toàn bộ dịch vụ tích hợp Slack, Discord và GitHub được đặt trong `TeamNexus.Modules.Ai` (`Services/Integrations`, `Endpoints`), giao tiếp một chiều với `Board` qua cổng `ITaskAutomation`.
+- **Bảo vệ khóa bí mật (`ASP.NET Core Data Protection`):** Mã hóa bí mật GitHub Webhook at-rest với mục đích định danh riêng (`TeamNexus.Integrations.GitHub.WebhookSecret.v1`), chỉ trả plaintext duy nhất 1 lần khi khởi tạo hoặc xoay vòng khóa (`rotate-secret`). Vòng khóa (Key ring) được lưu trữ bền vững trong PostgreSQL tại bảng `data_protection_keys` (`PersistKeysToDbContext<TeamNexusDbContext>()`) để không bị mất khi container trên Render khởi động lại; hỗ trợ cấu hình chứng chỉ PFX (`CertPath`) để mã hóa vòng khóa trên môi trường VPS.
+- **Transactional Outbox & Chống SSRF (Slack / Discord):**
+  - `WebhookOutboxExternalAlertSink` cắm vào điểm nối `IExternalAlertSink` của `NotificationService` (an toàn, không làm gián đoạn giao dịch chính nếu kênh ngoài lỗi). Tiến trình `WebhookOutboxRunner` gửi tin bất đồng bộ với chiến lược thử lại `5s → 30s → 2m → 10m → 30m` và tự ngắt mạch sau 10 lỗi liên tiếp.
+  - `WebhookUrlValidator` cưỡng chế giao thức `https://` (cổng 443), chỉ cho phép tên miền thuộc danh sách trắng (`hooks.slack.com/services/...`, `discord.com/api/webhooks/...`, `discordapp.com/api/webhooks/...`) và chặn toàn bộ địa chỉ IP trần, `localhost`, loopback, link-local cùng dải mạng riêng RFC1918.
+- **Xác thực GitHub Webhook (`HMAC-SHA256`):** Endpoint công khai `POST /api/webhooks/github/{webhookToken:guid}` giới hạn kích thước body tối đa `256 KB` (`413`), xác thực chữ ký `X-Hub-Signature-256` trực tiếp trên mảng byte thô bằng hàm so sánh hằng thời gian `CryptographicOperations.FixedTimeEquals` (`401`), và chống phát lại dựa trên khóa duy nhất `(integration_id, delivery_id)`.
 
-### 2.12. Tích hợp Bên ngoài — Data Protection, Outbox & Bảo mật Webhook (Giai đoạn 15)
-- **Giữ nguyên Modular Monolith 4 Modules (`Auth`, `Board`, `Ai`, `Reporting`):** Không tạo project `.csproj` thứ 5; toàn bộ dịch vụ Outbound/Inbound nằm trong `TeamNexus.Modules.Ai` (`Services/Integrations`, `Endpoints`), tương tác với `Board` qua port hẹp `ITaskAutomation` (`Ai → Board` một chiều).
-- **Bảo vệ Secret bằng ASP.NET Core Data Protection (`Program.cs`) — TASK-DP-01:** Mã hoá GitHub Webhook Secret at-rest (`TeamNexus.Integrations.GitHub.WebhookSecret.v1`), trả plaintext duy nhất 1 lần lúc tạo hoặc `rotate-secret`. Key ring được lưu **trong PostgreSQL** qua `PersistKeysToDbContext<TeamNexusDbContext>()` → bảng `data_protection_keys` (migration #16 `Phase15DataProtectionKeyRing`), vì Render free-tier có filesystem tạm và không có persistent disk. `Integrations:DataProtection:CertPath`/`CertPassword` là **tuỳ chọn** cho VPS để mã hoá key ring at-rest bằng PFX; trên Render key ring nằm dạng XML trong DB (chấp nhận rủi ro “ai đọc DB đọc được key ring”, đã ghi ở tài liệu 07 §9.1). `KeysPath`/`PersistKeysToFileSystem` đã bị loại bỏ.
-- **Payload URL qua `Integrations:PublicApiBaseUrl`:** Tách origin công khai của API (`https://api.teamnexus.cloud`) khỏi `Frontend:BaseUrl` (`https://app.teamnexus.cloud`, vốn rewrite mọi route về `index.html`).
-- **Transactional Outbox (Slack / Discord):** `WebhookOutboxExternalAlertSink` thay thế `NoOpExternalAlertSink` tại seam `IExternalAlertSink` của `NotificationService` (fail-soft, không ném lỗi ra nghiệp vụ chính). `WebhookOutboxRunner`/`Dispatcher` gửi bất đồng bộ qua `HttpClient` `"ExternalWebhookClient"` (`AllowAutoRedirect = false`), backoff `5s → 30s → 2m → 10m → 30m`, circuit breaker ở 10 lỗi liên tiếp.
-- **Chống SSRF (`WebhookUrlValidator`):** Cưỡng chế `https://`, cổng mặc định 443, allow-list host (`hooks.slack.com` path `/services/...`; `discord.com`/`discordapp.com` path `/api/webhooks/...`), chặn IP literal, `localhost`, loopback, link-local và dải RFC1918 cả khi tạo/sửa lẫn ngay trước khi gửi.
-- **Xác thực GitHub Webhook (`HMAC-SHA256`):** Endpoint công khai `POST /api/webhooks/github/{webhookToken:guid}` (`AllowAnonymous`, bỏ CSRF), giới hạn đọc stream ≤ 256 KB (`413`), kiểm `X-Hub-Signature-256` trên raw request bytes bằng `CryptographicOperations.FixedTimeEquals` (`401` khi sai/thiếu), chống replay theo `(integration_id, delivery_id)`, trả `502` khi delivery `Failed` để GitHub có thể redeliver.
+---
 
-## 3. Database, Hosting & Phân Bổ Tên Miền (teamnexus.cloud)
+## 3. Hạ tầng Triển khai & Phân bổ Tên miền (`teamnexus.cloud`)
 
 Toàn bộ hệ thống production được quản lý định danh và bảo mật tập trung qua **Cloudflare DNS & SSL**:
 
 | Thành phần | Địa chỉ Production | Dịch vụ triển khai | Lưu ý kỹ thuật |
 |---|---|---|---|
-| **DNS & SSL** | `teamnexus.cloud` | Cloudflare (Free) | Quản lý DNS, SSL/TLS Full (Strict), bảo vệ DDoS và cấu hình auto DNS cho Resend |
-| **Frontend Web** | `https://app.teamnexus.cloud` | Vercel (Free) | React 19 + Vite + TypeScript, trỏ CNAME `cname.vercel-dns.com`. Biến môi trường: `VITE_API_BASE_URL=https://api.teamnexus.cloud/api` |
-| **Backend API** | `https://api.teamnexus.cloud` | Render Web Service (Free) | Chạy Docker container (`Dockerfile`, port 10000). Cấu hình `Auth__CookieSameSite=None`, `Cors__AllowedOrigins__0=https://app.teamnexus.cloud` |
-| **Database** | Neon Cloud | Neon PostgreSQL Serverless | Connection string SSL Mode `VerifyFull` / `Require`, tự động pooling |
-| **Email Service**| `noreply@teamnexus.cloud` | Resend + Cloudflare DNS | Đã cấu hình DKIM/SPF, gửi trực tiếp vào Inbox thành viên |
-| **File export** | In-memory stream | Backend (QuestPDF / ClosedXML) | Không lưu file tĩnh lâu dài trên server để tối ưu dung lượng |
+| **DNS & SSL** | `teamnexus.cloud` | Cloudflare (Free) | Quản lý DNS, SSL/TLS Full (Strict), bảo vệ DDoS và cấu hình bản ghi xác thực cho Resend |
+| **Frontend Web** | `https://app.teamnexus.cloud` | Vercel (Free) | React 19 + Vite 8 + TypeScript 6, trỏ CNAME `cname.vercel-dns.com`. Biến môi trường: `VITE_API_BASE_URL=https://api.teamnexus.cloud/api` |
+| **Backend API** | `https://api.teamnexus.cloud` | Render Web Service | Chạy Docker container (`Dockerfile`, cổng 10000). Cấu hình `Auth__CookieSameSite=None`, `Cors__AllowedOrigins__0=https://app.teamnexus.cloud`, `Integrations__PublicApiBaseUrl=https://api.teamnexus.cloud` |
+| **Database** | Neon Cloud | Neon PostgreSQL 18 Serverless | Hỗ trợ `pgvector`, kết nối SSL Mode `Require`, quản lý qua 16 EF Core migrations |
+| **Email Service** | `noreply@teamnexus.cloud` | Resend + Cloudflare DNS | Đã xác thực DKIM/SPF/DMARC, gửi email giao dịch và Daily Digest trực tiếp vào hộp thư thành viên |
+| **File Export** | In-memory stream | Backend (QuestPDF / ClosedXML) | Kết xuất trực tiếp từ bộ nhớ RAM, không lưu trữ tệp tĩnh lâu dài trên đĩa |
 
-## 4. CI/CD & Testing
+---
 
-- **CI/CD:** GitHub Actions (miễn phí cho repository) — pipeline build/test → deploy.
-- **Testing Backend:** xUnit.
-- **Testing Frontend:** Vitest + React Testing Library.
-- **⚠️ PostgreSQL cho CI:** image hiện tại là **`pgvector/pgvector:pg18`** (Giai đoạn 14.7 Track B §B3 đã đổi từ `postgres:18`). Image chính thức của PostgreSQL **không** kèm extension `vector` (extension bên thứ ba, không phải contrib module). Cách dùng **y hệt**: cùng ENV `POSTGRES_PASSWORD`, cùng `ports`, cùng healthcheck `pg_isready` (cùng base image). Việc tạo extension nằm **trong migration** (`CREATE EXTENSION IF NOT EXISTS vector;`), không phải bước thủ công.
-  - **Máy dev local cũng phải dùng image pgvector**, và phải chạy **đúng major version 18** để khớp CI:
-    `docker run --name teamnexus-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d pgvector/pgvector:pg18`
-    (`postgres:18` **không** dùng được: migration `Phase147KnowledgeBase` sẽ dừng với `0A000`/`58P01`.)
-  - ⚠️ **Khác kế hoạch ban đầu (L10 của 14.7):** khi thiếu extension, `DatabaseFixture` **skip CẢ NHÓM test DB** kèm thông điệp hướng dẫn — **không** chỉ skip riêng nhóm RAG như dự định. Lý do: `CREATE EXTENSION` nằm ở **đầu** migration cuối, nên migration dừng **giữa chuỗi** (migration persona đã commit) và database rơi vào trạng thái nửa vời. Probe được đặt **trước** `MigrateAsync` để biến nó thành **một** thông điệp nói rõ cách sửa. Không try/catch quanh migration: nuốt lỗi migration sẽ che bug schema thật.
+## 4. CI/CD & Kiểm thử Tự động
 
-## 5. Nguyên tắc chung khi phát triển
+- **CI/CD:** GitHub Actions (`.github/workflows/ci-backend.yml` và `ci-web.yml`) tự động kiểm tra biên dịch `0 Warning / 0 Error`, kiểm tra độ lệch mô hình EF Core (`has-pending-model-changes`) và thực thi toàn bộ bộ kiểm thử cùng cổng ngưỡng số lượng test tối thiểu.
+- **Kiểm thử Backend:** xUnit (gồm nhóm `Pure` unit tests không phụ thuộc CSDL và nhóm `Integration` tests chạy trên PostgreSQL thật).
+- **Kiểm thử Frontend:** Vitest + React Testing Library + kiểm tra tĩnh `oxlint` và `tsc -b`.
+- **Lưu ý Image PostgreSQL cho CI & Máy phát triển cục bộ:**
+  - Do tính năng Kho tri thức RAG sử dụng extension bên thứ ba `vector`, môi trường CI và Docker cục bộ bắt buộc sử dụng image **`pgvector/pgvector:pg18`** (thay vì `postgres:18` thuần):
+    ```bash
+    docker run --name teamnexus-pg -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d pgvector/pgvector:pg18
+    ```
+  - `DatabaseFixture` tự động kiểm tra sự tồn tại của extension `vector` trước khi chạy migration để đưa ra thông báo hướng dẫn rõ ràng nếu môi trường cục bộ cài thiếu extension.
 
-- Ưu tiên đơn giản, tránh "over-scope / over-architecture".
-- Mọi tính năng AI đều phải đi qua Accountability Layer trước khi ảnh hưởng đến dữ liệu thật.
-- Theo dõi chi phí gọi DeepSeek API — tóm tắt/nén dữ liệu đầu vào trước khi gửi để kiểm soát token.
-- Ưu tiên giải pháp built-in của .NET (BackgroundService, SignalR, Identity) trước khi thêm hạ tầng phụ (Redis, message queue...) — chỉ thêm khi thực sự cần.
+---
+
+## 5. Nguyên tắc Chung khi Phát triển
+
+1. **Ưu tiên sự đơn giản & Rõ ràng:** Tránh thiết kế thừa (*over-architecture*); tận dụng tối đa các thành phần chuẩn của .NET (`BackgroundService`, `SignalR`, `Identity`, `DataProtection`) trước khi cân nhắc thêm hạ tầng phụ trợ bên ngoài.
+2. **Tuân thủ tuyệt đối Lớp Giải trình AI:** Không một tính năng AI nào được phép tự ý ghi đè dữ liệu nghiệp vụ mà không đi qua quy trình phê duyệt và lưu ảnh chụp hoàn tác của `AiActionService`.
+3. **Kiểm soát chặt chẽ Chi phí & Bảo mật AI:** Luôn đặt ngưỡng giới hạn ký tự/token đầu vào trước khi gọi nhà cung cấp AI, tóm tắt dữ liệu nhật ký trước khi phân tích, và lọc bỏ mọi định danh nhạy cảm (UUID, email, khóa bí mật).
+4. **Hợp đồng API Chỉ ghi nối (Append-Only DTOs):** Không đổi tên, xóa hoặc đảo thứ tự các trường đã công bố trên các DTO phản hồi để bảo toàn tính tương thích ngược với bộ kiểm thử và ứng dụng di động Flutter.

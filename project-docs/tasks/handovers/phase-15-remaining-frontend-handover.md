@@ -3,7 +3,7 @@
 > **Cập nhật lần cuối:** 2026-11-11 (sau đợt review + khắc phục; người dùng đã đặt biến môi trường deploy).
 > **Nhánh hiện tại:** `develop` @ `8891bac` (local đang ahead `origin/develop`, **chưa push** — xem `git log --oneline origin/develop..develop`).
 > **Phạm vi:** Phase 15.1 → 15.4 đã xong; **15.5 (UI + E2E) là việc tiếp theo**.
-> **Đọc kèm:** [`phase-15-0`](./phase-15-0-external-integrations-master-plan.md), [`phase-15-3`](./phase-15-3-inbound-github-webhooks-and-pr-automation.md), [`phase-15-4`](./phase-15-4-github-issues-jev-triage-and-comments.md), [`phase-15-5`](./phase-15-5-frontend-integrations-and-e2e-verification.md), [báo cáo review](../report/phase-15-3-15-4-code-review-and-remediation-plan.md).
+> **Đọc kèm:** [`phase-15-0`](../phase-15-0-external-integrations-master-plan.md), [`phase-15-3`](../phase-15-3-inbound-github-webhooks-and-pr-automation.md), [`phase-15-4`](../phase-15-4-github-issues-jev-triage-and-comments.md), [`phase-15-5`](../phase-15-5-frontend-integrations-and-e2e-verification.md), [báo cáo review](../../report/reviews/phase-15-3-15-4-code-review-and-remediation-plan.md).
 
 ---
 
@@ -58,7 +58,7 @@ Người dùng đã khai báo trên môi trường deploy (2026-11-11):
 | `a083d5d` | Cập nhật 15.0/15.3/15.4/roadmap + nâng CI baseline **1.329 / 747** + báo cáo review |
 | `8891bac` | (Người dùng) `KeysPath` và `CertPath` độc lập, có thể bật đồng thời (**lịch sử**; TASK-DP-01 đã bỏ `KeysPath`) |
 
-Chi tiết từng lỗi (bằng chứng file:line, cách sửa, test): [`report/phase-15-3-15-4-code-review-and-remediation-plan.md`](../report/phase-15-3-15-4-code-review-and-remediation-plan.md) §4 + §9.
+Chi tiết từng lỗi (bằng chứng file:line, cách sửa, test): [`report/reviews/phase-15-3-15-4-code-review-and-remediation-plan.md`](../../report/reviews/phase-15-3-15-4-code-review-and-remediation-plan.md) §4 + §9.
 
 ---
 
@@ -77,7 +77,7 @@ Bẫy cần giữ: auto-link chỉ `TN-…`; `Failed` trả `502`; giữ nguyên
 
 ---
 
-## 5. Việc tiếp theo — 15.5 (đọc [`phase-15-5`](./phase-15-5-frontend-integrations-and-e2e-verification.md))
+## 5. Việc tiếp theo — 15.5 (đọc [`phase-15-5`](../phase-15-5-frontend-integrations-and-e2e-verification.md))
 
 1. **T15.5.1** — `integration.types.ts`, `integrationApi.ts`, `useWorkspaceIntegrations.ts`; thêm `isInReview`, `taskNumber`, `externalLinks` vào `board.types.ts`.
 2. **T15.5.2** — pill `TN-123` + chip GitHub trên `TaskCard`; tag `Đang duyệt PR` trên `KanbanColumn`.
@@ -124,4 +124,4 @@ DB test phải là `pgvector/pgvector:pg18` (container `:5433` trong phiên này
 - **TASK-DP-01:** key ring DataProtection chuyển sang PostgreSQL `data_protection_keys` (migration **#16** `Phase15DataProtectionKeyRing`); `Integrations__DataProtection__KeysPath` bị loại bỏ; `CertPath` chỉ còn là tuỳ chọn VPS. Runbook bắt buộc **Rotate Secret 1 lần** sau deploy.
 - **Frontend:** sửa BUG-P3-2/3/4/5/6 + `TaskCalendar` line-through; lazy-load tab Tích hợp; text cold-start; dọn deprecation AntD v6 (trừ `antd.List`/`Listy` — tồn đọng ngoài phạm vi).
 - **Số đo thật:** backend build `0/0`, drift sạch, Pure **666**, full **1.332 / 0 / 0**; frontend lint `0/0`, `tsc` exit 0, Vitest **791/791 (128 file)**, build exit 0; CI baseline **1.332 / 791**.
-- Chi tiết: [`report/phase-14-15-acceptance-test-and-remediation-report.md`](../report/phase-14-15-acceptance-test-and-remediation-report.md) §6.
+- Chi tiết: [`report/phase-14-15-acceptance-test-and-remediation-report.md`](../../report/phase-14-15-acceptance-test-and-remediation-report.md) §6.

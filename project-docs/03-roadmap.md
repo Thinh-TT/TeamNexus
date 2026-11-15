@@ -1,497 +1,312 @@
-# TeamNexus – Roadmap Phát triển
+# TeamNexus – Lộ trình Phát triển (Master Roadmap)
 
-> Roadmap ở mức giai đoạn lớn (chưa chia task chi tiết). Mỗi giai đoạn kèm các yêu cầu hoàn thiện để coi là "xong" trước khi chuyển sang giai đoạn kế tiếp.
-
-> **Thứ tự thi hành:** 1 → 2 → 3 → 4 → 5 → 6 → **7 (✅)** → **8 (✅)** → **9 (✅)** → **10 (✅)** → **11 (✅)** → **12 (✅)** → **13 (✅)** → **14 (✅)** → **14.5 (✅)** → **14.6 (✅ Track A)** → **14.7 (✅ Track A + ✅ Track B)** → 15 → 16.
+> Tài liệu theo dõi tiến độ tổng thể và các tiêu chí hoàn thành (Definition of Done – DoD) qua từng giai đoạn của dự án **TeamNexus**.
 >
-> Số giai đoạn đã được **đánh lại** (lần 2 — sau Giai đoạn 12): **7 = AI Agent Executor**, **8 = Test & Deploy**, **9 = Đơn giản hóa Role**, **10 = Nâng cao Task & Workspace UX**, **11 = Quản lý Member & Profile**, **12 = Dashboard & Tìm kiếm**, **13 = Trực quan hóa & Thông báo**, **14 = Nâng cao AI**, **14.5 = Củng cố nền + AI Agent Chat cấp Board**, **14.6 = Hoàn thiện Trải nghiệm (Track A)**, **14.7 = Autonomous Agent & Tối ưu hóa Ra Quyết định với Jev (Hybrid AI)**, **15 = Tích hợp bên ngoài**, **16 = Mobile (Flutter)**. `01-system-specification.md` và `02-tech-stack-decisions.md` sẽ cập nhật khi mỗi giai đoạn bắt đầu.
->
-> **Giai đoạn 14.5, 14.6 và 14.7 là các giai đoạn NỐI TIẾP của 14:** Giai đoạn 14.5 hoàn thiện chat board; Giai đoạn 14.6 giải quyết triệt để ma sát thực chiến UX (Track A); Giai đoạn 14.7 kế thừa và mở rộng Track B của 14.6, hợp nhất mô hình Jev (Non-Generative Decision AI) để hoàn thiện nền tảng Autonomous AI Agent trước khi mở rộng ra Phase 15 (Tích hợp ngoài) và 16 (Mobile). **Cả hai Track của 14.7 nay đã xong:** Track A = client Jev + taxonomy + hồ sơ kỹ năng + triage + assignee dispatching + Observer (severity & Recovery Plan); Track B = **đội ngũ AI theo persona + 3 tool ReAct + bộ nhớ dự án ngữ nghĩa pgvector**. Chi tiết kiến trúc Jev lưu tại `project-docs/06-adjust-and-upgrade-with-jev.md`; nhật ký thi hành (7 bug thật, 13 lệch kế hoạch) tại `tasks/phase-14-7-autonomous-agent-jev.md` §11–§12.
->
-> **Lưu ý khi đọc tài liệu cũ:** các tài liệu đã đóng băng của giai đoạn 4/5/6 (`tasks/phase-4..6-*.md`, `report/phase-5-*`, `report/phase-6-*`) vẫn dùng cách đánh số cũ — Giai đoạn 9 (cũ) = Mobile, nay là **Giai đoạn 16**.
+> **Thứ tự lộ trình:** `1 (✅)` → `2 (✅)` → `3 (✅)` → `4 (✅)` → `5 (✅)` → `6 (✅)` → `7 (✅)` → `8 (✅)` → `9 (✅)` → `10 (✅)` → `11 (✅)` → `12 (✅)` → `13 (✅)` → `14 (✅)` → `14.5 (✅)` → `14.6 (✅)` → `14.7 (✅)` → `15 (✅)` → `16 (⏳)`.
 
-## Giai đoạn 1: Nền tảng & Auth
+---
 
-Khởi tạo project ASP.NET Core (Modular Monolith) + React, thiết kế schema PostgreSQL cơ bản, dựng ASP.NET Core Identity với OAuth Google/GitHub và JWT/Cookie, phân quyền Admin/Manager/Member theo workspace.
+## Bảng Tổng hợp Trạng thái & Số đo Nghiệm thu
 
-**Yêu cầu hoàn thiện:**
-- [x] Project backend (Modular Monolith) và frontend (React/Vite) khởi tạo, build/run được
-- [x] Schema PostgreSQL cơ bản (User, Role, Workspace/Board) đã migrate
-- [x] Đăng nhập được qua Google và GitHub OAuth
-- [x] JWT + refresh token qua HttpOnly Cookie hoạt động, có rotate refresh token
-- [x] Phân quyền Policy-based cho 3 role (Admin/Manager/Member) áp dụng được trên ít nhất 1 endpoint mẫu
+| Giai đoạn | Tên giai đoạn | Trạng thái | Tổng số Migration | Backend Tests | Frontend Tests |
+| :---: | :--- | :---: | :---: | :---: | :---: |
+| **1** | Nền tảng & Xác thực (Auth & RBAC) | ✅ Hoàn thành | 1 | — | — |
+| **2** | Kanban Core (CRUD & Real-time SignalR) | ✅ Hoàn thành | 3 | — | — |
+| **3** | AI Smart Setup (Khởi tạo công việc tự động) | ✅ Hoàn thành | 3 | — | — |
+| **4** | Hệ thống Giải trình AI (Accountability Layer) | ✅ Hoàn thành | 4 | — | — |
+| **5** | AI Observer (Giám sát & Cảnh báo ngầm) | ✅ Hoàn thành | 5 | — | — |
+| **6** | Báo cáo & Xuất dữ liệu (PDF / Excel) | ✅ Hoàn thành | 5 | — | — |
+| **7** | AI Agent Executor (Thành viên ảo thực thi) | ✅ Hoàn thành | 6 | 291 checks | 187 |
+| **8** | Kiểm thử Tự động, CI/CD & Triển khai Cloud | ✅ Hoàn thành | 6 | 172 | 206 |
+| **9** | Đơn giản hóa Kiến trúc Phân quyền Hai lớp | ✅ Hoàn thành | 8 | 171 | 206 |
+| **10** | Nâng cao Trải nghiệm Task & Quản trị Workspace | ✅ Hoàn thành | 8 | 226 | 279 |
+| **11** | Quản lý Thành viên, Email & Hồ sơ Cá nhân | ✅ Hoàn thành | 9 | 371 | 360 |
+| **12** | Trang Tổng quan (Dashboard), Tìm kiếm & `@mention` | ✅ Hoàn thành | 9 | 423 | 406 |
+| **13** | Lịch biểu, Biểu đồ Tiến độ & Daily Email Digest | ✅ Hoàn thành | 10 | 480 | 508 |
+| **14** | Nâng cao AI (Task Chat SSE, Dự báo Rủi ro, Board Template) | ✅ Hoàn thành | 10 | 584 | 578 |
+| **14.5** | Củng cố Nền tảng & AI Agent Chat cấp Bảng | ✅ Hoàn thành | 11 | 643 | 633 |
+| **14.6** | Hoàn thiện UX Đính kèm Thẻ & Chống rò rỉ Định danh | ✅ Hoàn thành | 11 | 665 | 657 |
+| **14.7** | Kiến trúc Hybrid AI với Jev, Personas, ReAct & RAG (`pgvector`) | ✅ Hoàn thành | 14 | 1.167 | 738 |
+| **15** | Tích hợp Hệ sinh thái Bên ngoài (Slack, Discord, GitHub) | ✅ Hoàn thành | 16 | 1.346 | 799 |
+| **16** | Ứng dụng Di động Đa nền tảng (Flutter) | ⏳ Chưa bắt đầu | — | — | — |
 
-## Giai đoạn 2: Kanban Core (CRUD + Real-time)
+---
 
-Xây dựng CRUD cho Board/Task/Column, giao diện kéo-thả bằng @dnd-kit, tích hợp SignalR để đồng bộ trạng thái real-time giữa các client.
+## Giai đoạn 1: Nền tảng & Auth — ✅ HOÀN THÀNH
 
-**Yêu cầu hoàn thiện:**
-- [x] CRUD đầy đủ cho Board, Column, Task
-- [x] Giao diện kéo-thả task giữa các column hoạt động mượt
-- [x] SignalR đồng bộ real-time: thay đổi ở client A phản ánh ngay ở client B (không cần reload)
-- [x] SignalR group theo boardId, có xử lý auto-reconnect khi mất kết nối
+Khởi tạo kiến trúc Modular Monolith trên ASP.NET Core kết hợp React + TypeScript + Vite, thiết kế schema PostgreSQL nền tảng, tích hợp ASP.NET Core Identity với OAuth 2.0 (Google / GitHub), JWT + Refresh Token qua `HttpOnly Cookie` và phân quyền `Admin` / `Manager` / `Member` theo workspace.
 
-## Giai đoạn 3: AI Smart Setup
+**Yêu cầu hoàn thiện (DoD):**
+- [x] Khởi tạo giải pháp backend (Modular Monolith) và frontend (React/Vite) biên dịch và chạy ổn định.
+- [x] Thiết lập schema PostgreSQL cơ bản (`users`, `roles`, `workspaces`, `workspace_members`, `refresh_tokens`) qua migration `InitialSchema`.
+- [x] Đăng nhập thành công qua Google OAuth và GitHub OAuth.
+- [x] Cấp phát JWT + Refresh Token qua `HttpOnly Cookie`, hỗ trợ xoay vòng (rotate) refresh token và chống CSRF.
+- [x] Phân quyền theo vai trò cho các thao tác trong phạm vi không gian làm việc.
 
-Tích hợp DeepSeek API qua interface IAiProvider, xây luồng: trưởng nhóm nhập mô tả → AI phân rã sub-tasks/nhãn/đề xuất người phụ trách → hiển thị để con người xác nhận.
+> **Hồ sơ chi tiết:** Kế hoạch [`tasks/phase-1-auth.md`](tasks/phase-1-auth.md).
 
-**Yêu cầu hoàn thiện:**
-- [x] Interface `IAiProvider` triển khai xong cho DeepSeek
-- [x] Nhập mô tả dự án/tính năng → AI trả về danh sách sub-tasks có nhãn và đề xuất người phụ trách (JSON đúng schema, có validate)
-- [x] Giao diện hiển thị kết quả AI đề xuất, cho phép chỉnh sửa trước khi xác nhận
-- [x] Chưa ghi thẳng vào DB — chờ xác nhận (liên kết Accountability Layer ở giai đoạn 4)
+---
 
-## Giai đoạn 4: Accountability Layer
+## Giai đoạn 2: Kanban Core (CRUD + Real-time) — ✅ HOÀN THÀNH
 
-Xây bảng AiActionLog và service AiActionService làm cổng trung gian cho mọi hành động AI ghi dữ liệu (Pending/Approved/Rejected/Undone), gắn vào luồng Smart Setup ở bước trên.
+Xây dựng đầy đủ nghiệp vụ CRUD cho Bảng (`Board`), Cột (`Column`), Thẻ công việc (`Task`), Nhãn (`Label`) và Bình luận (`Comment`); xây dựng giao diện kéo-thả bằng `@dnd-kit` và tích hợp SignalR `BoardHub` để đồng bộ trạng thái thời gian thực giữa các trình duyệt.
 
-**Yêu cầu hoàn thiện:**
-- [x] Bảng `AiActionLog` lưu action, basis (tóm tắt input), timestamp, actor, trạng thái
-- [x] Service `AiActionService` là điểm duy nhất mọi hành động AI đi qua trước khi ghi dữ liệu thật
-- [x] Smart Setup (giai đoạn 3) đã chuyển sang dùng luồng Pending → Approve/Reject qua service này
-- [x] Chức năng Undo hoạt động cho ít nhất 1 loại hành động AI (vd: tạo hàng loạt sub-tasks)
+**Yêu cầu hoàn thiện (DoD):**
+- [x] Hoàn thiện API CRUD cho Board, Column (kèm cờ `is_done`), Task, Label, Comment.
+- [x] Giao diện kéo-thả thẻ giữa các cột và sắp xếp lại thứ tự cột hoạt động mượt mà.
+- [x] Đồng bộ thời gian thực qua SignalR: thay đổi ở máy khách A phản ánh tức thời trên máy khách B mà không cần tải lại trang.
+- [x] Cô lập sự kiện theo nhóm `board-{boardId}` và tự động kết nối lại khi rớt mạng.
 
-## Giai đoạn 5: AI Observer
+> **Hồ sơ chi tiết:** Kế hoạch [`tasks/phase-2-kanban.md`](tasks/phase-2-kanban.md) · Báo cáo nghiệm thu [`report/phase-2-kanban-test-report.md`](report/phase-2-kanban-test-report.md).
 
-Xây BackgroundService quét log định kỳ, phát hiện bottleneck/quá tải/xung đột tiềm ẩn, gửi báo cáo riêng cho Manager qua kênh phù hợp (thông báo trong app).
+---
 
-**Yêu cầu hoàn thiện:**
-- [x] `BackgroundService` chạy nền, quét log/hoạt động board theo chu kỳ cố định
-- [x] Log được tóm tắt trước khi gửi cho DeepSeek API (kiểm soát token/chi phí)
-- [x] Phát hiện được ít nhất 1 loại tín hiệu (vd: task quá hạn dồn ứ ở 1 người, task đứng yên lâu ngày)
-- [x] Kết quả cảnh báo chỉ hiển thị cho Manager, không public toàn team
+## Giai đoạn 3: AI Smart Setup — ✅ HOÀN THÀNH
 
-> **Trạng thái:** Backend (§1–§5 + §7.1 verify **178 check PASS**) đã xong; kênh gửi hiện là **in-app**
-> (`notifications`), email ghi chú cho tương lai. **Frontend (§6 + §7.2)** đã bàn giao antigravity với contract chốt ở
-> `tasks/phase-5-ai-observer.md` (mục "🔻 BÀN GIAO").
+Tích hợp DeepSeek API qua giao diện trừu tượng `IAiProvider` (kèm `FakeAiProvider` ngoại tuyến); xây dựng luồng khởi tạo thông minh: Quản lý nhập mô tả yêu cầu → AI phân rã thành danh sách thẻ công việc kèm độ ưu tiên, nhãn và gợi ý người phụ trách → hiển thị bản xem trước để con người chỉnh sửa.
 
-## Giai đoạn 6: Báo cáo & Xuất dữ liệu
+**Yêu cầu hoàn thiện (DoD):**
+- [x] Triển khai `IAiProvider` cho DeepSeek API và `FakeAiProvider` phục vụ kiểm thử tất định.
+- [x] Từ mô tả dự án/tính năng, AI trả về danh sách sub-tasks chuẩn JSON schema, tự động đối chiếu nhãn và thành viên sẵn có trong workspace.
+- [x] Giao diện hiển thị bản đề xuất của AI, cho phép chỉnh sửa tiêu đề, độ ưu tiên, nhãn và người phụ trách trước khi xác nhận.
+- [x] Tuyệt đối không ghi thẳng vào CSDL khi chưa qua bước xác nhận của con người.
 
-Xây tính năng tổng hợp tiến độ/hiệu suất, xuất PDF (QuestPDF) và Excel (ClosedXML) theo yêu cầu, generate on-demand.
+> **Hồ sơ chi tiết:** Kế hoạch [`tasks/phase-3-ai-smart-setup.md`](tasks/phase-3-ai-smart-setup.md).
 
-**Yêu cầu hoàn thiện:**
-- [x] Tổng hợp được dữ liệu tiến độ/hiệu suất board (vd: số task hoàn thành, thời gian trung bình mỗi task)
-- [x] Xuất báo cáo ra PDF (QuestPDF) đúng định dạng, đọc được
-- [x] Xuất báo cáo ra Excel (ClosedXML) đúng định dạng, mở được
-- [x] File generate on-demand, không lưu trữ vĩnh viễn trên server
+---
 
-> **Trạng thái: ✅ ĐÃ HOÀN THÀNH & VERIFY ĐẦY ĐỦ.** Backend verify 74/74 check PASS. Frontend hoàn tất tại `src/features/reporting/`. Chi tiết: `tasks/phase-6-reporting-export.md` và `report/phase-6-reporting-test-report.md`.
+## Giai đoạn 4: Accountability Layer — ✅ HOÀN THÀNH
 
-## Giai đoạn 7: AI Agent Executor (✅ HOÀN THÀNH — cả Backend & Frontend)
+Xây dựng bảng `ai_action_logs` và dịch vụ trung tâm `AiActionService` làm cổng kiểm duyệt duy nhất cho mọi hành động ghi dữ liệu của AI (`Pending → Approved / Rejected → Undone`), tích hợp hoàn chỉnh với luồng AI Smart Setup.
 
-Nâng AI từ vai trò đề xuất/quan sát lên vai trò thực thi thật: gán task cho AI Agent như một thành viên, xây vòng lặp tool-calling (soạn thảo, tóm tắt, web search qua Tavily), gắn kết quả vào Accountability Layer sẵn có, xử lý trạng thái "Chờ làm rõ" khi Agent thiếu thông tin.
+**Yêu cầu hoàn thiện (DoD):**
+- [x] Thiết lập bảng `ai_action_logs` lưu loại hành động, cơ sở dữ liệu đầu vào (`basis`), ảnh chụp trước/đề xuất/đã áp dụng (`before_snapshot`, `after_snapshot`, `applied_snapshot`), người yêu cầu, người quyết định và trạng thái.
+- [x] Đảm bảo `AiActionService` là cổng duy nhất thực thi thay đổi dữ liệu do AI đề xuất (sử dụng cơ chế CAS chống duyệt trùng).
+- [x] Chuyển đổi luồng xác nhận Smart Setup sang tạo bản ghi `Pending` → Quản lý `Approve` / `Reject`.
+- [x] Hoàn thiện tính năng Hoàn tác (`Undo`) khôi phục chính xác trạng thái trước khi áp dụng (xóa mềm các thẻ đã tạo và dọn nhãn mới sinh).
 
-**Yêu cầu hoàn thiện:**
-- [x] Thêm pseudo-member AI Agent vào `workspace_members`, **gán được task qua đúng UI assignee hiện có**
-- [x] Vòng lặp tool-calling hoạt động qua DeepSeek function-calling với bộ tool: `SearchSystemData`, `WebSearch` (Tavily), `DraftOutput`, `RequestClarification`
-- [x] Trạng thái task mới "Chờ làm rõ" hoạt động, hiển thị nổi bật trên Kanban
-- [x] Kết quả AI đi qua đúng luồng Accountability Layer (Pending → Approve/Reject/Undo)
-- [x] Guardrail hoạt động đúng (15 tool-call / 5 phút / ~50.000 token)
-- [x] Bảng `agent_runs` ghi đầy đủ trạng thái, broadcast real-time qua SignalR
+> **Hồ sơ chi tiết:** Kế hoạch [`tasks/phase-4-accountability-layer.md`](tasks/phase-4-accountability-layer.md) · Báo cáo nghiệm thu [`report/phase-4-accountability-test-report.md`](report/phase-4-accountability-test-report.md).
 
-> **Trạng thái: ✅ ĐÃ HOÀN THÀNH & VERIFY ĐẦY ĐỦ.** Backend **291/291 check PASS** + Frontend **187/187 tests PASS**. Chi tiết: `tasks/phase-7-ai-agent-executor.md` và `report/phase-7-ai-agent-executor-test-report.md`.
+---
 
-## Giai đoạn 8: Hoàn thiện, Test & Deploy — 🔄 ĐANG LÀM
+## Giai đoạn 5: AI Observer — ✅ HOÀN THÀNH
 
-> **Đang làm — tiếp ngay sau Giai đoạn 7.** Kế hoạch chi tiết: `tasks/phase-8-completion-test-deploy.md`.
->
-> **Schema đã đóng băng ở Giai đoạn 7 (6 migration)** — giai đoạn này không thêm migration. Migration tiếp theo thuộc Giai đoạn 9.
+Xây dựng tiến trình nền `ObserverBackgroundService` quét nhật ký hoạt động và trạng thái bảng định kỳ để phát hiện sớm điểm nghẽn (`Bottleneck`), quá tải nhân sự (`Overload`), thẻ quá hạn (`OverdueTask`) và thẻ đình trệ (`StalledTask`), gửi cảnh báo riêng cho cấp Quản lý.
 
-Viết test (xUnit, Vitest), dọn UI/UX, cấu hình CI/CD bằng GitHub Actions, deploy backend/frontend/DB lên hạ tầng free-tier đã chọn.
+**Yêu cầu hoàn thiện (DoD):**
+- [x] Bổ sung các bảng `activity_logs`, `notifications` và `ai_observer_runs` (Migration #5).
+- [x] Tiến trình nền quét định kỳ an toàn với khóa chống chạy chồng (`pg_try_advisory_lock`) và cơ chế dọn dẹp nhật ký cũ theo thời hạn lưu giữ.
+- [x] Tóm tắt tín hiệu trước khi gọi LLM để kiểm soát chi phí token và xác thực chặt chẽ kết quả trả về (`ObserverFindingValidator` chống ảo giác định danh).
+- [x] Phát cảnh báo riêng cho `Manager` / `Admin` trong ứng dụng kèm cửa sổ khử trùng lặp 24 giờ.
 
-**Yêu cầu hoàn thiện:**
-- [x] Test cơ bản cho các luồng chính bằng xUnit/Vitest — backend **172 test**, frontend **206 test**
-- [x] CI/CD pipeline qua GitHub Actions chạy build/test tự động — cả hai workflow **xanh** trên run thật
-- [x] Backend deploy thành công lên Render, Database trên Neon, Frontend trên Vercel
-- [x] Kiểm tra và xử lý ổn thỏa hiện tượng cold-start ảnh hưởng SignalR (phần frontend **đã xong**)
-- [x] UI/UX rà soát lại tổng thể, sẵn sàng để demo/đưa vào CV
+> **Hồ sơ chi tiết:** Kế hoạch [`tasks/phase-5-ai-observer.md`](tasks/phase-5-ai-observer.md) · Báo cáo nghiệm thu [`report/phase-5-ai-observer-test-report.md`](report/phase-5-ai-observer-test-report.md).
+
+---
+
+## Giai đoạn 6: Báo cáo & Xuất dữ liệu — ✅ HOÀN THÀNH
+
+Xây dựng module `TeamNexus.Modules.Reporting` tổng hợp số liệu tiến độ, hiệu suất hoàn thành, hoạt động và sức khỏe dự án; hỗ trợ kết xuất báo cáo theo yêu cầu ra định dạng PDF (QuestPDF) và Excel (ClosedXML) trực tiếp trong bộ nhớ RAM.
+
+**Yêu cầu hoàn thiện (DoD):**
+- [x] Tổng hợp chính xác các chỉ số tiến độ và hiệu suất theo khoảng thời gian và theo bảng (`ReportAggregator`).
+- [x] Xuất báo cáo PDF (QuestPDF) trình bày rõ ràng, hiển thị đúng tiếng Việt.
+- [x] Xuất báo cáo Excel (ClosedXML) gồm 5 trang tính với định dạng thanh dữ liệu và bộ lọc tự động.
+- [x] Kết xuất tệp hoàn toàn trong bộ nhớ đệm (`byte[]`), không lưu trữ tệp vật lý trên máy chủ.
+
+> **Hồ sơ chi tiết:** Kế hoạch [`tasks/phase-6-reporting-export.md`](tasks/phase-6-reporting-export.md) · Báo cáo nghiệm thu [`report/phase-6-reporting-test-report.md`](report/phase-6-reporting-test-report.md).
+
+---
+
+## Giai đoạn 7: AI Agent Executor — ✅ HOÀN THÀNH
+
+Nâng cấp AI từ vai trò đề xuất/quan sát lên vai trò thực thi công việc: khởi tạo thành viên ảo (`member_type = 'ai_agent'`) nhận thẻ trực tiếp trên Kanban, thực thi vòng lặp gọi công cụ (`SearchSystemData`, `WebSearch` qua Tavily, `DraftOutput`, `RequestClarification`), xử lý cột *"Chờ làm rõ"* (`is_clarification`) và đưa mọi đầu ra bình luận/tệp đính kèm qua Lớp Giải trình.
+
+**Yêu cầu hoàn thiện (DoD):**
+- [x] Bổ sung thành viên ảo `ai_agent` vào `workspace_members`, cho phép gán thẻ công việc qua đúng giao diện chọn người phụ trách hiện hữu.
+- [x] Triển khai vòng lặp function-calling (`IAiToolCallingProvider`) với 4 công cụ trong danh sách trắng.
+- [x] Hỗ trợ trạng thái cột *"Chờ làm rõ"* (`is_clarification`) và thao tác *"Chạy lại"* sau khi Quản lý giải đáp câu hỏi của Agent.
+- [x] Đưa kết quả đầu ra ngắn (`PostComment`) và dài (`PostAttachment` lưu `bytea ≤ 512 KB`) qua quy trình `Pending → Approve/Reject → Undo`.
+- [x] Cưỡng chế giới hạn ngân sách (`15 tool-call` / `5 phút` / `50.000 token`) và phát sóng tiến độ thời gian thực (`AgentRunProgress`) qua SignalR.
+
+> **Hồ sơ chi tiết:** Kế hoạch [`tasks/phase-7-ai-agent-executor.md`](tasks/phase-7-ai-agent-executor.md) · Bàn giao FE [`tasks/handovers/phase-7-frontend-handover.md`](tasks/handovers/phase-7-frontend-handover.md) · Báo cáo nghiệm thu [`report/phase-7-ai-agent-executor-test-report.md`](report/phase-7-ai-agent-executor-test-report.md).
+
+---
+
+## Giai đoạn 8: Hoàn thiện, Kiểm thử Tự động & Triển khai Cloud — ✅ HOÀN THÀNH
+
+Xây dựng bộ kiểm thử tự động toàn diện bằng xUnit (Backend) và Vitest (Frontend), thiết lập quy trình CI/CD qua GitHub Actions và triển khai hệ thống thực tế lên hạ tầng Cloud (Vercel, Render Docker, Neon PostgreSQL, Cloudflare).
+
+**Yêu cầu hoàn thiện (DoD):**
+- [x] Xây dựng bộ kiểm thử tự động cho toàn bộ các luồng nghiệp vụ chính (**172** backend tests, **206** frontend tests).
+- [x] Cấu hình thành công 2 pipeline GitHub Actions (`ci-backend.yml` và `ci-web.yml`) tự động kiểm tra build và chạy test.
+- [x] Triển khai hoàn chỉnh Backend lên Render, Database lên Neon Serverless PostgreSQL và Frontend lên Vercel.
+- [x] Xử lý mượt mà trạng thái chờ khởi động lại (cold-start) và tự động kết nối lại SignalR trên giao diện Web.
+
+> **Hồ sơ chi tiết:** Kế hoạch [`tasks/phase-8-completion-test-deploy.md`](tasks/phase-8-completion-test-deploy.md) · Bàn giao FE [`tasks/handovers/phase-8-2b-frontend-handover.md`](tasks/handovers/phase-8-2b-frontend-handover.md) · Báo cáo nghiệm thu [`report/phase-8-completion-test-deploy-report.md`](report/phase-8-completion-test-deploy-report.md).
+
+---
 
 ## Giai đoạn 9: Đơn giản hóa Kiến trúc Role — ✅ HOÀN THÀNH
 
-> **Prerequisite của mọi giai đoạn sau.** Thay đổi nhỏ ở tầng Auth, không ảnh hưởng workspace role hay schema board/task.
-> Kế hoạch chi tiết: `tasks/phase-9-role-simplification.md`.
+Tách biệt minh bạch hai tầng phân quyền: tinh giản **Identity Role toàn cục** xuống 2 vai trò (`Admin` quản trị nền tảng và `User` cho mọi người dùng đăng nhập OAuth), giữ nguyên **Workspace Role** (`Admin` / `Manager` / `Member` trong `workspace_members.role`) làm lớp phân quyền thực tế cho toàn bộ tính năng nghiệp vụ.
 
-Đơn giản hóa Identity Role toàn cục từ 3 (`Admin`/`Manager`/`Member`) xuống 2 (**`Admin`** / **`User`**). Workspace Role (`workspace_members.role`) **giữ nguyên** (Admin/Manager/Member) vì đây là lớp phân quyền thực sự của mọi tính năng.
+**Yêu cầu hoàn thiện (DoD):**
+- [x] Bảng `roles` chỉ giữ 2 bản ghi chuẩn: `Admin` và `User`.
+- [x] Tài khoản mới đăng nhập qua OAuth tự động nhận Identity role `User`.
+- [x] Tinh giản Policy còn `SystemAdminPolicy` cho quản trị hệ thống; mọi endpoint cấp workspace dùng `.RequireAuthorization()` kết hợp kiểm tra quyền tại tầng dịch vụ (`IWorkspaceAccess`).
+- [x] Hoàn tất 2 migration `Phase9RoleSimplification` và `Phase9ModelSync` (nâng tổng số lên **8 migrations**), toàn bộ bộ kiểm thử đạt 100% PASS.
 
-**Lý do:** Identity Role cũ chỉ được dùng ở 2 endpoint mẫu — mọi kiểm tra quyền thực sự đã đọc `workspace_members.role`. Giữ 3 Identity Role gây nhầm lẫn giữa "global role" và "workspace role". Sau thay đổi: `Admin` = system administrator (platform management); `User` = mọi người dùng thường đã đăng nhập.
-
-**Yêu cầu hoàn thiện:**
-- [x] `roles` table chỉ còn 2 row: `Admin` (system admin) và `User` (default cho mọi user thường)
-- [x] User mới đăng ký OAuth tự động nhận Identity role `User` (thay vì `Member` cũ)
-- [x] Policy definitions đơn giản: chỉ còn `SystemAdminPolicy` (Identity = Admin); mọi endpoint workspace dùng `.RequireAuthorization()` thuần + workspace role check trong service layer
-- [x] Migration `Phase9RoleSimplification` chạy sạch: rename "Member" → "User" trong `roles` + `user_roles`, xóa row "Manager" (kèm migration `Phase9ModelSync` ⇒ tổng **8** migration)
-- [x] Toàn bộ test PASS — backend **171 test / 0 fail / 0 skip**, frontend **37 file / 206 test PASS**, `oxlint` 0/0, `tsc -b` exit 0, `npm run build` OK
+---
 
 ## Giai đoạn 10: Nâng cao Task & Workspace UX — ✅ HOÀN THÀNH
 
-> **Không cần migration mới cho task fields** — `tasks.due_date`, `tasks.priority`, `tasks.description` đã có sẵn trong schema Phase 2.
-> Chỉ cần xây UI và kết nối API. Riêng Workspace Settings và Activity Log cũng dùng bảng/endpoint đã có.
->
-> **Kế hoạch chi tiết đã chia task (D1–D12, checklist theo file, ca biên, bằng chứng):**
-> `tasks/phase-10-advanced-task-workspace-ux.md`.
->
-> 📤 **Bàn giao §3 + §4 + §5 (frontend, CI, tài liệu):** `tasks/phase-10-remaining-frontend-handover.md`.
->
-> **⛔ Schema đóng băng ở Giai đoạn 9 (8 migration)** — giai đoạn này **KHÔNG** thêm migration;
-> `dotnet ef migrations has-pending-model-changes` phải tiếp tục trả "No changes have been made to the model since the last migration."
-> **Đã kiểm: vẫn 8 migration, không có pending change.**
->
-> **Kết quả đo thật hoàn thành:**
-> backend **226 test PASS / 0 fail / 0 skip**, `dotnet build TeamNexus.sln -m:1 -nr:false` = **0 warning / 0 error**;
-> frontend **47 file / 279 test PASS**, `oxlint` **0/0**, `tsc -b` exit 0, `npm run build` OK;
-> `dotnet ef migrations list` = **8**. Cổng CI `ci-web.yml` đã được nâng và chạy xanh.
-
-Hoàn thiện UI cho các field task đã có schema nhưng chưa có giao diện, thêm quản lý workspace cơ bản và hiển thị lịch sử hoạt động.
-
-**Yêu cầu hoàn thiện:**
-- [x] Task có thể set/hiển thị **Due Date** (hạn chót); card Kanban hiển thị badge đỏ khi quá hạn — kết nối với tín hiệu `OverdueTask` của AI Observer
-- [x] Task có thể set/hiển thị **Priority** (Low/Medium/High/Urgent), badge màu trên card — ✅ **§1 XONG** (UI đã có sẵn từ trước; §1 bịt lỗ hổng test + sửa 2 bug validate — xem dưới)
-- [x] Task có **Description** với markdown cơ bản (in đậm, code inline, link) trong modal chi tiết
-- [x] **Workspace Settings** (Admin): sửa tên/mô tả workspace, chuyển ownership cho Admin khác, xóa workspace (với xác nhận) — ✅ **HOÀN THÀNH** (Backend §2 + Frontend §4)
-- [x] **Activity Log UI** (Manager/Admin): trang lịch sử hoạt động workspace — tận dụng `activity_logs` table đã có từ Phase 5 — ✅ **HOÀN THÀNH** (Backend §2 + Frontend §4)
-
-> **🐞 2 bug thật đã bắt & sửa ở §1** (nhờ viết test cho 3 field task — trước đó **không** test nào phủ):
-> **(1)** `priority: "1"` bị `Enum.TryParse` **âm thầm** map thành `Medium` (và `"99"` lọt qua ⇒ vi phạm `ck_tasks_priority` ⇒ **500** thay vì 400)
-> ⇒ sửa bằng `Enum.IsDefined` + helper `IsNumericString`; mọi giá trị số giờ trả **400**, còn `"urgent"` vẫn ⇒ `Urgent`.
-> **(2)** `dueDate` có offset (ví dụ `+07:00`) làm Npgsql ném `only offset 0 (UTC) is supported` **từ `SaveChangesAsync`** ⇒ **mọi request 500**
-> ⇒ sửa bằng helper `ToUtc(...)` ở cả create và update (payload activity ghi giá trị **đã chuẩn hoá**). UI hiện gửi `.toISOString()` nên bug
-> **chưa từng lộ**, nhưng mọi client gửi offset theo múi giờ (Flutter Giai đoạn 13, mobile, Postman) đều dính.
-> Kết quả §1: backend **189 test PASS / 0 fail / 0 skip**, `dotnet build` **0 warning / 0 error**, **không** migration, **không** đổi DTO/endpoint.
-
-> **§2 — Backend Workspace & Activity (ĐÃ XONG, 37 test case mới):**
-> - **Rút `GET /api/workspaces` khỏi `Program.cs`** (code inline từ Giai đoạn 1) thành `WorkspaceService` + `WorkspacesEndpoints` trong module Board;
->   payload **giữ nguyên 4 field cũ** (`id`/`name`/`description`/`role`) và **append** `ownerId`/`isOwner`; giữ nguyên side effect "tự tạo workspace mặc định" mà `DashboardPage` phụ thuộc.
-> - **6 endpoint mới**: `GET /api/workspaces/{id}` · `PUT /api/workspaces/{id}` (Manager+) · `PUT /api/workspaces/{id}/owner` (owner/Admin) ·
->   `DELETE /api/workspaces/{id}` (owner/Admin, **soft delete**) · `GET /api/workspaces/{id}/activity` (Manager+).
-> - **Activity feed** phân trang **keyset** `(created_at, id)` trần 200, filter `boardId`/`entityType`/`action`, lấy tên actor bằng LEFT JOIN `users`,
->   cursor hỏng ⇒ **400** (không 500). Ghi thêm **3 action cấp workspace** (`WorkspaceUpdated` / `WorkspaceOwnerTransferred` / `WorkspaceDeleted`, `board_id = NULL`).
-> - **Quyết định đáng nhớ:** chuyển ownership **nâng** owner mới lên `Admin` nhưng **giữ nguyên** role owner cũ; **từ chối** chuyển cho AI Agent;
->   Manager (không phải owner) **không** chuyển owner/xoá được (**403**).
-
-> **Khảo sát đầu kỳ (đã phản ánh vào tài liệu chia task):**
-> **Đã có sẵn, không viết lại** — backend nhận & trả đủ `description`/`dueDate`/`priority`
-> (`DTOs/TaskDtos.cs`, `TaskService.ParsePriority`, `DtoMapping.MapTask` điền ở **cả 3** đường trả task);
-> card Kanban đã có badge priority màu và badge hạn chót (`TaskCard.tsx`); modal đã có Select priority + DatePicker + textarea mô tả.
-> **Khoảng trống thật** — (1) **markdown** cho Description: repo **chưa có** thư viện markdown ⇒ tự viết renderer thuần, **không**
-> `dangerouslySetInnerHTML`; (2) **Workspace Settings**: `GET /api/workspaces` đang là **code inline trong `Program.cs`**, chưa có
-> PUT/DELETE/chuyển owner ⇒ tách ra `WorkspaceService` + `WorkspacesEndpoints`; (3) **Activity Log**: bảng `activity_logs` có dữ liệu
-> từ Phase 5 nhưng **không** endpoint nào đọc cho UI ⇒ thêm `GET /api/workspaces/{id}/activity` (phân trang keyset).
-> **Phát sinh bắt buộc** — nút vào 2 trang mới ở `BoardListPage`/`BoardView`; tách `useWorkspaceRole` dùng chung (logic phân quyền đang
-> **copy 2 lần** ở `BoardView` và `ReportsPage`); và 1 **nghi vấn bug** ở `TaskDetailModal` (Select priority/ngày có thể gửi **giá trị cũ**
-> do `onChange` chạy trước khi AntD Form cập nhật store) ⇒ **phải viết test chứng minh trước, chỉ sửa nếu test đỏ**.
-
-## Giai đoạn 11: Quản lý Member & Profile (✅ HOÀN THÀNH — cả Backend & Frontend)
-
-> Schema mới: bảng `workspace_invitations` và `email_messages` (Migration `Phase11MemberProfile`). Dịch vụ email tích hợp qua Resend API kết nối với tên miền riêng `teamnexus.cloud` (SPF/DKIM/DMARC qua Cloudflare DNS) kèm `NullEmailSender` fallback cho môi trường test/dev/CI.
-
-Xây luồng mời thành viên vào workspace qua email, quản lý danh sách member, profile cá nhân và notification center.
-
-**Yêu cầu hoàn thiện:**
-- [x] **Mời member qua email**: Manager/Admin nhập email → hệ thống lưu token SHA-256 an toàn và gửi link mời qua Resend (`noreply@teamnexus.cloud`) → người nhận click link, chọn role (Member mặc định), tham gia workspace
-- [x] **Gửi email nhanh**: Manager/Admin soạn tiêu đề + nội dung ngắn trong app → gửi đến inbox thật của một hoặc nhiều member (dùng cho thông báo họp, việc cần gấp...) kèm ghi nhận vào `email_messages`
-- [x] **Quản lý member**: xem danh sách thành viên + role, hủy invitation đang chờ (Manager/Admin), đổi role member (chỉ Admin), kick member (chỉ Admin)
-- [x] **Profile cá nhân**: xem/sửa display_name, avatar URL (validate an toàn); xem danh sách workspace đang tham gia + role của mình; tự rời workspace (chặn chủ sở hữu)
-- [x] **Notification Center**: badge unread + Drawer tại AppHeader dùng chung — hỗ trợ cả thông báo AI Observer và thông báo nghiệp vụ (được assign task, comment mới, được mời vào workspace)
-
-> **Trạng thái: ✅ ĐÃ HOÀN THÀNH & VERIFY ĐẦY ĐỦ.**
-> - **Backend:** **371 tests** (0 failed; CI PostgreSQL 18 assert 371/371 pass). Migration thứ 9 `Phase11MemberProfile` áp dụng thành công.
-> - **Frontend:** **360/360 tests passed (60 test files)**; `npm run lint` đạt 0 warning / 0 error; `npx tsc -b` exit 0; `npm run build` thành công.
-> - **Live Deployment:** Đã cấu hình và kết nối thành công tên miền chính thức `https://app.teamnexus.cloud` (Vercel) và `https://api.teamnexus.cloud` (Render).
-> - Chi tiết: `tasks/phase-11-member-profile-management.md` và `report/phase-11-member-profile-management-test-report.md`.
-
-## Giai đoạn 12: Dashboard & Tìm kiếm — ✅ **ĐÃ HOÀN THÀNH & VERIFY ĐẦY ĐỦ**
-
-> Xây trên dữ liệu từ Phase 10+11. Dashboard có giá trị cao khi workspace có nhiều member và task có due date.
->
-> **Kế hoạch chi tiết đã chia task (D1–D13, P1–P13, ca biên, bằng chứng):**
-> `tasks/phase-12-dashboard-search.md`.
-> **Báo cáo nghiệm thu chi tiết:** `report/phase-12-dashboard-search-test-report.md`.
->
-> **⛔ Schema đóng băng ở Giai đoạn 11 (9 migration)** — giai đoạn này **KHÔNG** thêm migration, **KHÔNG** bảng/cột/index mới.
-> `@mention` dùng cột `notifications.type` (text tự do) + `notifications.payload` (jsonb) sẵn có —
-> `dotnet ef migrations has-pending-model-changes` vẫn trả "No changes have been made to the model since the last migration."
->
-> **Kết quả kiểm thử toàn diện đo thật:**
-> - **Backend:** **Failed 0 / Passed 423 / Skipped 0 / Total 423** (PostgreSQL 18 Docker, cổng 5433).
->   `dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental` = **0 warning / 0 error**; `dotnet ef migrations list` = **9**.
->   Phân bổ: `DashboardApiTests` 14 · `TaskSearchApiTests` 24 · `CommentMentionApiTests` 10 · `NotificationTriggerApiTests` +4.
-> - **Frontend:** **Failed 0 / Passed 406 / Total 406 (77 test files)**; `npm run lint` đạt **0 warning / 0 error** (194 files); `npx tsc -b` exit 0; `npm run build` thành công.
-> - **CI Workflows:** Đã nâng ngưỡng kiểm soát `ci-backend.yml` (total = 423) và `ci-web.yml` (total ≥ 406).
->
-> Trang tổng quan workspace sau đăng nhập và khả năng tìm kiếm/lọc task nâng cao.
->
-> **Yêu cầu hoàn thiện:**
-> - [x] **Dashboard tổng quan**: trang chủ workspace hiển thị "Task của tôi" (sắp đến hạn, quá hạn, mới giao), hoạt động gần đây (recent activity feed), tóm tắt board (số task theo trạng thái), cảnh báo AI Observer chưa đọc
->   - ✅ **Backend XONG** — `GET /api/workspaces/{id}/dashboard` (Member+, 404 người ngoài) + tham số `kind` trên `GET /api/notifications` để tách riêng "cảnh báo AI Observer chưa đọc"
->   - ✅ **Frontend XONG** — `WorkspaceDashboardPage` tại `/workspaces/:workspaceId/dashboard` với 3 panel thống kê, bộ lọc tab, tóm tắt board, cảnh báo observer và hoạt động gần đây
-> - [x] **Tìm kiếm & Lọc task**: tìm task theo tên, assignee, label, priority, trạng thái, due date — trong phạm vi workspace hoặc board đang xem
->   - ✅ **Backend XONG** — `GET /api/workspaces/{id}/tasks/search` (11 tham số, keyset `(updated_at, id)`); `GET /api/boards/{id}/tasks` **giữ nguyên** shape mảng
->   - ✅ **Frontend XONG** — trang `/workspaces/:workspaceId/search` với bộ lọc đa điều kiện, phân trang tải thêm keyset, sync 2 chiều URL params + nút chuyển hướng nhanh "Tìm trong workspace →" tại `BoardView`
-> - [x] **@mention trong comment**: tag thành viên bằng `@tên` (autocomplete), kích hoạt thông báo cho người được tag — mở rộng `notifications` table
->   - ✅ **Backend XONG** — `CreateCommentRequest.MentionUserIds` (**id tường minh**, server **không** parse `@tên`) + type `CommentMention` (jsonb, **không** cần migration)
->   - ✅ **Frontend XONG** — `Mentions` của antd v6 trong `TaskDetailModal` + lọc thành viên human + trích xuất `mentionUserIds` an toàn + nhãn "Được nhắc đến" trong Notification Center
-
-> **Khảo sát đầu kỳ (đã phản ánh vào tài liệu chia task):**
-> **Đã có sẵn, không viết lại** — `BoardView` **đã có** lọc client theo title/description/assignee/label + priority (nhưng thiếu trạng thái/due date và không tìm xuyên board);
-> `CommentService` đã có 1 row `CommentOnTask` cho assignee; hạ tầng notification + `AppHeader`/`NotificationBell`/drawer
-> đã đủ (Phase 11); 3 vocabulary notification đã tách sẵn; `activityLabels` UI, `taskDueDate.ts`, `useWorkspaceMembers`, `useWorkspaceRole` dùng lại được.
-> **Khoảng trống thật** — (1) **Dashboard**: `DashboardPage` vẫn là trang demo Phase 1 (ô nhập Workspace ID + 3 nút test RBAC), **không** có API/service/hook nào;
-> (2) **Search**: chưa có endpoint tìm xuyên board (chỉ có `GET /api/boards/{id}/tasks`), chưa lọc theo trạng thái/due date;
-> (3) **Mention**: chưa có gì (`grep -i mention` toàn repo = 1 dòng comment).
-> **Phát sinh bắt buộc** — `GET /api/notifications` **không tách được** "cảnh báo AI Observer chưa đọc" khỏi thông báo nghiệp vụ (badge trả tổng mọi loại)
-> ⇒ phải **append** tham số `kind` (observer/agent/member) — additive, tham số vắng ⇒ hành vi y hệt;
-> và trang chủ workspace phải là **route riêng** `/workspaces/:workspaceId/dashboard` (giữ nguyên `/` = danh sách workspace,
-> vì `DashboardPage` phụ thuộc side effect "tự tạo workspace mặc định" của `GET /api/workspaces`).
-
-## Giai đoạn 13: Trực quan hóa & Thông báo Chủ động — ✅ **ĐÃ HOÀN THÀNH & VERIFY ĐẦY ĐỦ**
-
-> **Kế hoạch chi tiết đã chia task (D1–D14, ca biên, bằng chứng):** `tasks/phase-13-visualization-proactive-notifications.md`.
-> **📤 Note bàn giao Frontend** (giữ lại làm hồ sơ hợp đồng API + các bẫy đã biết): `tasks/phase-13-remaining-frontend-handover.md`.
-> **Báo cáo nghiệm thu chi tiết:** `report/phase-13-visualization-proactive-notifications-test-report.md`.
->
-> **⚠️ Khác bản roadmap đầu — HAI lệch có chủ ý & bắt buộc (chi tiết ở §D2 và §D5 của tài liệu chia task):**
-> 1. **CÓ 1 migration additive:** thêm **1 cột** `users.digest_enabled` (`bool NOT NULL DEFAULT true`) ⇒ tổng **10**
->    migration (mới nhất `20260916045955_Phase13DailyDigest`). Lý do: yêu cầu *"người dùng có thể bật/tắt trong
->    Profile Settings"* **không thể** thoả mãn bằng cờ ở client — `BackgroundService` chạy phía **server** phải
->    **đọc** được lựa chọn đó, và `users` không có cột nào tái dùng được. `DEFAULT true` ⇒ không cần backfill.
-> 2. **CÓ 1 endpoint read-only mới:** `GET /api/workspaces/{id}/reports/progress-series?from=&to=&boardId=&tzOffsetMinutes=`
->    (**Manager+**, cùng quyền `/summary`). Lý do: `ReportSummary` chỉ là ảnh chụp **một thời điểm**, và
->    `activity_logs` **không** lưu trạng thái cột ⇒ **không thể** tái dựng lịch sử open/closed ở client.
->    Burndown vì vậy **không thể** tính thuần frontend.
->
-> **Kết quả ĐO THẬT (số đo thắng tài liệu):**
-> - **Backend:** `dotnet build TeamNexus.sln -m:1 -nr:false --no-incremental` = **0 warning / 0 error** ·
->   `dotnet test` (PostgreSQL thật) = **Failed 0 / Passed 480 / Skipped 0** (baseline 423 ⇒ **+57**) ·
->   `dotnet ef migrations list` = **10** · `has-pending-model-changes` = **sạch**.
->   Phân bổ 57 test mới: `ReportProgressSeriesTests` **17** · `ReportProgressSeriesApiTests` **10** ·
->   `DigestTemplateTests` **13** · `DailyDigestTests` **14** · `ProfileApiTests` **+3**.
-> - **Frontend:** `npm test` = **Failed 0 / Passed 508 / Total 508 (86 file)** (baseline 407/77 file ⇒ **+101 / +9 file**) ·
->   `npm run lint` = **0 warning / 0 error** (212 file) · `npx tsc -b` = **exit 0** · `npm run build` = **thành công**.
-> - **CI:** `ci-backend.yml` nâng `423` → **`480`**; `ci-web.yml` nâng `406` → **`508`**.
-
-Bổ sung khả năng xem task theo chiều thời gian (Calendar), biểu đồ tiến độ trực quan trong app, và email digest tóm tắt hàng ngày/tuần cho từng thành viên — tất cả tận dụng dữ liệu đã có (`due_date`, `completed_at`, `activity_logs`, Resend API).
-
-**Yêu cầu hoàn thiện:**
-- [x] **Calendar View**: tab "Lịch" trong `BoardView` (antd `Calendar`) — thẻ xếp theo **hạn chót địa phương**, tràn gộp `+N`, ô có thẻ trễ hạn báo đỏ; click ngày mở `/search?boardId=&dueFrom=&dueTo=`; click thẻ mở `TaskDetailModal` hiện có; `Segmented` chuyển view với **Kanban là mặc định**. **Thuần client, không API mới** — tôn trọng ô tìm kiếm/bộ lọc ưu tiên đang bật.
-- [x] **Burndown Chart & Velocity**: `GET /api/workspaces/{id}/reports/progress-series` (Manager+) trả chuỗi `openTasks`/`completions`/`creations` theo **ngày** (≤ 60 ngày) hoặc theo **tuần** (> 60, mốc Thứ Hai), `tzOffsetMinutes` clamp `±840` + echo giá trị thực dùng, cap 90 bucket + cờ `truncated`; tính bằng **hàm thuần** `ReportAggregator.BuildProgressSeries`. UI vẽ biểu đồ cột bằng **CSS** + `Statistic`/`Tooltip` (**không** thêm thư viện npm); lỗi chuỗi thời gian chỉ hiện `Alert` cục bộ, **không** làm hỏng khối báo cáo.
-- [x] **Email Digest hàng ngày**: `DigestOptions` (mặc định **`Enabled = false`**) + `DailyDigestRunner` (scoped ⇒ gọi trực tiếp được từ test) + `DailyDigestBackgroundService` (bọc try/catch **mọi** tick) + `EmailTemplates.DailyDigest` (hàm thuần, HTML-escape mọi giá trị, giữ dấu tiếng Việt) + port `IDailyDigestService`/`NullDailyDigestService` ở Board (tái dùng `IDashboardService`). **Chống trùng ở tầng DB** ⇒ host free-tier ngủ/thức vẫn **tối đa 1 email/người/ngày**; digest **không** tạo notification, **không** ghi `activity_logs`. UI: tab "Thông báo" trong `ProfilePage`, mở thẳng tab khi URL có `#notifications`, **rollback** công tắc khi API lỗi.
-- [x] Toàn bộ test xanh: **backend 480/0/0** · **frontend 508/0/0**; migration **9 → 10** (lệch #1 ở trên) và `has-pending-model-changes` sạch.
-
----
-
-## Giai đoạn 14: Nâng cao AI — ✅ **HOÀN THÀNH (BACKEND & FRONTEND)**
-
-> **Kế hoạch chi tiết đã chia task:** `tasks/phase-14-ai-advanced.md`.
-> **Frontend hoàn thiện bởi:** antigravity (570 test frontend / 96 test files / 0 warning 0 error / CI gate -lt 570).
-> **Báo cáo nghiệm thu chi tiết:** `report/phase-14-ai-advanced-test-report.md`.
->
-> **⚠️ LỆCH DoD có chủ ý & bắt buộc (chi tiết ở §1 D6 và §10 R1 của tài liệu chia task):**
-> **`ProjectHealthScore` KHÔNG đặt trong `ObserverSignalDetector`** như dòng yêu cầu dưới đây viết, mà ở
-> `Board/Services/ProjectHealth.cs` (**hàm thuần**) và được **append cuối** `DashboardResponse`. Lý do:
-> gauge nằm trên `WorkspaceDashboardPage` vốn là **Member+**, còn `ObserverSignalDetector` là nội bộ của
-> pipeline **Manager+**; thêm nữa `Board → Ai` **bị cấm** (bất biến `Ai → Board` một chiều, Giai đoạn 13 §9)
-> nên Board **không thể** nhúng một giá trị do Ai sở hữu. Tín hiệu `AtRiskDeadline` **vẫn** nằm trong
-> `ObserverSignalDetector` (đúng yêu cầu). Quy tắc "at risk" thì **dùng chung** một định nghĩa duy nhất ở
-> `TeamNexus.Shared.Risk.DeadlineRiskRules` ⇒ gauge và cảnh báo **không thể** nói hai số khác nhau.
->
-> **Schedule/schema:** ⛔ **KHÔNG migration nào — `dotnet ef migrations list` vẫn là 10** (khác Giai đoạn 13).
-> Cả 3 tính năng đều không cần schema mới: chat dùng `ai_action_logs` (**bảng đã có**, cột `action`/
-> `entity_type` là free text) + transcript ở **client**; health **tính lại** mỗi request; board template dùng
-> `boards`/`board_columns`/`tasks` sẵn có. `entity_type = 'Workspace'` **dùng lại** index
-> `(entity_type, entity_id, created_at)` ⇒ không index mới.
-
-Bổ sung khả năng tương tác trực tiếp với AI trong ngữ cảnh task, biến Observer thành công cụ **dự báo** rủi ro,
-và mở rộng Smart Setup thành **AI Board Template**.
-
-**Yêu cầu hoàn thiện:**
-- [x] **AI Task Chat**: `POST /api/tasks/{id}/ai-chat/stream` (**SSE**, Member+) — `IAiStreamingProvider` (port **thứ ba**, không sửa `IAiProvider`), khung `meta` → `delta`* → `done` | `error` dựng bằng **hàm thuần** `AiChatSseWriter`, guard `AiChat:MaxHistoryMessages(12)`/`MaxHistoryChars(8000)` ⇒ **400 trước khi gọi provider**; + `POST .../ai-chat/message` lưu câu trả lời thành bình luận ⇒ `Pending` `PostComment` ⇒ Manager duyệt. **Transcript ở client** (không bảng mới); lỗi giữa luồng trả khung `error` thay vì 500.
-- [x] **Observer Dự báo Rủi ro**: tín hiệu **`AtRiskDeadline`** (task chưa done, còn < 20% cửa sổ, 0 update trong 48 h, **sàn cửa sổ ≥ 2 ngày**) + severity `Critical ≤24h` / `High ≤72h` / `Medium`; `NotificationTypes.All` **4 → 5**; prompt liệt kê 5 type; `ObserverSummarizer` **pin thứ tự ưu tiên khi cắt** + đếm `signalsPreserved`/`signalsDroppedBeforePrompt`. **Gauge "Sức khỏe dự án"** = `ProjectHealth.Compute` (0–100, 4 band, 5 thành phần điểm trừ cộng lại **đúng 100**) **append cuối** `DashboardResponse`.
-- [x] **AI Board Template**: `POST /api/workspaces/{id}/smart-setup/template` (Manager+, **không ghi gì**) + `/confirm` ⇒ `Pending` `CreateBoardFromTemplate` (`entity_type = 'Workspace'`) ⇒ Approve tạo **đúng 1 board + 2–6 cột (pin đúng 1 cột `is_done`) + 5–10 task**; Undo = **soft-delete board**.
-- [x] Guardrail và giới hạn token áp dụng cho mọi tính năng mới (`AiChatOptions` + `ObserverOptions.AtRiskDeadline*` + `BoardTemplatePrompts` bounds, tất cả **clamp**); test coverage **≥ baseline** (xem số thật trong `phase-14-ai-advanced.md` §6.1 + báo cáo).
-
----
-
-## Giai đoạn 14.5: Củng cố nền tảng + AI Agent Chat cấp Board — ✅ **HOÀN THÀNH (BACKEND & FRONTEND)**
-
-> **Vì sao có giai đoạn này:** theo yêu cầu *"đọc lại tài liệu, rà các tính năng cần chỉnh sửa/nâng cấp/củng cố để làm nền chắc chắn cho giai đoạn 15 và 16"* + *"gộp AI Agent và Hỏi AI thành **AI Agent Chat** tổng của board"*.
-> **Kế hoạch chi tiết:** `tasks/phase-14-5-foundation-and-agent-chat.md`.
-> **Báo cáo nghiệm thu:** `report/phase-14-5-foundation-and-agent-chat-test-report.md`.
->
-> **⚠️ LỆCH DoD có chủ ý so với Giai đoạn 14 (bắt buộc ghi rõ):** `tasks/phase-14-ai-advanced.md` §8 ghi
-> **"⛔ KHÔNG được làm"** — *lưu transcript chat ở DB* (D2) và *chat nhiều task cùng lúc*. Giai đoạn 14.5
-> **thay thế có chủ ý** hai dòng đó (người dùng chốt). Dòng thứ ba — *chat có tool/function-calling* —
-> **vẫn bị cấm**. Cơ chế không đổi: **chưa duyệt thì chưa ghi dữ liệu nghiệp vụ**.
->
-> **Schedule/schema:** ⚠️ **CÓ 1 migration** — bảng `agent_chat_messages` (`Phase14_5AgentChat`) ⇒
-> `dotnet ef migrations list` **10 → 11**. Lệch có chủ ý so với Giai đoạn 14 (giai đoạn đó không migration).
-> Cột `task_id` (nullable, kèm CHECK `num_nonnulls(board_id, task_id) = 1`) là **chỗ chừa**: hợp nhất task
-> chat vào cùng bảng sau này sẽ **không cần migration nữa**.
->
-> **Kết quả ĐO THẬT:** backend `dotnet build --no-incremental` **0 warning / 0 error** ·
-> `dotnet test` **Failed 0 / Passed 643 / Skipped 0** (baseline 584 ⇒ **+59**) ·
-> `migrations list` = **11** · `has-pending-model-changes` = **sạch** ·
-> frontend **Failed 0 / Passed 633 / 107 file** (baseline 578 / 99 ⇒ **+55 / +8**) ·
-> `oxlint` **0 warning / 0 error** (255 file) · `npx tsc -b` exit 0 · `npm run build` OK ·
-> cổng CI: `ci-backend.yml` `584 → 643`, `ci-web.yml` `578 → 633`.
-
-### Track A — củng cố nền (làm trước Phase 15/16)
-- **A1.1** — **`GET /api/workspaces/{id}/ai-actions`** (Manager+). Vì `ai_action_logs` **không có**
-  `workspace_id`, log tạo board (`entity_type='Workspace'`) **không bao giờ** hiện ở danh sách theo board:
-  trước đây chỉ duyệt/undo được board-template **từ bên trong chính board nó vừa tạo**. FE: nút *Lịch sử AI*
-  ở `BoardListPage` (+ re-fetch danh sách board sau khi duyệt). **Không** cột/index mới.
-- **A1.2** — seam **`IExternalAlertSink`** đặt ở `NotificationService` (nơi **cả 4** đường ghi notification
-  đi qua, không phải adapter `NotificationWriter` chỉ phủ 1 đường). Mặc định `NoOpExternalAlertSink`;
-  transport hỏng **không** làm request ghi dữ liệu thất bại. ⇒ Phase 15 thêm **1 dòng đăng ký**, sửa **0**
-  producer.
-- **A2.1** — `AgentRunReaper` đóng luôn run mà **task đã bị xoá mềm** (`Failed` + `TaskChanged`, không
-  notification). Tách `AgentRunReaperRunner` (scoped, test gọi trực tiếp được) khỏi hosted service.
-- **A2.3** — bỏ **fetch trùng** số hành động AI đang chờ ở `BoardView`; hai helper log lỗi thay vì
-  `.catch(() => {})` nuốt im lặng.
-- **A2.4** — `AgentChatRetentionRunner`: retention **90 ngày**, theo batch, cho transcript chat.
-- **A3** — nợ kỹ thuật ghi lại, **không** làm: attachment chỉ text ≤512 KB, chưa có webhook idempotency,
-  chưa có seam GitHub PR ↔ task, chưa có AI provider fallback.
-
-### Track B — AI Agent Chat cấp Board
-- **Bề mặt:** nút nổi góc phải-dưới board ⇒ **panel docked ~1/4 bề rộng** (kéo được) + **kéo thẻ từ cột vào
-  panel để đính kèm** (tối đa **8** thẻ/lượt) + action card cho đề xuất + stream câu trả lời.
-- **Transcript lưu DB** nên hội thoại **bền qua reload**; đọc lại bằng
-  `GET /api/boards/{id}/agent-chat/messages` (keyset).
-- **Ngân sách riêng `AgentChat`** (2–3× `AiChat`): `MaxHistoryMessages 24`, `MaxHistoryChars 24000`,
-  `MaxOutputTokens 2400`, `MaxAttachedTasks 8`, `MaxTotalContextChars 24000` — mọi giá trị **clamp**;
-  vượt trần ⇒ **400 trước khi gọi provider** (0 token). `Enabled=false` ⇒ **503**.
-- **3 dạng đề xuất**, tất cả đi **Chat → "Gửi đề xuất" → Pending → Manager duyệt → mới ghi**:
-  `CreateSubtasks` (dùng lại applier Phase 4) · `UpdateTaskFields` · `MoveTaskToColumn`; **Undo** khôi phục
-  đúng trạng thái trước (5 trường / cột cũ). Đề xuất **chỉ** chạm thẻ trong tập đính kèm và cột của board
-  này; **không** vào cột `is_clarification`.
-- **❗ 2 bug thật bắt được khi hiện thực:**
-  **(P1)** cả hai service chat kiểm `chunk.Done` **trước** khi nối `chunk.Delta` ⇒ **mất chữ ở khung cuối**,
-  mọi câu trả lời **ngắn đi đúng một chunk**, và bất biến `done.answer == Σ delta` (client dựa vào để khôi
-  phục khung bị mất) **sai âm thầm** — bộ test Phase 14 không bắt được vì chỉ khẳng định hai thứ *cùng tồn
-  tại*. **(P2)** `MoveTaskAsync` mở transaction riêng trong khi `ApproveAsync` đã mở ⇒ duyệt di chuyển thẻ
-  trả **500**; bỏ transaction thừa (mọi thay đổi đã nằm trong **một** `SaveChangesAsync` nên nguyên tử
-  không đổi, thứ tự "activity log sau commit" vẫn đúng).
-> **Nợ kỹ thuật có chủ ý:** task chat trong `TaskDetailModal` **vẫn** transcript ở client; chỉ nhãn đổi thành
-> **"Hỏi AI về thẻ này"** (1 assertion test được sửa — ngoại lệ duy nhất) và `data-testid` giữ nguyên.
-> `agent_chat_messages.task_id` là chỗ chừa để hợp nhất sau **không cần migration**.
-
----
-
-## Giai đoạn 14.6: Hoàn thiện Trải nghiệm (Track A) — ✅ ĐÃ HOÀN THÀNH
-
-> **Vì sao có giai đoạn này:** Sau khi đưa Phase 14.5 lên production (`app.teamnexus.cloud`), kiểm thử thực chiến phát hiện các điểm ma sát UX thực tế (kéo thẻ vào dropzone khó khăn trên laptop/touch, model để lộ raw UUID ra chat, transcript task chat vẫn ở client, hỏi tiến độ rỗng khi chưa gắn thẻ).
-> **Kế hoạch chi tiết & DoD:** `tasks/phase-14-6-ai-agent-enhancements.md`.
-> **Báo cáo nghiệm thu Track A:** `report/phase-14-6-track-a-test-report.md` (665 backend tests / 657 frontend tests PASS).
-> **Ghi chú kiến trúc:** Track B ban đầu của 14.6 được **hợp nhất và nâng tầm vào Giai đoạn 14.7** cùng với mô hình **Jev** để tạo nên nền tảng Autonomous AI Agent toàn diện.
-
-### Các hạng mục đã hoàn thành (Track A — Quick-Wins & Hardening):
-- **A1. Bộ chọn đính kèm thẻ trực quan:** ✅ Nút **"Đính kèm thẻ"** (Popover tìm kiếm theo tiêu đề/người phụ trách, hiển thị title + priority + assignee) trên header vùng đính kèm, song song với kéo-thả dnd; action **"Gửi vào AI Chat"** trong menu `...` của `TaskCard` (chỉ hiện khi có handler, tự mở panel + gắn thẻ).
-- **A2. Chặn rò rỉ ID kỹ thuật (GUID / UUID):** ✅ Rule nghiêm ngặt trong **cả hai** system prompt (`AgentChatPrompts` + `AiChatPrompts`) **và** bộ lọc cưỡng chế: `AiChatAnswerSanitizer` (C#, lọc transcript trước khi ghi DB) + `redactIdentifiers.ts` (FE, lọc trên chuỗi tích luỹ khi hiển thị). Khối JSON đề xuất **không** bị lọc (ID thật phải sống để duyệt được).
-- **A3. Hợp nhất Transcript Task Chat:** ✅ Task chat ghi/nạp `agent_chat_messages` qua `task_id` (`board_id = null`, CHECK của Migration 11 giữ isolation) + route `GET /api/tasks/{taskId}/agent-chat/messages`. **0 migration mới.**
-- **A4. Lightweight Board Digest:** ✅ Khi `attachedTaskIds` rỗng, server tự dựng digest (số thẻ mỗi cột + top thẻ theo priority/hạn chót, trần `MaxDigestChars = 2000`); có thẻ đính kèm thì **không** thêm digest.
-
----
-
-## Giai đoạn 14.7: Autonomous Agent & Tối ưu hóa Ra Quyết định với Jev (Hybrid AI Platform) — ✅ XONG (Track A §A1–§A5 + Track B §B1–§B3)
-
-> **Mục tiêu:** Hợp nhất năng lực Autonomous AI Agent (kế thừa Track B của 14.6) với mô hình **Jev (Non-Generative Decision AI)** theo kiến trúc **Hybrid AI: System 1 (Jev - Ra quyết định có cấu trúc siêu tốc) + System 2 (DeepSeek - Tư duy ngôn ngữ & Giải thích sâu)**.
-> **Tài liệu kiến trúc chi tiết:** `project-docs/06-adjust-and-upgrade-with-jev.md`.
-> **Kế hoạch chia task + NHẬT KÝ THI HÀNH (6 bug thật + 13 lệch kế hoạch):** `tasks/phase-14-7-autonomous-agent-jev.md` §11 (Track A) và §12 (Track B).
-> **Nguyên tắc bất biến:** Accountability Layer giữ nguyên 100% (mọi tác động ghi dữ liệu phải qua `Pending` → `Approve` → `Undo`); tuân thủ trần token & guardrail.
->
-> **📊 SỐ ĐO THẬT (Track A + Track B):** backend `dotnet build --no-incremental` **0 warning / 0 error** ·
-> `dotnet test` **Failed 0 / Passed 1167 / Skipped 0** (baseline 665 ⇒ **+502**) ·
-> `dotnet ef migrations list` **11 → 14** (`Phase147AgentPlatform`, `Phase147AgentPersonas`, `Phase147KnowledgeBase`) · `has-pending-model-changes` **sạch** ·
-> frontend **738 / 123 file** · `oxlint` **0/0** · `tsc -b` exit 0 · `npm run build` OK ·
-> cổng CI: `ci-backend.yml` `665 → 1167`; `ci-web.yml` `657 → 738`.
-> **⚡ KẾT QUẢ ĐO LIVE JEV (OpenRouter key thật, 20 lượt):** 100% thành công (0 degraded), server latency P50 **773 ms**, client round-trip P50 **782 ms**.
->
-> **⚠️ LỆCH có chủ ý so với bản roadmap bên dưới (chi tiết ở §11.3 + §12.2 của tài liệu chia task):**
-> 1. **3 migration** (`Phase147AgentPlatform` + `Phase147AgentPersonas` + `Phase147KnowledgeBase`) — không phải 2 như dự định: phần persona được tách khỏi phần pgvector để migration pgvector (đụng `CREATE EXTENSION`) có ranh giới rõ ràng, và vì Track A đã lấy luôn phần cột kỹ năng/taxonomy.
-> 2. **Đổi image CI** `postgres:18` → `pgvector/pgvector:pg18` (chỉ cần khi có cột `vector`).
-> 3. **Nới index agent**: thay `uq_workspace_members_ai_agent` ("đúng 1 agent/workspace") bằng `uq_workspace_members_ai_persona` trên `(workspace_id, COALESCE(persona_key,'general'))` — kèm backfill `persona_key = 'general'` nên hành vi Phase 7 **không đổi**.
-> 4. **Sửa 2 assertion của test cũ** (đều là append field vào `WorkspaceMemberResponse` theo luật append-only Phase 10 §4.2): `WorkspaceMemberApiTests` nhận thêm 4 field §A2 (Track A), rồi thêm `personaKey` (Track B). Không assertion nào khác bị sửa.
-> 5. **Bỏ tool `SearchProjectContext`** (dự định ở 14.6 §B3) — `SearchSystemData` (Phase 7) đã phủ chức năng; ghi thành nợ kỹ thuật có chủ ý thay vì thêm tool trùng.
-
-### 1. Nâng cấp Tiền đề Bắt buộc (Foundational Prerequisites)
-- **1.1. Quản lý Nhãn Cố định & Taxonomy Chuẩn hóa:** ✅ **XONG** — bảng `workspace_taxonomies` (`domain`/`work_type`, UNIQUE `(workspace_id, kind, key)`), seed mặc định **lazy + idempotent bằng `INSERT … ON CONFLICT DO NOTHING`**, `GET/PUT /api/workspaces/{id}/taxonomies` (Member+ / Manager+). Frontend `TaxonomySettings` trong Workspace Settings.
-- **1.2. Hồ sơ Kỹ năng (Skills) & Vai trò (Roles) Thành viên:** ✅ **XONG** — `workspace_members` thêm `skills` (jsonb), `primary_role`, `capacity_weight`, `max_wip_limit`; `PUT /api/workspaces/{id}/members/{userId}/profile` (**Admin**, từ chối AI Agent, field vắng ⇒ giữ nguyên). Frontend `MemberSkillsForm` trong Members Table.
-- **1.3. Cấu trúc Logic Rẽ nhánh theo "Xác suất Tin cậy" (Confidence Threshold Branching):** ✅ **XONG** — `ConfidenceRouting` + `JevDecisionValidator` (hàm thuần); ngưỡng **cưỡng chế trong code, không tin provider**; test ở **đúng biên** 0.85/0.50 + `NaN`/`∞`. Frontend `confidenceHelpers`.
-
-### 2. Tích hợp Mô hình Jev & Tối ưu Hóa Ra Quyết Định (System 1)
-- **2.1. Phân loại Task & Đánh giá Mức độ Gấp (Auto-Triage & Smart Priority):** ✅ **XONG toàn diện (BE + FE)** — `POST /api/boards/{id}/tasks/triage` (Member+, **không ghi gì**, `Jev:Enabled=false` ⇒ 503, provider lỗi ⇒ **200 + `degraded:true`** thay vì 502). Trả `latencyMs`. Frontend: `useJevTriage` debounce 400ms + `JevTriagePanel` 3 nhánh, degraded warning, security badge.
-- **2.2. Gợi ý Người Thực hiện Phù hợp (Smart Assignee Dispatching):** ✅ **XONG toàn diện (BE + FE)** — `POST /api/boards/{id}/tasks/{taskId}/assignee-suggestions`; Jev chỉ thấy nhãn `cand-N`. Frontend: `AssigneeSuggestion` hiển thị độ phù hợp %, lý do và nút gán nhanh.
-- **2.3. AI Observer Toàn diện (Bộ đôi A + B):**
-  - **Phần A** ✅ **XONG** — Jev chấm `severity` + cờ khẩn + rủi ro domino **trước**; verdict tự tin dưới ngưỡng ⇒ **chặn luôn lời gọi LLM** (đây là phần tiết kiệm token); verdict được truyền xuống **system prompt** để LLM giải thích đúng mức. `ObserverFindingValidator` **vẫn** là thứ quyết định finding nào được ghi. Cờ rollback: `Jev:ObserverSeverityRouting=false` ⇒ về đúng đường Phase 5/14 bằng 1 dòng config.
-  - **Phần B** ✅ **XONG toàn diện (BE + FE)** — `RecoveryPlan` (`Pending`, scope `entity_type='Workspace'`) + `RecoveryPlanApplier` cho 4 kind; `EscalateManager` **không ghi gì** (có test riêng); `AutoRecoveryPlanEnabled = false` **mặc định**. Frontend: `RecoveryPlanCard` trong `AiActionLogItem` với cảnh báo họp khẩn cấp và nút Duyệt/Từ chối/Undo.
-
-### 3. Nâng cấp Autonomous Agent Platform (Kế thừa Track B 14.6) — ✅ XONG
-- **3.1. Đội ngũ AI Chuyên Gia (Multi-Agent Personas):** ✅ Track B §B1 — `persona_key` + CHECK whitelist (`general`/`scrum_master`/`tech_lead`/`qa_security`); index `uq_workspace_members_ai_persona` trên `(workspace_id, COALESCE(persona_key,'general')) WHERE member_type='ai_agent'` **thay** `uq_workspace_members_ai_agent`; `IAiAgentResolver.EnsurePersonaAgentAsync` tạo row agent theo persona (lazy + race-guard); `?persona=` trên Agent Chat (vắng ⇒ `AgentChat:DefaultPersona`, sai ⇒ 400); prompt chỉ **prepend** khối `VAI TRÒ:` cho persona khác `general` (marker `FakeAiProvider` giữ nguyên); `WorkspaceMemberResponse` append `personaKey`. `IsAiAgentAsync` **không đổi** nên mọi persona được nhận diện là agent ở mọi module mà không sửa file nào.
-- **3.2. Mở rộng Tool-Calling (ReAct Loop):** ✅ Track B §B2 — 3 tool mới `InspectMemberWorkload` (dùng **chung** truy vấn tải việc với §A4 qua `IMemberWorkloadReader`), `MatchSkills` (thuần EF, không gọi model), `ValidateAcceptanceCriteria` (Jev `noul`; Jev tắt/lỗi ⇒ `verified: null` **không** ném lỗi). Whitelist **4 → 7** tool; guardrail `MaxToolCalls 15`/`RunTimeoutSeconds 300`/`MaxRunTokens 50000`/`MaxRunLlmCalls 20` **không đổi** (có test).
-- **3.3. Bộ nhớ Dự án Ngữ nghĩa (Workspace RAG với pgvector):** ✅ Track B §B3 — `CREATE EXTENSION vector` + `workspace_knowledge_documents` + `workspace_knowledge_chunks` (cột `vector(1536)` + index **HNSW `vector_cosine_ops`**, thư viện `Pgvector.EntityFrameworkCore` 0.3.0); 3 endpoint `/api/workspaces/{id}/knowledge/documents` (đọc Member+, ghi Manager+ ⇒ **`Pending`** action `CreateKnowledgeDocument`); `CreateKnowledgeDocumentApplier` (một action type, `kind` trong payload: vắng ⇒ tạo, `"Delete"` ⇒ soft-delete); `KnowledgeEmbeddingRunner` chạy nền (scope + gọi trực tiếp được từ test), chỉ chuyển `ready` khi **không còn** chunk thiếu vector; khối `KIẾN THỨC DỰ ÁN` chèn **trước** khối digest, trần `Jev:RagMaxContextChars`, **không chứa GUID**. Image CI & dev = **`pgvector/pgvector:pg18`**.
+Hoàn thiện giao diện và kiểm tra hợp lệ cho các trường nâng cao của thẻ công việc (**Due Date**, **Priority**, **Description Markdown**), tách dịch vụ quản trị không gian làm việc (`WorkspaceService`) và bổ sung giao diện **Cài đặt Workspace** cùng **Nhật ký Hoạt động (Activity Log)**.
 
 **Yêu cầu hoàn thiện (DoD):**
-- [x] Interface `IJevDecisionService` và mock `FakeJevDecisionProvider` hoạt động ổn định với kiểm thử đơn vị độc lập.
-- [x] Bổ sung schema `workspace_taxonomies` và các cột `skills`/`primary_role` trên `workspace_members` (kèm migration EF Core sạch).
-- [x] Tự động gợi ý phân loại và độ khẩn cấp của task (`latencyMs` trả về trong response — **đã đo thật 20 runs, P50 773 ms**).
-- [x] Gợi ý assignee tuân thủ nghiêm ngặt logic rẽ nhánh theo ngưỡng confidence.
-- [x] AI Observer phát hiện rủi ro sinh Recovery Plan Proposal ở trạng thái `Pending`, Quản lý có thể Approve/Reject/Undo thành công.
-- [x] Toàn bộ test suite backend và frontend tiếp tục pass 100%, không vi phạm bất biến của Accountability Layer (**1167/0/0** + **738/0/0**).
-- [x] **Frontend của §A2–§A5** (triage panel, nút gợi ý người làm, màn hình taxonomy + hồ sơ kỹ năng, action card Recovery Plan).
-- [x] **§B1 Multi-Agent Personas** — nhiều row agent theo persona, chat chọn được persona, tên persona hiển thị trên lịch sử chạy.
-- [x] **§B2 Ba tool ReAct mới** — dùng chung ngân sách guardrail, `ValidateAcceptanceCriteria` không làm chết lượt chạy khi Jev tắt.
-- [x] **§B3 Workspace RAG (pgvector)** — tài liệu chỉ được ghi sau khi Manager duyệt, tìm kiếm ngữ nghĩa bằng cosine trên index HNSW, mọi lỗi embedding đều suy giảm an toàn (chunk ở `pending`, chat vẫn trả lời).
+- [x] Hiển thị và cập nhật hạn chót (**Due Date** chuẩn hóa UTC, cảnh báo đỏ khi quá hạn) và mức độ ưu tiên (**Priority** `Low` / `Medium` / `High` / `Urgent`).
+- [x] Hỗ trợ trình bày **Description** với cú pháp Markdown an toàn (không dùng `dangerouslySetInnerHTML`).
+- [x] Hoàn thiện trang **Cài đặt Workspace** (cập nhật tên/mô tả, chuyển quyền sở hữu cho thành viên con người, xóa mềm workspace) và tính năng **Tạo không gian làm việc chủ động** (`POST /api/workspaces`).
+- [x] Hoàn thiện trang **Nhật ký Hoạt động (Activity Log)** phân trang keyset cho cấp Quản lý.
+
+> **Kết quả nghiệm thu:** **8 migrations** · Backend **226 tests PASS** · Frontend **279 tests PASS**.
+> **Hồ sơ chi tiết:** Kế hoạch [`tasks/phase-10-advanced-task-workspace-ux.md`](tasks/phase-10-advanced-task-workspace-ux.md) · Bổ sung tạo Workspace [`tasks/handovers/workspace-creation-api-ui.md`](tasks/handovers/workspace-creation-api-ui.md) · Bàn giao FE [`tasks/handovers/phase-10-remaining-frontend-handover.md`](tasks/handovers/phase-10-remaining-frontend-handover.md) · Báo cáo nghiệm thu [`report/phase-10-advanced-task-workspace-ux-test-report.md`](report/phase-10-advanced-task-workspace-ux-test-report.md).
 
 ---
 
-## Giai đoạn 15: Tích hợp bên ngoài — ✅ HOÀN THÀNH (Sub-phase 15.1 ✅ · 15.2 ✅ · 15.3 ✅ · 15.4 ✅ · 15.5 ✅)
+## Giai đoạn 11: Quản lý Thành viên, Email & Hồ sơ Cá nhân — ✅ HOÀN THÀNH
 
-> **Tài liệu thiết kế & kế hoạch chia task:** `project-docs/07-external-integrations-design.md` & `project-docs/tasks/phase-15-0-external-integrations-master-plan.md` (`phase-15-1..15-5.md`).
-> **Độ phức tạp kỹ thuật: 🔴 Cao** — webhook, lưu secret bên thứ ba, eventual consistency, độ bền gửi ra ngoài (outbox + retry).
-> **Đã có sẵn seam:** `IExternalAlertSink` (Giai đoạn 14.5 A1.2) là điểm cắm thông báo ra ngoài — Phase 15 đăng ký
-> implementation thật và **không** phải sửa Observer/Agent/member path.
-> **📊 Sub-phase 15.5 ✅ XONG (Frontend Integrations React 19 + Ant Design v6 & Nghiệm thu):** Hoàn thiện tầng contracts & API client ([`integration.types.ts`](frontend/src/features/workspace/types/integration.types.ts), [`integrationApi.ts`](frontend/src/features/workspace/services/integrationApi.ts), [`useWorkspaceIntegrations.ts`](frontend/src/features/workspace/hooks/useWorkspaceIntegrations.ts)); nâng cấp Kanban & Task UI hiển thị mã tuần tự **`TN-123`** (monospace `JetBrains Mono`) kèm nút sao chép nhanh & fallback `#XXXXXXXX` trên `TaskCard`, `TaskDetailModal`, `TaskSearchResultList` + lọc tìm kiếm `tn-123` trên `BoardView`; hiển thị chip PR/Issue (`Draft`, `Open`, `Merged`, `Closed`), khối liên kết GitHub, bình luận nhận diện **`GitHub Bot`** (`GITHUB BOT`) và vai trò cột **`Đang duyệt PR (isInReview)`** loại trừ lẫn nhau với `isDone`/`isClarification` (đồng thời vá bug mất `isInReview`/`isClarification`/`position` trong `boardStore.applyColumnUpdated`); xây dựng hệ thống `Tabs` trên `WorkspaceSettingsPage` gồm tab `Cài đặt chung` (giữ nguyên `open-settings-modal-btn`) và tab `Tích hợp (Slack / Discord / GitHub)` (`OutboundWebhooksSection` thống kê 24h + CRUD HTTPS + Gửi thử + Drawer 20 outbox deliveries; `GitHubIntegrationSection` cấu hình bảng mặc định/label filter + Payload URL + Secret one-shot + Rotate Secret + bảng 30 deliveries). Số đo thật sau chỉnh sửa cuối: Frontend `oxlint` **0 warning / 0 error** (299 file), `tsc -b` + `vite build` **exit 0** (3,340 module), Vitest **127/127 file — 786/786 PASS** (`+39` test mới so với baseline 747; đã nâng ngưỡng [`ci-web.yml`](.github/workflows/ci-web.yml) lên `786`); Backend không đổi mã nguồn từ sau 15.4 (`dotnet build --no-incremental` **0 warning / 0 error**; Pure **665/665**; chạy `dotnet test` trên máy Windows cục bộ chưa bật container `pgvector/pgvector:pg18` ghi nhận trung thực **Failed: 0 / Passed: 670 / Skipped: 659 / Total: 1,329** — 659 test DB skip an toàn qua `DatabaseFixture.EnsureVectorExtensionAvailable`; bộ 1,329 đầy đủ & `dotnet ef` drift check chạy với container `pgvector/pgvector:pg18`). Báo cáo tổng hợp: [`report/phase-15-external-integrations-test-report.md`](report/phase-15-external-integrations-test-report.md).
-> **📤 Bàn giao phiên 15.5:** [`tasks/phase-15-remaining-frontend-handover.md`](tasks/phase-15-remaining-frontend-handover.md) — biến môi trường deploy (`Integrations__PublicApiBaseUrl=https://api.teamnexus.cloud`) & checklist xác minh sau deploy. `Integrations__DataProtection__KeysPath` đã bị loại bỏ bởi TASK-DP-01: key ring lưu PostgreSQL `data_protection_keys`.
-> **📊 Sub-phase 15.4 ✅ XONG (GitHub Issue → Task + Jev 1.13 Auto-Triage & Comment Sync 1 Chiều):** Mở rộng `ITaskTriageService` với phương thức hệ thống `TriageForSystemAsync` phân loại thẻ bằng Jev 1.13 mà không đòi hỏi interactive user context; sửa triệt để lỗi cờ `Degraded` kép khi Jev hoạt động bình thường nhưng độ tự tin < 50% (`ManualRequired`) cả ở backend và frontend `AssigneeSuggestion.tsx`; xử lý sự kiện GitHub `issues` (`opened`, `labeled`, `closed`, `reopened`) với bộ lọc nhãn `IssueLabelFilter`, deduplication chống tạo trùng tuyệt đối qua `task_external_links`, tự động gán Priority / Tags từ Jev 1.13, ghi nhận `ai_action_logs` (`GitHubIssueCreateTask`, actor `GitHubBotUserId`) và hỗ trợ **Hoàn tác (Undo) 100%** qua `GitHubIssueCreateTaskApplier` tuân thủ nghiêm ngặt Bẫy P2 (không nested transaction) & T1 (`SaveChangesAsync`); đồng bộ bình luận 1 chiều GitHub → TeamNexus từ `issue_comment.created` dưới tài khoản `GitHub Bot` với cơ chế chống loop (bỏ qua bot sender và comment rỗng) và định tuyến thông minh qua `task_external_links` + `TaskKeyParser` (`TN-123`). Số đo thật: build **0 warning / 0 error**, `has-pending-model-changes` **sạch**, unit test Pure **Passed 665 / Failed 0 / Skipped 0**, integration test **15 tests** (`GitHubWebhookIssueAndCommentTests`), toàn bộ backend **Passed 1,329 / Failed 0 / Skipped 0**.
-> **📊 Sub-phase 15.3 ✅ XONG (Inbound GitHub Webhook Core & PR State Machine):** Quản lý cấu hình GitHub theo Workspace (5 endpoint Minimal APIs: `GET/PUT/DELETE`, `POST /rotate-secret`, `GET /deliveries`), mã hóa secret bằng `IDataProtectionProvider` ("TeamNexus.Integrations.GitHub.WebhookSecret.v1"), zero secret leakage (`SecretHint` 4 ký tự cuối), webhook public `POST /api/webhooks/github/{webhookToken:guid}` (xác thực `X-Hub-Signature-256` HMAC-SHA256 trên raw body bằng `CryptographicOperations.FixedTimeEquals`, body limit 256KB, anonymous, skip CSRF, chống replay bằng delivery idempotency), bộ bóc tách mã task `TaskKeyParser` (`TN-123`, `tn-123`, `#123`, tối đa 5 task/event — auto-link từ webhook chỉ nhận tiền tố `TN-` để không nhầm với số Issue GitHub), PR State Machine liên kết `task_external_links` (`draft`, `open`, `merged`, `closed`) và tự động kéo task sang `In Review` khi mở PR, sang `Done` (`CompletedAt != null`) khi merge PR (kiểm tra an toàn multi-PR open). Tích hợp Accountability Layer: ghi nhận `ai_action_logs` (`GitHubPrMoveTask`, actor `GitHubBotUserId`) và hỗ trợ **Hoàn tác (Undo) 100%** qua `GitHubPrMoveTaskApplier` tuân thủ nghiêm ngặt Bẫy P2 (không mở transaction lồng), khôi phục đúng cột + vị trí + `CompletedAt`. Số đo thật: build **0 warning / 0 error**, `has-pending-model-changes` **sạch**, unit test Pure **Passed 665 / Failed 0 / Skipped 0**, integration test **20 tests** (`GitHubWebhookPrTests`), toàn bộ backend **Passed 1,329 / Failed 0 / Skipped 0**.
-> **🔎 Rà soát & khắc phục sau Phase 15.3/15.4 (2026-11-11):** Review nhánh `backup/main-before-reset-26382b6` phát hiện 1 test đỏ (stale `DbContext`), Payload URL rơi về host SPA, key ring DataProtection không bền, `Degraded` còn sai ở `TriageAsync`, auto-link nhầm `#n` của GitHub, thiếu SignalR khi Issue đóng/mở lại, audit log ghi sau bước Jev. Đã khắc phục toàn bộ trên nhánh `fix/phase15-review` (không migration mới ở thời điểm đó) — báo cáo: [`report/phase-15-3-15-4-code-review-and-remediation-plan.md`](report/phase-15-3-15-4-code-review-and-remediation-plan.md). Phần key ring file-system sau đó được **thay thế** bởi TASK-DP-01 (migration #16 `Phase15DataProtectionKeyRing`).
-> **🔧 Khắc phục sau nghiệm thu Live 14/15 (2026-11-12):** TASK-DP-01 chuyển DataProtection key ring sang PostgreSQL (`data_protection_keys`, migration #16), bỏ `Integrations__DataProtection__KeysPath`; thêm log lỗi giải mã webhook và test persistence qua 2 provider. Frontend sửa BUG-P3-2/3/4/5/6 + `TaskCalendar` line-through, lazy-load tab Tích hợp, text cold-start, dọn deprecation AntD v6 (`destroyOnClose`→`destroyOnHidden`, `Drawer width`→`size`, `Card bodyStyle/bordered`, `Statistic valueStyle`, `Alert message`→`title`, `Space direction`→`orientation`, `Spin tip`→`description`, `Timeline items.children`→`items.content`). `antd.List` (khuyến nghị `Listy`) được ghi nhận là tồn đọng ngoài phạm vi. Số đo thật: build **0/0**, drift sạch, Pure **666**, backend **1.332 / 0 / 0**, frontend lint **0/0**, `tsc` exit 0, Vitest **791/791 (128 file)**, build exit 0; CI baseline nâng **1.332 / 791**. Chi tiết: [`report/phase-14-15-acceptance-test-and-remediation-report.md`](report/phase-14-15-acceptance-test-and-remediation-report.md) §6.
-> **📊 Sub-phase 15.2 ✅ XONG (Outbound Slack/Discord):** `IExternalAlertSink` → transactional outbox (`WebhookOutboxExternalAlertSink` + `WebhookOutboxRunner`/`Dispatcher`: retry `5s→30s→2m→10m→30m`, circuit breaker ở 10 lỗi), `WebhookUrlValidator` chống SSRF, Slack Block Kit / Discord Embed, sự kiện `MemberJoined`, 6 endpoint `/api/workspaces/{id}/integrations/webhooks`. Số đo thật: build **0/0**, `has-pending-model-changes` **sạch** (không migration mới), `dotnet test` **Passed 1,236 / Failed 0 / Skipped 0** (từ 1,175 ⇒ **+61**).
-> **📊 Tiến độ trước đó (Sub-phase 15.1 ✅ XONG):** Migration #15 (`20261110154843_Phase15ExternalIntegrations`), 6 bảng mới (`task_numbers`, `workspace_webhook_endpoints`, `webhook_delivery_outbox`, `workspace_github_integrations`, `github_webhook_deliveries`, `task_external_links`), mã công việc tuần tự `TN-123` + tìm kiếm theo mã (`TN-123`/`#123`), cờ cột `is_in_review`, tài khoản hệ thống `GitHub Bot` (`IsSystem = true`) và port `ITaskAutomation` (`TaskAutomationService`). Số đo thật: `dotnet build --no-incremental` **0 warning / 0 error**, `has-pending-model-changes` **sạch**, `dotnet test` **Passed 1,175 / Failed 0 / Skipped 0** (baseline 1,167 ⇒ **+8**).
+Xây dựng quy trình mời thành viên tham gia workspace qua email (sử dụng Resend API trên tên miền chính thức `teamnexus.cloud`), gửi email thông báo nhanh, quản lý danh sách thành viên, trang hồ sơ cá nhân và trung tâm thông báo (`Notification Center`) trên thanh điều hướng chung.
 
-Kết nối TeamNexus với hệ sinh thái công cụ phát triển: thông báo sang Slack/Discord, liên kết task với GitHub PR/Issue và tự cập nhật task từ webhook.
+**Yêu cầu hoàn thiện (DoD):**
+- [x] Bổ sung bảng `workspace_invitations` và `email_messages` (Migration #9 `Phase11MemberProfile`).
+- [x] Hoàn thiện luồng mời thành viên qua email (lưu mã băm token `SHA-256`, hạn 7 ngày) và luồng chấp nhận lời mời tự động khôi phục sau bước đăng nhập OAuth.
+- [x] Hỗ trợ Quản lý gửi email thông báo nhanh tới các thành viên trong workspace.
+- [x] Quản lý danh sách thành viên: phân biệt rõ Người thật và AI Agent, hủy lời mời đang chờ, đổi vai trò hoặc xóa thành viên.
+- [x] Trang Hồ sơ cá nhân (cập nhật tên hiển thị, ảnh đại diện, danh sách workspace tham gia, tự rời workspace) và Chuông thông báo hợp nhất tại `AppHeader`.
 
-**Quyết định đã chốt (tóm tắt, chi tiết ở tài liệu 07):**
-- Kênh thông báo: **Slack + Discord qua Incoming Webhook URL** (provider-registry, mở rộng Teams/Telegram/DM bot về sau). Manager bật/tắt **theo loại sự kiện**.
-- GitHub: mỗi workspace gắn 1..n repo; PAT **tuỳ chọn** (chỉ đọc); webhook secret **do hệ thống sinh**; đồng bộ comment **một chiều** GitHub → TeamNexus.
-- Mã task `TN-123` (thêm `tasks.task_number` theo workspace) để tự nhận diện PR; cột **In Review** = cờ `is_in_review` trên `board_columns`.
-- Issue mới → task vào board/cột mặc định theo repo, người tạo là bot "GitHub", có Jev triage fail-soft.
-- PR merge tự chuyển Done (khi không còn PR liên kết đang mở) kèm activity log, notify assignee và **hoàn tác**.
-- Secret mã hoá bằng Data Protection (key ring lưu DB); idempotency theo `X-GitHub-Delivery`; outbox + retry cho Slack/Discord; host VPS 24/7 là định hướng.
-
-**Phạm vi (chia phase con dự kiến, xem §16 tài liệu 07):**
-- 15.1 Nền (module `Integrations`, mã hoá secret, chống SSRF, migration, bot, `ITaskAutomation`) · 15.2 Outbound Slack/Discord · 15.3 GitHub inbound lõi (HMAC, deliveries, link, PR→In Review/Done, hoàn tác) · 15.4 Issue→task + comment sync · 15.5 UI & nghiệm thu.
-
-**Yêu cầu hoàn thiện:**
-- [x] **Slack / Discord Notification**: Workspace Settings → tab `Tích hợp (Slack / Discord / GitHub)` → thêm channel (Webhook URL, chọn loại sự kiện, gửi thử, drawer 20 outbox deliveries); `IChatProvider` (Slack/Discord) sau `IExternalAlertSink`; gửi khi Observer phát hiện tín hiệu, agent pending/clarification, task assigned, comment mentioned, member joined; outbox + retry + dead-letter (`Pending` | `Sent` | `Failed`)
-- [x] **GitHub Integration**: Workspace Settings → cấu hình GitHub Integration (`WebhookToken` + `WebhookSecret` mã hoá, Payload URL + 3 tùy chọn automation — *lệch L2: 1 integration/workspace, chưa gồm PAT / gắn URL thủ công*); tự nhận diện mã `TN-123`; webhook `POST /api/webhooks/github/{webhookToken:guid}` → PR opened/ready ⇒ In Review, PR merge ⇒ Done (kèm Undo `GitHubPrMoveTask`), Issue mới ⇒ tạo task + Jev Triage (kèm Undo `GitHubIssueCreateTask`), Issue closed/reopened, comment 1 chiều qua `GitHub Bot`; chip "PR #123 · ..." trên `TaskCard` & `TaskDetailModal`
-- [x] Webhook endpoint xác thực chữ ký HMAC-SHA256 trên raw body (so sánh hằng thời gian), idempotency theo delivery id; secret/Webhook URL mã hoá khi lưu DB và không bao giờ trả plaintext lại qua `GET`
-- [x] Hoạt động khi workspace không cấu hình tích hợp (graceful degradation): core không đổi hành vi, test cũ vẫn xanh (fallback `#XXXXXXXX` khi thiếu `taskNumber`)
-- [x] Cờ `is_in_review` trên cột + `task_number` (backfill) + delivery log trên UI (20 outbox deliveries & 30 GitHub deliveries)
-
-> **📊 Bổ sung sau 15.5 — Tạo không gian làm việc chủ động (2026-11-12):** `POST /api/workspaces` (đăng nhập + CSRF) tạo `workspaces` + `workspace_members` (`Admin`, `Human`) trong **một** `SaveChangesAsync` ⇒ người gọi là Owner/Admin; trả `201` + `WorkspaceSummaryResponse` (append-only) + `Location`; ghi `activity_logs` action mới `WorkspaceCreated` (`board_id = NULL`). **Không migration**, `has-pending-model-changes` sạch. Frontend: `WorkspaceCreateModal` + nút **"Tạo không gian làm việc"** trên trang `/` (`DashboardPage`), điều hướng tới `/workspaces/{id}/boards` sau khi tạo (empty state "Tạo bảng đầu tiên" là bước tiếp theo); thêm nhãn `WorkspaceCreated` trong Nhật ký hoạt động. Hardening kèm theo: mô tả workspace >2000 ký tự giờ trả **400** (trước đó **500** từ `varchar(2000)`) ở cả create và update. Số đo thật: `dotnet build TeamNexus.sln --no-incremental` **0 warning / 0 error**, drift **sạch**, Pure **666/666**, toàn bộ backend **1346 / 0 / 0** (baseline 1332 ⇒ **+14**); frontend `oxlint` **0/0** (302 file), `tsc -b` + `vite build` **exit 0** (3,341 module), Vitest **129/129 file — 799/799 PASS** (baseline 791 ⇒ **+8**; lần chạy xanh dùng `--maxWorkers=2` — 2 lần chạy mặc định trước đó dính flake **có sẵn** ở `ProfilePage`/`useUnreadCount`, cả hai pass khi chạy riêng). CI baseline nâng **1.346 / 799**. Chi tiết: [`tasks/workspace-creation-api-ui.md`](tasks/workspace-creation-api-ui.md).
+> **Kết quả nghiệm thu:** **9 migrations** · Backend **371 tests PASS** · Frontend **360 tests PASS**.
+> **Hồ sơ chi tiết:** Kế hoạch [`tasks/phase-11-member-profile-management.md`](tasks/phase-11-member-profile-management.md) · Bàn giao FE [`tasks/handovers/phase-11-remaining-frontend-handover.md`](tasks/handovers/phase-11-remaining-frontend-handover.md) · Báo cáo nghiệm thu [`report/phase-11-member-profile-management-test-report.md`](report/phase-11-member-profile-management-test-report.md).
 
 ---
 
-## Giai đoạn 16: Mobile (Flutter)
+## Giai đoạn 12: Trang Tổng quan (Dashboard) & Tìm kiếm — ✅ HOÀN THÀNH
 
-> **Chưa bắt đầu — dự kiến sau khi bản Web đã có đủ tích hợp bên ngoài.**
-> **Độ phức tạp kỹ thuật: 🔴 Cao** — nền tảng mới, cần xử lý OAuth flow trên mobile, real-time SignalR trên Flutter.
-> Nội dung giữ nguyên từ roadmap cũ (trước đây là Giai đoạn 13 → 9 cũ).
+Xây dựng trang chủ tổng quan cho từng không gian làm việc (`WorkspaceDashboardPage`), công cụ tìm kiếm & lọc thẻ đa tiêu chí xuyên bảng phân trang keyset, và tính năng nhắc tên `@mention` an toàn trong bình luận.
 
-Sau khi bản Web ổn định, xây app Flutter dùng chung toàn bộ API đã có, tích hợp `signalr_netcore` cho real-time và kiểm thử trên thiết bị thật. `dueDate` offset và priority enum đã được xử lý đúng ở backend (Phase 10 BUG-1/BUG-2) — Flutter sẽ hưởng lợi trực tiếp.
+**Yêu cầu hoàn thiện (DoD):**
+- [x] **Workspace Dashboard** (`/workspaces/:workspaceId/dashboard`): thống kê 3 nhóm *"Công việc của tôi"* (Quá hạn, Sắp đến hạn, Mới giao), tóm tắt tiến độ các bảng, cảnh báo AI Observer chưa đọc và dòng hoạt động gần đây.
+- [x] **Tìm kiếm & Lọc xuyên bảng** (`GET /api/workspaces/{id}/tasks/search`): lọc theo từ khóa, bảng, người phụ trách, nhiều nhãn kết hợp (`AND`), độ ưu tiên, khoảng hạn chót và trạng thái hoàn thành với phân trang keyset `(updated_at DESC, id DESC)`.
+- [x] **`@mention` trong bình luận**: gửi danh sách định danh `mentionUserIds` tường minh từ giao diện `Mentions`, xác thực thành viên con người thuộc workspace và phát thông báo `CommentMention`.
 
-**Yêu cầu hoàn thiện:**
-- [ ] App Flutter kết nối và xác thực được với API đã có (dùng chung OAuth/JWT flow)
-- [ ] Các màn hình chính (Board Kanban, Task Detail, Dashboard, thông báo AI Observer) hoạt động trên Flutter
-- [ ] Real-time qua `signalr_netcore` hoạt động tương đương bản Web
-- [ ] Kiểm thử thành công trên thiết bị thật (không chỉ emulator)
+> **Kết quả nghiệm thu:** **9 migrations** · Backend **423 tests PASS** · Frontend **406 tests PASS**.
+> **Hồ sơ chi tiết:** Kế hoạch [`tasks/phase-12-dashboard-search.md`](tasks/phase-12-dashboard-search.md) · Bàn giao FE [`tasks/handovers/phase-12-remaining-frontend-handover.md`](tasks/handovers/phase-12-remaining-frontend-handover.md) · Báo cáo nghiệm thu [`report/phase-12-dashboard-search-test-report.md`](report/phase-12-dashboard-search-test-report.md).
+
+---
+
+## Giai đoạn 13: Trực quan hóa & Thông báo Chủ động — ✅ HOÀN THÀNH
+
+Bổ sung chế độ xem Lịch tháng (**Calendar View**) ngay trên bảng Kanban, biểu đồ chuỗi thời gian tiến độ & vận tốc (**Burndown & Velocity**) trong trang Báo cáo, và dịch vụ gửi bản tin email tóm tắt công việc mỗi sáng (**Daily Email Digest**).
+
+**Yêu cầu hoàn thiện (DoD):**
+- [x] **Calendar View**: chuyển đổi mượt mà giữa Kanban và Lịch tháng trên `BoardView`, gom nhóm thẻ theo ngày hạn địa phương, làm nổi bật ô có thẻ trễ hạn và kết nối trực tiếp với `TaskDetailModal` cùng trang Tìm kiếm.
+- [x] **Burndown & Velocity**: endpoint `GET /api/workspaces/{id}/reports/progress-series` tính toán chuỗi `openTasks`, `completions`, `creations` theo ngày hoặc theo tuần tôn trọng múi giờ người xem (`tzOffsetMinutes`), hiển thị biểu đồ trực quan trên `ReportsPage`.
+- [x] **Daily Email Digest**: bổ sung cột `users.digest_enabled` (Migration #10 `Phase13DailyDigest`), tiến trình `DailyDigestRunner` tổng hợp công việc từ mọi workspace và đảm bảo chống gửi trùng tối đa 1 email/người/ngày ở tầng CSDL; cho phép bật/tắt trong trang Hồ sơ cá nhân.
+
+> **Kết quả nghiệm thu:** **10 migrations** · Backend **480 tests PASS** · Frontend **508 tests PASS**.
+> **Hồ sơ chi tiết:** Kế hoạch [`tasks/phase-13-visualization-proactive-notifications.md`](tasks/phase-13-visualization-proactive-notifications.md) · Bàn giao FE [`tasks/handovers/phase-13-remaining-frontend-handover.md`](tasks/handovers/phase-13-remaining-frontend-handover.md) · Báo cáo nghiệm thu [`report/phase-13-visualization-proactive-notifications-test-report.md`](report/phase-13-visualization-proactive-notifications-test-report.md).
+
+---
+
+## Giai đoạn 14: Nâng cao AI — ✅ HOÀN THÀNH
+
+Đưa AI vào tương tác trực tiếp theo luồng thời gian thực trong ngữ cảnh thẻ công việc (**AI Task Chat qua SSE**), nâng cấp AI Observer thành công cụ dự báo sớm nguy cơ trễ hạn (**`AtRiskDeadline`**) kèm chỉ số **Sức khỏe Dự án (`Project Health Score`)**, và mở rộng Smart Setup thành **AI Board Template**.
+
+**Yêu cầu hoàn thiện (DoD):**
+- [x] **AI Task Chat (`POST /api/tasks/{id}/ai-chat/stream`):** truyền tải câu trả lời theo thời gian thực qua Server-Sent Events (`meta → delta* → done | error`), kiểm soát ngân sách lịch sử hội thoại và hỗ trợ lưu câu trả lời thành bình luận qua Lớp Giải trình (`Pending` `PostComment`).
+- [x] **Dự báo rủi ro `AtRiskDeadline` & Điểm Sức khỏe Dự án:** phát hiện sớm các thẻ còn `< 20%` thời gian nhưng đứng yên `48 giờ`; tính toán tất định chỉ số `ProjectHealth.Compute` (thang `0–100`, 5 trọng số cộng đúng 100) hiển thị trên Workspace Dashboard.
+- [x] **AI Board Template (`POST /api/workspaces/{id}/smart-setup/template`):** sinh đề xuất bảng mới (`2–6` cột kèm đúng 1 cột `is_done` và `5–10` thẻ), thực thi tạo bảng khi Quản lý phê duyệt (`CreateBoardFromTemplate`) và xóa mềm bảng khi Hoàn tác (`Undo`).
+
+> **Kết quả nghiệm thu:** **10 migrations** · Backend **584 tests PASS** · Frontend **578 tests PASS**.
+> **Hồ sơ chi tiết:** Kế hoạch [`tasks/phase-14-ai-advanced.md`](tasks/phase-14-ai-advanced.md) · Bàn giao FE [`tasks/handovers/phase-14-remaining-frontend-handover.md`](tasks/handovers/phase-14-remaining-frontend-handover.md) · Báo cáo nghiệm thu [`report/phase-14-ai-advanced-test-report.md`](report/phase-14-ai-advanced-test-report.md).
+
+---
+
+## Giai đoạn 14.5: Củng cố Nền tảng & AI Agent Chat cấp Board — ✅ HOÀN THÀNH
+
+Gia cố nền tảng kiến trúc (lịch sử AI cấp workspace, điểm nối `IExternalAlertSink` cho thông báo ngoại vi, tiến trình dọn dẹp lượt chạy mồ côi) và xây dựng khung **AI Agent Chat cấp Bảng** neo bên phải Kanban, hỗ trợ kéo-thả đính kèm nhiều thẻ công việc, lưu trữ lịch sử hội thoại bền vững vào CSDL và trích xuất đề xuất hành động có cấu trúc.
+
+**Yêu cầu hoàn thiện (DoD):**
+- [x] Bổ sung bảng `agent_chat_messages` (Migration #11 `Phase14_5AgentChat`) kèm tiến trình lưu giữ 90 ngày theo lô (`AgentChatRetentionRunner`).
+- [x] Bổ sung endpoint `GET /api/workspaces/{id}/ai-actions` (Manager+) và giao diện Lịch sử AI cấp Workspace; thiết lập cổng `IExternalAlertSink` tại `NotificationService`.
+- [x] Xây dựng giao diện **AI Agent Chat panel** neo bên phải bảng Kanban, cho phép kéo-thả tối đa 8 thẻ công việc vào làm ngữ cảnh.
+- [x] Hỗ trợ trích xuất và xác nhận 3 loại đề xuất hành động từ cuộc trò chuyện (`CreateSubtasks`, `UpdateTaskFields`, `MoveTaskToColumn`), toàn bộ đi qua quy trình `Pending → Approve → Undo` của Lớp Giải trình.
+
+> **Kết quả nghiệm thu:** **11 migrations** · Backend **643 tests PASS** · Frontend **633 tests PASS**.
+> **Hồ sơ chi tiết:** Kế hoạch [`tasks/phase-14-5-foundation-and-agent-chat.md`](tasks/phase-14-5-foundation-and-agent-chat.md) · Báo cáo nghiệm thu [`report/phase-14-5-foundation-and-agent-chat-test-report.md`](report/phase-14-5-foundation-and-agent-chat-test-report.md).
+
+---
+
+## Giai đoạn 14.6: Hoàn thiện Trải nghiệm & Chống rò rỉ Định danh — ✅ HOÀN THÀNH
+
+Giải quyết triệt để các điểm ma sát trải nghiệm thực tế sau khi vận hành trên môi trường production: bổ sung bộ chọn đính kèm thẻ trực quan không cần kéo-thả, hợp nhất lưu trữ lịch sử Task Chat vào CSDL, tự động cung cấp bản tóm tắt bảng (*Lightweight Board Digest*) và thiết lập cơ chế lọc hai đầu chặn rò rỉ mã UUID/GUID ra văn bản hội thoại.
+
+**Yêu cầu hoàn thiện (DoD):**
+- [x] **Bộ chọn đính kèm thẻ trực quan:** nút *"Đính kèm thẻ"* (Popover tìm kiếm nhanh theo tiêu đề/người phụ trách) và mục *"Gửi vào AI Chat"* trên menu của từng `TaskCard`.
+- [x] **Chặn rò rỉ định danh kỹ thuật (GUID / UUID):** kết hợp quy tắc prompt nghiêm ngặt cùng bộ lọc cưỡng chế ở cả máy chủ (`AiChatAnswerSanitizer`) và giao diện (`redactIdentifiers.ts`) mà không làm ảnh hưởng khối JSON đề xuất.
+- [x] **Hợp nhất Transcript Task Chat:** lưu và nạp lịch sử hội thoại cấp thẻ qua cột `agent_chat_messages.task_id` (`GET /api/tasks/{taskId}/agent-chat/messages`).
+- [x] **Lightweight Board Digest:** tự động cung cấp bản tóm tắt số lượng thẻ theo cột và các thẻ ưu tiên/sắp đến hạn khi người dùng hỏi tiến độ chung mà chưa đính kèm thẻ cụ thể.
+
+> **Kết quả nghiệm thu:** **11 migrations** · Backend **665 tests PASS** · Frontend **657 tests PASS**.
+> **Hồ sơ chi tiết:** Kế hoạch [`tasks/phase-14-6-ai-agent-enhancements.md`](tasks/phase-14-6-ai-agent-enhancements.md) · Báo cáo nghiệm thu [`report/phase-14-6-track-a-test-report.md`](report/phase-14-6-track-a-test-report.md).
+
+---
+
+## Giai đoạn 14.7: Autonomous Agent & Kiến trúc Hybrid AI với Jev — ✅ HOÀN THÀNH
+
+Xây dựng nền tảng **Hybrid AI** kết hợp **System 1 (TypeSafe Jev 1.13 — mô hình quyết định có cấu trúc siêu tốc)** và **System 2 (DeepSeek LLM)**; đồng thời mở rộng toàn diện hệ sinh thái Autonomous Agent với **Đội ngũ Chuyên gia AI (Multi-Agent Personas)**, **7 công cụ ReAct** và **Bộ nhớ Dự án Ngữ nghĩa (Workspace RAG trên `pgvector`)**.
+
+**Yêu cầu hoàn thiện (DoD):**
+- [x] **Nền tảng Jev System 1 & Confidence Routing (Track A):** triển khai `IJevDecisionProvider` (`JevDecisionHttpProvider` + `FakeJevDecisionProvider`), bảng từ điển `workspace_taxonomies` (`domain` / `work_type`), hồ sơ kỹ năng thành viên (`skills`, `primary_role`, `capacity_weight`, `max_wip_limit` trên `workspace_members` — Migration #12 `Phase147AgentPlatform`) và bộ định tuyến ngưỡng tin cậy `ConfidenceRouting` (`≥ 0.85` `DirectAssign`, `0.50..0.85` `OfferChoices`, `< 0.50` `ManualRequired`).
+- [x] **Auto-Triage & Smart Assignee Dispatching (Track A):** phân loại thẻ tự động (`POST /api/boards/{id}/tasks/triage`) và gợi ý người thực hiện phù hợp (`POST /api/boards/{id}/tasks/{taskId}/assignee-suggestions`) kèm giao diện `JevTriagePanel` và `AssigneeSuggestion`.
+- [x] **AI Observer Severity Routing & Recovery Plan (Track A):** thẩm định mức độ nghiêm trọng qua Jev trước khi gọi LLM; tự động sinh đề xuất kịch bản phục hồi `RecoveryPlan` (`ReassignTask`, `SplitSubtasks`, `ExtendDeadline`, `EscalateManager`) ở trạng thái `Pending` để Quản lý duyệt hoặc hoàn tác.
+- [x] **Đội ngũ AI Chuyên gia — Multi-Agent Personas (Track B §B1):** bổ sung cột `workspace_members.persona_key` và chỉ mục duy nhất theo từng persona (Migration #13 `Phase147AgentPersonas`), hỗ trợ 4 vai trò (`general`, `scrum_master`, `tech_lead`, `qa_security`) trên cả giao diện thành viên và khung Agent Chat (`?persona=`).
+- [x] **Mở rộng 7 công cụ ReAct (Track B §B2):** bổ sung `InspectMemberWorkload`, `MatchSkills` và `ValidateAcceptanceCriteria` vào vòng lặp thực thi của Agent Executor, giữ nguyên giới hạn guardrail an toàn.
+- [x] **Bộ nhớ Dự án Ngữ nghĩa — Workspace RAG với `pgvector` (Track B §B3):** kích hoạt extension `vector`, bổ sung bảng `workspace_knowledge_documents` và `workspace_knowledge_chunks` (`vector(1536)` + chỉ mục HNSW `vector_cosine_ops` — Migration #14 `Phase147KnowledgeBase`), kiểm duyệt nạp/xóa tài liệu qua `CreateKnowledgeDocument` của Lớp Giải trình, nhúng vector chạy nền (`KnowledgeEmbeddingRunner`) và tự động chèn ngữ cảnh `KIẾN THỨC DỰ ÁN` vào Agent Chat.
+
+> **Kết quả nghiệm thu:** **14 migrations** · Backend **1.167 tests PASS** · Frontend **738 tests PASS** · Độ trễ thực tế Jev live P50 **773 ms**.
+> **Hồ sơ chi tiết:** Kiến trúc [`06-adjust-and-upgrade-with-jev.md`](06-adjust-and-upgrade-with-jev.md) · Kế hoạch [`tasks/phase-14-7-autonomous-agent-jev.md`](tasks/phase-14-7-autonomous-agent-jev.md) · Nhật ký kiểm thử thực chiến [`tasks/handovers/phase-14-7-track-a-issues.md`](tasks/handovers/phase-14-7-track-a-issues.md), [`tasks/handovers/phase-14-7-track-b-issues.md`](tasks/handovers/phase-14-7-track-b-issues.md), [`tasks/handovers/phase-14-7-track-b-test-plan.md`](tasks/handovers/phase-14-7-track-b-test-plan.md) · Báo cáo nghiệm thu [`report/phase-14-7-track-b-test-report.md`](report/phase-14-7-track-b-test-report.md), [`report/phase-14-98-uiux-luminous-enterprise-upgrade-report.md`](report/phase-14-98-uiux-luminous-enterprise-upgrade-report.md), [`report/phase-14-99-uiux-comprehensive-audit-report.md`](report/phase-14-99-uiux-comprehensive-audit-report.md).
+
+---
+
+## Giai đoạn 15: Tích hợp Hệ sinh thái Bên ngoài (Slack, Discord, GitHub) — ✅ HOÀN THÀNH
+
+Kết nối TeamNexus với hệ sinh thái công cụ phát triển phần mềm: đẩy cảnh báo ra ngoài sang **Slack** và **Discord** qua Transactional Outbox, và nhận sự kiện **GitHub Webhook** (Pull Request, Issue, Comment) để tự động hóa vòng đời thẻ công việc kèm khả năng hoàn tác đầy đủ qua Lớp Giải trình.
+
+**Lộ trình triển khai qua 5 phân đoạn con:**
+1. **15.1 — Nền tảng Schema & Mã công việc `TN-123`:** Thiết lập 6 bảng tích hợp mới (`task_numbers`, `workspace_webhook_endpoints`, `webhook_delivery_outbox`, `workspace_github_integrations`, `github_webhook_deliveries`, `task_external_links`) và 4 cột mở rộng (`users.is_system`, `workspaces.next_task_number`, `board_columns.is_in_review`, `tasks.task_number` — Migration #15 `Phase15ExternalIntegrations`) cùng bảng lưu vòng khóa `data_protection_keys` (Migration #16 `Phase15DataProtectionKeyRing`); cấp phát mã `TN-123` nguyên tử, hỗ trợ tìm kiếm theo mã và khởi tạo cổng `ITaskAutomation`.
+2. **15.2 — Outbound Slack / Discord Webhooks & Transactional Outbox:** Triển khai `WebhookOutboxExternalAlertSink` trên cổng `IExternalAlertSink`, bộ kiểm tra URL chống SSRF (`WebhookUrlValidator`), định dạng bản tin Slack Block Kit & Discord Embed, tiến trình gửi tin nền `WebhookOutboxRunner` (backoff retry 5 bậc + circuit breaker) và 6 endpoint quản trị kênh webhook.
+3. **15.3 — Inbound GitHub Webhooks & Tự động hóa Pull Request:** Triển khai quản trị cấu hình GitHub cấp workspace (mã hóa khóa bí mật bằng `IDataProtectionProvider`, chỉ hiển thị plaintext 1 lần), endpoint nhận webhook `POST /api/webhooks/github/{webhookToken:guid}` (xác thực chữ ký `HMAC-SHA256` bằng `FixedTimeEquals`, giới hạn body 256 KB, chống replay theo `delivery_id`), tự động gắn liên kết `TN-123` và chuyển thẻ sang cột *Đang duyệt PR (`is_in_review`)* khi mở PR hoặc sang cột *Hoàn thành (`is_done`)* khi merge PR kèm ghi vết hoàn tác `GitHubPrMoveTask`.
+4. **15.4 — Đồng bộ GitHub Issue (+ Jev Auto-Triage) & Bình luận 1 chiều:** Tự động tạo thẻ công việc từ sự kiện `issues` khớp bộ lọc nhãn dưới danh nghĩa `GitHub Bot`, gọi Jev 1.13 phân loại tự động (`TriageForSystemAsync` fail-soft), ghi vết hoàn tác `GitHubIssueCreateTask`, và đồng bộ bình luận một chiều từ `issue_comment.created`.
+5. **15.5 — Giao diện Quản trị Tích hợp & Nghiệm thu E2E:** Hiển thị huy hiệu `TN-123` và chip trạng thái PR/Issue trên thẻ Kanban, cửa sổ chi tiết và kết quả tìm kiếm; bổ sung tùy chọn cột *Đang duyệt PR* và xây dựng tab **Tích hợp (Slack / Discord / GitHub)** trong trang Cài đặt Workspace.
+
+**Yêu cầu hoàn thiện (DoD):**
+- [x] Cấu hình và gửi thông báo thành công sang Slack / Discord theo danh mục sự kiện với hàng đợi Outbox bền vững, hỗ trợ gửi tin kiểm thử và tra cứu lịch sử gửi.
+- [x] Cấu hình tích hợp GitHub, tự động nhận diện mã `TN-123`, tự động chuyển trạng thái thẻ khi mở/merge PR, tự động tạo thẻ từ Issue kèm Jev Triage và đồng bộ bình luận một chiều.
+- [x] Xác thực chữ ký `HMAC-SHA256` trên raw body, chống phát lại theo `delivery_id`, chống SSRF và bảo vệ khóa bí mật at-rest bằng Data Protection (key ring lưu trên PostgreSQL).
+- [x] Mọi tự động hóa thay đổi dữ liệu từ GitHub đều lưu vết vào `ai_action_logs` và hoàn tác (`Undo`) được 100%.
+- [x] Đảm bảo suy giảm an toàn (Graceful Degradation) khi workspace chưa cấu hình tích hợp.
+
+> **Kết quả nghiệm thu:** **16 migrations** (35 bảng vật lý) · Backend **1.346 tests PASS** (0 fail, 0 skip) · Frontend **799 tests PASS** (129 test files).
+> **Hồ sơ chi tiết:** Thiết kế [`07-external-integrations-design.md`](07-external-integrations-design.md) · Kế hoạch [`tasks/phase-15-0-external-integrations-master-plan.md`](tasks/phase-15-0-external-integrations-master-plan.md) (`phase-15-1..15-5.md`) · Bàn giao [`tasks/handovers/phase-15-remaining-frontend-handover.md`](tasks/handovers/phase-15-remaining-frontend-handover.md) · Báo cáo review [`report/reviews/phase-15-3-15-4-code-review-and-remediation-plan.md`](report/reviews/phase-15-3-15-4-code-review-and-remediation-plan.md), [`report/reviews/phase-15-5-code-review-and-remediation-plan.md`](report/reviews/phase-15-5-code-review-and-remediation-plan.md) · Báo cáo nghiệm thu [`report/phase-15-external-integrations-test-report.md`](report/phase-15-external-integrations-test-report.md) & [`report/phase-14-15-acceptance-test-and-remediation-report.md`](report/phase-14-15-acceptance-test-and-remediation-report.md).
+
+---
+
+## Giai đoạn 16: Ứng dụng Di động Đa nền tảng (Flutter) — ⏳ CHƯA BẮT ĐẦU
+
+Xây dựng ứng dụng di động đa nền tảng (iOS & Android) bằng **Flutter** tái sử dụng chung toàn bộ hệ thống REST API và hợp đồng DTO append-only hiện có, tích hợp `signalr_netcore` để đồng bộ thời gian thực và kiểm thử trên thiết bị thật.
+
+**Yêu cầu hoàn thiện (DoD):**
+- [ ] Ứng dụng Flutter kết nối và xác thực an toàn với Backend API (OAuth/JWT + lưu trữ token mã hóa qua `flutter_secure_storage`).
+- [ ] Hoàn thiện các màn hình cốt lõi tối ưu cho thao tác chạm – vuốt: Bảng Kanban, Chi tiết thẻ, Trang tổng quan (Dashboard), Trung tâm thông báo và Màn hình phê duyệt/hoàn tác đề xuất AI.
+- [ ] Đồng bộ trạng thái thời gian thực hai chiều giữa Web và Mobile qua `signalr_netcore` (`BoardHub`).
+- [ ] Kiểm thử vận hành ổn định trên thiết bị di động thực tế.

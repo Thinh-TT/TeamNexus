@@ -4,7 +4,7 @@
 > **Nguồn:** `project-docs/03-roadmap.md` → *Giai đoạn 13: Trực quan hóa & Thông báo Chủ động* (3 ô A/B/C).
 > **Tiền đề đã merge:** Giai đoạn 7 · 8 · 9 · 10 · 11 · **12 (Dashboard & Tìm kiếm)**.
 > **📤 Note bàn giao Frontend** (đã hiện thực xong; giữ làm hồ sơ hợp đồng API + bẫy đã biết):
-> `tasks/phase-13-remaining-frontend-handover.md`.
+> `tasks/handovers/phase-13-remaining-frontend-handover.md`.
 > **Báo cáo nghiệm thu:** `report/phase-13-visualization-proactive-notifications-test-report.md`.
 >
 > **Kết quả ĐO THẬT (số đo thắng tài liệu):**

@@ -35,6 +35,7 @@ TeamNexus/
 - [`02-tech-stack-decisions.md`](project-docs/02-tech-stack-decisions.md): Architectural Decision Records (ADRs) & infrastructure constraints.
 - [`03-roadmap.md`](project-docs/03-roadmap.md): Master roadmap (Phases 1 → 16) with verified metrics and deviation summaries.
 - [`04-database-design.md`](project-docs/04-database-design.md): PostgreSQL ERD, table schemas, index strategies, and migration history.
+- [`05-academic-project-transition.md`](project-docs/05-academic-project-transition.md): Academic project transition overview, inherited baseline vs. new AI/ecosystem contributions.
 - [`06-adjust-and-upgrade-with-jev.md`](project-docs/06-adjust-and-upgrade-with-jev.md): Hybrid AI architecture (TypeSafe Jev 1.13 System-1 + DeepSeek System-2).
 - [`07-external-integrations-design.md`](project-docs/07-external-integrations-design.md): Design specification for Phase 15 external integrations (Slack, Discord, GitHub).
 - [`tasks/`](project-docs/tasks/): Phase-by-phase implementation plans (`phase-*.md`), frontend handover contracts, and execution logs.

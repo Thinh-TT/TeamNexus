@@ -3,7 +3,7 @@
 > **Trạng thái thi hành:** ✅ **BACKEND ĐÃ HOÀN THÀNH & VERIFY · FRONTEND 📤 BÀN GIAO cho antigravity.**
 > **Nguồn:** `project-docs/03-roadmap.md` → *Giai đoạn 14: Nâng cao AI* (4 ô A/B/C/D).
 > **Tiền đề đã merge:** Giai đoạn 7 · 8 · 9 · 10 · 11 · 12 · **13 (Trực quan hóa & Thông báo Chủ động)**.
-> **📤 Note bàn giao Frontend:** `tasks/phase-14-remaining-frontend-handover.md`.
+> **📤 Note bàn giao Frontend:** `tasks/handovers/phase-14-remaining-frontend-handover.md`.
 > **Báo cáo nghiệm thu:** `report/phase-14-ai-advanced-test-report.md`.
 >
 > **Kết quả ĐO THẬT (số đo thắng tài liệu):**
@@ -92,7 +92,7 @@ từ "phát hiện sau khi xảy ra" thành **dự báo rủi ro chủ động**
 | **P5** | `ObserverPrompts.SystemPrompt` liệt kê **5** type | **J** |
 | **P6** | `ObserverSummarizer` ưu tiên tín hiệu khi phải cắt: sort theo `(rank severity desc, weight desc)`, chỉ drop từ **cuối** | **I** |
 | **P7** | `ScriptedAiProvider` implement thêm `IAiStreamingProvider` | **L** |
-| **P8** | FE `AiActionType` (`aiAction.types.ts:4`) + nhãn trong `AiActionLogItem.tsx:143` phải nhận thêm `'CreateBoardFromTemplate'` | **Việc frontend** — ghi ở `phase-14-remaining-frontend-handover.md` §3 |
+| **P8** | FE `AiActionType` (`aiAction.types.ts:4`) + nhãn trong `AiActionLogItem.tsx:143` phải nhận thêm `'CreateBoardFromTemplate'` | **Việc frontend** — ghi ở `handovers/phase-14-remaining-frontend-handover.md` §3 |
 
 ---
 

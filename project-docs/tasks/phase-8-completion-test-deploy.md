@@ -287,7 +287,7 @@ dotnet test tests/TeamNexus.Api.Tests/TeamNexus.Api.Tests.csproj
 
 ## 2b. [Test] Frontend bổ sung
 
-> 🔻 **ĐÃ BÀN GIAO**: `tasks/phase-8-2b-frontend-handover.md` — note thực thi cho Antigravity, gộp **§2b + §3.2 + §3.3** (vì §2b test
+> 🔻 **ĐÃ BÀN GIAO**: `tasks/handovers/phase-8-2b-frontend-handover.md` — note thực thi cho Antigravity, gộp **§2b + §3.2 + §3.3** (vì §2b test
 > đúng hai hàm mà §3.2/§3.3 tạo ra: `resolveHubUrl` và `reconnectPolicy`) + **§3.1** (vá cookie backend). Baseline đã đo lại:
 > **35 files / 187 tests PASS**, `lint` 0/0, `tsc -b` exit 0, `build` OK.
 
@@ -317,7 +317,7 @@ Baseline hiện tại: **35 test files / 187 tests PASS** — mọi thứ dướ
 > Ba mục này là **điều kiện sống còn**, không phải "cải tiến". Nếu bỏ qua, app deploy xong sẽ: (1) không đăng nhập được, (2) real-time chết,
 > (3) chết hẳn sau 15 phút rỗi.
 >
-> 🔻 **Hướng dẫn thi hành chi tiết (viết cho Antigravity, gồm cả cấu trúc file cụ thể): `tasks/phase-8-2b-frontend-handover.md` §2.4 + §3.1.**
+> 🔻 **Hướng dẫn thi hành chi tiết (viết cho Antigravity, gồm cả cấu trúc file cụ thể): `tasks/handovers/phase-8-2b-frontend-handover.md` §2.4 + §3.1.**
 > Trạng thái: **§3.1 đã thi hành xong** (xem §3.1 dưới); §3.2 + §3.3 gộp vào lượt §2b của Antigravity (cùng tạo 2 hàm thuần).
 
 ### 3.1 Vá #1 — Cookie cho cross-site (D7)

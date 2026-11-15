@@ -1,753 +1,117 @@
-Module AI của TeamNexus (modular monolith):
-1. **AI Smart Setup (Phase 3):** biến mô tả công việc của trưởng nhóm thành **đề xuất** sub-tasks + nhãn + người phụ trách qua DeepSeek API để con người chỉnh sửa và xác nhận (không ghi DB).
-2. **Accountability Layer (Phase 4):** cổng trung gian kiểm soát mọi hành động AI ghi dữ liệu (`AiActionLog`, vòng đời `Pending → Approved / Rejected → Undone`). Nút "Xác nhận" tạo log `Pending`, chỉ khi con người **Duyệt** mới sinh `tasks`/`labels`/`task_labels` thật, và hỗ trợ **Hoàn tác** (soft-delete + dọn nhãn).
-3. **AI Observer (Phase 5):** `BackgroundService` quét hoạt động board theo chu kỳ, phát hiện tín hiệu bất thường và cảnh báo riêng cho Manager/Admin qua `notifications`.
-4. **AI Agent Executor (Phase 7 — ✅ đã hoàn tất & verify):** Agent là thành viên ảo của workspace, được gán task như người thật, tự chạy vòng lặp tool-calling, kết quả đi qua Accountability Layer và có guardrail ngân sách.
+# TeamNexus.Modules.Ai — Phân hệ Trí tuệ Nhân tạo Lai, Giải trình, RAG & Tích hợp Hệ sinh thái
 
-> Trạng thái: **Giai đoạn 3–5, 7, 14, 14.5 và 14.6 (Track A) đã hoàn tất & verify.** Chi tiết Phase 14.5 ở
-> `project-docs/tasks/phase-14-5-foundation-and-agent-chat.md`, Phase 14.6 Track A ở
-> `project-docs/tasks/phase-14-6-ai-agent-enhancements.md`; schema ở `project-docs/04-database-design.md` §3.10.
+Phân hệ trung tâm hiện thực hóa kiến trúc **Hybrid AI (TypeSafe Jev 1.13 System-1 + DeepSeek System-2)**, **Lớp Giải trình Minh bạch (AI Accountability Layer)**, **Tác nhân Tự chủ Đa Nhân cách (Multi-Agent Personas & 7 ReAct Tools)**, **Cơ sở Tri thức Ngữ nghĩa (`pgvector` Semantic RAG)**, **Quan sát Chủ động & Tự phục hồi (`AiObserverService` & `RecoveryPlan`)**, **Hội thoại Thời gian thực qua SSE**, **Email Giao dịch & Daily Digest**, cùng **Tích hợp Hệ sinh thái Mở (Slack, Discord, GitHub Webhooks)**.
 
-## §1 — Cấu hình & đăng ký (đã hiện thực)
-
-### Options `DeepSeek` (`Options/DeepSeekOptions.cs`)
-
-| Key | Mặc định | Ghi chú |
-|---|---|---|
-| `ApiKey` | `""` | Secret — đặt qua User Secrets, không commit, **không bao giờ log** |
-| `BaseUrl` | `https://api.deepseek.com` | `NormalizedBaseUrl` tự cắt `/` cuối (rỗng → về mặc định) |
-| `Model` | `deepseek-chat` | |
-| `TimeoutSeconds` | `60` | Áp vào `HttpClient.Timeout` của named client |
-| `MaxTokens` | `4096` | Kiểm soát chi phí token |
-| `Temperature` | `0.2` | Thấp để JSON ổn định |
-| `MaxTaskCount` | `20` | Trần số sub-task trong 1 proposal |
-
-Đặt key (khuyến nghị, không lưu vào file tracked):
-
-```bash
-dotnet user-secrets init --project src/TeamNexus.Api        # chỉ cần một lần
-dotnet user-secrets set --project src/TeamNexus.Api "DeepSeek:ApiKey" "sk-..."
-```
-
-### Đăng ký DI (`AiModule.AddAiModule`)
-
-| Đăng ký | Chi tiết |
-|---|---|
-| `IOptions<DeepSeekOptions>` | Bind section `DeepSeek` — **không** `ValidateOnStart` để dev chạy được khi chưa có key |
-| Named `HttpClient` `"DeepSeek"` | `AiModule.HttpClientName`; timeout lấy từ options. `DeepSeekAiProvider` tạo client bằng `IHttpClientFactory.CreateClient(AiModule.HttpClientName)` |
-| `IAiProvider` (singleton) | Chọn theo cấu hình: `ApiKey` rỗng → `FakeAiProvider`; có key → `DeepSeekAiProvider` |
-| `DomainExceptionFilter` (Board) | Map `BoardModuleException` → `{ error }` + status tương ứng (gồm `AiProviderException` 502) |
-| `AntiforgeryValidationEndpointFilter` (Shared) | Bắt buộc header `X-XSRF-TOKEN` trên endpoint POST |
-
-`ISmartSetupService` **chưa đăng ký** — thuộc §4 (tránh stub `NotImplementedException` dùng một lần).
-
-### Hành vi khi thiếu key
-
-`ApiKey` rỗng là cấu hình dev hợp lệ: app vẫn boot và `FakeAiProvider` được đăng ký
-(proposal mẫu, không tốn chi phí, không cần mạng). Khi khởi động, module log đúng một dòng
-để biết đang ở nhánh nào:
-
-```
-warn: TeamNexus.Modules.Ai[0]
-      Ai module: DeepSeek:ApiKey chưa được cấu hình — đăng ký FakeAiProvider (proposal mẫu, không gọi API). ...
-```
-
-Có key → `info: ... provider=DeepSeekAiProvider, model=deepseek-chat, baseUrl=...` (không kèm key).
-
-## §2 — `IAiProvider` & DeepSeek (đã hiện thực)
-
-### Chọn provider
-
-| Điều kiện | Implementation | Hành vi |
-|---|---|---|
-| `DeepSeek:ApiKey` rỗng | `FakeAiProvider` | Trả proposal mẫu khớp schema §4.1; không gọi mạng; token counts `null` |
-| `DeepSeek:ApiKey` có giá trị | `DeepSeekAiProvider` | `POST {BaseUrl}/chat/completions` thật |
-
-> Provider là **singleton**: đổi key cần restart app để nhánh mới có hiệu lực.
-
-### Contract (`Services/AiProvider.cs`)
-
-```csharp
-Task<AiCompletionResult> CompleteAsync(AiCompletionRequest request, CancellationToken ct = default);
-record AiCompletionRequest(string SystemPrompt, string UserPrompt, double Temperature, int MaxTokens, bool JsonMode);
-record AiCompletionResult(string Content, int? PromptTokens, int? CompletionTokens);
-```
-
-Interface cố tình mỏng để Giai đoạn 5 (Observer) tái dùng chỉ bằng cách đổi prompt.
-
-### Request gửi DeepSeek (OpenAI-compatible)
-
-| JSON key | Nguồn | Ghi chú |
-|---|---|---|
-| `model` | `DeepSeekOptions.Model` | |
-| `messages` | `[{role:"system",content:SystemPrompt},{role:"user",content:UserPrompt}]` | |
-| `temperature` | `AiCompletionRequest.Temperature` | Validate `0–2` trước khi gọi |
-| `max_tokens` | `AiCompletionRequest.MaxTokens` | Validate `> 0` |
-| `response_format.type` | `"json_object"` khi `JsonMode = true` | Bỏ hẳn field khi `JsonMode = false` |
-
-Header: `Authorization: Bearer {ApiKey}`, `Accept: application/json`.
-Nối URL: `$"{NormalizedBaseUrl}/chat/completions"` → `https://api.deepseek.com/chat/completions`.
-
-### Response parse
-
-| Nguồn | Đích |
-|---|---|
-| `choices[0].message.content` | `AiCompletionResult.Content` (ném 502 nếu null/rỗng) |
-| `usage.prompt_tokens` | `AiCompletionResult.PromptTokens` |
-| `usage.completion_tokens` | `AiCompletionResult.CompletionTokens` |
-
-Thiếu `usage` **không** phải lỗi — token counts để `null`.
-
-### Failure modes → `AiProviderException` (502)
-
-| Tình huống | Xử lý |
-|---|---|
-| HTTP ≠ 2xx | 502, message có status + body (cắt ≤ 500 ký tự) |
-| Timeout (`TimeoutSeconds`) | 502 "không phản hồi trong Ns" |
-| `content` rỗng/chỉ khoảng trắng | 502 "nội dung rỗng" |
-| Body không phải JSON | 502, kèm ≤ 200 ký tự đầu để debug |
-| Caller `ct` bị cancel | **Không** bọc — rethrow `OperationCanceledException` |
-| Prompt rỗng / `MaxTokens ≤ 0` / `Temperature` ngoài `[0,2]` | 502 ngay, **không** gọi mạng (không tốn token) |
-
-Không retry HTTP ở tầng provider (tránh trả tiền 2 lần cho một POST). Việc **retry 1 lần khi
-JSON parse lỗi** thuộc `SmartSetupService` (§4.3 bước 8).
-
-**Bảo mật:** `ApiKey` không bao giờ vào log/exception message; prompt chỉ được log ở mức
-`Debug` (độ dài, không nội dung).
-
-### `FakeAiProvider` — proposal mẫu
-
-Trả JSON cố định khớp schema §4.1 với 3 task, phủ sẵn các nhánh §4.3 phải xử lý:
-priority không hợp lệ (`null`), task có 2 label, assignee có tên (khớp) và assignee `null`.
-`summary` echo độ dài mô tả + 60 ký tự đầu (escape bằng `JsonEncodedText` nên luôn là JSON hợp lệ).
-Số task bị cắt theo `MaxTaskCount`.
-
-## Endpoints
-
-| Endpoint | Quyền | Trạng thái |
-|---|---|---|
-| `POST /api/boards/{boardId}/smart-setup` | Manager/Admin (kiểm tra trong service) | **Hoàn chỉnh (§3.2 + §4.3)** → `200 SmartSetupProposal` |
-
-Pipeline của endpoint (theo `TasksEndpoints`): `RequireAuthorization` → `AntiforgeryValidationEndpointFilter`
-(header `X-XSRF-TOKEN`) → `DomainExceptionFilter` → `ISmartSetupService.GenerateAsync` → `200 SmartSetupProposal`.
-
-Giai đoạn 3 **không có endpoint ghi DB**: đây là endpoint duy nhất của module. `POST .../smart-setup/confirm`
-thuộc Giai đoạn 4.
-
-## §4 — Smart Setup service (đã hiện thực)
-
-`SmartSetupService.GenerateAsync` chạy đúng 12 bước của spec §4.3:
-
-| # | Bước | Chi tiết |
-|---|---|---|
-| 1 | Load board | `AsNoTracking`; không thấy (hoặc soft-deleted) → **404** |
-| 2 | Phân quyền | `IWorkspaceAccess.RequireManagerAsync` → Member **403** |
-| 3 | Validate mô tả | rỗng/khoảng trắng hoặc **> 4000** ký tự → **400** (trước khi tốn token) |
-| 4 | Load context | tên cột (`IColumnService`), thành viên (`IWorkspaceMemberService`), nhãn workspace — tất cả read-only |
-| 5–6 | Build prompt | `SmartSetupPrompts` (tách riêng): system = quy tắc + schema JSON; user = context + mô tả |
-| 7 | Gọi provider | `JsonMode: true`, `Temperature`/`MaxTokens` từ `DeepSeekOptions` |
-| 8 | Parse JSON | bỏ code fence phòng thủ → deserialize case-insensitive; **retry 1 lần** với prompt chặt hơn khi lỗi; hỏng cả 2 → **502** |
-| 9 | Normalize | title trim 1–200 (sai → **bỏ task**), description cắt ≤ 2000, priority sai → `null`, labels dedupe/trim/≤ 5×(≤ 80), cắt theo `MaxTaskCount`; 0 task → **400** |
-| 10 | Resolve assignee | khớp **exact** (case-insensitive) → khớp **contains** → nếu AI để trống **và** workspace chỉ có **1 thành viên** thì gán thành viên đó; không khớp ai thì giữ tên + `matched=false` |
-| 11 | Resolve label | khớp nhãn có sẵn (case-insensitive) → `labelId` + `exists=true`; còn lại là nhãn mới `exists=false` |
-| 12 | Trả proposal | `SmartSetupProposal` trong bộ nhớ — **không** `SaveChanges` |
-
-### Ngưỡng & hằng số
-
-| Hằng số | Giá trị | Nơi dùng |
-|---|---|---|
-| `SmartSetupService.MaxDescriptionLength` | 4000 | validate input |
-| `SmartSetupService.MaxTitleLength` | 200 | title quá dài → bỏ task |
-| `SmartSetupService.MaxTaskDescriptionLength` | 2000 | cắt mô tả |
-| `SmartSetupService.MaxLabelsPerTask` | 5 | cắt nhãn |
-| `SmartSetupService.MaxLabelLength` | 80 | bỏ nhãn quá dài |
-| `DeepSeekOptions.MaxTaskCount` | 20 | trần số sub-task |
-
-### Mã lỗi của endpoint
-
-| Tình huống | Status | Body |
-|---|---|---|
-| Không đăng nhập | 401 | (auth middleware) |
-| Thiếu/sai `X-XSRF-TOKEN` | 403 | `{ error: "CSRF token missing or invalid …" }` |
-| Là Member (không phải Manager/Admin) | 403 | `{ error: "Requires Manager or Admin role in this workspace." }` |
-| Mô tả rỗng / > 4000 | 400 | `{ error: "Description must be 1–4000 characters…" }` |
-| AI không trả sub-task hợp lệ nào | 400 | `{ error: "AI không trả về sub-task hợp lệ nào …" }` |
-| Board không tồn tại | 404 | `{ error: "Board not found." }` |
-| DeepSeek lỗi/timeout/JSON hỏng sau retry | 502 | `{ error: "DeepSeek …" }` / `"Không parse được JSON từ AI sau 2 lần thử …"` |
-
-### Hàm thuần có thể verify trực tiếp (không cần HTTP/AI)
-
-`SmartSetupService.BuildProposal`, `NormalizeTasks`, `NormalizePriority`, `ResolveAssignee`, `ResolveLabels`
-là `public static` để test/verify được logic chuẩn hoá mà không cần dựng API — dùng cho §4 verify và sau này
-làm điểm tựa cho test backend (Giai đoạn 8).
-
-### Ghi chú chi phí token
-
-Context gửi AI chỉ gồm **tên**: board, cột, thành viên, nhãn — không gửi nội dung task/lịch sử. Mô tả bị cap
-4000 ký tự, `max_tokens`/`temperature` lấy từ config, `MaxTaskCount` chặn số task. Retry chỉ xảy ra khi JSON
-hỏng (tối đa 1 lần).
-
-## Phase 4 — Accountability Layer (đã hoàn tất 100%)
-
-### Endpoints Accountability Layer
-
-| Endpoint | Quyền | Method | Thành công | Ghi chú |
-|---|---|---|---|---|
-| `/api/boards/{boardId}/smart-setup/confirm` | Manager/Admin | POST | 201 `AiActionLog` | Tạo log `Pending` — không ghi task |
-| `/api/boards/{boardId}/ai-actions` | Manager/Admin | GET | 200 `AiActionLog[]` | Filter `?status=` và `?take=`, sort `createdAt DESC` |
-| `/api/ai-actions/{logId}` | Manager/Admin | GET | 200 `AiActionLogDetail` | Trả chi tiết + snapshots |
-| `/api/ai-actions/{logId}/approve` | Manager/Admin | POST | 200 `AiActionLogDetail` | Duyệt và ghi DB thật qua Applier (409 nếu không Pending) |
-| `/api/ai-actions/{logId}/reject` | Manager/Admin | POST | 200 `AiActionLogDetail` | Từ chối (body `{ note? }`) |
-| `/api/ai-actions/{logId}/undo` | Manager/Admin | POST | 200 `AiActionLogDetail` | Hoàn tác (soft-delete tasks, dọn nhãn, 409 nếu không Approved) |
-
-### Vòng đời trạng thái
-```
-Pending → Approved → Undone
-Pending → Rejected
-```
-Mọi chuyển trạng thái khác trả **409 Conflict**.
-
-### Contract bàn giao Giai đoạn 5 (AI Observer)
-- Mọi hành động AI ghi dữ liệu mới **bắt buộc** đi qua `IAiActionService` và cài đặt một `IAiActionApplier` tương ứng.
-- Lớp AI Observer chỉ đọc (`ai_action_logs`, board data) và phát cảnh báo/notifications, không ghi đè dữ liệu nghiệp vụ.
-
-## Phase 5 — AI Observer (đã hoàn tất, verify 178 check PASS)
-
-Observer chạy nền theo chu kỳ, phát hiện bất thường trên board và **chỉ báo cho Manager/Admin** qua
-notification trong app. Nó là lớp *đọc/cảnh báo*: chỉ ghi `activity_logs` / `notifications` /
-`ai_observer_runs`, **không** chạm `tasks`/`labels`/`task_labels` và **không** đi qua Accountability Layer.
-
-### Endpoints Phase 5
-
-| Endpoint | Quyền | Method | Thành công | Ghi chú |
-|---|---|---|---|---|
-| `/api/workspaces/{id}/observer/scan` | Manager/Admin | POST | 200 `ObserverScanResponse` | **Quét đồng bộ**; 403 Member; 404 workspace lạ; **502** nếu AI lỗi (run đã ghi `Failed`) |
-| `/api/workspaces/{id}/observer/runs?take=` | Manager/Admin | GET | 200 `ObserverRunResponse[]` | sort `startedAt DESC`; `take` 1–50 (default 20) |
-| `/api/observer/runs/{runId}` | Manager/Admin | GET | 200 `ObserverRunDetailResponse` | kèm `summary` + `findings[]` |
-| `/api/notifications?isRead=&take=` | mọi user (chỉ row của mình) | GET | 200 `NotificationListResponse` | `take` 1–100 (default 20); `isRead` strict (`bogus` ⇒ 400 `{error}`) |
-| `/api/notifications/{id}/read` | owner | POST | 200 `NotificationResponse` | idempotent (không đổi `readAt`); alert của người khác ⇒ **404** |
-| `/api/notifications/read-all` | mọi user | POST | 200 `{ updated: n }` | chỉ row của mình; gọi lại ⇒ `0` |
-
-`POST` cần `X-XSRF-TOKEN`; `GET` không cần. Body lỗi luôn `{ "error": "…" }` (trừ 400 ProblemDetails
-khi sai kiểu tham số, ví dụ `?take=abc`).
-
-### Luồng quét của `ObserverService.ScanAsync` (9 bước)
-
-1. `Enabled=false` + không chỉ định workspace ⇒ `Skipped` (`Disabled`), không ghi DB. Quét tay vẫn chạy.
-2. Giành lock: `SemaphoreSlim(1,1)` trong process + `pg_try_advisory_lock` trên connection riêng; thua ⇒ `Skipped` (`AlreadyRunning`); `finally` luôn unlock.
-3. Nạp workspace active có task mở, sắp theo hoạt động gần nhất, cap `MaxWorkspacesPerRun`.
-4. Nạp snapshot bounded: task + column (`IsDone`) + tên assignee + comment count/`max(created_at)`.
-5. `ObserverSignalDetector.Analyze` → 0 tín hiệu ⇒ `Completed`, `aiCalled=false`, **0 token**.
-6. `ObserverSummarizer.BuildRequest` → prompt tóm tắt (marker `{"agent":"observer"}` ở dòng đầu, JSON mode).
-7. Gọi `IAiProvider` (không retry); lỗi/JSON hỏng ⇒ run `Failed` + `summary.error`, 0 notification.
-8. `ObserverFindingValidator` (giao evidence với tín hiệu ⇒ chống hallucination).
-9. `NotifyManagersAsync` → ghi `ai_observer_runs` → prune `activity_logs` cũ theo retention.
-
-### Tín hiệu & ngưỡng (config section `Observer`)
-
-| Tín hiệu | Điều kiện | Severity | Ngưỡng |
-|---|---|---|---|
-| `OverdueTask` | task mở, `due_date < now` | High; **Critical** nếu `overdueDays > 2×` | `CriticalOverdueDays=3` |
-| `StalledTask` | `max(updated_at, lastCommentAt, created_at) < now − StalledDays` (**strict**) | Medium; **High** nếu `≥ 2×` | `StalledDays=7` |
-| `Overload` | 1 người: `openCount ≥ 5` **hoặc** `overdueCount ≥ 2` | High; **Critical** nếu `openCount ≥ 2×` | `OverloadMinOpenTasks=5`, `OverloadOverdueMin=2` |
-| `Bottleneck` | cột không done: `openCount ≥ 5` **và** `stalledInColumn ≥ 2` | Medium | `BottleneckMinTasks=5`, `BottleneckStalledMinTasks=2` |
-
-Mỗi **loại** tín hiệu được gom thành **một** signal (evidence bị cap `MaxEvidenceIdsPerSignal=10`);
-`MaxSignalsPerWorkspace=20` cắt khi có nhiều tín hiệu khác loại → `truncatedSignals` ghi vào `summary`.
-Thứ tự: severity giảm dần → weight giảm dần → thứ tự phát hiện.
-
-### Kiểm soát chi phí & vận hành
-
-| Key | Mặc định | Ghi chú |
-|---|---|---|
-| `Enabled` | `true` | `false` ⇒ timer không chạy (nút "Quét ngay" vẫn hoạt động) |
-| `IntervalMinutes` / `StartupDelaySeconds` | `30` / `60` | chu kỳ & trễ khởi động |
-| `LookbackHours` / `MaxLookbackDays` | `24` / `7` | `LookbackHours` là **sàn**, `MaxLookbackDays` là **trần** (host ngủ lâu ⇒ lùi tối đa 7 ngày) |
-| `MaxPromptCharacters` | `12000` | prompt bị cắt tín hiệu yếu nhất cho tới khi vừa; **JSON luôn hợp lệ** |
-| `MaxOutputTokens` / `Temperature` | `1500` / `0.0` | cap riêng của Observer; không retry |
-| `MaxNotificationsPerRun` / `MaxManagersPerWorkspace` | `50` / `10` | cap fan-out |
-| `DeduplicationWindowHours` | `24` | không lặp lại cùng `(workspace, type, taskIds, userIds)` |
-| `MinSeverityToNotify` | `Medium` | finding thấp hơn bị bỏ |
-| `RetentionDays` / `RetentionDeleteBatchSize` | `30` / `5000` | prune `activity_logs` cũ **theo workspace** cuối run thành công |
-
-**Hạn chế đã biết:** 2 tiến trình quét **thật sự đồng thời** có thể cùng ghi notification trước khi bên nào
-commit dedupe (nhịp 30 phút khiến thực tế không xảy ra). Trên free-tier, app sleep ⇒ Observer chỉ chạy khi
-app thức (xử lý ở Giai đoạn 8 bằng cron ngoài/keep-alive).
-
-**Kênh gửi:** hiện chỉ **in-app**. Email là hạng mục *tương lai* — thêm implementation mới bên cạnh
-`INotificationService` (gợi ý `INotificationChannel`), **không** sửa Observer.
-
-### `FakeAiProvider` — hai nhánh
-
-`CompleteAsync` nhận diện prompt Observer bằng marker `{"agent":"observer"}` ở đầu `UserPrompt` (sau khi
-`TrimStart`) ⇒ trả `{ "findings": [...] }` dùng **ID thật lấy từ `evidence` trong prompt** (luôn qua được
-validator). Không có marker ⇒ vẫn trả proposal Smart Setup như Phase 3. Payload hỏng ⇒ `findings: []` +
-`LogWarning` (không throw, không im lặng).
-
-## Verify §1 (đã chạy)
-
-1. `dotnet build TeamNexus.sln` → Build succeeded, 0 warning / 0 error.
-2. Boot API không có key → log Warning + health `200`.
-3. Boot API với `DeepSeek__ApiKey` giả → log Information `provider=DeepSeekAiProvider`,
-   health `200`; kiểm tra log không chứa giá trị key.
-4. `src/TeamNexus.Persistence/Migrations/` không đổi (vẫn 3 migration Phase 1/2).
-
-## Verify §2 (đã chạy)
-
-Harness tạm ngoài workspace (`%TEMP%\tn-ai-s2-verify`, không commit) dùng `HttpMessageHandler`
-stub nên **không cần API key thật, không cần mạng** — tất cả check PASS:
-
-1. **Request shape:** method `POST`, URI `https://api.deepseek.com/chat/completions`,
-   `Authorization: Bearer …`, body có `model`/`max_tokens`/`temperature`/
-   `response_format.type=json_object`/`messages[system,user]`; `JsonMode=false` → không có `response_format`.
-2. **Response parse:** `content` + `usage.prompt_tokens`/`completion_tokens`; thiếu `usage` → counts `null`, không lỗi.
-3. **Failure mapping:** HTTP 429, `content` rỗng, JSON hỏng, timeout → đều `AiProviderException`
-   với `StatusCode == 502`; caller cancel → `OperationCanceledException` (không bọc);
-   validate `MaxTokens`/`Temperature`/prompt rỗng → 502 **và không gửi HTTP request nào**.
-4. **`FakeAiProvider`:** content không có code fence, parse được JSON, 3 task, priority
-   hợp lệ/null, có task 2 label, assignee có tên và `null`, prompt chứa quote/backslash/newline
-   vẫn cho JSON hợp lệ, `MaxTaskCount` cắt đúng, cancel token được tôn trọng.
-5. **Chọn provider qua DI:** config không key → `FakeAiProvider`; có key → `DeepSeekAiProvider`;
-   `BaseUrl` có `/` cuối được chuẩn hoá; `Timeout` = `TimeoutSeconds`.
-6. **Boot API 2 nhánh** (cổng 5197/5196) → `GET /api/health` = 200, log đúng nhánh, không lộ key.
-
-> Chưa verify với DeepSeek thật trong bước §2 (chưa có key) — đã chạy ở §3, xem mục dưới.
-
-## Verify §3 (đã chạy)
-
-Harness tạm ngoài workspace (không commit, đã xoá sau khi chạy). Hai phần:
-
-**A. API thật + PostgreSQL thật** (API chạy ở cổng 5190; JWT tự ký bằng chính `Jwt:SigningKey`
-trong User Secrets, đúng claims của `JwtService`):
-
-| Kiểm tra | Kết quả |
-|---|---|
-| `GET /api/health` | 200 |
-| `GET .../members` không auth | **401** |
-| `GET .../members` có JWT | **200**; số phần tử khớp `workspace_members`; đúng 4 field `userId`/`displayName`/`role`/`avatarUrl`; `role` hợp lệ; mọi `userId` khớp DB; `displayName`+`role` của phần tử đầu khớp DB |
-| `GET .../members` workspace không tồn tại | **404** |
-| `POST .../smart-setup` không auth | **401** |
-| `POST .../smart-setup` có auth nhưng thiếu `X-XSRF-TOKEN` | **403** |
-| `GET /api/auth/antiforgery` | cấp được token → dùng cho POST |
-| `POST .../smart-setup` auth + CSRF hợp lệ | **500** (đi hết được filter tới stub §4.3 — xác nhận route/auth/CSRF/DI hoàn chỉnh, không 404/405) |
-| `workspace_members` / `tasks` / `labels` trước ↔ sau toàn bộ request | **không đổi** (2/10/0) |
-
-> Một case được bỏ qua: "non-member → 404". DB local chỉ có **1 user** và user đó thuộc chính
-> workspace đang test, nên không tồn tại outsider để kiểm chứng. Cùng cơ chế
-> `IWorkspaceAccess.RequireMemberAsync` đã được kiểm chứng gián tiếp bằng case
-> "unknown workspace → 404" (pass).
-
-**B. DeepSeek thật** (key trong User Secrets, resolve `IAiProvider` thật qua `AddAiModule`):
-
-```
-provider=DeepSeekAiProvider, keyConfigured=True
-latency=2352ms, chars=1293, promptTokens=155, completionTokens=447
-```
-
-`content` là JSON parse được, có `summary` + `tasks[]` không rỗng, `tasks[0].title` không rỗng
-→ xác nhận key hợp lệ và contract §2 chạy đúng với API thật (không chỉ stub handler).
-
-**C. `GET /api/workspaces/{workspaceId}/members` (module Board, §3.1)** được verify trong phần A;
-chi tiết thiết kế xem `src/Modules/Board/TeamNexus.Modules.Board/README.md`.
-
-## Verify §4 (đã chạy)
-
-Harness tạm ngoài workspace (không commit, đã xoá sau khi chạy), chạy **hai nhánh** trên API thật
-(cổng 5191) + PostgreSQL thật, JWT tự ký bằng `Jwt:SigningKey`:
-
-| Nhóm | Kết quả |
-|---|---|
-| Guards | không auth → **401**; thiếu CSRF → **403**; mô tả rỗng → **400**; mô tả 4001 ký tự → **400**; board không tồn tại → **404** |
-| DeepSeek thật | **200** trong ~3.1–3.6s, 7 task, `priority=[High,High,High,High,Medium,High,Medium]`, assignee matched 7/7, 21 nhãn mới (`exists=false`) |
-| `FakeAiProvider` (không key) | **200** trong **83ms**, đúng 3 task, `priority=[High,Medium,null]`, assignee **matched=2 / unmatched=1** ("Linh" không có trong workspace, giữ tên), nhãn mới 5 — đúng mọi nhánh resolve |
-| Shape | mỗi task đúng 5 field `title/description/priority/labels/assignee`; title 1–200; ≤ 5 nhãn, mỗi nhãn ≤ 80; `exists=true` ⇒ có `labelId` và tên khớp nhãn workspace; `exists=false` ⇒ `labelId=null`; `matched=true` ⇒ có `userId`; `matched=false` → `userId=null` + giữ `displayName` |
-| Không ghi DB | `tasks` 10→10, `labels` 0→0, `task_labels` 0→0, `workspace_members` 2→2 |
-| Hàm thuần | priority `urgent/HIGH` → chuẩn hoá, `Critical` → `null`; title rỗng/> 200 → bỏ task; description 2500 → cắt 2000; labels dedupe (`backend`/`BACKEND`)/bỏ rỗng/bỏ > 80/cắt 5; `MaxTaskCount=2` → 2; bỏ hết task → `BadRequestException`; assignee exact / contains ("Linh" → "Nguyen Linh") / unknown → `matched=false` / null + 1 member → gán / null + 2 members → `null` / 0 member → `null` |
-
-> Case "Member → 403" **chưa verify được**: DB local chỉ có 1 user (Admin) trong workspace, không có
-> Member nào để thử. Cơ chế `RequireManagerAsync` là code sẵn có của Board và đã được verify ở Giai đoạn 2.
->
-> Case "provider lỗi/timeout → 502" đã verify ở §2 bằng stub handler (HTTP 429/timeout/JSON hỏng) và
-> logic retry-1-lần được verify qua code path; không cố tình tạo lỗi DeepSeek thật để tránh tốn token.
-
-## Verify §5 — AI Observer (đã chạy, 178 check PASS toàn Giai đoạn 5)
-
-| Nhóm | Kết quả |
-|---|---|
-| A. Schema & migration | **28/28** — 3 bảng, 3 jsonb, CHECK `ck_ai_observer_runs_status`, 6 FK `ON DELETE RESTRICT` (`23001`), `status='Bogus'` → `23514`, jsonb hỏng → `22P02` |
-| B. Detector + validator/summarizer thuần | **44/44** + **15/15** (+ **7/7** chạy lại `FakeAiProvider` sau fix) |
-| C. `ObserverBackgroundService` | **3/3** — `Enabled=false` ⇒ host start/stop sạch, 0 run; `Enabled=true` + delay 30s ⇒ không exception |
-| D. Scan end-to-end (DB thật) | **6/6** — `signalsDetected=4` (Overdue/Stalled/Overload/Bottleneck), `notifications = findings × manager`, `tasks`/`ai_action_logs` **không đổi** |
-| E. Token/chi phí | **3/3** — 0 tín hiệu ⇒ `aiCalled=false`, provider **không được gọi**, prompt 4133 ≤ 12000 ký tự, không chứa `description` |
-| F. HTTP API (§5) | **32/32** — xem bảng endpoint ở trên; Member ⇒ **403** cả 3 route Observer; 401/403/404/405/502/400 đúng |
-| G. Activity log | **31/31** — 6 loại sự kiện từ `TaskService`/`CommentService`, mutation thất bại không sinh log |
-| H/I/J. Dedupe, concurrency, failure modes | **2/2**, **3/3**, **4/4** — dedupe 24h; 1 `Completed` + 1 `Skipped(AlreadyRunning)`; JSON hỏng/provider lỗi ⇒ `Failed` + 0 notification |
-
-Harness đặt **ngoài workspace** (`%TEMP%`, đã xoá), API thật + PostgreSQL thật + `FakeAiProvider`/stub
-⇒ **không gọi DeepSeek, không tốn token**. Chi tiết: `project-docs/report/phase-5-ai-observer-test-report.md`.
-
-**Lưu ý khi viết harness cho module này:**
-1. Lấy lại token CSRF **sau** khi gắn JWT cookie (token ẩn danh 155 ký tự ≠ token đã bind identity 198 ký tự; echo token cũ ⇒ 403).
-2. Seed fixture bằng **raw SQL**: `TeamNexusDbContext.SaveChanges` tự stamp `created_at`/`updated_at` cho mọi `IAuditableEntity` khi insert ⇒ seed qua EF làm task "cũ" thành "vừa tạo".
-3. Boot API thật rồi stop trong **< 60s** (`StartupDelaySeconds`) hoặc đặt `Observer__Enabled=false` để observer không quét DB dev.
-4. Khi API bật, `AddAiModule` resolve `FakeAiProvider` nếu `DeepSeek:ApiKey` trống — đó là cấu hình đúng cho verify offline.
-5. **(Phase 7) Env var RỖNG ≠ tắt cấu hình:** `.NET` coi `SetEnvironmentVariable(name, "")` là **xoá biến**, nên `DeepSeek__ApiKey=''`
-   **không** ép `FakeAiProvider` — User Secrets có key thật sẽ thắng trở lại và harness **gọi DeepSeek thật ngoài ý muốn**. Dùng
-   **một khoảng trắng** `' '` (`HasApiKey` dùng `IsNullOrWhiteSpace`). Và **clear** mọi key override trước mỗi lần boot, nếu không
-   ngưỡng của case trước rò sang case sau (đã gặp: `MaxRunTokens` của case TokenBudget làm hỏng case MaxRunLlmCalls).
-6. **(Phase 7) PowerShell 5.1:** script harness phải **ASCII-only** (một dấu `⇒` bị đọc theo ANSI thành `'` ⇒ **vỡ cú pháp** cả file);
-   `ConvertFrom-Json` trả **một object mảng** nên `@(hàm-JSON)` **lồng mảng** (dùng `@($x | ForEach-Object { $_ })`); `-Headers` của
-   một lần gọi **bám vào `WebSession`** (check "POST thiếu CSRF" phải dùng **session mới**, nếu không sẽ gửi lại header cũ và test
-   luôn PASS giả).
-7. **(Phase 7)** `AgentRunReaper` chạy lúc boot ⇒ seed run `Running` mồ côi **trước** khi boot; `POST /cancel` và "chạy chồng" cần
-   task `FAKE:SLOW` để run còn `Running` khi harness thao tác.
-
-## Phase 7 — AI Agent Executor (✅ đã xong §2–§4; §5 frontend còn lại)
-
-Nâng AI từ **đề xuất/quan sát** (Phase 3–5) lên **thực thi**: Agent là một **thành viên ảo** của workspace
-(`workspace_members.member_type = 'ai_agent'`, một row `users` riêng cho mỗi workspace) và được gán task bằng đúng thao tác
-assign sẵn có. Khi Manager bấm **"Chạy Agent"**, Agent chạy một vòng lặp tool-calling và **mọi kết quả ghi dữ liệu thật đều đi
-qua Accountability Layer** — không có cơ chế giải trình riêng cho Agent.
-
-> **Trạng thái: ✅ ĐÃ HIỆN THỰC & VERIFY (270/270 check PASS — nhóm B/C 89 · D/E/H/I 107 · F+503 46 · G 21 ·
-> 1 lần gọi DeepSeek thật 7).** `dotnet build` 0 warning / 0 error; `dotnet ef migrations list` = **6** (không sinh migration
-> mới); frontend không bị chạm. Chi tiết: `project-docs/report/phase-7-ai-agent-executor-test-report.md` §2.3.
-> Nguồn thiết kế: `project-docs/tasks/phase-7-ai-agent-executor.md` (§0 bảng quyết định D1–D20).
->
-> **Sáu điều chỉnh khi hiện thực so với bản kế hoạch §4** (ghi ở đây để người đọc code không thấy lệch):
-> 1. **Kết quả thuộc về AGENT, không phải người duyệt.** `PostCommentApplier`/`PostAttachmentApplier` dùng
->    `log.RequestedByUserId` (= agent) cho `task_comments.author_id`/`task_attachments.created_by_user_id`; `ctx.ActingUserId`
->    là **Manager đã bấm duyệt** (đúng cho phân quyền Undo, sai cho việc ghi công).
-> 2. **Chống chạy chồng theo TASK, không dùng `SemaphoreSlim(1,1)` toàn cục** (khác `ObserverService`): `AgentRunCancellationRegistry`
->    đặt chỗ theo `taskId`, cộng với kiểm row `Running` cùng task (đa instance) và `pg_try_advisory_lock(hash(taskId))` cho phần chạy.
->    Semaphore toàn cục sẽ làm task B bị **409 oan** khi task A đang chạy.
-> 3. **Advisory lock thuộc scope nền, không thuộc request.** `StartAsync` tạo scope nền **trước**, lấy lock trên connection của
->    scope đó, rồi mới `Task.Run(ExecuteAsync)`; lock nhả trong `finally` của `ExecuteAsync` (lấy trong request sẽ nhả ngay lúc trả 202).
-> 4. **`ResolutionCommentId` nằm trên run MỚI**, không ghi vào run cũ ⇒ bất biến append-only (D14) giữ nguyên vẹn
->    ("run cũ không đổi byte nào"); guard cho rerun là `AwaitingClarification` + `ClarificationCommentId` ≠ null.
-> 5. **3 loại notification của agent tách khỏi `NotificationTypes`** (`AgentNotificationTypes`): `NotificationTypes.All` là
->    whitelist chống hallucination của Observer — thêm loại agent vào đó sẽ cho phép model Observer sinh `AgentRunFailed`.
-> 6. **Tên file attachment dùng `ReportFileName.Slugify`** (module Reporting) ⇒ `Ai` có thêm `ProjectReference → Reporting`
->    (S16/§0.3 "chỉ gọi lại hàm sẵn có", không viết lại logic slug). Hàm thật tên là `Slugify`, không phải `Normalize`.
->
-> **Hai key cấu hình thêm** (ngoài bảng §6): `Agent:ClarificationColumnName` (mặc định `"Chờ làm rõ"`) và
-> `Tavily:AuthMode` (`Bearer` *(mặc định)* | `Body`) — key sau để chốt biến thể auth của Tavily **bằng thực nghiệm**
-> (đổi config thay vì sửa code), đúng yêu cầu "không suy đoán" của §4.3. Lưu ý `POST /agent-runs/{id}/cancel` **cũng** trả
-> **503** khi `Agent:Enabled=false` (§7H yêu cầu 503 cho **cả 3** route ghi — bảng §4.9 chỉ ghi 403/404/409).
-
-### Danh tính Agent (D1)
-
-| Điểm | Quyết định |
-|---|---|
-| Ai là agent? | **1 `ApplicationUser` riêng cho mỗi workspace**, sinh **lazy** ở lần đầu task được gán cho agent |
-| Vì sao per-workspace | `workspace_members` có composite PK `(workspace_id, user_id)` ⇒ một user chỉ thuộc **một** workspace |
-| Vì sao phải là `users` row thật | `tasks.assignee_id` FK→`users`; `task_comments.author_id` **NOT NULL** FK→`users` ⇒ agent phải đăng comment và nhận task như người thật |
-| Phân biệt với người | `workspace_members.member_type` ∈ {`human`,`ai_agent`} + partial UQ `(workspace_id) WHERE member_type='ai_agent'` |
-| Bảo mật | `password_hash = null`, `email = null`, `lockout_enabled = true`, `two_factor_enabled = true`, **không** `user_logins` ⇒ agent **không thể đăng nhập** |
-| Vai trò | `role = 'Member'` — agent **không** phải Manager; quyền ghi dữ liệu thật thuộc về con người duyệt |
-
-### Vòng lặp thực thi & bộ tool (whitelist đúng 4, D9)
-
-`IAiProvider.CompleteAsync` (Phase 3) **không đổi**; Phase 7 thêm interface thứ hai `IAiToolCallingProvider.ChatAsync`
-(nhiều lượt, `tools`/`tool_calls`) và `DeepSeekAiProvider` implement **cả hai**.
-
-| Tool | Việc | Ghi chú an toàn |
-|---|---|---|
-| `SearchSystemData` | Truy vấn task/comment/board **nội bộ** | `workspaceId`/`boardId`/`taskId` lấy từ **context**, **không** từ arguments ⇒ model không đọc chéo workspace |
-| `WebSearch` | Web search qua Tavily (`results[].content`, fallback `snippet`) | `Tavily:ApiKey` rỗng/whitespace ⇒ `FakeWebSearchProvider`. Biến thể auth = config `Tavily:AuthMode` (`Bearer` mặc định ⇒ header, **không** đưa key vào body; `Body` ⇒ `api_key` trong body) |
-| `DraftOutput` | Kết quả ngắn → **comment**; dài → **attachment** | **Không** ghi DB; chỉ trả cho model để kết thúc loop |
-| `RequestClarification` | Hỏi lại trưởng nhóm khi thiếu thông tin | **Không** đi qua Accountability (là câu hỏi, không phải kết quả ghi dữ liệu) |
-
-Tên tool ngoài whitelist ⇒ trả `{"error": …}` cho model (đã verify end-to-end: run **vẫn hoàn thành**, trace entry có `isError=true`).
-Provider thứ 3 của `FakeAiProvider` (marker `{"agent":"executor"}` ở **dòng đầu system prompt**) chạy kịch bản tool-call **xác định** ⇒
-verify end-to-end offline, **0 token**; token count của nhánh này là **giả nhưng xác định** (điều kiện để test được `TokenBudget`).
-
-Kịch bản của provider offline chọn theo **sentinel** `FAKE:*`: mặc định = `SearchSystemData → WebSearch → DraftOutput (comment)`;
-`FAKE:ATTACH` = draft dài + `fileName`/`contentType` (⇒ attachment); `FAKE:CLARIFY` = `RequestClarification`; `FAKE:SLOW` = delay 3 s
-mỗi lượt (để test timeout/cancel); `FAKE:UNKNOWN`/`FAKE:BADJSON` = tool ngoài whitelist / `arguments` hỏng. Sentinel **chỉ** được đọc
-từ system prompt + message `role="user"` — **không** đọc tool result, vì tool result là dữ liệu sống do con người nhập và có thể
-"cướp" kịch bản của run khác (bug đã bắt được ở nhóm D/E, xem report §4 `AI-bug-2`).
-
-### Vòng đời một lượt chạy (`agent_runs`)
-
-```
-Running ──► AwaitingApproval      (DraftOutput ⇒ AiActionLog Pending, chờ Manager duyệt)
-        ──► AwaitingClarification (RequestClarification ⇒ comment agent + task sang cột "Chờ làm rõ")
-        ──► Failed                (+ stop_reason: ToolLimit | TimeLimit | TokenBudget | ProviderError | Cancelled | TaskChanged | InternalError)
-```
-
-- **`Completed` chưa được set ở giai đoạn này:** phán quyết nằm ở `ai_action_logs` (Approved/Rejected/Undone) và UI đọc qua
-  `agentRun.aiActionLogId`, nên run giữ `AwaitingApproval` sau khi con người duyệt (đã ghi ở §5 hạn chế của report).
-- **`status` tách khỏi `stop_reason` (D4):** `BudgetExceeded` **không** phải status riêng — nó là `stop_reason`
-  (`ToolLimit`/`TimeLimit`/`TokenBudget`) trên `status = Failed`, theo đúng tiền lệ `ai_observer_runs.status = Skipped`
-  **không phải lỗi** ở Phase 5. Nhờ vậy phân biệt được *hết ngân sách (chủ ý)* với *lỗi provider (bất khả kháng)*.
-- **`MaxRunLlmCalls`** (20) không có stop reason riêng ⇒ vượt ⇒ `Failed`/`InternalError`; nó được kiểm **trước** mỗi lượt gọi model.
-- **Append-only (D14):** "Chạy lại" **tạo run mới** (`previous_run_id` trỏ run cũ, `resolution_comment_id` ghi trên run **mới**);
-  run cũ **không** bao giờ bị sửa — đã verify bằng so sánh **byte-identical** trước/sau rerun.
-- **Guardrail (D12):** 15 tool-call · 5 phút wall-clock · ~50 000 token · 20 lượt gọi model — kiểm **sau mỗi vòng** (và ngay sau
-  **mỗi** tool call, trước cả tín hiệu kết thúc), vượt ⇒ dừng + `stop_reason` + **đúng một** notification
-  (`AgentRunFailed`, `notification_sent = true` chống spam).
-- **Chống chạy chồng (D11):** đặt chỗ **theo task** trong process + kiểm row `Running` cùng task + `pg_try_advisory_lock` theo
-  `task_id` cho phần chạy; không lấy được ⇒ **409** (xem điều chỉnh #2/#3 ở banner trên).
-- **Tiến trình được ghi dần:** sau **mỗi vòng**, counters + `tool_call_trace` được persist (guard `WHERE status='Running'`) ⇒
-  Kanban GET giữa run thấy số thật, và run bị cancel/crash không mất toàn bộ counter.
-- **Reaper (D13):** app free-tier sleep/recycle giữa run ⇒ `AgentRunReaper` lúc khởi động đóng mọi run `Running` quá hạn
-  thành `Failed`/`InternalError`, nếu không card Kanban kẹt "Đang chạy" vĩnh viễn. Reaper **không** phụ thuộc `Agent:Enabled`.
-
-### Kết quả & duyệt (tái dùng Phase 4)
-
-Hai applier mới đi qua **nguyên** vòng đời `Pending → Approved/Rejected → Undone` (CAS chống duyệt trùng, transaction,
-`applied_snapshot`):
-
-| Action | Apply khi được duyệt | Undo |
-|---|---|---|
-| `PostComment` (`entity_type='Task'`) | `ICommentService.CreateCommentAsync(..., userId = log.RequestedByUserId = agent_user_id)` ⇒ có luôn `activity_logs` + SignalR `CommentAdded` + `authorName` = tên agent | soft delete comment (bởi Manager duyệt, qua `ctx.ActingUserId`) |
-| `PostAttachment` (`entity_type='Task'`) | INSERT `task_attachments` (`bytea`, cap **512 KB**; `agent_runs.output_kind = 'Attachment'` khi draft có `fileName`/`contentType` hoặc dài > `AttachmentThresholdChars`) | **hard delete** (bảng duy nhất không soft-delete — file để lại là tiêu quota thật) |
-
-`requested_by_user_id = agent_user_id`, `decided_by_user_id` = Manager duyệt ⇒ truy vết "agent làm hay người làm" chỉ cần so Guid.
-`AiActionService` chỉ đổi **tối thiểu**: thêm nhánh `entity_type = 'Task'` trong `ResolveAsync`, thêm
-`RequestAgentOutputAsync` (**API nội bộ, không có route HTTP**: tin cậy bằng assert "task đang gán cho agent" + "agent đúng là
-`member_type='ai_agent'` của workspace"), và thêm 2 field nullable vào `applied_snapshot`.
-
-### Endpoint của Phase 7 (7 route)
-
-| Endpoint | Quyền | Thành công |
-|---|---|---|
-| `POST /api/tasks/{taskId}/agent-runs` | Manager/Admin | **202** `AgentRunResponse` (chạy ở scope nền) |
-| `POST /api/tasks/{taskId}/agent-runs/{runId}/rerun` | Manager/Admin | **202** — nút **"Chạy lại"** |
-| `GET /api/tasks/{taskId}/agent-runs?take=` | Member+ | 200 `AgentRunResponse[]` (`take` clamp 1–50, mặc định 20, `startedAt DESC`) |
-| `GET /api/agent-runs/{runId}` | Member+ | 200 `AgentRunDetailResponse` (kèm `toolCallTrace`) |
-| `POST /api/agent-runs/{runId}/cancel` | Manager/Admin | 200 (409 nếu không còn `Running`) |
-| `GET /api/tasks/{taskId}/attachments` | Member+ | 200 `AttachmentResponse[]` |
-| `GET /api/tasks/{taskId}/attachments/{id}/download` | Member+ | 200 file bytes (`Results.File`, có `Content-Length` + `Content-Disposition` ASCII) |
-
-`Agent:Enabled=false` ⇒ **503** ở cả **3** route ghi (tiền lệ `Reports:Enabled`; route đọc vẫn 200). Real-time: event
-**`AgentRunProgress`** broadcast qua `IBoardEventPublisher` có sẵn (thêm 1 method; **không** sửa `BoardHub` constants) — chỉ
-**thay đổi trạng thái**, **không** stream token.
-
-### Hạn chế đã biết của Phase 7 (ghi trước để không ai tưởng là bug)
-
-1. **Không** stream token — chỉ broadcast trạng thái.
-2. Chạy **in-process** ⇒ app free-tier sleep giữa run là mất run đó (reaper đóng lại + nút "Chạy lại" là lưới an toàn). **Không** dùng Hangfire/Redis.
-3. `POST /cancel` chỉ hoạt động trong **cùng instance** đang chạy run đó.
-4. Chưa prune `agent_runs`/`task_attachments` (file là nội dung người dùng đã duyệt).
-5. Task do agent thực hiện **sẽ** xuất hiện trong `byAssignee` của báo cáo và tín hiệu `Overload` — đây là **hành vi mong muốn**.
-6. Chưa có test xUnit (để Phase 8); verify bằng harness tạm ngoài workspace như Phase 2–6.
-7. `status = Completed` **chưa** được set: phán quyết duyệt nằm ở `ai_action_logs`, run giữ `AwaitingApproval` (xem mục vòng đời trên).
-8. `Tavily:AuthMode` mặc định `Bearer` **chưa** được xác nhận bằng 1 lần gọi Tavily thật (máy dev không có key) — nhóm C mới
-   verify wire-shape; nếu server trả 401 thì đổi config sang `Body`.
-9. `after_snapshot` của `PostAttachment` mang base64 (cap 512 KB ⇒ row jsonb ≤ ~700 KB) nên `GET /api/ai-actions/{logId}` trả payload đó.
-10. Nhóm **J** (frontend) chưa chạy — thuộc §5; §4 **không** chạm frontend (baseline 155 test giữ nguyên).
-
-> **Bàn giao §5 frontend:** `project-docs/tasks/phase-7-frontend-handover.md` — hợp đồng API đã verify (7 route + mã lỗi
-> thật), 11 sự thật backend mà UI phải tôn trọng (ví dụ `status=Completed` không bao giờ được set ⇒ phán quyết nằm ở
-> `ai_action_logs`; `activeAgentRunId` gồm cả run đang chờ), danh sách file cần sửa kèm số dòng, và cách verify offline
-> **không tốn token**.
+> **Bất biến kiến trúc:** Phân hệ `Ai` được phép tham chiếu `TeamNexus.Modules.Board` (chiều một chiều `Ai → Board`), đồng thời cung cấp các triển khai thật ghi đè lên các cổng mặc định (`IActivityLogWriter`, `INotificationWriter`, `IEmailGateway`, `IAiAgentResolver`) đã đăng ký trước ở `BoardModule`.
 
 ---
 
-## Phase 14 — Nâng cao AI (✅ backend xong · 📤 frontend bàn giao)
+## 1. Kiến trúc 10 Phân khu Chức năng trong `TeamNexus.Modules.Ai`
 
-Kế hoạch: `project-docs/tasks/phase-14-ai-advanced.md` · Note bàn giao FE:
-`project-docs/tasks/phase-14-remaining-frontend-handover.md` · Báo cáo:
-`project-docs/report/phase-14-ai-advanced-test-report.md`.
+### 1.1. Nhà cung cấp AI & Chế độ Giả lập Tất định (Providers & Deterministic Offline Fakes)
+Khi khóa API tương ứng trong cấu hình (`DeepSeek:ApiKey`, `Jev:ApiKey`, `Embeddings:ApiKey`, `Tavily:ApiKey`, `Email:ApiKey`) để trống, `AiModule` tự động đăng ký các bộ giả lập ngoại tuyến tất định (`0` token, `0` kết nối mạng) phục vụ kiểm thử tự động và phát triển cục bộ:
 
-**Schema:** ⛔ **không migration nào** — `dotnet ef migrations list` vẫn **10**. Chat dùng `ai_action_logs`
-(bảng đã có; `action`/`entity_type` là text tự do) + transcript ở **client**; sức khỏe dự án tính lại mỗi request;
-board template dùng `boards`/`board_columns`/`tasks` sẵn có; `entity_type = 'Workspace'` **dùng lại** index
-`(entity_type, entity_id, created_at)`.
-
-### §1 — AI Task Chat: port thứ ba + SSE
-
-| Thành phần | File | Ghi chú |
+| Cổng giao tiếp (Port) | Triển khai Thực tế (Khi có API Key) | Triển khai Ngoại tuyến Tất định (Khi rỗng Key) |
 |---|---|---|
-| Port streaming | `Services/AiProvider.cs` | `IAiStreamingProvider` + `AiStreamRequest`/`AiStreamChunk`. **Không** sửa `IAiProvider`/`IAiToolCallingProvider` |
-| DeepSeek | `Services/DeepSeekAiProvider.cs` | `"stream": true` + `ResponseHeadersRead`, đọc `data:` đến `[DONE]`. `ChatRequest` += `bool? Stream` (**null** ⇒ payload 3 luồng cũ **byte-identical**) |
-| Offline | `Services/FakeAiProvider.cs` | chia câu trả lời mẫu thành khung 24 ký tự, `Task.Yield()` giữa các khung ⇒ chunked thật, 0 token |
-| Khung SSE (hàm **thuần**) | `Services/AiChatSseWriter.cs` | `meta` / `delta` / `done` / `error`; JSON camelCase trên 1 dòng |
-| Ghi response | `Services/SseStreamResult.cs` | `IResult` tự viết: `text/event-stream`, `no-cache`, `X-Accel-Buffering: no`, **`FlushAsync` sau mỗi khung**, và biến exception (header đã gửi) thành khung `error` |
-| Service | `Services/AiChatService.cs` | `PrepareAsync` (**eager**, mọi guard) tách khỏi `StreamPreparedAsync` (**lazy**, chỉ còn provider) ⇒ 503/404/403/400 vẫn là **status thật** |
-| Options | `Options/AiChatOptions.cs` | section `"AiChat"`; mọi giá trị **clamp** trong `Effective` |
-| Endpoints | `Endpoints/AiChatEndpoints.cs` | `POST /api/tasks/{id}/ai-chat/stream` · `POST /api/tasks/{id}/ai-chat/message` |
-
-**Hợp đồng:** `meta` → `delta`* → `done` \| `error`. `done.answer` == nối toàn bộ `delta.text`.
-`MaxHistoryMessages=12` / `MaxHistoryChars=8000` ⇒ **400 trước khi gọi provider** (0 token). `Enabled=false` ⇒
-**503** trước khi chạm DB. Người ngoài workspace ⇒ **404** (không phải 403). Thiếu `X-XSRF-TOKEN` ⇒ **403**.
-**Client dùng `fetch`, KHÔNG `EventSource`** (EventSource không POST được, không gửi được header CSRF).
-
-**Đường ghi:** `POST .../ai-chat/message` ⇒ `ai_action_logs` **`Pending`** `PostComment` (`entity_type='Task'`)
-⇒ Manager Approve mới ghi `task_comments` (**tác giả = người bấm lưu**), Undo soft-delete. Lượt chat thường
-**không ghi gì**. Đường này đi qua `IAiActionService.RequestChatCommentAsync` (**mới**) — **KHÔNG** dùng
-`RequestAgentOutputAsync` (nó assert task phải gán cho AI Agent ⇒ sẽ 403 mọi lượt lưu của người).
-
-### §2 — Observer dự báo rủi ro + Sức khỏe dự án
-
-| Thành phần | File | Ghi chú |
-|---|---|---|
-| Luật dùng chung | `TeamNexus.Shared/Risk/ProjectWorkItem.cs` | `DeadlineRiskRules` + `ProjectWorkItem` + `DeadlineRisk` — **một** định nghĩa cho cả Observer **và** dashboard (Board không được tham chiếu Ai, và ngược lại) |
-| Adapter Ai | `Services/ObserverRisk.cs` | `AiRiskCandidate` (thuần) + `BuildSignal` (**1** signal cho N task rủi ro) |
-| Detector | `Services/ObserverSignalDetector.cs` | += `AtRiskDeadline`; `ObserverThresholds` += 4 field |
-| Vocabulary | `Services/ObserverSeverity.cs` | `NotificationTypes.All` **4 → 5** (whitelist chống hallucination) |
-| Prompt | `Services/ObserverPrompts.cs` | liệt kê **5** type + 1 dòng giải thích `AtRiskDeadline` |
-| Ưu tiên khi cắt | `Services/ObserverSummarizer.cs` | pin `(severity desc → weight desc)`, chỉ bỏ từ **cuối**; `CountSignalsInPayload` (public) |
-| Đếm | `Services/ObserverService.cs` | run summary += `signalsPreserved` / `signalsDroppedBeforePrompt` |
-| Sức khỏe | `Board/Services/ProjectHealth.cs` | **hàm thuần**: 40/20/10/15/15 = **100**, band `Tốt≥80`/`Cần chú ý 60–79`/`Rủi ro 40–59`/`Nghiêm trọng <40` |
-
-**Luật `AtRiskDeadline`** (`window = dueDate − createdAt`): cần `window ≥ 2 ngày`, `remaining < 20% × window`
-(biên **strict `<`**), `0 update/comment trong 48 h`; đã quá hạn ⇒ **chỉ** `OverdueTask`. Severity
-`Critical ≤24h` / `High ≤72h` / `Medium`. `Weight` = ngày còn lại, kẹp `[0,30]`.
-
-**`ProjectHealthScore` KHÔNG ở `ObserverSignalDetector` (lệch DoD có chủ ý, D6):** gauge nằm trên dashboard
-**Member+**, còn Observer là **Manager+**, và `Board → Ai` **bị cấm** ⇒ nếu ở Ai thì Board không thể nhúng.
-Đổi lại, **quy tắc at-risk thì dùng chung** ở `Shared.Risk` nên hai nơi không thể lệch.
-
-### §3 — AI Board Template
-
-| Thành phần | File | Ghi chú |
-|---|---|---|
-| DTO/contract | `DTOs/BoardTemplateDtos.cs` · `Contracts/BoardTemplateAiModels.cs` | proposal dùng **chung** cho generate (trả về) và confirm (nhận vào) |
-| Prompt | `Services/BoardTemplatePrompts.cs` | 2–6 cột, 5–10 task, pin `isDone`; hằng số bounds ở **một** chỗ |
-| Validator (hàm **thuần**) | `Services/BoardTemplateValidator.cs` | dedupe tên cột (bỏ, **không** đổi tên), **pin đúng 1** cột done, task rơi vào cột không-done đầu tiên, tái dùng `SmartSetupService.NormalizePriority/ResolveLabels/ResolveAssignee` |
-| JSON retry | `Services/BoardTemplateValidator.cs` (`AiJsonCompletion`) | trích từ `SmartSetupService` (**không** copy-paste) |
-| Service | `Services/BoardTemplateService.cs` | generate **không ghi gì**; confirm **re-validate toàn bộ** proposal client gửi lên |
-| Applier | `Services/Appliers/CreateBoardFromTemplateApplier.cs` | approve ⇒ `IBoardService`+`IColumnService`+`ITaskService`; undo ⇒ **soft-delete** board |
-
-**Route mới:** `POST /api/workspaces/{id}/smart-setup/template` (Manager+) · `POST .../template/confirm` ⇒ **201**
-`Pending` `CreateBoardFromTemplate` (`entity_type='Workspace'`, `entity_id=workspaceId`).
-
-### Hạn chế đã biết của Phase 14 (ghi trước để không ai tưởng là bug)
-
-1. **`TestServer` có thể đệm body ⇒ "streaming thật" không chứng minh được ở tầng byte.** Suite khoá **hợp đồng**
-   (content type, `meta` trước mọi `delta`, đúng 1 `done`, `done.answer == Σ delta`) + dùng
-   `TestHttpClient.SendStreamingAsync`. **Nếu bỏ `FlushAsync` trong `SseStreamResult`, KHÔNG test nào đỏ** ⇒
-   điểm cần review bằng mắt.
-2. **Chat không lưu transcript ở DB (D2, cố ý)** ⇒ đóng tab là mất hội thoại; giữ lâu dài = bấm "Lưu thành bình luận".
-3. **Board template Undo soft-delete cả board** ⇒ việc đã thêm vào board đó cũng bị ẩn (khôi phục được bằng DB).
-   FE **phải** có `Popconfirm` cảnh báo.
-4. `SearchSystemDataTool` (**`AgentToolContext`**) **giữ** `BoardId` non-nullable — đó là context khác với
-   `AiActionContext`; đừng "sửa cho đồng bộ".
-5. `AiRiskCandidate.MinutesRemaining` **làm tròn lên**; `Weight` **làm tròn xuống** — cùng một task có thể có
-   `Weight = 0` (dưới 1 ngày) mà severity vẫn `Critical`. Đó là chủ ý (weight chỉ dùng để **sắp xếp**).
-6. `MaxSignalsPerWorkspace` (20) **không** được nâng cho Phase 14; nếu `AtRiskDeadline` làm vượt trần ở workspace
-   lớn thì việc cắt diễn ra **có đếm** (`signalsDroppedBeforePrompt`) chứ không im lặng.
+| `IAiProvider` | `DeepSeekAiProvider` (OpenAI-compatible `/chat/completions`, SSE & Tool Calling) | `FakeAiProvider` (tất định theo ngữ cảnh & `AgentChatPrompts.Marker`) |
+| `IJevDecisionProvider` | `OpenRouterJevDecisionProvider` (`POST /api/alpha/decisions`) | `FakeJevDecisionProvider` (điều khiển qua sentinel `FAKE:JEV_HIGH\|MED\|LOW\|ERROR\|SLOW`) |
+| `IEmbeddingProvider` | `OpenRouterEmbeddingProvider` (`POST /embeddings`, `1536` chiều) | `FakeEmbeddingProvider` (sinh vector chuẩn hóa tất định từ băm SHA-256) |
+| `IWebSearchProvider` | `TavilySearchProvider` (REST API tìm kiếm Web thời gian thực) | `FakeWebSearchProvider` (trả về kết quả mẫu tất định) |
+| `IEmailSender` | `ResendEmailSender` (HTTP API) / `SmtpEmailSender` (MailKit) | `NullEmailSender` (ghi log an toàn, không gửi mạng) |
 
 ---
 
-## Phase 14.5 — Củng cố nền + AI Agent Chat cấp Board
+### 1.2. Lớp Giải trình Minh bạch (`AiActionService` & 10 `IAiActionApplier`)
+Mọi hành động ghi hoặc biến đổi dữ liệu nghiệp vụ do AI đề xuất hoặc do GitHub Webhook tự động hóa đều đi qua bảng `ai_action_logs` với máy trạng thái so-sánh-và-hoán-đổi (CAS) nguyên tử và hỗ trợ **Hoàn tác (`Undo`) 100%**:
 
-> **Bối cảnh:** giai đoạn **nối tiếp 14**, không có trong roadmap gốc. Người dùng yêu cầu (a) rà lại tính năng
-> để củng cố nền cho Giai đoạn 15/16, và (b) gộp `AI Agent` + "Hỏi AI" thành **một AI Agent Chat tổng của board**.
-> **⚠️ Lệch DoD có chủ ý:** Phase 14 §8 **cấm** *lưu transcript ở DB* và *chat nhiều task cùng lúc* — 14.5 thay thế
-> hai dòng đó. *Chat có tool/function-calling* **vẫn cấm**.
-
-### Thành phần mới
-
-| Thành phần | File | Ghi chú |
+| `AiActionType` | Bộ thực thi (`IAiActionApplier`) | Hành vi `ApplyAsync` & `UndoAsync` |
 |---|---|---|
-| Options | `Options/AgentChatOptions.cs` | Section **`AgentChat`**, **riêng** với `AiChat`; mọi giá trị **clamp** trong `Effective` |
-| DTO | `DTOs/AgentChatDtos.cs` | `AgentChatSendRequest` (messages + attachedTaskIds), `SaveAgentChatAnswerRequest`, `AgentChatMessageResponse` |
-| Prompt | `Services/AgentChatPrompts.cs` | `Marker` (chọn nhánh fake), context block (board + cột + **N thẻ đính kèm** + thành viên), **hợp đồng JSON đề xuất** |
-| Parser (**hàm thuần**) | `Services/AgentChatProposalParser.cs` | Tách khối ```json **cuối cùng** khỏi câu trả lời; bỏ envelope `{proposal:{…}}`; JSON hỏng ⇒ **không ném** |
-| Validator (**hàm thuần**) | `Services/AgentChatProposalValidator.cs` | `taskId` ∈ tập đính kèm · `columnId` ∈ board · priority qua `NormalizePriority` (bẫy BUG-1) · `DateTimeOffset` → `ToUtc` (bẫy BUG-2) · **đúng 1** đề xuất |
-| Validator dùng chung | `Services/AiChatTranscriptValidator.cs` | Tách ra ở 14.5 để **chat task và chat board** dùng **cùng** luật với trần khác nhau (không có bản sao thứ hai để trôi) |
-| Service | `Services/AgentChatService.cs` | `PrepareAsync` (mọi guard eager ⇒ JSON + status thật) tách khỏi `StreamPreparedAsync` (lazy ⇒ lỗi giữa luồng là khung `error`); lưu transcript **best-effort** sau khi đã stream |
-| SSE | `Endpoints/AgentChatEndpoints.cs` + `Services/SseStreamResult.cs` | Khung **giống hệt** Phase 14 (`meta`/`delta`/`done`/`error`), ghi bằng `AiChatSseWriter` |
-| Applier cập nhật thẻ | `Services/Appliers/UpdateTaskFieldsApplier.cs` | Chụp **cả 5** trường vào `before_snapshot` **tại thời điểm apply** ⇒ Undo khôi phục chính xác |
-| Applier di chuyển thẻ | `Services/Appliers/MoveTaskToColumnApplier.cs` | `applied_snapshot.fromColumnId` ⇒ Undo về cột cũ; cột đích **đọc lại** ở bước Apply (không tin snapshot) |
-| Retention | `Services/AgentChatRetentionRunner.cs` | Xoá lượt cũ hơn `RetentionDays` (90) theo **batch**; scoped + gọi trực tiếp được từ test |
-| Seam tích hợp | `Services/Integrations/IExternalAlertSink.cs` | Port + `ExternalAlertMessage` + `NoOpExternalAlertSink`; gọi từ `NotificationService` (nơi **cả 4** đường notification đi qua) |
-| Reaper (tách ra) | `Services/Agent/AgentRunReaperRunner.cs` | Scoped, gọi trực tiếp được; thêm nhánh đóng run của **task đã xoá mềm** (`TaskChanged`) |
+| `SmartSetup` | `SmartSetupApplier` | Khởi tạo cột, nhãn và thẻ cho bảng mới; `Undo` xóa mềm toàn bộ phần tử vừa tạo |
+| `CreateBoardTemplate` | `CreateBoardTemplateApplier` | Tạo bảng Kanban mới kèm cột (`is_done`) và 5–10 thẻ mẫu; `Undo` xóa mềm bảng |
+| `CreateSubtasks` | `CreateSubtasksApplier` | Chia nhỏ thẻ công việc thành các thẻ con; `Undo` xóa mềm danh sách `createdTaskIds` |
+| `UpdateTaskFields` | `UpdateTaskFieldsApplier` | Cập nhật tiêu đề, mô tả, độ ưu tiên, hạn chót hoặc người nhận; `Undo` khôi phục từ `before_snapshot` |
+| `MoveTaskToColumn` | `MoveTaskToColumnApplier` | Di chuyển thẻ sang cột đích; `Undo` đưa thẻ về cột và vị trí cũ |
+| `PostComment` | `PostCommentApplier` | Đăng kết quả của AI Agent hoặc lưu câu trả lời AI Chat thành bình luận; `Undo` xóa mềm bình luận |
+| `ReassignTask` | `ReassignTaskApplier` | Điều chuyển người phụ trách thẻ; `Undo` khôi phục `assignee_id` ban đầu |
+| `RecoveryPlan` | `RecoveryPlanApplier` | Thực thi 4 chiến lược tự phục hồi (`ReassignTask`, `SplitSubtasks`, `ExtendDeadline`, `EscalateManager`) |
+| `CreateKnowledgeDocument` | `CreateKnowledgeDocumentApplier` | Tạo mới hoặc xóa mềm (`kind="Delete"`) tài liệu RAG trong `workspace_knowledge_documents` |
+| `GitHubPrMoveTask` / `GitHubIssueCreateTask` | `GitHubPrMoveTaskApplier` / `GitHubIssueCreateTaskApplier` | Ghi nhận tự động hóa từ GitHub ở trạng thái `Approved` kèm snapshot để quản trị viên có thể `Undo` |
 
-### Route mới
-
-```http
-GET  /api/boards/{boardId}/agent-chat/session                 (Member+ · idempotent)
-GET  /api/boards/{boardId}/agent-chat/messages?take=&before=  (Member+ · cũ→mới, keyset)
-POST /api/boards/{boardId}/agent-chat/stream                  (Member+ · antiforgery ⇒ text/event-stream)
-POST /api/boards/{boardId}/agent-chat/message                 (Member+ · antiforgery ⇒ 201 Pending PostComment)
-POST /api/boards/{boardId}/agent-chat/proposal/confirm         (Member+ · antiforgery ⇒ 201 Pending)
-GET  /api/workspaces/{workspaceId}/ai-actions?status=&entityType=&action=&take=   (Manager+)
-```
-
-### Guardrail (section `AgentChat`, **không** dùng chung `AiChat`)
-
-`Enabled` (false ⇒ **503**) · `MaxHistoryMessages 24` · `MaxHistoryChars 24000` · `MaxOutputTokens 2400` ·
-`MaxAttachedTasks 8` · `MaxTaskContextChars 3000`/thẻ · `MaxTotalContextChars 24000` ·
-`MaxCommentsInContext 6`/thẻ · `MaxMessageChars 16000` · `MaxAnswerChars 2000` (**không** nới) ·
-`MaxProposalsPerAnswer 1` (**clamp cứng `[1,1]`**) · `RetentionDays 90` · `RetentionBatchSize 2000`.
-Vượt trần ⇒ **400 TRƯỚC khi gọi provider** (**0 token**).
-
-### Hạn chế đã biết của Phase 14.5 (ghi trước để không ai tưởng là bug)
-
-1. **Task chat trong `TaskDetailModal` VẪN transcript ở client** (D2 của Phase 14 còn hiệu lực cho nó; chỉ nhãn
-   đổi thành *"Hỏi AI về thẻ này"*). Hệ quả: cùng một thẻ có thể có **2 nguồn hội thoại** (tab trong modal tạm
-   thời, panel board bền). `agent_chat_messages.task_id` là **chỗ chừa** để hợp nhất sau **không cần migration**.
-   → **ĐÃ TRẢ NỢ ở Phase 14.6 §A3:** task chat ghi/nạp transcript qua `task_id`; xem mục *Phase 14.6* ở cuối file.
-2. **Chat không có tool/function-calling.** Model chỉ **đề xuất** JSON; người bấm *Gửi đề xuất*, Manager duyệt.
-   Đúng chốt người dùng và giữ chat **không tự ghi**.
-3. **`TestServer` có thể đệm body** ⇒ suite khoá **hợp đồng** (thứ tự khung, `done.answer == Σ delta`), không
-   chứng minh được streaming ở tầng byte. Bỏ `FlushAsync` trong `SseStreamResult` ⇒ **không test nào đỏ**.
-4. **Lưu transcript là best-effort:** lỗi DB **sau** khi stream đã mở chỉ được log — câu trả lời đã tới tay người
-   dùng, `pending` không thể đổi thành 500.
-5. **`task_attachments` vẫn chỉ `text/*` ≤ 512 KB** (nợ cho Phase 15: diff/ảnh GitHub).
-6. **Nợ A3 (không làm ở 14.5):** webhook idempotency, seam `IWorkItemLink` (GitHub PR ↔ task), AI provider fallback.
-
-### Bug thật đã bắt & sửa ở 14.5 (đọc trước khi "tối ưu" lại)
-
-- **P1 — hai service chat bỏ chữ ở khung cuối.** Cả `AiChatService` và `AgentChatService` kiểm `chunk.Done`
-  **trước** khi nối `chunk.Delta`. Provider offline đặt **text ở chính khung kết thúc** ⇒ chữ đó **bị mất**, mọi
-  câu trả lời **ngắn đi đúng một chunk**, và bất biến `done.answer == Σ delta` **sai âm thầm**. Bộ test Phase 14
-  không bắt được vì chỉ khẳng định hai thứ *cùng tồn tại*. **Thứ tự đúng: nối `delta` TRƯỚC, kiểm `Done` SAU.**
-- **P2 — duyệt `MoveTaskToColumn` trả 500.** `TaskService.MoveTaskAsync` mở transaction riêng trong khi
-  `AiActionService.ApproveAsync` đã mở ⇒ `InvalidOperationException`. Đã **bỏ transaction thừa** (mọi thay đổi
-  nằm trong **một** `SaveChangesAsync` nên nguyên tử không đổi). **Đừng** thêm lại `BeginTransactionAsync` vào
-  `MoveTaskAsync`: `AiActionService` bọc mọi applier trong transaction của nó.
+> **Quy tắc bất biến cho Applier:** `AiActionService.ApproveAsync` và `UndoAsync` đã mở sẵn giao dịch CSDL. Các lớp `IAiActionApplier` **không bao giờ** được gọi `_db.Database.BeginTransactionAsync()`, và nếu sửa trực tiếp trên `TeamNexusDbContext` thì phải gọi `await _db.SaveChangesAsync(ct)`.
 
 ---
 
-## Phase 14.6 Track A — Hoàn thiện trải nghiệm & bịt rò rỉ ID
+### 1.3. Hệ thống 1 — TypeSafe Jev 1.13 (`IJevDecisionService` & `ConfidenceRouting`)
+- **Giao thức:** Gọi `POST {Jev:BaseUrl}{Jev:DecisionsPath}` (`/api/alpha/decisions`) với các câu hỏi có kiểu tĩnh (`choice`, `score`, `noul`).
+- **Định tuyến Độ tự tin (`ConfidenceRouting`):**
+  - `confidence ≥ 0.85` → `DirectAssign` (gán trực tiếp phương án tối ưu).
+  - `0.50 ≤ confidence < 0.85` → `OfferChoices` (hiển thị tối đa 3 phương án kèm `%` độ tự tin).
+  - `confidence < 0.50` → `ManualRequired` (xóa trắng mọi trường gợi ý về `null` để chống ảo giác).
+- **Bảo vệ Quyền riêng tư (Zero-GUID / Zero-PII):** Khi xếp hạng ứng viên (`RecommendAssigneeAsync`), hệ thống ánh xạ thành viên sang nhãn ẩn danh (`cand-1`, `cand-2`) và không gửi `Guid` hay `email` ra ngoài.
 
-> Kế hoạch: `project-docs/tasks/phase-14-6-ai-agent-enhancements.md` (§1 Track A).
-> **Schema: ⛔ 0 migration** — `dotnet ef migrations list` vẫn **11**; A3 dùng đúng cột `task_id` mà
-> Migration 11 đã chừa sẵn.
+---
 
-| # | Việc | File |
-|---|---|---|
-| **A2** | Quy tắc "không in raw ID/GUID/UUID" vào **cả hai** system prompt | `Services/AgentChatPrompts.cs` · `Services/AiChatPrompts.cs` |
-| **A2** | Bộ lọc **thuần**: thay mọi chuỗi dạng UUID bằng `[mã nội bộ]` | `Services/AiChatAnswerSanitizer.cs` |
-| **A2** | Transcript lưu DB được lọc **trước khi ghi** (đọc lại không hồi sinh thứ đã ẩn) | `Services/AgentChatService.cs` (board) · `Services/AiChatService.cs` (task) |
-| **A3** | Transcript của task chat: ghi 2 row với `task_id`, `board_id = null` | `Services/AiChatService.cs` |
-| **A3** | Đọc transcript của task (Member+, keyset) | `Services/AiChatService.ListMessagesAsync` + `Endpoints/AiChatEndpoints.cs` |
-| **A3** | Luật đọc **dùng chung** cho cả hai transcript | `Services/AgentChatTranscriptQuery.cs` · `Services/AgentChatTranscriptMapper.cs` |
-| **A4** | Lightweight Board Digest (chỉ khi **không** gắn thẻ nào) | `Services/AgentChatPrompts.BuildDigestBlock` · `Services/AgentChatService.LoadDigestAsync` |
-| **A4** | 2 knob mới, đều clamp | `Options/AgentChatOptions.cs` (`MaxDigestTasks` 10 · `MaxDigestChars` 2000) |
+### 1.4. Quan sát Chủ động, Dự báo Rủi ro & Kế hoạch Tự phục hồi (`AiObserverService`)
+- Tiến trình nền `AiObserverBackgroundService` định kỳ quét các Workspace có hoạt động mới để phát hiện 4 nhóm tín hiệu:
+  1. `OverdueTask`: Thẻ đã quá hạn chót.
+  2. `AtRiskDeadline`: Thẻ chưa hoàn thành, còn `< 20%` quỹ thời gian (sàn cửa sổ $\ge 2$ ngày) và không có cập nhật trong `48 giờ` (dùng chung quy tắc tất định `DeadlineRiskRules` với chỉ số `ProjectHealth.Compute`).
+  3. `Bottleneck`: Cột có số lượng thẻ mở vượt ngưỡng.
+  4. `WorkloadOverload`: Thành viên đang gánh số thẻ mở vượt ngưỡng WIP.
+- Tích hợp **Jev System-1 Pre-Filter** (`AssessObserverSignalsAsync` & `DecideRecoveryActionAsync`) để thẩm định mức độ nghiêm trọng và tự động đề xuất `RecoveryPlan` khi cần thiết.
 
-### Route mới (A3)
+---
 
-```http
-GET  /api/tasks/{taskId}/agent-chat/messages?take=&before=   (Member+ · cũ→mới, keyset)
-POST /api/tasks/{taskId}/ai-chat/stream                      (không đổi shape — nay GHI thêm transcript)
-```
+### 1.5. Tác nhân Thực thi Đa Nhân cách (`AiAgentExecutorService`, Personas & 7 ReAct Tools)
+- **4 Nhân cách Chuyên gia (`PersonaCatalog`):**
+  - `general` (*TeamNexus Agent*), `scrum_master` (*AI Scrum Master*), `tech_lead` (*AI Tech Lead*), `qa_security` (*AI QA & Security*).
+- **Vòng lặp ReAct 7 Công cụ:**
+  1. `SearchSystemData`: Tìm kiếm thẻ công việc, bình luận và các đoạn tài liệu ngữ nghĩa RAG (`IWorkspaceKnowledgeStore`).
+  2. `WebSearch`: Tìm kiếm thông tin Internet qua Tavily API.
+  3. `InspectMemberWorkload`: Kiểm tra tải công việc hiện tại của thành viên (`IMemberWorkloadReader`).
+  4. `MatchSkills`: Đối sánh yêu cầu kỹ năng với hồ sơ thành viên trong Workspace.
+  5. `ValidateAcceptanceCriteria`: Thẩm định bản thảo đầu ra so với tiêu chí nghiệm thu bằng Jev System-1.
+  6. `DraftOutput`: Gửi bản thảo kết quả vào `AiActionLog` (`Pending`) và chuyển thẻ sang cột hoàn thành/chờ duyệt.
+  7. `RequestClarification`: Đăng câu hỏi làm rõ và tự động chuyển thẻ sang cột `is_clarification`.
+- **Ngân sách bảo vệ (Guardrails):** Tối đa `15` lượt gọi công cụ, thời gian chạy `5 phút`, ngân sách `50.000 tokens` và `20` lượt gọi LLM mỗi lần thực thi (`agent_runs`). Cố vấn nền `AgentRunReaperRunner` tự động thu hồi các lượt chạy bị treo khi máy chủ khởi động lại.
 
-### ⚠️ Lệch DoD có chủ ý (đọc trước khi "khôi phục" D2 của Phase 14)
+---
 
-- **Phase 14 D2 ("server không giữ bảng chat nào") bị thay thế cho task chat.** Người dùng chốt A3. Hệ quả:
-  1 assertion của `AgentChatApiTests.AGENTCHAT22` **phải** đổi từ "0 row" thành "2 row, `task_id` set,
-  `board_id` null" — đây là **ngoại lệ duy nhất** của giai đoạn này. Hợp đồng **SSE** và `meta` của task chat
-  **không** đổi (vẫn tên TASK), và **isolation** giữa hai transcript được kiểm bằng cả DB lẫn HTTP.
-- **A2 không viết lại luồng SSE trực tiếp.** `done.answer == Σ delta` là bất biến client dựa vào để khôi phục
-  khung bị mất, mà một UUID **vắt qua hai khung** thì lọc từng khung vừa phá bất biến vừa cắt nát khối JSON đề
-  xuất **thật** (`taskId`/`columnId` là ID hợp lệ, phải sống). Vì vậy: prompt (yêu cầu) + **server lọc phần
-  lưu DB** + **client lọc phần hiển thị** (`frontend/src/features/ai/utils/redactIdentifiers.ts` — lọc trên
-  **chuỗi tích luỹ**, không lọc từng delta). **Đây là một phần hợp đồng API**: client Phase 16 phải lọc prose
-  trước khi render, đừng render thẳng `answer`.
+### 1.6. Hội thoại Ngữ cảnh Thời gian thực qua SSE (`AiTaskChatService` & `AiBoardChatService`)
+- Giao thức luồng sự kiện đồng nhất: `event: meta` → chuỗi `event: delta` → `event: done` (hoặc `event: error`).
+- Hỗ trợ đính kèm nhiều thẻ công việc (`attachedTaskIds`), nén tóm tắt bảng (`BoardDigestBuilder`), chọn nhân cách chuyên gia (`?persona=`) và trích xuất các đề xuất hành động có cấu trúc (`CreateSubtasks`, `UpdateTaskFields`, `MoveTaskToColumn`).
+- Bộ lọc `AiChatAnswerSanitizer` tự động thay thế mọi chuỗi UUID thô trong văn bản trả lời bằng tên hiển thị thân thiện trước khi lưu và phát luồng SSE.
 
-### Bug thật đã bắt & sửa ở 14.6 Track A
+---
 
-- **A1 — thứ tự transcript do Guid ngẫu nhiên quyết định.** Cả hai row của một lượt hỏi-đáp được ghi trong
-  **một** `SaveChangesAsync`, mà `StampAuditableTimestamps` lấy **một** `DateTimeOffset.UtcNow` cho cả lần lưu
-  ⇒ hai row có `created_at` **giống hệt nhau**. Truy vấn cũ (`ORDER BY created_at, id`) để **Guid ngẫu nhiên**
-  phân xử, nên khoảng **một nửa số lần mở lại** transcript hiện câu trả lời **trước** câu hỏi. Suite của
-  Phase 14.5 (`AGENTCHAT3`) **may mắn** nên không bắt được. Luật đúng nằm ở `AgentChatTranscriptQuery`:
-  `created_at` → **`role`** (câu hỏi trước câu trả lời) → `id` cho ổn định. **Đừng** bỏ khoá thứ hai.
+### 1.7. Cơ sở Tri thức Ngữ nghĩa RAG với PostgreSQL `pgvector` (`WorkspaceKnowledgeService`)
+- Lưu trữ tài liệu tại `workspace_knowledge_documents` và các đoạn văn bản kèm vector `embedding vector(1536)` tại `workspace_knowledge_chunks` (chỉ mục **HNSW `vector_cosine_ops`**).
+- Mọi thao tác thêm/xóa tài liệu đều đi qua `AiActionType.CreateKnowledgeDocument`. Sau khi được phê duyệt, `KnowledgeEmbeddingRunner` chia đoạn (`KnowledgeTextChunker`) và sinh vector nhúng bất đồng bộ ở tiến trình nền.
 
+---
+
+### 1.8. Email Giao dịch & Bản tin Hàng ngày (`EmailGateway` & `DailyDigestRunner`)
+- Gửi email lời mời tham gia Workspace và bản tin tổng hợp công việc mỗi sáng (**Daily Digest**).
+- Ghi vết toàn bộ lịch sử gửi vào bảng `email_messages` kèm khóa chống trùng lặp `idempotency_key` (`UNIQUE` partial index) để đảm bảo mỗi người dùng nhận tối đa 1 bản tin/ngày ngay cả khi container khởi động lại nhiều lần.
+
+---
+
+### 1.9. Tích hợp Hệ sinh thái Bên ngoài (`Services/Integrations`)
+- **Outbound (Slack & Discord):** `WebhookOutboxExternalAlertSink` và `WebhookOutboxRunner` gửi cảnh báo qua bảng `webhook_delivery_outbox` với cơ chế thử lại lũy tiến (`5s → 30s → 2m → 10m → 30m`), cầu chì tự ngắt sau 10 lỗi liên tiếp và bộ lọc chống SSRF `WebhookUrlValidator`.
+- **Inbound (GitHub Webhooks):** `GitHubWebhookEndpoints` (`POST /api/webhooks/github/{webhookToken:guid}`) xác thực chữ ký `HMAC-SHA256` thời gian hằng (`WebhookSignatureVerifier`), chống phát lại qua `github_webhook_deliveries`, phân tích mã thẻ `TN-123` (`TaskKeyParser`), tự động chuyển cột PR (`is_in_review` / `is_done`), tự động tạo thẻ từ Issue kèm `TriageForSystemAsync`, đồng bộ bình luận một chiều và hỗ trợ hoàn tác 100%.
+
+---
+
+## 2. Tổng hợp các Điểm cuối HTTP (`Endpoints/*Endpoints.cs`)
+
+| Tệp Điểm cuối | Các Đường dẫn Chính |
+|---|---|
+| `AiEndpoints.cs` | `POST /api/boards/{boardId}/ai/smart-setup` · `POST /api/workspaces/{workspaceId}/ai/board-template` · `GET /api/workspaces/{workspaceId}/ai-actions` · `POST /api/ai-actions/{id}/approve\|reject\|undo` |
+| `ObserverEndpoints.cs` | `GET /api/workspaces/{workspaceId}/observer/runs` · `POST /api/workspaces/{workspaceId}/observer/scan` · `GET /api/notifications` · `PUT /api/notifications/{id}/read` · `PUT /api/notifications/read-all` |
+| `AgentEndpoints.cs` | `POST /api/tasks/{taskId}/agent/run` · `GET /api/tasks/{taskId}/agent/runs` · `GET /api/agent-runs/{runId}` |
+| `AiChatEndpoints.cs` | `POST /api/tasks/{taskId}/ai-chat/stream` (SSE) · `POST /api/tasks/{taskId}/ai-chat/save-comment` |
+| `BoardAgentChatEndpoints.cs` | `GET|DELETE /api/boards/{boardId}/agent-chat/session` · `POST /api/boards/{boardId}/agent-chat/stream?persona=` (SSE) · `POST /api/boards/{boardId}/agent-chat/proposals/{proposalId}/confirm` |
+| `JevEndpoints.cs` | `GET|PUT /api/workspaces/{workspaceId}/taxonomies` · `PUT /api/workspaces/{workspaceId}/members/{userId}/profile` · `POST /api/boards/{boardId}/tasks/triage` · `POST /api/boards/{boardId}/tasks/{taskId}/assignee-suggestions` |
+| `KnowledgeEndpoints.cs` | `GET|POST /api/workspaces/{workspaceId}/knowledge/documents` · `DELETE /api/workspaces/{workspaceId}/knowledge/documents/{docId}` |
+| `WebhookEndpoints.cs` | `GET|POST /api/workspaces/{workspaceId}/webhooks` · `PUT|DELETE .../webhooks/{endpointId}` · `POST .../webhooks/{endpointId}/test` |
+| `GitHubIntegrationEndpoints.cs` | `GET|PUT /api/workspaces/{workspaceId}/github-integration` · `POST .../github-integration/rotate-secret` · `GET|POST /api/tasks/{taskId}/external-links` · `DELETE .../external-links/{linkId}` |
+| `GitHubWebhookEndpoints.cs` | `POST /api/webhooks/github/{webhookToken:guid}` (`AllowAnonymous`, giới hạn 256 KB, xác thực `HMAC-SHA256`) |
