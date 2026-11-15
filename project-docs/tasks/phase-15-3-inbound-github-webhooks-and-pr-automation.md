@@ -162,7 +162,7 @@
 
 ## 5. Khắc phục sau Review (2026-11-11)
 
-> **Nguồn:** [`phase-15-3-15-4-code-review-and-remediation-plan.md`](../report/phase-15-3-15-4-code-review-and-remediation-plan.md).
+> **Nguồn:** [`phase-15-3-15-4-code-review-and-remediation-plan.md`](../report/reviews/phase-15-3-15-4-code-review-and-remediation-plan.md).
 > **Nhánh:** `fix/phase15-review` (tách từ `develop`, merge `backup/main-before-reset-26382b6`).
 > **Không phát sinh migration mới** — mọi thay đổi dùng đúng schema Phase 15.1.
 

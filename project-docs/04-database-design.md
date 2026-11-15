@@ -1,72 +1,60 @@
-# TeamNexus – Tài liệu Thiết kế Database
+# TeamNexus – Tài liệu Thiết kế Cơ sở Dữ liệu (Database Design)
 
-> Tài liệu mô tả toàn bộ schema PostgreSQL cho dự án TeamNexus. Phạm vi phủ đủ **7 giai đoạn chức năng** (Auth/RBAC, Kanban real-time, AI Smart Setup, Accountability Layer, AI Observer, Reporting, **AI Agent Executor**).
->
-> Các bảng thuộc **Giai đoạn 1 (Auth & Workspace)** được thiết kế chi tiết theo `tasks/phase-1-auth.md`. Các bảng thuộc **Giai đoạn 2–9** là thiết kế sơ bộ, sẽ được tinh chỉnh khi hiện thực từng giai đoạn; mỗi bảng đều gắn nhãn giai đoạn tương ứng theo `03-roadmap.md`.
+> Tài liệu đặc tả toàn bộ kiến trúc cơ sở dữ liệu PostgreSQL 18 (`pgvector`) của hệ thống **TeamNexus**, phản ánh chính xác trạng thái hiện hành qua **16 EF Core migrations** (**35 bảng vật lý**: 27 bảng nghiệp vụ + 7 bảng ASP.NET Core Identity + 1 bảng hạ tầng `data_protection_keys`).
 
 ---
 
-## 1. Tổng quan
+## 1. Tổng quan Kiến trúc Dữ liệu
 
-| Thành phần | Lựa chọn | Ghi chú |
+| Thành phần | Lựa chọn Kỹ thuật | Ghi chú Thiết kế |
 |---|---|---|
-| DBMS | PostgreSQL (Neon hoặc Supabase, serverless) | Free tier — theo dõi quota storage/compute |
-| ORM | EF Core Code-First (Npgsql) | Migration bằng `dotnet ef migrations` |
-| Kiến trúc | Modular Monolith | Module `Auth`, `Board`, `Ai`, `Reporting` |
-| Khóa chính | `Guid` (UUID) cho mọi entity | Sinh ở app layer |
-| Quy ước đặt tên | `snake_case` cho bảng/cột | Map từ entity PascalCase qua EF Core config |
-| Timestamp | `timestamptz` | `created_at`/`updated_at`; thêm cột riêng ở chỗ cần |
-| Enum | Cột `text` + `CHECK` constraint | Map sang .NET enum lưu dạng string; không dùng native ENUM type |
-| Soft delete | Cột `deleted_at` (nullable) + global query filter | Cho workspace/board/column/task/comment |
-| JSON linh hoạt | `jsonb` | Chỉ cho payload động (AI basis, snapshot, activity payload, tool trace) |
-| Binary file | `bytea` | **Chỉ** cho `task_attachments.content` (Giai đoạn 7) — cap 512 KB, không dùng blob/disk/S3 |
+| **Hệ quản trị CSDL** | PostgreSQL 18 + extension `pgvector` | Triển khai trên Neon Serverless (Production) và `pgvector/pgvector:pg18` (CI/Local) |
+| **ORM & Migration** | EF Core 10 Code-First (`Npgsql` + `Pgvector.EntityFrameworkCore`) | Một chuỗi migration tuyến tính duy nhất từ `TeamNexusDbContext` |
+| **Kiến trúc Module** | Modular Monolith (`Auth`, `Board`, `Ai`, `Reporting`) | Dùng chung `TeamNexusDbContext` đặt tại `TeamNexus.Persistence` |
+| **Khóa chính (PK)** | `uuid` (`Guid`) cho toàn bộ bảng nghiệp vụ | Sinh tại tầng ứng dụng (`Guid.NewGuid()`) |
+| **Quy ước đặt tên** | `snake_case` cho mọi bảng và cột | Ánh xạ từ thực thể C# `PascalCase` qua `IEntityTypeConfiguration` |
+| **Kiểu thời gian** | `timestamptz` (luôn chuẩn hóa về UTC `Offset = 0`) | Tự động gắn `created_at` / `updated_at` qua `IAuditableEntity` |
+| **Biểu diễn Enum** | Cột `text` / `varchar` + ràng buộc `CHECK` (hoặc từ điển mở) | Không dùng kiểu `ENUM` cứng của PostgreSQL để dễ mở rộng |
+| **Xóa mềm (Soft Delete)** | Cột `deleted_at` (`timestamptz NULL`) + Global Query Filter | Áp dụng cho `workspaces`, `boards`, `tasks`, `task_comments`; riêng `workspace_knowledge_documents` dùng `status = 'deleted'` |
+| **Dữ liệu bán cấu trúc** | `jsonb` | Dùng cho cơ sở lý luận AI (`basis`), ảnh chụp hoàn tác (`before/after/applied_snapshot`), nhật ký công cụ (`tool_call_trace`), kỹ năng (`skills`) |
+| **Nhúng Vector (RAG)** | `vector(1536)` + chỉ mục `HNSW (vector_cosine_ops)` | Cố định số chiều `1536` trên `workspace_knowledge_chunks.embedding` |
+| **Lưu trữ tệp nhị phân** | `bytea` (giới hạn `≤ 512 KB`) | Dùng duy nhất cho `task_attachments.content` |
 
-### 1.1 DbContext & Migration
-
-Khuyến nghị dùng **một DbContext duy nhất** để giữ **một chuỗi migration**:
-
-```csharp
-public class TeamNexusDbContext : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
-{
-    // DbSet cho toàn bộ domain entity
-}
-```
-
-- Thay thế tên `AuthDbContext` trong `tasks/phase-1-auth.md` §2.1 bằng DbContext hợp nhất `TeamNexusDbContext` (kế thừa `IdentityDbContext`), chứa cả entity Identity lẫn domain entity để tránh cross-context FK và giữ migration đơn giản cho solo/free-tier.
-- **Phương án thay thế** (không chọn ở giai đoạn này): mỗi module một DbContext + một "migration context" chung. Tradeoff: tách module sạch hơn nhưng phức tạp quản lý migration và FK giữa các module — chưa cần thiết ở quy mô hiện tại.
-
-### 1.2 Quy ước chung
-
-- Tên bảng/cột viết thường, phân tách bằng `_` (ví dụ `workspace_members`, `created_at`).
-- Mọi entity đều có `id` kiểu `uuid` (PK).
-- Mọi entity nghiệp vụ (không phải bảng junction thuần) có `created_at`; phần lớn có `updated_at` (đặt tự động ở app layer hoặc `SaveChanges` override).
-- Không dùng cascade delete vật lý mặc định ở cấp DB; việc xóa tuân theo soft delete (`deleted_at`) hoặc ràng buộc app layer.
-- `jsonb` chỉ dùng cho dữ liệu động; dữ liệu cần truy vấn/lọc phải tách thành cột quan hệ.
-- **Phân biệt "người thật" và "AI Agent" (Giai đoạn 7):** `workspace_members.member_type` là dấu hiệu **duy nhất** phân biệt thành viên con người với trợ lý AI. Mọi truy vấn "thành viên" khi cần lọc/tách phải dùng cột này — **không** suy đoán qua tên hiển thị hay qua việc user có `password_hash` hay không.
-- **Actor của mọi bản ghi do AI Agent tạo phải nêu rõ:** comment do agent đăng dùng `author_id = agent_user_id` (row `users` thật), hành động ghi dữ liệu dùng `ai_action_logs.requested_by_user_id = agent_user_id`. Nhờ vậy truy vết "việc này do agent hay do người làm" chỉ cần so Guid, không cần bảng ánh xạ.
+### 1.1. DbContext Hợp nhất & Quy ước Định danh Actor
+- **Một `TeamNexusDbContext` duy nhất** kế thừa `IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>` quản lý toàn bộ thực thể Identity, thực thể nghiệp vụ và bảng vòng khóa `DataProtectionKeys` (`IDataProtectionKeyContext`).
+- **Phân biệt Thành viên Người thật, AI Agent và Tài khoản Hệ thống:**
+  - `workspace_members.member_type` (`'human'` | `'ai_agent'`) là trường phân biệt duy nhất giữa thành viên con người và trợ lý AI trong một workspace.
+  - Mỗi chuyên gia AI (`persona_key` ∈ `'general'`, `'scrum_master'`, `'tech_lead'`, `'qa_security'`) của một workspace được ánh xạ tới một bản ghi `users` riêng biệt (khởi tạo tự động khi cần, khóa đăng nhập).
+  - Tài khoản hệ thống toàn cục (như `GitHub Bot` — `00000000-0000-0000-0000-00000000b071`) được đánh dấu bằng cờ `users.is_system = true`, không thuộc `workspace_members` và bị chặn đăng nhập tương tác tại `AuthService`.
 
 ---
 
-## 2. Sơ đồ quan hệ (ERD)
+## 2. Sơ đồ Quan hệ Thực thể (ERD)
 
 ```mermaid
 erDiagram
     users ||--o{ user_roles : ""
     roles ||--o{ user_roles : ""
+    users ||--o{ user_logins : ""
     users ||--o{ refresh_tokens : ""
     users ||--o{ workspaces : "owner"
     workspaces ||--o{ workspace_members : ""
     users ||--o{ workspace_members : ""
+    workspaces ||--o{ workspace_invitations : ""
+    workspaces ||--o{ email_messages : ""
+    workspaces ||--o{ workspace_taxonomies : ""
     workspaces ||--o{ boards : ""
     boards ||--o{ board_columns : ""
     boards ||--o{ tasks : ""
     board_columns ||--o{ tasks : ""
-    users ||--o{ tasks : "assignee"
-    users ||--o{ task_comments : "author"
-    tasks ||--o{ task_comments : ""
+    users ||--o{ tasks : "assignee/creator"
+    workspaces ||--o{ task_numbers : ""
+    tasks ||--|| task_numbers : "TN-123"
     workspaces ||--o{ labels : ""
     labels ||--o{ task_labels : ""
     tasks ||--o{ task_labels : ""
+    tasks ||--o{ task_comments : ""
+    users ||--o{ task_comments : "author"
     users ||--o{ ai_action_logs : "requested/decided"
     workspaces ||--o{ activity_logs : ""
     workspaces ||--o{ notifications : ""
@@ -74,783 +62,470 @@ erDiagram
     workspaces ||--o{ ai_observer_runs : ""
     tasks ||--o{ agent_runs : ""
     workspaces ||--o{ agent_runs : ""
-    users ||--o{ agent_runs : "triggered/agent"
     agent_runs ||--o{ task_attachments : "source"
     tasks ||--o{ task_attachments : ""
-    users ||--o{ task_attachments : "created"
-    ai_action_logs ||--o{ task_attachments : "approved by"
+    workspaces ||--o{ agent_chat_messages : ""
+    boards ||--o{ agent_chat_messages : "board chat"
+    tasks ||--o{ agent_chat_messages : "task chat"
+    workspaces ||--o{ workspace_knowledge_documents : ""
+    workspace_knowledge_documents ||--o{ workspace_knowledge_chunks : "vector(1536)"
+    workspaces ||--o{ workspace_webhook_endpoints : ""
+    workspace_webhook_endpoints ||--o{ webhook_delivery_outbox : ""
+    workspaces ||--o| workspace_github_integrations : ""
+    workspace_github_integrations ||--o{ github_webhook_deliveries : ""
+    tasks ||--o{ task_external_links : "PR/Issue"
 ```
-
-Quan hệ chính:
-- Một `workspace` có nhiều `board`; mỗi `board` thuộc đúng một `workspace`.
-- Một `workspace` có nhiều `workspace_members`; vai trò (`Admin`/`Manager`/`Member`) lưu trên từng membership, loại thành viên (`human`/`ai_agent`) lưu trên `member_type`.
-- Một `board` có nhiều `board_columns`; mỗi `task` nằm trong một `board_columns` (trạng thái hiện tại). Hai cột mang ngữ nghĩa hệ thống: `is_done` (hoàn thành) và `is_clarification` (Chờ làm rõ — Giai đoạn 7).
-- `task` có thể gắn nhiều `labels` qua bảng junction `task_labels`.
-- Mọi hành động ghi dữ liệu do AI khởi tạo đều qua `ai_action_logs` (Accountability Layer).
-- Mỗi lượt AI Agent thực thi một task là **một row** `agent_runs` (theo dõi tiến trình, **không** phải log quyết định ghi dữ liệu); kết quả dài của agent lưu ở `task_attachments`.
 
 ---
 
-## 3. Chi tiết bảng theo module
+## 3. Chi tiết Bảng theo Phân hệ
 
-> Ký hiệu cột: **PK** = khóa chính, **FK** = khóa ngoại, **UQ** = unique, **IX** = index.
+> **Ký hiệu:** `PK` = Khóa chính · `FK` = Khóa ngoại · `UQ` = Ràng buộc duy nhất · `IX` = Chỉ mục.
 
-### 3.1 Module Auth — Bảng Identity (Giai đoạn 1)
+### 3.1. Phân hệ Xác thực — Các bảng Identity & Refresh Token (Giai đoạn 1, 9, 13, 15)
 
-Các bảng Identity của ASP.NET Core được đổi tên sang `snake_case`:
+Các bảng mặc định của ASP.NET Core Identity được ánh xạ sang tên `snake_case`: `users`, `roles`, `user_roles`, `user_logins`, `user_claims`, `role_claims`, `user_tokens`.
 
-| Tên bảng gốc (Identity) | Tên trong schema |
-|---|---|
-| `AspNetUsers` | `users` |
-| `AspNetRoles` | `roles` |
-| `AspNetUserRoles` | `user_roles` |
-| `AspNetUserLogins` | `user_logins` |
-| `AspNetUserClaims` | `user_claims` |
-| `AspNetRoleClaims` | `role_claims` |
-| `AspNetUserTokens` | `user_tokens` |
-
-#### `users`
-Entity `ApplicationUser` kế thừa `IdentityUser<Guid>`, thêm các field nghiệp vụ.
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
+#### `users` (`ApplicationUser`)
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
 |---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `user_name` | text | — | UQ | Identity chuẩn |
-| `normalized_user_name` | text | — | UQ (index) | Identity chuẩn |
-| `email` | text | — | UQ | Identity chuẩn |
-| `normalized_email` | text | — | UQ (index) | Identity chuẩn |
-| `email_confirmed` | bool | — | | Identity chuẩn |
-| `password_hash` | text | null | | Identity chuẩn (không dùng cho OAuth-only nhưng giữ chuẩn) |
-| `security_stamp` | text | — | | Identity chuẩn |
-| `concurrency_stamp` | text | — | | Identity chuẩn |
-| `phone_number` | text | null | | Identity chuẩn |
-| `phone_number_confirmed` | bool | — | | Identity chuẩn |
-| `two_factor_enabled` | bool | — | | Identity chuẩn |
-| `lockout_end` | timestamptz | null | | Identity chuẩn |
-| `lockout_enabled` | bool | — | | Identity chuẩn |
-| `access_failed_count` | int | — | | Identity chuẩn |
-| `display_name` | text | — | | Field mở rộng (theo phase-1 §2.1) |
-| `avatar_url` | text | null | | Field mở rộng (ảnh từ OAuth provider) |
-| `digest_enabled` | boolean | — | default `true` | **Giai đoạn 13.** Bật/tắt email tóm tắt công việc hằng ngày. Nằm ở DB (không phải `localStorage`) vì `DailyDigestRunner` chạy phía server phải **đọc** được lựa chọn. `DEFAULT true` ⇒ mọi row cũ nhận `true`, **không** cần backfill |
-| `created_at` | timestamptz | — | | Field mở rộng |
+| `id` | `uuid` | — | PK | Định danh người dùng (con người, AI Agent hoặc Bot hệ thống) |
+| `user_name` | `text` | — | UQ | Tên định danh tài khoản |
+| `normalized_user_name` | `text` | — | UQ (IX) | Tên định danh chuẩn hóa chữ hoa |
+| `email` | `text` | null | UQ | Địa chỉ email (`NULL` đối với tài khoản `ai_agent`) |
+| `normalized_email` | `text` | null | UQ (IX) | Email chuẩn hóa |
+| `email_confirmed` | `boolean` | — | | Trạng thái xác thực email |
+| `password_hash` | `text` | null | | Chuẩn Identity (`NULL` cho tài khoản OAuth / Agent / Bot) |
+| `security_stamp` | `text` | — | | Chuẩn Identity |
+| `concurrency_stamp` | `text` | — | | Chuẩn Identity |
+| `phone_number` / `phone_number_confirmed` | `text` / `bool` | null / — | | Chuẩn Identity |
+| `two_factor_enabled` / `lockout_enabled` | `boolean` | — | | Đặt `true` để khóa đăng nhập đối với tài khoản `ai_agent` |
+| `lockout_end` / `access_failed_count` | `timestamptz` / `int` | null / — | | Chuẩn Identity |
+| `display_name` | `text` | — | | Tên hiển thị trên giao diện |
+| `avatar_url` | `text` | null | | Đường dẫn ảnh đại diện (`http://` hoặc `https://`) |
+| `digest_enabled` | `boolean` | — | `DEFAULT true` | *(Giai đoạn 13)* Bật/tắt nhận bản tin Daily Email Digest mỗi sáng |
+| `is_system` | `boolean` | — | `DEFAULT false` | *(Giai đoạn 15)* Đánh dấu tài khoản hệ thống (`GitHub Bot`), chặn đăng nhập OAuth/JWT |
+| `created_at` | `timestamptz` | — | | Thời điểm tạo tài khoản |
 
-#### `roles`
-`IdentityRole<Guid>`.
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
-|---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `name` | text | — | UQ | `Admin` / `User` |
-| `normalized_name` | text | — | UQ (index) | |
-| `concurrency_stamp` | text | — | | |
-
-Seed 2 role khi migrate: `Admin` (system administrator nền tảng) và `User` (default cho mọi user thường đăng ký qua OAuth).
-
-> **Ghi chú thiết kế (Giai đoạn 9 — Đơn giản hóa Role):**
-> - **`Admin` (Identity)**: quản trị nền tảng — assign thủ công, không cấp cho user thường. Dùng protect endpoint platform-level (`SystemAdminPolicy`).
-> - **`User` (Identity)**: mọi người dùng đăng nhập thành công qua OAuth. Không phản ánh quyền gì trong workspace — quyền workspace do `workspace_members.role` quyết định.
-> - Phân quyền nghiệp vụ workspace (tạo board, dùng AI, xem báo cáo...) **không** đọc Identity role — chỉ đọc `workspace_members.role`.
-> - **Cũ (Phase 1):** 3 role `Admin`/`Manager`/`Member` — `Manager` và `Member` bị loại bỏ vì chúng không phản ánh quyền thực sự nào; mọi kiểm tra quyền đã dùng `workspace_members.role` từ đầu.
-
-
-#### `user_roles`
-`IdentityUserRole<Guid>`.
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
-|---|---|---|---|---|
-| `user_id` | uuid | — | PK (composite), FK→`users` | |
-| `role_id` | uuid | — | PK (composite), FK→`roles` | |
-
-#### `user_logins`
-`IdentityUserLogin<Guid>` — lưu thông tin đăng nhập ngoài (Google/GitHub).
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
-|---|---|---|---|---|
-| `login_provider` | text | — | PK (composite) | `Google` / `GitHub` |
-| `provider_key` | text | — | PK (composite) | Sub/ID từ provider |
-| `provider_display_name` | text | null | | |
-| `user_id` | uuid | — | FK→`users` | |
-
-#### `user_claims`, `role_claims`, `user_tokens`
-Giữ cấu trúc chuẩn Identity (`UserClaim`/`RoleClaim`/`UserToken`), đổi tên snake_case. `user_tokens` dùng cho flow password/two-factor nếu cần (không bắt buộc với OAuth-only nhưng giữ chuẩn).
-
-### 3.2 Module Auth — Refresh Token (Giai đoạn 1)
+#### `roles` & `user_roles` & `user_logins`
+- **`roles`:** Gồm `id` (PK), `name` (UQ), `normalized_name` (UQ). Chỉ lưu đúng **2 vai trò toàn cục** (tinh giản từ Giai đoạn 9): `Admin` (quản trị viên nền tảng, bảo vệ bởi `SystemAdminPolicy`) và `User` (mặc định cho mọi người dùng đăng nhập OAuth).
+- **`user_roles`:** Bảng nối `(user_id, role_id)` PK composite, FK → `users` và `roles`.
+- **`user_logins`:** Lưu liên kết OAuth `(login_provider, provider_key)` PK composite (`Google` / `GitHub`), FK `user_id` → `users`.
 
 #### `refresh_tokens`
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
 |---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `user_id` | uuid | — | FK→`users`, IX | |
-| `token_hash` | text | — | | SHA-256 của token thô (không lưu token gốc) |
-| `expires_at` | timestamptz | — | | Mặc định 7 ngày |
-| `created_at` | timestamptz | — | | |
-| `revoked_at` | timestamptz | null | | Set khi revoke (logout/rotate) |
-| `replaced_by_token_id` | uuid | null | FK→`refresh_tokens` (self) | Token thay thế trong flow rotate |
+| `id` | `uuid` | — | PK | Định danh bản ghi token |
+| `user_id` | `uuid` | — | FK → `users`, IX | Chủ sở hữu token |
+| `token_hash` | `text` | — | | Mã băm `SHA-256` của refresh token (không lưu token thô) |
+| `expires_at` | `timestamptz` | — | | Thời điểm hết hạn (mặc định 7 ngày) |
+| `created_at` | `timestamptz` | — | | Thời điểm phát hành |
+| `revoked_at` | `timestamptz` | null | | Thời điểm thu hồi (khi đăng xuất hoặc xoay vòng) |
+| `replaced_by_token_id` | `uuid` | null | FK → `refresh_tokens` | Trỏ tới token mới thay thế trong chuỗi xoay vòng chống phát lại |
 
-> **Ghi chú thiết kế:** dùng `replaced_by_token_id` (self-FK) thay cho field `ReplacedByToken` dạng hash ở `phase-1-auth.md` §2.1 — giúp truy vết chuỗi rotate rõ ràng hơn và chống replay; nếu cần giữ đúng nguyên văn phase-1 có thể thay bằng cột `replaced_by_token` (hash). Rotate = revoke token cũ (`revoked_at`) + tạo token mới trỏ ngược qua `replaced_by_token_id`.
+---
 
-### 3.3 Module Workspace & Membership (Giai đoạn 1)
+### 3.2. Phân hệ Không gian làm việc & Thành viên (Giai đoạn 1, 7, 11, 14.7, 15)
 
 #### `workspaces`
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
 |---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `name` | text | — | | |
-| `description` | text | null | | |
-| `owner_id` | uuid | — | FK→`users`, IX | Người sở hữu workspace |
-| `created_at` | timestamptz | — | | |
-| `updated_at` | timestamptz | — | | |
-| `deleted_at` | timestamptz | null | | Soft delete |
+| `id` | `uuid` | — | PK | Định danh không gian làm việc |
+| `name` | `varchar(120)` | — | | Tên không gian làm việc |
+| `description` | `varchar(2000)` | null | | Mô tả không gian làm việc |
+| `owner_id` | `uuid` | — | FK → `users`, IX | Chủ sở hữu hiện tại của workspace |
+| `next_task_number` | `bigint` | — | `DEFAULT 1` | *(Giai đoạn 15)* Bộ đếm nguyên tử cấp số thứ tự thẻ `TN-123` |
+| `created_at` / `updated_at` | `timestamptz` | — | | Thời điểm tạo và cập nhật |
+| `deleted_at` | `timestamptz` | null | Global Query Filter | Thời điểm xóa mềm |
 
 #### `workspace_members`
-Bảng junction giữa workspace và user, mang vai trò **theo từng workspace** (lớp phân quyền thứ hai, song song với Identity role toàn cục).
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
 |---|---|---|---|---|
-| `workspace_id` | uuid | — | PK (composite), FK→`workspaces` | |
-| `user_id` | uuid | — | PK (composite), FK→`users` | |
-| `role` | text | — | CHECK (`role` IN ('Admin','Manager','Member')) | Vai trò trong workspace này |
-| `member_type` | text | — | CHECK (`member_type` IN ('human','ai_agent')), default `'human'` | **Giai đoạn 7** — phân biệt thành viên người với trợ lý AI |
-| `ai_agent_name` | text | null | | **Giai đoạn 7** — tên hiển thị của agent (null với thành viên người) |
-| `joined_at` | timestamptz | — | | |
+| `workspace_id` | `uuid` | — | PK (composite), FK → `workspaces` | Không gian làm việc |
+| `user_id` | `uuid` | — | PK (composite), FK → `users` | Thành viên (người thật hoặc AI Agent) |
+| `role` | `text` | — | CHECK `IN ('Admin','Manager','Member')` | Vai trò phân quyền nghiệp vụ trong workspace |
+| `member_type` | `text` | — | CHECK `IN ('human','ai_agent')`, `DEFAULT 'human'` | *(Giai đoạn 7)* Phân biệt thành viên con người và trợ lý AI |
+| `ai_agent_name` | `text` | null | | *(Giai đoạn 7)* Tên hiển thị của AI Agent (`NULL` với người thật) |
+| `skills` | `jsonb` | — | `DEFAULT '[]'::jsonb` | *(Giai đoạn 14.7A)* Danh sách kỹ năng chuẩn hóa phục vụ gợi ý phân công |
+| `primary_role` | `varchar(50)` | — | `DEFAULT 'Member'` | *(Giai đoạn 14.7A)* Chức danh chuyên môn chính (VD: `Backend Dev`, `QA Engineer`) |
+| `capacity_weight` | `double precision` | — | `DEFAULT 1.0`, CHECK `> 0` | *(Giai đoạn 14.7A)* Trọng số năng lực xử lý công việc |
+| `max_wip_limit` | `int` | — | `DEFAULT 5`, CHECK `>= 0` | *(Giai đoạn 14.7A)* Giới hạn số thẻ tối đa đang thực hiện cùng lúc |
+| `persona_key` | `varchar(40)` | null | CHECK `IN ('general','scrum_master','tech_lead','qa_security')` | *(Giai đoạn 14.7B)* Định danh vai trò chuyên gia AI (`NULL` bắt buộc đối với `human`) |
+| `joined_at` | `timestamptz` | — | | Thời điểm gia nhập workspace |
 
-> **Mô hình phân quyền hai lớp:** `roles` + `user_roles` (Identity) quản lý vai trò **toàn cục** đưa vào claim JWT cho Policy-based authorization; `workspace_members.role` quản lý vai trò **trong phạm vi workspace** (một user có thể là `Admin` ở workspace A nhưng chỉ là `Member` ở workspace B). Composite PK đảm bảo một user chỉ có một vai trò duy nhất trong một workspace.
->
-> **Ghi chú tinh chỉnh (Giai đoạn 7 — chốt ở bước lập kế hoạch, chi tiết `tasks/phase-7-ai-agent-executor.md` §0 D1):**
-> - **AI Agent là một "pseudo-member" có row `users` thật.** Không thể tránh: `tasks.assignee_id` FK→`users` và `task_comments.author_id` FK→**NOT NULL** `users`, nên nếu agent không phải user thật thì phải sửa `Guid` → kiểu mới ở cả 3 module đồng thời. `member_type` là **discriminator nhỏ nhất** giúp UI/API phân biệt agent với người thật.
-> - **Agent là 1 user riêng cho MỖI workspace**, sinh **lazy** ở lần đầu một task được gán cho agent trong workspace đó. Lý do bắt buộc: composite PK `(workspace_id, user_id)` ⇒ một user chỉ thuộc **một** workspace; nếu dùng chung 1 user toàn cục thì agent không thể là thành viên của nhiều workspace cùng lúc.
-> - **Partial unique index** `uq_workspace_members_ai_agent` trên `workspace_id` **WHERE** `member_type = 'ai_agent'` ⇒ mỗi workspace có **đúng một** agent. Luôn tìm agent qua `member_type`, **không** qua `ai_agent_name` (tên có thể bị đổi).
-> - **Agent là user "ảo", không thể đăng nhập:** row `users` của agent sinh với `email = null`, `password_hash = null`, `lockout_enabled = true`, `two_factor_enabled = true`, và **không** có `user_logins`. Đây là ràng buộc **bảo mật**, không phải chi tiết kỹ thuật.
-> - `role` của agent: `Member` — agent **không** phải Manager/Admin; quyền ghi dữ liệu thật đi qua Accountability Layer và do con người duyệt, không qua `role`.
+> **Ràng buộc duy nhất theo Persona:** Chỉ mục biểu thức `uq_workspace_members_ai_persona` trên `(workspace_id, COALESCE(persona_key, 'general')) WHERE member_type = 'ai_agent'` đảm bảo mỗi workspace có tối đa 1 thành viên ảo cho mỗi vai trò chuyên gia.
 
-#### `workspace_invitations`
-Lời mời tham gia workspace qua email — **Giai đoạn 11**. Khi Manager/Admin mời người dùng mới, một row được tạo ở trạng thái `Pending`; người nhận click link để `Accept`; link hết hạn hoặc bị hủy thì `Expired`/`Cancelled`.
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
+#### `workspace_invitations` (Giai đoạn 11)
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
 |---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `workspace_id` | uuid | — | FK→`workspaces`, IX | |
-| `invited_email` | text | — | IX `(workspace_id, invited_email)` WHERE status='Pending' | Email người được mời |
-| `invited_role` | text | — | CHECK (`invited_role` IN ('Admin','Manager','Member')), default `'Member'` | Role sẽ nhận khi accept |
-| `token_hash` | text | — | UQ | SHA-256 của token thô gửi qua email (không lưu token gốc) |
-| `invited_by_user_id` | uuid | — | FK→`users`, IX | Manager/Admin tạo lời mời |
-| `status` | text | — | CHECK (`status` IN ('Pending','Accepted','Cancelled','Expired')), default `'Pending'` | Trạng thái lời mời |
-| `expires_at` | timestamptz | — | | Mặc định 7 ngày từ lúc tạo |
-| `accepted_by_user_id` | uuid | null | FK→`users` | Set khi người nhận accept (user đã tồn tại hoặc mới đăng ký) |
-| `accepted_at` | timestamptz | null | | |
-| `created_at` | timestamptz | — | | |
+| `id` | `uuid` | — | PK | Mã định danh lời mời |
+| `workspace_id` | `uuid` | — | FK → `workspaces` (Restrict), IX | Workspace phát hành lời mời |
+| `invited_email` | `varchar(320)` | — | UQ partial `(workspace_id, invited_email) WHERE status = 'Pending'` | Địa chỉ email người được mời |
+| `invited_role` | `varchar(32)` | — | CHECK `IN ('Admin','Manager','Member')`, `DEFAULT 'Member'` | Vai trò sẽ nhận khi chấp nhận lời mời |
+| `token_hash` | `varchar(128)` | — | UQ | Mã băm `SHA-256` của token lời mời gửi qua email |
+| `invited_by_user_id` | `uuid` | — | FK → `users` (Restrict), IX | Quản lý tạo lời mời |
+| `status` | `varchar(32)` | — | CHECK `IN ('Pending','Accepted','Cancelled','Expired')` | Trạng thái vòng đời lời mời |
+| `expires_at` | `timestamptz` | — | | Thời hạn hiệu lực (mặc định 7 ngày) |
+| `accepted_by_user_id` | `uuid` | null | FK → `users` (Restrict), IX | Người dùng chấp nhận lời mời |
+| `accepted_at` | `timestamptz` | null | | Thời điểm chấp nhận |
+| `created_at` / `updated_at` | `timestamptz` | — | | Thời điểm tạo và cập nhật |
 
-> **Ghi chú thiết kế:**
-> - **Partial unique index** trên `(workspace_id, invited_email)` WHERE `status = 'Pending'` — đảm bảo không có 2 lời mời đang chờ cùng một email cho cùng workspace.
-> - **Token thô** gửi qua email, lưu dạng SHA-256 hash — giống pattern `refresh_tokens.token_hash`.
-> - **Luồng accept:** người nhận click link `/invitations/accept?token=...` → hệ thống hash token, tìm row `Pending` chưa expire → tạo row `workspace_members` với `invited_role` → set `status = 'Accepted'`, `accepted_by_user_id`, `accepted_at`. Nếu email chưa có tài khoản thì redirect sang đăng nhập/đăng ký OAuth trước.
-> - **Expiry:** BackgroundService (hoặc kiểm tra lazy khi accept) set `status = 'Expired'` cho các row `Pending` đã quá `expires_at`.
+#### `email_messages` (Giai đoạn 11 & 13)
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
+|---|---|---|---|---|
+| `id` | `uuid` | — | PK | Định danh bản ghi email |
+| `workspace_id` | `uuid` | — | FK → `workspaces` (Restrict), IX `(workspace_id, created_at)` | Workspace liên quan |
+| `to_email` | `varchar(320)` | — | | Địa chỉ email người nhận |
+| `kind` | `varchar(40)` | — | | Loại email: `Invitation`, `QuickNotice`, `DailyDigest` |
+| `subject` | `varchar(200)` | — | | Tiêu đề email |
+| `body_preview` | `varchar(500)` | — | | Bản trích yếu nội dung |
+| `sent_by_user_id` | `uuid` | null | FK → `users` (Restrict), IX | Người gửi (`NULL` khi hệ thống gửi tự động như `DailyDigest`) |
+| `status` | `varchar(32)` | — | CHECK `IN ('Queued','Sent','Failed')` | Trạng thái gửi |
+| `provider_message_id` | `varchar(200)` | null | | Mã thông điệp trả về từ Resend API |
+| `error` | `varchar(500)` | null | | Chi tiết lỗi nếu gửi thất bại |
+| `created_at` / `updated_at` | `timestamptz` | — | | Thời điểm tạo và cập nhật |
 
-### 3.4 Module Kanban — Board (Giai đoạn 2)
+---
+
+### 3.3. Phân hệ Bảng điều khiển Kanban (Giai đoạn 2, 7, 15)
 
 #### `boards`
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
 |---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `workspace_id` | uuid | — | FK→`workspaces`, IX | |
-| `name` | text | — | | |
-| `description` | text | null | | |
-| `created_at` | timestamptz | — | | |
-| `updated_at` | timestamptz | — | | |
-| `deleted_at` | timestamptz | null | | Soft delete |
+| `id` | `uuid` | — | PK | Định danh bảng Kanban |
+| `workspace_id` | `uuid` | — | FK → `workspaces`, IX | Không gian làm việc chứa bảng |
+| `name` | `text` | — | | Tên bảng |
+| `description` | `text` | null | | Mô tả bảng |
+| `created_at` / `updated_at` | `timestamptz` | — | | Thời điểm tạo và cập nhật |
+| `deleted_at` | `timestamptz` | null | Global Query Filter | Thời điểm xóa mềm |
 
 #### `board_columns`
-Cột Kanban (trạng thái) của một board.
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
 |---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `board_id` | uuid | — | FK→`boards`, IX | |
-| `name` | text | — | | Ví dụ: To Do / In Progress / Done |
-| `position` | int | — | UQ `(board_id, position)` | Thứ tự hiển thị cột |
-| `is_done` | boolean | — | default false | Cột "hoàn thành": task vào đây được set `completed_at` |
-| `is_clarification` | boolean | — | default false | **Giai đoạn 7** — cột "Chờ làm rõ", nơi AI Agent tạm dừng task để hỏi lại trưởng nhóm |
-| `created_at` | timestamptz | — | | |
-| `updated_at` | timestamptz | — | | |
+| `id` | `uuid` | — | PK | Định danh cột trạng thái |
+| `board_id` | `uuid` | — | FK → `boards`, IX | Bảng chứa cột |
+| `name` | `text` | — | | Tên cột (VD: *Cần làm*, *Đang làm*, *Đang duyệt PR*, *Hoàn thành*) |
+| `position` | `int` | — | UQ `(board_id, position)` | Thứ tự hiển thị cột trên bảng |
+| `is_done` | `boolean` | — | `DEFAULT false` | Cột hoàn thành (thẻ vào cột này được gán `completed_at`) |
+| `is_clarification` | `boolean` | — | `DEFAULT false`, UQ partial `WHERE is_clarification` | *(Giai đoạn 7)* Cột *"Chờ làm rõ"* do AI Agent quản lý |
+| `is_in_review` | `boolean` | — | `DEFAULT false`, UQ partial `WHERE is_in_review` | *(Giai đoạn 15)* Cột *"Đang duyệt PR"* cho tự động hóa GitHub PR |
+| `created_at` / `updated_at` | `timestamptz` | — | | Thời điểm tạo và cập nhật |
 
-> **Ghi chú tinh chỉnh (Giai đoạn 7 — `tasks/phase-7-ai-agent-executor.md` §0 D3):**
-> - Trạng thái Kanban **là cột**, không phải enum trên `tasks` (`tasks.column_id` mới là "trạng thái hiện tại"). `is_clarification` đi đúng đường của tiền lệ `is_done` (thêm ở Giai đoạn 2 bằng migration `Phase2BoardColumnIsDone`) — **không** thêm enum `TaskStatus` để tránh hai nguồn sự thật với `column_id`.
-> - **Partial unique index** `uq_board_columns_clarification` trên `board_id` **WHERE** `is_clarification` ⇒ tối đa **một** cột "Chờ làm rõ" mỗi board.
-> - Cột được **tạo lazy** ở lần đầu Agent cần (không auto-seed cho board cũ, không bắt mọi board phải có), đặt ở `position = max + 1`, và **không cho xoá** (kể cả khi rỗng) vì hệ thống phụ thuộc vào nó.
-> - `is_done` và `is_clarification` **loại trừ nhau**: app layer từ chối bật đồng thời (400). Cột `is_clarification` **không** được coi là "done" khi tính `completed_at` hay thống kê báo cáo.
+> **Quy tắc loại trừ cờ cột:** Ba cờ `is_done`, `is_clarification` và `is_in_review` loại trừ lẫn nhau hoàn toàn (một cột chỉ được bật tối đa 1 cờ).
 
-#### `tasks`
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
+#### `tasks` (`BoardTask`)
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
 |---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `board_id` | uuid | — | FK→`boards`, IX | Để nhóm SignalR theo board & truy vấn nhanh |
-| `column_id` | uuid | — | FK→`board_columns`, IX | Trạng thái hiện tại của task |
-| `title` | text | — | | |
-| `description` | text | null | | |
-| `position` | int | — | IX `(board_id, column_id, position)` | Thứ tự task trong cột |
-| `assignee_id` | uuid | null | FK→`users`, IX | Người phụ trách (MVP: 1 assignee). **Giai đoạn 7:** có thể là AI Agent (`workspace_members.member_type = 'ai_agent'`) |
-| `due_date` | timestamptz | null | | Hạn hoàn thành |
-| `priority` | text | null | CHECK (`priority` IN ('Low','Medium','High','Urgent')) | Độ ưu tiên |
-| `created_by` | uuid | — | FK→`users` | Người tạo task |
-| `created_at` | timestamptz | — | | |
-| `updated_at` | timestamptz | — | | |
-| `completed_at` | timestamptz | null | | Set khi task vào cột Done |
-| `deleted_at` | timestamptz | null | | Soft delete |
+| `id` | `uuid` | — | PK | Định danh thẻ công việc |
+| `board_id` | `uuid` | — | FK → `boards`, IX | Bảng chứa thẻ |
+| `column_id` | `uuid` | — | FK → `board_columns`, IX | Cột trạng thái hiện tại |
+| `task_number` | `bigint` | — | `DEFAULT 0`, IX `(board_id, task_number)` | *(Giai đoạn 15)* Số thứ tự định danh `TN-123` trong phạm vi workspace |
+| `title` | `text` | — | | Tiêu đề công việc |
+| `description` | `text` | null | | Nội dung mô tả chi tiết (hỗ trợ Markdown) |
+| `position` | `int` | — | IX `(board_id, column_id, position)` | Thứ tự sắp xếp thẻ trong cột |
+| `assignee_id` | `uuid` | null | FK → `users`, IX | Người phụ trách (thành viên người thật hoặc `ai_agent`) |
+| `due_date` | `timestamptz` | null | | Hạn hoàn thành (luôn chuẩn hóa UTC) |
+| `priority` | `text` | null | CHECK `IN ('Low','Medium','High','Urgent')` | Mức độ ưu tiên |
+| `created_by` | `uuid` | — | FK → `users` | Người tạo thẻ (hoặc `GitHub Bot` khi tạo tự động từ Issue) |
+| `created_at` / `updated_at` | `timestamptz` | — | | Thời điểm tạo và cập nhật |
+| `completed_at` | `timestamptz` | null | | Thời điểm hoàn thành |
+| `deleted_at` | `timestamptz` | null | Global Query Filter | Thời điểm xóa mềm |
 
-> **Ghi chú thiết kế:**
-> - Giữ cả `board_id` (cho SignalR group theo board + query theo board) lẫn `column_id` (trạng thái hiện tại). Tính nhất quán (`task.board_id == task.column.board_id`) do app layer đảm bảo.
-> - MVP dùng **một assignee** (`assignee_id`). Hỗ trợ đa người phụ trách (bảng `task_assignees`) để dành giai đoạn sau nếu cần.
-> - Cập nhật đồng thời chấp nhận chiến lược **last-write-wins** (theo `02-tech-stack-decisions.md` §2.2).
-
-#### `labels`
-Nhãn gắn cho task, phạm vi theo workspace.
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
-|---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `workspace_id` | uuid | — | FK→`workspaces`, UQ `(workspace_id, name)` | |
-| `name` | text | — | | |
-| `color` | text | — | | Mã màu (hex, ví dụ `#3B82F6`) |
-| `created_at` | timestamptz | — | | |
-
-#### `task_labels`
-Junction giữa task và label.
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
-|---|---|---|---|---|
-| `task_id` | uuid | — | PK (composite), FK→`tasks` | |
-| `label_id` | uuid | — | PK (composite), FK→`labels` | |
-
-#### `task_comments`
-Bình luận trên task — đồng thời là nguồn "bối cảnh giao tiếp" cho AI Observer.
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
-|---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `task_id` | uuid | — | FK→`tasks`, IX | |
-| `author_id` | uuid | — | FK→`users`, IX | **Giai đoạn 7:** câu hỏi của AI Agent cũng là comment với `author_id = agent_user_id` |
-| `content` | text | — | | |
-| `created_at` | timestamptz | — | | |
-| `updated_at` | timestamptz | — | | |
-| `deleted_at` | timestamptz | null | | Soft delete |
-
-### 3.5 Module AI — Accountability Layer (Giai đoạn 4)
-
-#### `ai_action_logs`
-Vết dữ liệu cho **mọi hành động AI ghi dữ liệu** (theo `02` §2.4 và `03-roadmap.md` giai đoạn 4).
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
-|---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `action` | text | — | | Loại hành động (xem bộ giá trị gợi ý ở §4) |
-| `entity_type` | text | — | | Loại entity bị tác động (`Board` cho hành động theo lô như `CreateSubtasks`; `Task` cho hành động trên một task) |
-| `entity_id` | uuid | null | | Id entity bị tác động (nếu đã sinh) |
-| `basis` | jsonb | — | | Tóm tắt prompt/dữ liệu đầu vào (cơ sở của hành động) |
-| `before_snapshot` | jsonb | null | | Dữ liệu trước khi áp dụng (dùng để revert/undo) |
-| `after_snapshot` | jsonb | null | | Dữ liệu đề xuất (sẽ áp dụng khi được duyệt) |
-| `applied_snapshot` | jsonb | null | | Dữ liệu **đã ghi thật** khi `Approved` (danh sách task/label id đã tạo + warnings) — cơ sở để `Undone` revert chính xác |
-| `status` | text | — | CHECK (`status` IN ('Pending','Approved','Rejected','Undone')) | Trạng thái vòng đời |
-| `requested_by_user_id` | uuid | — | FK→`users`, IX | Người khởi tạo yêu cầu AI |
-| `decided_by_user_id` | uuid | null | FK→`users` | Người duyệt/từ chối/undo |
-| `decided_at` | timestamptz | null | | Thời điểm ra quyết định |
-| `decision_note` | text | null | | Lý do từ chối/hoàn tác (tuỳ chọn, ≤ 500 ký tự) |
-| `created_at` | timestamptz | — | | |
-| `updated_at` | timestamptz | — | | |
-
-> **Luồng:** AI tạo log ở trạng thái `Pending` (chưa ghi dữ liệu thật) → người dùng `Approved` (áp dụng `after_snapshot`, lưu vết dữ liệu đã ghi vào `applied_snapshot`) hoặc `Rejected` → sau này có thể `Undone` (revert `applied_snapshot`, hoặc về `before_snapshot` nếu có). Mọi hành động AI ghi dữ liệu phải đi qua service `AiActionService` duy nhất.
->
-> **Quy ước định vị log (Giai đoạn 4):** hành động `CreateSubtasks` lưu `entity_type = 'Board'` và `entity_id = boardId`, nhờ đó liệt kê lịch sử hành động AI theo board chỉ cần lọc `(entity_type, entity_id)` — **không** cần thêm cột `workspace_id`. Index `(entity_type, entity_id, created_at)` phục vụ truy vấn này (xem §5).
->
-> **Ghi chú tinh chỉnh:** hai cột `applied_snapshot` và `decision_note` được bổ sung khi hiện thực Giai đoạn 4 (theo tinh thần "thiết kế sơ bộ, sẽ tinh chỉnh khi hiện thực" ở đầu tài liệu): `applied_snapshot` tách bạch "đề xuất" (`after_snapshot`) khỏi "đã ghi thật" nên Undo không phải suy diễn từ đề xuất; `decision_note` lưu lý do từ chối/hoàn tác cho mục đích giải trình. Chi tiết quyết định xem `tasks/phase-4-accountability-layer.md` §0.
->
-> **Quy ước định vị log mở rộng (Giai đoạn 7):** hai hành động mới `PostComment` (kết quả ngắn) và `PostAttachment` (kết quả dài dưới dạng file) lưu `entity_type = 'Task'` và `entity_id = taskId`. `requested_by_user_id` = **`agent_user_id`** (actor thật sự khởi tạo hành động — đúng `04` §1.2 "actor của bản ghi do AI tạo phải nêu rõ"), `decided_by_user_id` = Manager/Admin duyệt. Truy vấn lịch sử theo task dùng **đúng** index sẵn có `(entity_type, entity_id, created_at)` ⇒ **không** cần index mới cho `ai_action_logs`.
->
-> **Không cần cột mới cho Giai đoạn 7:** `basis` giữ tóm tắt input (id task + số tool-call + token đã dùng, **không** dump prompt); `after_snapshot` giữ nội dung đề xuất (comment hoặc base64 của file, đã cap); `applied_snapshot` giữ `commentId`/`attachmentId` thật để Undo revert chính xác. Cả hai applier mới tái dùng **nguyên** vòng đời `Pending → Approved/Rejected → Undone` và cơ chế CAS chống duyệt trùng của Giai đoạn 4.
-
-### 3.6 Module AI — Observer (Giai đoạn 5)
-
-#### `activity_logs`
-Nguồn "log hệ thống" cho Observer quét định kỳ.
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
-|---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `workspace_id` | uuid | — | FK→`workspaces`, IX `(workspace_id, created_at)` | |
-| `board_id` | uuid | null | FK→`boards` | |
-| `user_id` | uuid | null | FK→`users` | Actor (nếu có) |
-| `entity_type` | text | — | | Loại entity (ví dụ `Task`, `Comment`) |
-| `entity_id` | uuid | null | | Id entity |
-| `action` | text | — | | `TaskCreated` / `TaskUpdated` / `TaskMoved` / `TaskCompleted` / `TaskDeleted` / `CommentAdded` |
-| `payload` | jsonb | null | | Chi tiết sự kiện (trạng thái trước/sau, …) |
-| `created_at` | timestamptz | — | | |
-| `updated_at` | timestamptz | — | | Stamp tự động qua `IAuditableEntity` (append-only ⇒ không mang thông tin) |
-
-#### `notifications`
-Cảnh báo gửi **riêng cho Manager** (không public toàn team).
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
-|---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `workspace_id` | uuid | — | FK→`workspaces` | |
-| `recipient_user_id` | uuid | — | FK→`users`, IX `(recipient_user_id, is_read)` | Manager nhận cảnh báo |
-| `type` | text | — | | `Bottleneck` / `Overload` / `ConflictPotential` / `OverdueTask` / … |
-| `title` | text | — | | |
-| `message` | text | — | | |
-| `payload` | jsonb | null | | Chi tiết cảnh báo (danh sách task/user liên quan, …) |
-| `is_read` | bool | — | default false | |
-| `created_at` | timestamptz | — | | |
-| `read_at` | timestamptz | null | | |
-
-#### `ai_observer_runs`
-Ghi lại mỗi lần chạy nền của Observer (chống cảnh báo trùng lặp, phục vụ audit).
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
-|---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `workspace_id` | uuid | — | FK→`workspaces`, IX | |
-| `started_at` | timestamptz | — | | |
-| `finished_at` | timestamptz | null | | |
-| `status` | text | — | | `Running` / `Completed` / `Skipped` / `Failed` |
-| `summary` | jsonb | null | | Tổng kết lần chạy (tín hiệu phát hiện, notification đã tạo, token đã dùng, lý do skip/error, …) |
-
-> **Ghi chú tinh chỉnh (Giai đoạn 5):** ba bảng trên được tinh chỉnh khi hiện thực AI Observer (theo tinh thần "thiết kế sơ bộ, sẽ tinh chỉnh khi hiện thực" ở đầu tài liệu):
-> - `activity_logs` là **event store append-only**: **không** có global query filter (`deleted_at`) — log vẫn phải đọc được kể cả sau khi board/workspace bị soft-delete — và có thêm `updated_at` để giữ đúng interface `IAuditableEntity` chung. Bộ giá trị `action` đợt này: `TaskCreated`, `TaskUpdated`, `TaskMoved`, `TaskCompleted`, `TaskDeleted`, `CommentAdded` (text tự do — §4).
-> - `notifications` **fan-out theo người nhận**: 1 row / 1 Manager (hoặc Admin) — `recipient_user_id` là người nhận thật, `is_read`/`read_at` theo từng người, nhờ vậy đọc "cảnh báo chưa đọc của tôi" chỉ cần index `(recipient_user_id, is_read)` và **không** cần bảng junction riêng. Bộ giá trị `type` đợt này: `OverdueTask`, `StalledTask`, `Overload`, `Bottleneck` (text tự do — §4).
-> - `ai_observer_runs.status` bổ sung `Skipped` so với bản sơ bộ: dùng khi Observer đang tắt hoặc **không lấy được advisory lock** (một lần quét khác đang chạy) — trạng thái này **không** phải lỗi và **không** sinh notification.
-> - Mỗi run gắn với **một workspace** (1 row/workspace/lần quét); `summary` gồm `signalsDetected`, `signalsByType`, `truncatedSignals`, `findingsWritten`, `notificationsCreated`, `aiCalled`, `model`, `promptTokens`, `completionTokens`, `durationMs`, `skippedReason`, `error`.
-> - Observer là lớp **đọc/cảnh báo**: **không** ghi `tasks`/`labels`/`task_labels` và **không** đi qua `ai_action_logs`/`AiActionService`. Chi tiết quyết định (kèm advisory lock, dedupe 24h, retention) xem `tasks/phase-5-ai-observer.md` §0.
-
-### 3.7 Module Reporting (Giai đoạn 6)
-
-**Không tạo bảng lưu trữ.** File PDF (QuestPDF) / Excel (ClosedXML) được **generate on-demand** và không lưu lâu dài trên server (theo `02-tech-stack-decisions.md` §2.5). Dữ liệu báo cáo được tổng hợp trực tiếp từ `tasks`, `boards`, `board_columns`, `activity_logs`, `ai_observer_runs` tại thời điểm yêu cầu.
-
-> **Ghi chú tinh chỉnh (Giai đoạn 6 — chốt ở bước lập kế hoạch, chi tiết `tasks/phase-6-reporting-export.md` §0):**
-> - Báo cáo là **projection read-only**: module `Reporting` (project `TeamNexus.Modules.Reporting`) **không** có entity, **không** có
->   migration, **không** ghi bất kỳ bảng nào (kể cả `activity_logs`/`notifications`/`ai_action_logs`). Không có bảng lịch sử báo cáo.
-> - Nguồn dữ liệu: `tasks` + `board_columns` (tiến độ hiện tại & hiệu suất theo `completed_at`/`due_date`), `activity_logs` (khối hoạt động
->   trong cửa sổ), `ai_observer_runs.summary` (khối "sức khoẻ dự án").
-> - Quyền: **Manager/Admin** của workspace (Member ⇒ 403) cho cả 3 endpoint (`GET .../reports/summary`, `GET .../reports/export`,
->   `GET .../reports/boards`); phạm vi workspace, lọc tuỳ chọn `?boardId=`.
-> - Cửa sổ thời gian `?from=&to=` (mặc định **30 ngày**, clamp ≤ **365 ngày**); mọi thời lượng trả bằng **giờ**, tỉ lệ bằng **%**.
-> - File là **`byte[]` trong RAM** (`Results.File`) — không ghi disk/temp/blob; có `Content-Length` + `Content-Disposition` (tên file ASCII);
->   cap `Reports:MaxExportRows` (5000) chống phình bộ nhớ trên free-tier.
-> - **Không** index/cột mới: các truy vấn dùng đúng index hiện có (`tasks.board_id`, `tasks.assignee_id`,
->   `activity_logs (workspace_id, created_at)`, `boards.workspace_id`).
-
-### 3.8 Module AI — Agent Executor (Giai đoạn 7)
-
-Nâng AI lên vai trò **thực thi**: Agent là một thành viên ảo của workspace (`member_type = 'ai_agent'`, xem §3.3), được gán task
-như một người thật, tự chạy vòng lặp tool-calling, và mọi kết quả ghi dữ liệu đều đi qua Accountability Layer (`ai_action_logs`, §3.5).
-Hai bảng mới + một cột mới trên `board_columns` (§3.4) là toàn bộ thay đổi schema của giai đoạn này.
-
-#### `agent_runs`
-Theo dõi **mỗi lượt** AI Agent thực thi một task. Tách khỏi `ai_action_logs` vì **mục đích khác nhau**: `ai_action_logs` là **log quyết định
-ghi dữ liệu** (Pending → Approved/Rejected/Undone); `agent_runs` là **nhật ký tiến trình chạy** (vòng lặp tool-call, token, vì sao dừng).
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
-|---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `workspace_id` | uuid | — | FK→`workspaces`, IX `(workspace_id, started_at)` | Audit + prune theo workspace |
-| `board_id` | uuid | — | FK→`boards`, IX | Nhóm SignalR theo board để broadcast tiến trình |
-| `task_id` | uuid | — | FK→`tasks`, IX `(task_id, started_at)` | Task đang thực thi |
-| `agent_user_id` | uuid | — | FK→`users` | Row `users` của agent (§3.3) |
-| `triggered_by_user_id` | uuid | — | FK→`users` | Manager/Admin bấm "Chạy Agent" / "Chạy lại" |
-| `status` | text | — | CHECK (`status` IN ('Running','AwaitingClarification','AwaitingApproval','Completed','Failed')) | Vòng đời lượt chạy |
-| `stop_reason` | text | null | CHECK (`stop_reason` IN ('DraftProduced','QuestionAsked','ToolLimit','TimeLimit','TokenBudget','ProviderError','Cancelled','TaskChanged','InternalError')) | **Nguyên nhân** dừng (null khi đang chạy) |
-| `clarification_question` | text | null | | Câu hỏi Agent đặt khi cần làm rõ (≤ 2000) |
-| `clarification_comment_id` | uuid | null | FK→`task_comments` | Comment Agent đăng câu hỏi (để UI mở thẳng) |
-| `resolution_comment_id` | uuid | null | FK→`task_comments` | Comment trả lời của trưởng nhóm **được lượt chạy này dùng** — ghi trên **run MỚI** của "Chạy lại", **không** ghi ngược vào run cũ (giữ bất biến append-only D14) |
-| `previous_run_id` | uuid | null | FK→`agent_runs` (self) | Chuỗi run của cùng một task |
-| `tool_call_trace` | jsonb | — | default `[]` | Mảng compact: `name`, `arguments`, `resultSummary` (≤ 500 ký tự/entry), `isError`, `at`, `durationMs` |
-| `trace_truncated` | bool | — | default false | Cờ khi trace bị cắt theo `Agent:ToolTraceMaxEntries` |
-| `tool_call_count` | int | — | default 0 | Đối chiếu guardrail 15 tool-call |
-| `llm_call_count` | int | — | default 0 | Số lần gọi model |
-| `prompt_tokens` | int | — | default 0 | **Cộng dồn mọi lượt gọi** trong run |
-| `completion_tokens` | int | — | default 0 | |
-| `output_kind` | text | null | CHECK (`output_kind` IS NULL OR `output_kind` IN ('Comment','Attachment')) | Loại kết quả đề xuất |
-| `ai_action_log_id` | uuid | null | FK→`ai_action_logs` | Hành động `Pending` đã tạo — nối thẳng Accountability Layer |
-| `notification_sent` | bool | — | default false | Đã cảnh báo Manager khi dừng bất thường (chống spam) |
-| `error` | text | null | | Chi tiết lỗi/nguyên nhân (≤ 2000) |
-| `started_at` | timestamptz | — | | |
-| `finished_at` | timestamptz | null | | |
-| `created_at` / `updated_at` | timestamptz | — | | Stamp tự động qua `IAuditableEntity` |
-
-> **Ghi chú tinh chỉnh (Giai đoạn 7 — chốt ở bước lập kế hoạch, chi tiết `tasks/phase-7-ai-agent-executor.md` §0):**
-> - **`status` tách khỏi `stop_reason` (D4).** Bản sơ bộ `02` §2.8 chỉ nêu `status` (5 giá trị) và yêu cầu "log `BudgetExceeded`". Nếu gộp
->   "vượt ngân sách" thành một `status` riêng thì không phân biệt được *hết ngân sách* (chủ ý dừng) với *lỗi provider* (bất khả kháng) — trong
->   khi Manager cần biết đúng để hành động. Vì vậy `status` giữ đúng 5 giá trị vòng đời, còn `BudgetExceeded` trở thành `stop_reason` trên
->   `status = Failed`, đúng tiền lệ `ai_observer_runs.status = Skipped` **không phải lỗi** (Giai đoạn 5).
-> - **Append-only theo lượt chạy (D14).** "Chạy lại" **tạo row mới** với `previous_run_id` trỏ row cũ; row cũ **không** bao giờ bị sửa. Nhờ vậy
->   lịch sử giải trình còn nguyên (`QuestionAsked` của lượt trước vẫn đọc được sau khi lượt sau thành công).
-> - **Chống chạy chồng (D11):** `pg_try_advisory_lock` theo `task_id` + `SemaphoreSlim(1,1)` trong process; không lấy được lock ⇒ **409**,
->   không tạo row. Dùng đúng pattern `ObserverService.TryAcquireAdvisoryLockAsync`.
-> - **Run mồ côi (D13):** app free-tier có thể sleep/recycle giữa run ⇒ row kẹt `Running`. `AgentRunReaper` (`IHostedService`) chạy lúc khởi
->   động, đóng mọi run `Running` có `started_at < now − Agent:RunTimeoutSeconds − Agent:OrphanRunGraceSeconds` thành `Failed` + `InternalError`.
->   Index partial `(status) WHERE status = 'Running'` phục vụ đúng truy vấn này.
-> - **Không** có query filter và **không** soft-delete: bảng là nhật ký audit chỉ ghi thêm (giống `ai_action_logs`).
-> - **Guardrail ghi vào chính row này:** `tool_call_count` ≤ 15, thời gian chạy ≤ 5 phút (wall-clock), `prompt_tokens + completion_tokens`
->   ≤ ~50 000 (`04` §7). Vượt ngưỡng ⇒ dừng + `stop_reason` tương ứng + **một** `notifications` cho Manager (`notification_sent = true`).
-
-#### `task_attachments`
-Kết quả **dài** của Agent (báo cáo, tài liệu, file có định dạng) — `02` §2.8 chốt: nội dung ngắn là **comment**, nội dung dài là **tệp đính kèm**.
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
-|---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `task_id` | uuid | — | FK→`tasks`, IX | |
-| `created_by_user_id` | uuid | — | FK→`users` | Đợt này luôn = `agent_user_id` của run sinh ra file |
-| `source_run_id` | uuid | null | FK→`agent_runs` | Truy vết "file do lượt chạy nào sinh" |
-| `file_name` | text | — | | Tên ASCII đã chuẩn hoá (dùng lại `ReportFileName.Slugify` của Giai đoạn 6 — hàm thật tên là `Slugify`, không phải `Normalize`) |
-| `content_type` | text | — | | `text/markdown`, `text/plain`, `text/csv`, … |
-| `size_bytes` | int | — | | = `length(content)`; app layer chặn > `Agent:MaxAttachmentBytes` |
-| `content` | bytea | — | | **`bytea`**, cap **512 KB** (`Agent:MaxAttachmentBytes` = 524288) |
-| `created_at` | timestamptz | — | | |
-
-> **Ghi chú tinh chỉnh (Giai đoạn 7 — D5):**
-> - **Vì sao `bytea` trong PostgreSQL, không blob/S3/disk.** Repo **không** có bất kỳ hạ tầng lưu file nào, và `02` §3 + `04` §7 đã chốt
->   "generate on-demand, **không** lưu file lâu dài trên server" để tiết kiệm free-tier. `bytea` giữ đúng bất biến đó, trả file bằng đúng
->   pattern `Results.File(byte[], contentType, fileName)` đã verify ở Giai đoạn 6, và xoá được **vật lý** khi Undo.
-> - **Đây là bảng DUY NHẤT không có soft delete.** File chỉ tồn tại **sau khi** con người `Approved`; `Rejected` ⇒ không có row nào;
->   `Undone` ⇒ xoá hẳn row (không có `deleted_at`). Lý do: `bytea` để lại rác là tiêu quota thật, và Undo của AI phải trả workspace về
->   đúng trạng thái trước đó. Hệ quả cần chấp nhận: file đã Undo **không thể** khôi phục — khác với soft delete của task/comment.
-> - **Ước lượng quota:** cap 512 KB/row và chỉ sinh khi được duyệt ⇒ vài chục file ≈ vài MB, nằm trong free-tier Neon/Supabase.
-> - **Không** có `IAuditableEntity` (`updated_at` vô nghĩa với file bất biến) ⇒ dùng đúng field `created_at`.
-> - **Không** prune tự động: file là nội dung người dùng đã duyệt, chỉ biến mất khi Undo hoặc khi task bị xoá (soft) — xem §7.
-
-#### `notifications.type` — bộ giá trị mở rộng
-
-- **Giai đoạn 7:** `AgentRunFailed` (dừng bất thường / vượt ngưỡng), `AgentAwaitingClarification` (Agent cần trưởng nhóm trả lời), `AgentOutputPending` (có kết quả chờ duyệt).
-- **Giai đoạn 11:** `WorkspaceInvitation` (lời mời vào workspace), `TaskAssigned` (được gán việc), `CommentOnTask` (bình luận mới trên task đang tham gia).
-Fan-out giữ nguyên "1 row / 1 người nhận".
-
-> **Các loại thông báo ngoài Observer KHÔNG nằm trong whitelist của Observer.** `NotificationTypes.All` (4 tín hiệu của Giai đoạn 5) là danh sách
-> **chống hallucination** của model AI Observer. Notification hệ thống/nghiệp vụ do backend ghi trực tiếp nên không dùng chung whitelist này.
+#### `labels`, `task_labels` & `task_comments`
+- **`labels`:** `id` (PK), `workspace_id` (FK → `workspaces`, UQ `(workspace_id, name)`), `name`, `color` (mã màu hex), `created_at`.
+- **`task_labels`:** Bảng nối `(task_id, label_id)` PK composite, FK → `tasks` và `labels`.
+- **`task_comments`:** `id` (PK), `task_id` (FK → `tasks`, IX), `author_id` (FK → `users`, IX), `content` (`text ≤ 2000`), `created_at`, `updated_at`, `deleted_at` (Global Query Filter).
 
 ---
 
-### 3.9 Module Quản lý Thành viên & Hồ sơ Cá nhân (Giai đoạn 11)
+### 3.4. Phân hệ AI — Lớp Giải trình, Giám sát & Thực thi (Giai đoạn 4, 5, 7)
 
-> **Mục tiêu:** Quản lý lời mời gia nhập workspace qua email (Postmark / MailKit fallback), chấp nhận lời mời, phân quyền vai trò thành viên, gửi email nhanh nội bộ, và quản lý hồ sơ cá nhân (`displayName`, `avatarUrl`) cùng danh sách workspace đã tham gia.
-
-#### `workspace_invitations` — Lời mời tham gia Workspace
-
-| Cột | Kiểu | Null? | Mặc định | Ý nghĩa |
+#### `ai_action_logs` (Accountability Layer)
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
 |---|---|---|---|---|
-| `id` | uuid | PK | | Mã định danh lời mời |
-| `workspace_id` | uuid | FK | | Workspace phát lời mời (`workspaces.id`, Restrict) |
-| `invited_email` | varchar(320) | — | | Email được mời (chuẩn RFC 5321) |
-| `invited_role` | varchar(32) | — | | Vai trò dự kiến: `Admin`, `Manager`, `Member` (CHECK) |
-| `token_hash` | varchar(128) | UQ | | Mã băm SHA-256 của invitation token ngẫu nhiên (chống lộ token trong DB) |
-| `invited_by_user_id` | uuid | FK | | Người tạo lời mời (`users.id`, Restrict) |
-| `status` | varchar(32) | — | | Trạng thái: `Pending`, `Accepted`, `Cancelled`, `Expired` (CHECK) |
-| `expires_at` | timestamptz | — | | Thời hạn hết hiệu lực của lời mời (mặc định 7 ngày) |
-| `accepted_by_user_id` | uuid | FK, null | null | Người thực sự chấp nhận lời mời (`users.id`, Restrict) |
-| `accepted_at` | timestamptz | null | null | Thời điểm chấp nhận lời mời |
-| `created_at` | timestamptz | — | | Thời điểm gửi lời mời |
-| `updated_at` | timestamptz | — | | Thời điểm cập nhật cuối cùng |
+| `id` | `uuid` | — | PK | Định danh bản ghi hành động AI |
+| `action` | `varchar(64)` | — | | Loại hành động (`CreateSubtasks`, `PostComment`, `PostAttachment`, `CreateBoardFromTemplate`, `UpdateTaskFields`, `MoveTaskToColumn`, `RecoveryPlan`, `CreateKnowledgeDocument`, `GitHubPrMoveTask`, `GitHubIssueCreateTask`) |
+| `entity_type` | `varchar(64)` | — | IX `(entity_type, entity_id, created_at)` | Phạm vi tác động (`Board`, `Task`, `Workspace`) |
+| `entity_id` | `uuid` | null | | Định danh thực thể bị tác động |
+| `basis` | `jsonb` | — | | Tóm tắt ngữ cảnh/cơ sở dữ liệu đầu vào của quyết định AI |
+| `before_snapshot` | `jsonb` | null | | Ảnh chụp dữ liệu trước khi áp dụng (phục vụ khôi phục khi Undo) |
+| `after_snapshot` | `jsonb` | null | | Nội dung đề xuất sẽ áp dụng khi được phê duyệt |
+| `applied_snapshot` | `jsonb` | null | | Dữ liệu thực tế đã ghi khi `Approved` (danh sách ID đã tạo, cột cũ, v.v.) |
+| `status` | `text` | — | CHECK `IN ('Pending','Approved','Rejected','Undone')` | Trạng thái vòng đời giải trình |
+| `requested_by_user_id` | `uuid` | — | FK → `users`, IX | Chủ thể khởi tạo đề xuất (người dùng, `ai_agent` hoặc `GitHub Bot`) |
+| `decided_by_user_id` | `uuid` | null | FK → `users` | Quản lý phê duyệt / từ chối / hoàn tác |
+| `decided_at` | `timestamptz` | null | | Thời điểm ra quyết định |
+| `decision_note` | `text` | null | | Ghi chú lý do từ chối hoặc hoàn tác (`≤ 500` ký tự) |
+| `created_at` / `updated_at` | `timestamptz` | — | | Thời điểm tạo và cập nhật |
 
-#### `email_messages` — Nhật ký và Hàng đợi Gửi Email
+#### `activity_logs`, `notifications` & `ai_observer_runs` (Giai đoạn 5)
+- **`activity_logs` (Append-only Event Store):** `id` (PK), `workspace_id` (FK, IX `(workspace_id, created_at)`), `board_id` (FK nullable), `user_id` (FK nullable), `entity_type`, `entity_id`, `action` (`TaskCreated`, `TaskUpdated`, `TaskMoved`, `TaskCompleted`, `TaskDeleted`, `CommentAdded`, `WorkspaceCreated`, `WorkspaceUpdated`, `WorkspaceOwnerTransferred`, `WorkspaceDeleted`), `payload` (`jsonb`), `created_at`, `updated_at`.
+- **`notifications`:** `id` (PK), `workspace_id` (FK), `recipient_user_id` (FK → `users`, IX `(recipient_user_id, is_read)`), `type` (`OverdueTask`, `AtRiskDeadline`, `StalledTask`, `Overload`, `Bottleneck`, `AgentRunFailed`, `AgentAwaitingClarification`, `AgentOutputPending`, `RecoveryPlanPending`, `WorkspaceInvitation`, `MemberJoined`, `TaskAssigned`, `CommentOnTask`, `CommentMention`), `title`, `message`, `payload` (`jsonb`), `is_read` (`bool default false`), `created_at`, `read_at`.
+- **`ai_observer_runs`:** `id` (PK), `workspace_id` (FK, IX), `started_at`, `finished_at`, `status` (CHECK `IN ('Running','Completed','Skipped','Failed')`), `summary` (`jsonb` lưu thống kê tín hiệu, lượng token và kết quả thẩm định Jev).
 
-| Cột | Kiểu | Null? | Mặc định | Ý nghĩa |
-|---|---|---|---|---|
-| `id` | uuid | PK | | Mã định danh thông điệp email |
-| `workspace_id` | uuid | FK | | Workspace liên quan (`workspaces.id`, Restrict) |
-| `to_email` | varchar(320) | — | | Địa chỉ email người nhận |
-| `kind` | varchar(40) | — | | Loại email: `Invitation`, `QuickNotice`, `TaskAssignment`, v.v. |
-| `subject` | varchar(200) | — | | Tiêu đề email (tối đa 200 ký tự) |
-| `body_preview` | varchar(500) | — | | Bản trích yếu nội dung (tối đa 500 ký tự, chống phình DB) |
-| `sent_by_user_id` | uuid | FK, null | null | Người bấm gửi (`users.id`, Restrict; null nếu hệ thống tự gửi) |
-| `status` | varchar(32) | — | | Trạng thái gửi: `Queued`, `Sent`, `Failed` (CHECK) |
-| `provider_message_id` | varchar(200) | null | null | Message-ID do Email Provider trả về (Postmark / MailKit) |
-| `error` | varchar(500) | null | null | Thông điệp lỗi nếu gửi thất bại |
-| `created_at` | timestamptz | — | | Thời điểm tạo thông điệp |
-| `updated_at` | timestamptz | — | | Thời điểm cập nhật trạng thái gửi |
+#### `agent_runs` & `task_attachments` (Giai đoạn 7)
+- **`agent_runs` (Nhật ký tiến trình chạy Agent):** `id` (PK), `workspace_id` (FK, IX `(workspace_id, started_at)`), `board_id` (FK, IX), `task_id` (FK, IX `(task_id, started_at)`), `agent_user_id` (FK → `users`), `triggered_by_user_id` (FK → `users`), `status` (CHECK `IN ('Running','AwaitingClarification','AwaitingApproval','Completed','Failed')`, IX partial `WHERE status = 'Running'`), `stop_reason` (CHECK `IN ('DraftProduced','QuestionAsked','ToolLimit','TimeLimit','TokenBudget','ProviderError','Cancelled','TaskChanged','InternalError')`), `clarification_question`, `clarification_comment_id` (FK), `resolution_comment_id` (FK), `previous_run_id` (self-FK), `tool_call_trace` (`jsonb`), `trace_truncated` (`bool`), `tool_call_count` (`int`), `llm_call_count` (`int`), `prompt_tokens` (`int`), `completion_tokens` (`int`), `output_kind` (`'Comment'` | `'Attachment'`), `ai_action_log_id` (FK → `ai_action_logs`), `notification_sent` (`bool`), `error`, `started_at`, `finished_at`, `created_at`, `updated_at`.
+- **`task_attachments` (Tệp đính kèm đầu ra của Agent — bảng duy nhất xóa vật lý khi Undo):** `id` (PK), `task_id` (FK → `tasks`, IX), `created_by_user_id` (FK → `users`), `source_run_id` (FK → `agent_runs`), `file_name` (ASCII chuẩn hóa), `content_type`, `size_bytes` (`int`), `content` (`bytea ≤ 512 KB`), `created_at`.
 
 ---
 
-## 4. Enum & giá trị hợp lệ
+### 3.5. Phân hệ Báo cáo (Giai đoạn 6 & 13)
+Module `TeamNexus.Modules.Reporting` hoạt động hoàn toàn theo cơ chế **truy vấn chỉ đọc (Read-only Projection)** trên dữ liệu sẵn có của `tasks`, `boards`, `board_columns`, `activity_logs` và `ai_observer_runs`; không sử dụng bảng lưu trữ riêng.
 
-| Enum | Lưu trữ | Giá trị hợp lệ | Áp dụng tại |
+---
+
+### 3.6. Phân hệ Hội thoại AI, Taxonomy & Kho Tri thức Ngữ nghĩa RAG (Giai đoạn 14.5, 14.6, 14.7)
+
+#### `agent_chat_messages` (Giai đoạn 14.5 & 14.6 — Lịch sử hội thoại cấp Bảng và cấp Thẻ)
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
+|---|---|---|---|---|
+| `id` | `uuid` | — | PK | Định danh tin nhắn hội thoại |
+| `board_id` | `uuid` | null | FK → `boards` (Restrict), IX `(board_id, created_at)` | Đặt giá trị khi là hội thoại cấp Bảng (`task_id = NULL`) |
+| `task_id` | `uuid` | null | FK → `tasks` (Restrict), IX `(task_id)` | Đặt giá trị khi là hội thoại cấp Thẻ (`board_id = NULL`) |
+| `workspace_id` | `uuid` | — | FK → `workspaces` (Restrict), IX `(workspace_id, created_at)` | Phục vụ quét dọn dẹp định kỳ (retention 90 ngày) toàn workspace |
+| `user_id` | `uuid` | null | FK → `users` (Restrict) | Người gửi đối với lượt `User`; `NULL` đối với lượt `Assistant` |
+| `role` | `varchar(16)` | — | CHECK `IN ('User','Assistant')` | Vai trò lượt tin nhắn |
+| `content` | `text` | — | | Nội dung văn bản (`≤ 16.000` ký tự, đã lọc sạch mã GUID) |
+| `attachments` | `jsonb` | null | | Danh sách thẻ đính kèm `[{ taskId, title }]` trên hội thoại cấp Bảng |
+| `created_at` / `updated_at` | `timestamptz` | — | | Thời điểm ghi nhận (truy vấn sắp xếp theo `created_at → role → id`) |
+
+> **Ràng buộc phạm vi (`ck_agent_chat_messages_scope`):** `CHECK (num_nonnulls(board_id, task_id) = 1)` đảm bảo mỗi tin nhắn thuộc đúng một trong hai phạm vi (Bảng hoặc Thẻ).
+
+#### `workspace_taxonomies` (Giai đoạn 14.7 Track A — Từ điển phân loại chuẩn)
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
+|---|---|---|---|---|
+| `id` | `uuid` | — | PK | Định danh mục từ điển |
+| `workspace_id` | `uuid` | — | FK → `workspaces` (Restrict), UQ `(workspace_id, kind, key)` | Không gian làm việc sở hữu từ điển |
+| `kind` | `varchar(20)` | — | CHECK `IN ('domain','work_type')`, IX `(workspace_id, kind, position)` | Phân nhóm: Miền kỹ thuật (`domain`) hoặc Loại công việc (`work_type`) |
+| `key` | `varchar(40)` | — | | Khóa định danh chuẩn đưa vào Jev `Choice` (VD: `backend`, `bug`) |
+| `label` | `varchar(80)` | — | | Nhãn hiển thị trên giao diện |
+| `color_hex` | `varchar(16)` | — | | Mã màu hiển thị |
+| `position` | `int` | — | | Thứ tự hiển thị |
+| `created_at` / `updated_at` | `timestamptz` | — | | Thời điểm tạo và cập nhật |
+
+#### `workspace_knowledge_documents` (Giai đoạn 14.7 Track B — Tài liệu Kho tri thức dự án)
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
+|---|---|---|---|---|
+| `id` | `uuid` | — | PK | Định danh tài liệu tri thức |
+| `workspace_id` | `uuid` | — | FK → `workspaces` (Restrict), IX `(workspace_id, created_at)` | Không gian làm việc sở hữu tài liệu |
+| `title` | `varchar(300)` | — | | Tiêu đề tài liệu |
+| `source_url` | `varchar(1000)` | null | | Đường dẫn nguồn tham chiếu (tùy chọn) |
+| `content` | `text` | — | | Toàn văn nội dung tài liệu (`≤ 400.000` ký tự) |
+| `status` | `varchar(20)` | — | CHECK `IN ('pending','ready','failed','deleted')` | Trạng thái nhúng vector (`deleted` đóng vai trò xóa mềm) |
+| `error` | `varchar(500)` | null | | Chi tiết lỗi nếu quá trình nhúng vector thất bại |
+| `chunk_count` | `int` | — | `DEFAULT 0` | Số đoạn văn bản (chunks) đã chia |
+| `created_by_user_id` | `uuid` | — | FK → `users` (Restrict) | Quản lý khởi tạo yêu cầu nạp tài liệu |
+| `created_at` / `updated_at` | `timestamptz` | — | | Thời điểm tạo và cập nhật |
+
+#### `workspace_knowledge_chunks` (Giai đoạn 14.7 Track B — Các đoạn văn bản & Vector 1536 chiều)
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
+|---|---|---|---|---|
+| `id` | `uuid` | — | PK | Định danh đoạn văn bản |
+| `document_id` | `uuid` | — | FK → `workspace_knowledge_documents` (Cascade), UQ `(document_id, chunk_index)` | Tài liệu gốc |
+| `workspace_id` | `uuid` | — | IX `(workspace_id)` | Phi chuẩn hóa từ tài liệu gốc để truy vấn RAG trực tiếp trên một bảng |
+| `chunk_index` | `int` | — | | Thứ tự đoạn trong tài liệu (`0..N`) |
+| `content` | `text` | — | | Nội dung đoạn văn bản (`≤ 1.200` ký tự) |
+| `embedding` | `vector(1536)` | null | IX HNSW `USING hnsw (embedding vector_cosine_ops)` | Vector nhúng ngữ nghĩa 1536 chiều (`NULL` khi đang chờ `KnowledgeEmbeddingRunner` xử lý) |
+| `created_at` / `updated_at` | `timestamptz` | — | | Thời điểm tạo và cập nhật |
+
+---
+
+### 3.7. Phân hệ Tích hợp Hệ sinh thái Bên ngoài (Giai đoạn 15 — Migration #15 & #16)
+
+#### `task_numbers` (Đảm bảo tính duy nhất mã `TN-123` toàn Workspace)
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
+|---|---|---|---|---|
+| `workspace_id` | `uuid` | — | PK (composite), FK → `workspaces` (Cascade) | Không gian làm việc |
+| `task_number` | `bigint` | — | PK (composite) | Số thứ tự công việc trong workspace (`1, 2, 3...`) |
+| `task_id` | `uuid` | — | UQ, FK → `tasks` (Cascade) | Thẻ công việc tương ứng |
+
+#### `workspace_webhook_endpoints` (Cấu hình kênh Outbound Slack / Discord)
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
+|---|---|---|---|---|
+| `id` | `uuid` | — | PK | Định danh điểm cuối webhook |
+| `workspace_id` | `uuid` | — | FK → `workspaces` (Cascade), IX `(workspace_id, is_active)` | Không gian làm việc |
+| `name` | `varchar(100)` | — | | Tên gợi nhớ của kênh thông báo |
+| `provider` | `varchar(20)` | — | CHECK `IN ('slack','discord')` | Nhà cung cấp đích |
+| `target_url` | `varchar(1000)` | — | | URL Incoming Webhook (đã qua kiểm định chống SSRF, ẩn khi trả về GET) |
+| `subscribed_events` | `varchar(500)` | — | | Chuỗi sự kiện đăng ký nhận (phân cách bằng dấu phẩy) |
+| `is_active` | `boolean` | — | `DEFAULT true` | Trạng thái hoạt động (tự động tắt khi circuit breaker ngắt ở 10 lỗi liên tiếp) |
+| `failure_count` | `int` | — | `DEFAULT 0` | Số lần gửi lỗi liên tiếp hiện tại |
+| `last_success_at` / `last_failure_at` | `timestamptz` | null | | Thời điểm gửi thành công / thất bại gần nhất |
+| `last_error` | `varchar(500)` | null | | Thông điệp lỗi gần nhất |
+| `created_by_user_id` | `uuid` | — | FK → `users` (Restrict) | Quản lý tạo kênh |
+| `created_at` / `updated_at` | `timestamptz` | — | | Thời điểm tạo và cập nhật |
+
+#### `webhook_delivery_outbox` (Hàng đợi Transactional Outbox cho Slack / Discord)
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
+|---|---|---|---|---|
+| `id` | `uuid` | — | PK | Định danh bản ghi hàng đợi |
+| `endpoint_id` | `uuid` | — | FK → `workspace_webhook_endpoints` (Cascade), UQ `(endpoint_id, dedupe_key)` | Điểm cuối nhận tin |
+| `workspace_id` | `uuid` | — | IX `(workspace_id, created_at)` | Không gian làm việc |
+| `notification_id` | `uuid` | null | | Định danh thông báo gốc (nếu có) |
+| `event_type` | `varchar(60)` | — | | Loại sự kiện (`ObserverFinding`, `OverdueTask`, `MemberJoined`, `AgentRunFailed`, v.v.) |
+| `dedupe_key` | `varchar(120)` | — | | Khóa chống tạo trùng bản tin trong hàng đợi |
+| `payload_json` | `jsonb` | — | | Dữ liệu thông báo dùng để dựng bản tin Slack Block Kit / Discord Embed |
+| `status` | `varchar(20)` | — | CHECK `IN ('Pending','Sent','Failed')`, IX `(status, next_attempt_at)` | Trạng thái xử lý |
+| `attempt_count` / `max_attempts` | `int` | — | `DEFAULT 0` / `DEFAULT 5` | Số lần đã thử và trần số lần thử tối đa |
+| `next_attempt_at` / `sent_at` | `timestamptz` | — / null | | Thời điểm thử tiếp theo / thời điểm gửi thành công |
+| `last_http_status` | `int` | null | | Mã phản hồi HTTP gần nhất |
+| `last_error` | `varchar(500)` | null | | Thông điệp lỗi gần nhất |
+| `created_at` / `updated_at` | `timestamptz` | — | | Thời điểm tạo và cập nhật |
+
+#### `workspace_github_integrations` (Cấu hình Inbound GitHub Webhook cấp Workspace)
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
+|---|---|---|---|---|
+| `id` | `uuid` | — | PK | Định danh cấu hình tích hợp GitHub |
+| `workspace_id` | `uuid` | — | UQ, FK → `workspaces` (Cascade) | Mỗi workspace có tối đa 1 cấu hình GitHub Integration |
+| `webhook_token` | `uuid` | — | UQ | Mã định danh ngẫu nhiên trên URL nhận webhook (`/api/webhooks/github/{webhookToken}`) |
+| `secret_ciphertext` | `text` | — | | Khóa bí mật HMAC đã mã hóa bằng `IDataProtectionProvider` |
+| `secret_hint` | `varchar(16)` | — | | 4 ký tự cuối của khóa bí mật để hiển thị nhận diện trên giao diện |
+| `is_enabled` | `boolean` | — | `DEFAULT true` | Bật/tắt xử lý sự kiện từ GitHub |
+| `default_board_id` | `uuid` | null | FK → `boards` (SetNull) | Bảng mặc định để tạo thẻ mới khi có GitHub Issue mở |
+| `issue_label_filter` | `varchar(500)` | null | | Bộ lọc nhãn Issue được phép tự động tạo thẻ |
+| `auto_move_on_pr` | `boolean` | — | `DEFAULT true` | Tự động kéo thẻ sang `In Review` / `Done` theo trạng thái PR |
+| `auto_create_tasks_from_issues` | `boolean` | — | `DEFAULT false` | Tự động tạo thẻ công việc từ GitHub Issue mới |
+| `sync_issue_comments` | `boolean` | — | `DEFAULT true` | Đồng bộ bình luận một chiều từ GitHub vào thẻ |
+| `created_by_user_id` | `uuid` | — | FK → `users` (Restrict) | Quản lý thiết lập cấu hình |
+| `created_at` / `updated_at` | `timestamptz` | — | | Thời điểm tạo và cập nhật |
+
+#### `github_webhook_deliveries` (Sổ nhật ký & Chống phát lại GitHub Webhook)
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
+|---|---|---|---|---|
+| `id` | `uuid` | — | PK | Định danh lượt nhận webhook |
+| `integration_id` | `uuid` | — | FK → `workspace_github_integrations` (Cascade), UQ `(integration_id, delivery_id)` | Cấu hình tích hợp nhận sự kiện |
+| `workspace_id` | `uuid` | — | IX `(workspace_id, received_at)` | Không gian làm việc |
+| `delivery_id` | `varchar(100)` | — | | Giá trị header `X-GitHub-Delivery` (dùng làm khóa idempotency chống phát lại) |
+| `event_name` / `action` | `varchar(50)` | — / null | | Tên sự kiện (`ping`, `pull_request`, `issues`, `issue_comment`) và hành động con |
+| `repository_full_name` | `varchar(200)` | null | | Tên kho mã nguồn (`owner/repo`) |
+| `status` | `varchar(20)` | — | CHECK `IN ('Processed','Ignored','Failed')` | Kết quả xử lý |
+| `summary` / `error_message` | `varchar(500)` | null | | Tóm tắt kết quả thực thi hoặc thông điệp lỗi |
+| `received_at` | `timestamptz` | — | | Thời điểm tiếp nhận yêu cầu |
+
+#### `task_external_links` (Liên kết Thẻ công việc ↔ GitHub Pull Request / Issue)
+| Cột | Kiểu | Null | Ràng buộc / Mặc định | Ý nghĩa |
+|---|---|---|---|---|
+| `id` | `uuid` | — | PK | Định danh liên kết |
+| `workspace_id` | `uuid` | — | IX `(workspace_id, provider, link_type, external_id)` | Không gian làm việc |
+| `task_id` | `uuid` | — | FK → `tasks` (Cascade), UQ `(task_id, provider, link_type, external_id)` | Thẻ công việc được liên kết |
+| `provider` | `varchar(20)` | — | CHECK `IN ('github')` | Hệ thống bên ngoài |
+| `link_type` | `varchar(20)` | — | CHECK `IN ('pull_request','issue')` | Loại đối tượng liên kết |
+| `external_id` | `varchar(120)` | — | | Định danh đối tượng bên ngoài (VD: `owner/repo#88`) |
+| `external_url` | `varchar(1000)` | — | | Đường dẫn trực tiếp tới PR hoặc Issue trên GitHub |
+| `title` | `varchar(300)` | — | | Tiêu đề PR hoặc Issue |
+| `state` | `varchar(20)` | — | CHECK `IN ('draft','open','merged','closed')` | Trạng thái hiện tại của PR hoặc Issue |
+| `created_at` / `updated_at` | `timestamptz` | — | | Thời điểm tạo và cập nhật |
+
+#### `data_protection_keys` (Bảng hạ tầng lưu trữ vòng khóa ASP.NET Core Data Protection — Migration #16)
+- Gồm `id` (`integer` identity PK), `friendly_name` (`text`), `xml` (`text`). Được quản lý bởi `Microsoft.AspNetCore.DataProtection.EntityFrameworkCore` để bảo toàn vòng khóa giải mã `secret_ciphertext` qua các đợt khởi động lại container.
+
+---
+
+## 4. Tổng hợp Enum & Ràng buộc Giá trị Hợp lệ
+
+| Tên Miền / Enum | Cột áp dụng | Tập giá trị hợp lệ | Cơ chế kiểm soát |
 |---|---|---|---|
-| Identity role (toàn cục) | `roles.name` | `Admin`, `Manager`, `Member` | `roles`, `user_roles`, claim JWT |
-| `WorkspaceRole` | `text` + CHECK | `Admin`, `Manager`, `Member` | `workspace_members.role` |
-| `TaskPriority` | `text` + CHECK | `Low`, `Medium`, `High`, `Urgent` | `tasks.priority` |
-| `AiActionStatus` | `text` + CHECK | `Pending`, `Approved`, `Rejected`, `Undone` | `ai_action_logs.status` |
-| `AiActionType` | `text` (tự do, bộ gợi ý) | `CreateSubtasks`, `AssignMember`, `SetLabels`, `MoveTasks`, `PostComment`, `PostAttachment`, … | `ai_action_logs.action` |
-| `ActivityAction` | `text` (tự do, bộ gợi ý) | `TaskCreated`, `TaskUpdated`, `TaskMoved`, `TaskCompleted`, `TaskDeleted`, `CommentAdded`, … | `activity_logs.action` |
-| `NotificationType` | `text` (tự do, bộ gợi ý) | `OverdueTask`, `StalledTask`, `Overload`, `Bottleneck`, `AgentRunFailed`, `AgentAwaitingClarification`, `AgentOutputPending`, `WorkspaceInvitation`, `TaskAssigned`, `CommentOnTask`, … | `notifications.type` |
-| `NotificationSeverity` | `text` (tự do, bộ gợi ý) | `Low`, `Medium`, `High`, `Critical` | `notifications.payload.severity` (không phải cột) |
-| `ObserverRunStatus` | `text` + CHECK | `Running`, `Completed`, `Skipped`, `Failed` | `ai_observer_runs.status` |
-| `MemberType` | `text` + CHECK | `human`, `ai_agent` | `workspace_members.member_type` |
-| `AgentRunStatus` | `text` + CHECK | `Running`, `AwaitingClarification`, `AwaitingApproval`, `Completed`, `Failed` | `agent_runs.status` |
-| `AgentStopReason` | `text` + CHECK | `DraftProduced`, `QuestionAsked`, `ToolLimit`, `TimeLimit`, `TokenBudget`, `ProviderError`, `Cancelled`, `TaskChanged`, `InternalError` | `agent_runs.stop_reason` |
-| `AgentOutputKind` | `text` + CHECK | `Comment`, `Attachment` | `agent_runs.output_kind` |
-| `InvitationStatus` | `text` + CHECK | `Pending`, `Accepted`, `Cancelled`, `Expired` | `workspace_invitations.status` |
-| `EmailMessageStatus` | `text` + CHECK | `Queued`, `Sent`, `Failed` | `email_messages.status` |
-| `AgentChatRole` | `text` + CHECK | `User`, `Assistant` | **Giai đoạn 14.5** — `agent_chat_messages.role`. **Không** có `system`: prompt hệ thống do server dựng mỗi request, không bao giờ là row |
-
-> Nguyên tắc: enum có tập giá trị cố định (role, priority, status) dùng `CHECK`; enum dự kiến mở rộng (action type, notification type) dùng `text` tự do kèm bộ giá trị gợi ý để không phải sửa constraint mỗi lần thêm loại mới.
->
-> **`AgentStopReason` — vì sao KHÔNG có `BudgetExceeded` (Giai đoạn 7, D4):** yêu cầu "vượt ngân sách ⇒ dừng + log" của `03-roadmap.md` được đáp ứng bằng `status = Failed` + `stop_reason` **phân biệt được nguyên nhân**: `ToolLimit` (quá 15 tool-call), `TimeLimit` (quá 5 phút), `TokenBudget` (quá ~50 000 token). Một giá trị `BudgetExceeded` gộp chung sẽ không nói được Manager cần làm gì tiếp theo (giảm phạm vi task hay kiểm tra provider), và sẽ trái tiền lệ `Skipped` của Giai đoạn 5 (trạng thái "không phải lỗi" tách khỏi lỗi thật).
+| **Identity Role (Toàn cục)** | `roles.name` | `Admin`, `User` | Seed cố định qua Migration #7 |
+| **`WorkspaceRole`** | `workspace_members.role`, `workspace_invitations.invited_role` | `Admin`, `Manager`, `Member` | `CHECK` constraint |
+| **`MemberType`** | `workspace_members.member_type` | `human`, `ai_agent` | `CHECK` constraint |
+| **`PersonaKey`** | `workspace_members.persona_key` | `general`, `scrum_master`, `tech_lead`, `qa_security` (`NULL` cho `human`) | `CHECK` constraint kép |
+| **`TaskPriority`** | `tasks.priority` | `Low`, `Medium`, `High`, `Urgent` | `CHECK` constraint |
+| **`AiActionStatus`** | `ai_action_logs.status` | `Pending`, `Approved`, `Rejected`, `Undone` | `CHECK` constraint |
+| **`AiActionType`** | `ai_action_logs.action` | `CreateSubtasks`, `PostComment`, `PostAttachment`, `CreateBoardFromTemplate`, `UpdateTaskFields`, `MoveTaskToColumn`, `RecoveryPlan`, `CreateKnowledgeDocument`, `GitHubPrMoveTask`, `GitHubIssueCreateTask` | Từ điển mở (`varchar(64)`) |
+| **`ObserverRunStatus`** | `ai_observer_runs.status` | `Running`, `Completed`, `Skipped`, `Failed` | `CHECK` constraint |
+| **`AgentRunStatus`** | `agent_runs.status` | `Running`, `AwaitingClarification`, `AwaitingApproval`, `Completed`, `Failed` | `CHECK` constraint |
+| **`AgentStopReason`** | `agent_runs.stop_reason` | `DraftProduced`, `QuestionAsked`, `ToolLimit`, `TimeLimit`, `TokenBudget`, `ProviderError`, `Cancelled`, `TaskChanged`, `InternalError` | `CHECK` constraint |
+| **`AgentOutputKind`** | `agent_runs.output_kind` | `Comment`, `Attachment` | `CHECK` constraint |
+| **`InvitationStatus`** | `workspace_invitations.status` | `Pending`, `Accepted`, `Cancelled`, `Expired` | `CHECK` constraint |
+| **`EmailMessageStatus`** | `email_messages.status` | `Queued`, `Sent`, `Failed` | `CHECK` constraint |
+| **`AgentChatRole`** | `agent_chat_messages.role` | `User`, `Assistant` | `CHECK` constraint |
+| **`TaxonomyKind`** | `workspace_taxonomies.kind` | `domain`, `work_type` | `CHECK` constraint |
+| **`KnowledgeDocumentStatus`** | `workspace_knowledge_documents.status` | `pending`, `ready`, `failed`, `deleted` | `CHECK` constraint |
+| **`WebhookProvider`** | `workspace_webhook_endpoints.provider` | `slack`, `discord` | `CHECK` constraint |
+| **`WebhookOutboxStatus`** | `webhook_delivery_outbox.status` | `Pending`, `Sent`, `Failed` | `CHECK` constraint |
+| **`GitHubDeliveryStatus`** | `github_webhook_deliveries.status` | `Processed`, `Ignored`, `Failed` | `CHECK` constraint |
+| **`ExternalLinkType`** | `task_external_links.link_type` | `pull_request`, `issue` | `CHECK` constraint |
+| **`ExternalLinkState`** | `task_external_links.state` | `draft`, `open`, `merged`, `closed` | `CHECK` constraint |
 
 ---
 
-## 5. Chỉ mục & hiệu năng
+## 5. Chiến lược Chỉ mục & Tối ưu Hiệu năng
 
-| Bảng | Index | Loại | Mục đích |
+| Bảng | Chỉ mục (Index) | Loại | Mục đích Tối ưu Truy vấn |
 |---|---|---|---|
-| `refresh_tokens` | `user_id` | IX | Tra cứu token theo user |
-| `workspace_members` | `(workspace_id, user_id)` | PK | Đảm bảo vai trò duy nhất/workspace |
-| `workspace_members` | `workspace_id` WHERE `member_type = 'ai_agent'` | UQ (partial) | **Giai đoạn 7** — mỗi workspace có đúng một AI Agent |
-| `boards` | `workspace_id` | IX | Liệt kê board theo workspace |
-| `board_columns` | `(board_id, position)` | UQ | Thứ tự cột, chống trùng vị trí |
-| `board_columns` | `board_id` WHERE `is_clarification` | UQ (partial) | **Giai đoạn 7** — tối đa một cột "Chờ làm rõ" mỗi board |
-| `tasks` | `board_id` | IX | Query task theo board (SignalR group) |
-| `tasks` | `column_id` | IX | Query task theo cột |
-| `tasks` | `(board_id, column_id, position)` | IX | Sắp xếp kéo-thả trong cột |
-| `tasks` | `assignee_id` | IX | Lọc task theo người phụ trách |
-| `labels` | `(workspace_id, name)` | UQ | Tên nhãn duy nhất trong workspace |
-| `task_comments` | `task_id` | IX | Liệt kê bình luận theo task |
-| `ai_action_logs` | `requested_by_user_id` | IX | Liệt kê hành động AI theo người yêu cầu |
-| `ai_action_logs` | `(entity_type, entity_id, created_at)` | IX | Liệt kê lịch sử hành động AI theo board (Accountability Layer) |
-| `activity_logs` | `(workspace_id, created_at)` | IX | Observer quét theo chu kỳ |
-| `notifications` | `(recipient_user_id, is_read)` | IX | Lấy cảnh báo chưa đọc của Manager |
-| `ai_observer_runs` | `workspace_id` | IX | Audit theo workspace |
-| `agent_runs` | `(task_id, started_at)` | IX | **Giai đoạn 7** — lịch sử lượt chạy của một task (nút "Chạy lại") |
-| `agent_runs` | `(workspace_id, started_at)` | IX | Audit + prune theo workspace |
-| `agent_runs` | `status` WHERE `status = 'Running'` | IX (partial) | Reaper tìm run mồ côi sau restart |
-| `task_attachments` | `task_id` | IX | Liệt kê tệp đính kèm của task |
-| `workspace_invitations` | `(workspace_id, status)` | IX | Lọc danh sách lời mời theo trạng thái (Pending/Accepted/Cancelled/Expired) |
-| `workspace_invitations` | `(workspace_id, invited_email)` WHERE `status = 'Pending'` | UQ (partial) | **Giai đoạn 11** — Mỗi email chỉ có tối đa một lời mời chờ xử lý trong một workspace |
-| `workspace_invitations` | `token_hash` | UQ | **Giai đoạn 11** — Tra cứu và xác thực token lời mời nhanh chóng, duy nhất |
-| `workspace_invitations` | `invited_by_user_id` | IX | Lọc lời mời theo người gửi |
-| `workspace_invitations` | `accepted_by_user_id` | IX | Truy vết người chấp nhận lời mời |
-| `email_messages` | `(workspace_id, created_at)` | IX | Lịch sử gửi email theo workspace |
-| `email_messages` | `sent_by_user_id` | IX | Lọc email do người dùng gửi |
-| `agent_chat_messages` | `(board_id, created_at)` | IX | **Giai đoạn 14.5** — nạp transcript của một board (keyset, cũ→mới) |
-| `agent_chat_messages` | `(workspace_id, created_at)` | IX | **Giai đoạn 14.5** — retention quét theo workspace, cũ nhất trước |
-
-> Các FK còn lại (`activity_logs.board_id`/`user_id`, `notifications.workspace_id`, `ai_observer_runs.workspace_id`, `agent_runs.agent_user_id`/`triggered_by_user_id`/`previous_run_id`, `task_attachments.created_by_user_id`/`source_run_id`, …) **không** khai báo tường minh: EF Core sinh index theo FK convention (đúng tiền lệ Phase 4 §1.2 — FK `decided_by_user_id` cũng sinh index phụ, chấp nhận).
->
-> **Giai đoạn 7 không cần index mới cho `ai_action_logs`:** log của `PostComment`/`PostAttachment` dùng đúng index sẵn có `(entity_type, entity_id, created_at)` với `entity_type = 'Task'` (xem §3.5).
+| `refresh_tokens` | `user_id` | IX | Tra cứu và thu hồi chuỗi token theo người dùng |
+| `workspace_members` | `(workspace_id, user_id)` | PK | Đảm bảo mỗi user chỉ có 1 vai trò trong 1 workspace |
+| `workspace_members` | `(workspace_id, COALESCE(persona_key, 'general')) WHERE member_type = 'ai_agent'` | UQ (Expression + Partial) | Đảm bảo tối đa 1 thành viên ảo cho mỗi persona trong một workspace |
+| `workspace_invitations` | `(workspace_id, invited_email) WHERE status = 'Pending'` | UQ (Partial) | Chống gửi trùng lời mời đang chờ cho cùng một địa chỉ email |
+| `workspace_invitations` | `token_hash` | UQ | Xác thực nhanh liên kết chấp nhận lời mời |
+| `email_messages` | `(workspace_id, created_at)` | IX | Tra cứu lịch sử gửi email và kiểm tra idempotency của Daily Digest |
+| `board_columns` | `(board_id, position)` | UQ | Đảm bảo thứ tự cột không trùng lặp |
+| `board_columns` | `board_id WHERE is_clarification = true` | UQ (Partial) | Tối đa 1 cột *"Chờ làm rõ"* trên mỗi bảng |
+| `board_columns` | `board_id WHERE is_in_review = true` | UQ (Partial) | Tối đa 1 cột *"Đang duyệt PR"* trên mỗi bảng |
+| `tasks` | `(board_id, column_id, position)` | IX | Tải bảng Kanban và sắp xếp thứ tự kéo-thả trong cột |
+| `tasks` | `(board_id, task_number)` | IX | Tìm kiếm nhanh thẻ theo mã `TN-123` |
+| `task_numbers` | `(workspace_id, task_number)` / `task_id` | PK / UQ | Bảo toàn tính duy nhất toàn cục của mã `TN-123` trong phạm vi workspace |
+| `ai_action_logs` | `(entity_type, entity_id, created_at)` | IX | Truy vấn lịch sử hành động AI theo Bảng, Thẻ hoặc Workspace |
+| `activity_logs` | `(workspace_id, created_at)` | IX | Phân trang keyset dòng hoạt động và quét định kỳ của AI Observer |
+| `notifications` | `(recipient_user_id, is_read)` | IX | Đếm nhanh số thông báo chưa đọc trên thanh điều hướng |
+| `agent_runs` | `(task_id, started_at)` / `status WHERE status = 'Running'` | IX / IX (Partial) | Lịch sử chạy của thẻ và quét thu dọn các lượt chạy mồ côi lúc khởi động |
+| `agent_chat_messages` | `(board_id, created_at)` / `(workspace_id, created_at)` | IX | Phân trang keyset lịch sử chat và quét xóa tin nhắn quá 90 ngày |
+| `workspace_taxonomies` | `(workspace_id, kind, key)` / `(workspace_id, kind, position)` | UQ / IX | Tra cứu và hiển thị từ điển danh mục chuẩn |
+| `workspace_knowledge_chunks` | `USING hnsw (embedding vector_cosine_ops)` | HNSW Vector IX | Tìm kiếm láng giềng gần nhất theo khoảng cách cosine (`<=>`) cho RAG |
+| `webhook_delivery_outbox` | `(status, next_attempt_at)` / `(endpoint_id, dedupe_key)` | IX / UQ | Tiến trình Outbox lấy bản tin đến hạn gửi và chống tạo trùng |
+| `github_webhook_deliveries` | `(integration_id, delivery_id)` | UQ | Chống phát lại (anti-replay) sự kiện GitHub theo `X-GitHub-Delivery` |
+| `task_external_links` | `(task_id, provider, link_type, external_id)` | UQ | Chống gắn trùng liên kết PR/Issue trên cùng một thẻ |
 
 ---
 
-## 6. Chiến lược Migration
+## 6. Lịch sử Chuỗi Migration (`TeamNexus.Persistence/Migrations`)
 
-- Code-First: entity → `dotnet ef migrations add <Tên>` → `dotnet ef database update`.
-- Một chuỗi migration duy nhất từ `TeamNexusDbContext` (xem §1.1).
-- Seed dữ liệu nền trong migration/`OnModelCreating`: 3 role `Admin`, `Manager`, `Member`.
-- Migration áp dụng lên PostgreSQL local để dev, sau đó lên Neon/Supabase (theo `phase-1-auth.md` §2.1).
+Toàn bộ lịch sử tiến hóa schema được quản lý qua **16 migrations** tuyến tính (`dotnet ef migrations has-pending-model-changes` = sạch 100%):
 
-**Chuỗi migration đã áp dụng (tính tới đợt khắc phục sau Giai đoạn 15 — 16 migrations, 27 bảng nghiệp vụ + 7 bảng Identity + 1 bảng hạ tầng DataProtection):**
-
-| # | Migration | Giai đoạn | Nội dung |
-|---|---|---|---|
-| 1 | `InitialSchema` | 1 | Schema ban đầu: `users`, `roles`, `workspaces`, `workspace_members`, `refresh_tokens` |
-| 2 | `Phase2KanbanSchema` | 2 | Schema Kanban: `boards`, `board_columns`, `tasks`, `labels`, `task_labels`, `task_comments` |
-| 3 | `Phase2BoardColumnIsDone` | 2 | Bổ sung cờ `is_done` cho `board_columns` |
-| 4 | `Phase4AccountabilityLayer` | 4 | Bổ sung `ai_action_logs` |
-| 5 | `Phase5AiObserverSchema` | 5 | Bổ sung `activity_logs`, `notifications`, `ai_observer_runs` |
-| 6 | `Phase7AiAgentSchema` | 7 | `member_type`/`ai_agent_name`, `is_clarification`, `agent_runs`, `task_attachments` |
-| 7 | `Phase9RoleSimplification` | 9/10 | Tinh giản và chuẩn hoá cấu hình vai trò Identity |
-| 8 | `Phase9ModelSync` | 9/10 | Đồng bộ hoá model snapshot và quan hệ |
-| 9 | `Phase11MemberProfile` | 11 | Bổ sung `workspace_invitations`, `email_messages`, partial UQ pending invite |
-| 10 | `Phase13DailyDigest` | 13 | **Thêm 1 cột** `users.digest_enabled` (`boolean NOT NULL DEFAULT true`) — bật/tắt email tóm tắt hằng ngày |
-| 11 | `Phase14_5AgentChat` | 14.5 | **Thêm 1 bảng** `agent_chat_messages` (+ 2 index, + 2 CHECK) — transcript của AI Agent Chat cấp board |
-| 12 | `Phase147AgentPlatform` | 14.7A | Thêm `workspace_taxonomies` và các cột hồ sơ kỹ năng (`skills`, `primary_role`, `capacity_weight`, `max_wip_limit`) trên `workspace_members` |
-| 13 | `Phase147AgentPersonas` | 14.7B | Thêm `workspace_members.persona_key` + CHECK whitelist + thay `uq_workspace_members_ai_agent` bằng `uq_workspace_members_ai_persona` |
-| 14 | `Phase147KnowledgeBase` | 14.7B | `CREATE EXTENSION vector;` + thêm `workspace_knowledge_documents` & `workspace_knowledge_chunks` (`vector(1536)` + HNSW index) |
-| 15 | `Phase15ExternalIntegrations` | 15.1 | Thêm **6 bảng** (`task_numbers`, `workspace_webhook_endpoints`, `webhook_delivery_outbox`, `workspace_github_integrations`, `github_webhook_deliveries`, `task_external_links`), 4 cột mở rộng (`users.is_system`, `workspaces.next_task_number`, `board_columns.is_in_review`, `tasks.task_number`), backfill `TN-123` & seed `GitHub Bot` |
-| 16 | `Phase15DataProtectionKeyRing` | 15 (remediation) | Thêm **1 bảng hạ tầng** `data_protection_keys` (`id` identity PK, `friendly_name`, `xml`) — key ring DataProtection bền vững trên PostgreSQL thay cho filesystem tạm của Render (TASK-DP-01) |
-
-> Dùng `dotnet ef migrations list` để đối chiếu — hiện tại là **16** migrations (**27** bảng nghiệp vụ + **7** bảng Identity + **1** bảng hạ tầng `data_protection_keys` = **35** bảng vật lý), `has-pending-model-changes` sạch.
->
-> `data_protection_keys` là bảng **hạ tầng** do `Microsoft.AspNetCore.DataProtection.EntityFrameworkCore` quản lý; nó không có FK tới domain, không nằm trong ERD nghiệp vụ và **không** bị `TestScenario` truncate (key ring của test host phải sống qua các scenario).
-
-> **Giai đoạn 14 — KHÔNG có migration nào (10 → 11 là do Giai đoạn 14.5, không phải 14).** Cả ba tính năng
-> của 14 đều không cần schema: xem §7 bên dưới. Đây là điểm **khác** Giai đoạn 13 (giai đoạn đó có 1 cột additive).
+| # | Tên Migration | Giai đoạn | Nội dung Thay đổi Schema |
+| :---: | :--- | :---: | :--- |
+| **1** | `InitialSchema` | 1 | Khởi tạo 7 bảng Identity + `workspaces`, `workspace_members`, `refresh_tokens` |
+| **2** | `Phase2KanbanSchema` | 2 | Bổ sung `boards`, `board_columns`, `tasks`, `labels`, `task_labels`, `task_comments` |
+| **3** | `Phase2BoardColumnIsDone` | 2 | Bổ sung cờ `board_columns.is_done` |
+| **4** | `Phase4AccountabilityLayer` | 4 | Bổ sung bảng `ai_action_logs` |
+| **5** | `Phase5AiObserverSchema` | 5 | Bổ sung `activity_logs`, `notifications`, `ai_observer_runs` |
+| **6** | `Phase7AiAgentSchema` | 7 | Bổ sung `member_type`/`ai_agent_name`, `is_clarification`, `agent_runs`, `task_attachments` |
+| **7** | `Phase9RoleSimplification` | 9 | Tinh giản vai trò Identity toàn cục về 2 vai trò `Admin` và `User` |
+| **8** | `Phase9ModelSync` | 9 | Đồng bộ hóa model snapshot và cấu hình quan hệ |
+| **9** | `Phase11MemberProfile` | 11 | Bổ sung `workspace_invitations` và `email_messages` |
+| **10** | `Phase13DailyDigest` | 13 | Bổ sung cột `users.digest_enabled` (`boolean NOT NULL DEFAULT true`) |
+| **11** | `Phase14_5AgentChat` | 14.5 | Bổ sung bảng `agent_chat_messages` kèm CHECK phạm vi `num_nonnulls(board_id, task_id) = 1` |
+| **12** | `Phase147AgentPlatform` | 14.7A | Bổ sung bảng `workspace_taxonomies` và 4 cột kỹ năng/tải công việc trên `workspace_members` |
+| **13** | `Phase147AgentPersonas` | 14.7B | Bổ sung `workspace_members.persona_key` và thay thế index bằng `uq_workspace_members_ai_persona` |
+| **14** | `Phase147KnowledgeBase` | 14.7B | Kích hoạt `CREATE EXTENSION vector;` + bổ sung `workspace_knowledge_documents` & `workspace_knowledge_chunks` |
+| **15** | `Phase15ExternalIntegrations` | 15 | Bổ sung 6 bảng tích hợp ngoài, 4 cột mở rộng (`is_system`, `next_task_number`, `is_in_review`, `task_number`), backfill `TN-123` & seed `GitHub Bot` |
+| **16** | `Phase15DataProtectionKeyRing` | 15 | Bổ sung bảng hạ tầng `data_protection_keys` lưu trữ bền vững vòng khóa Data Protection |
 
 ---
 
-### 3.10 Module AI — AI Agent Chat cấp Board (Giai đoạn 14.5) & Chat của thẻ (Giai đoạn 14.6 §A3)
+## 7. Các Nguyên tắc Toàn vẹn Dữ liệu & Bất biến Kỹ thuật
 
-> **Lệch DoD có chủ ý so với Giai đoạn 14:** Phase 14 (D1/D2) **cấm** migration và cấm lưu transcript ở DB.
-> Người dùng đã chốt **lưu DB** cho chat **cấp board**, nên 14.5 có **đúng 1** migration. Giai đoạn **14.6 §A3**
-> dùng nốt nửa còn lại của bảng: dialog của **tab trong `TaskDetailModal`** cũng ghi/nạp transcript qua
-> `task_id` ⇒ D2 của Phase 14 hết hiệu lực cho **cả hai** bề mặt, và việc đó **không cần migration nào**
-> (đúng như cột `task_id` được chừa sẵn ở Migration 11).
-
-#### `agent_chat_messages`
-Một row = một lượt (một câu hỏi **hoặc** một câu trả lời) của một cuộc chat AI. Một cặp hỏi–đáp là **2 row**; một bảng phục vụ **hai** phạm vi (board / task), đúng một trong hai cột được set.
-
-> ⚠️ **`ORDER BY created_at` KHÔNG đủ để dựng lại thứ tự.** `StampAuditableTimestamps` lấy **một**
-> `DateTimeOffset.UtcNow` cho **mỗi** `SaveChangesAsync`, nên hai row của cùng một lượt hỏi–đáp có `created_at`
-> **giống hệt nhau**. Luật đọc đúng (`AgentChatTranscriptQuery.NewestPageAsync`): `created_at` → **`role`**
-> (câu hỏi trước câu trả lời) → `id`. Xem §"Bug thật" trong `tasks/phase-14-6-ai-agent-enhancements.md`.
-
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
-|---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `board_id` | uuid | **null** | FK→`boards` (Restrict), IX `(board_id, created_at)` | set khi là chat cấp board |
-| `task_id` | uuid | **null** | FK→`tasks` (Restrict), IX `(task_id)` (EF tự tạo cho FK) | **đã dùng từ 14.6 §A3**: chat của tab "Hỏi AI về thẻ này"; `board_id` để **null** |
-| `workspace_id` | uuid | — | FK→`workspaces` (Restrict), IX `(workspace_id, created_at)` | retention theo workspace — **một** lượt quét cho cả hai phạm vi |
-| `user_id` | uuid | **null** | FK→`users` (Restrict) | tác giả lượt `User`; **null** với lượt `Assistant` |
-| `role` | text(16) | — | CHECK `role IN ('User','Assistant')` | **không** có `system`: prompt hệ thống do server dựng mỗi request, không bao giờ là row |
-| `content` | text | — | | app layer cap `AgentChat:MaxMessageChars` (**16000**) cho chat board, `AiChat:MaxMessageChars` (**16000**) cho chat thẻ; **prose** đã lọc GUID trước khi ghi (§A2) |
-| `attachments` | jsonb | null | | `[{ taskId, title }]` — để dựng lại pill + audit *"câu trả lời được phép thấy gì"*; **không** đọc lại làm ngữ cảnh (ngữ cảnh lấy từ board sống). Chat của thẻ để **null** (chỉ có đúng một thẻ, và nó là chủ thể của tab) |
-| `created_at` | timestamptz | — | | keyset paging + nạp transcript (**không** đủ để sắp thứ tự — xem cảnh báo trên) |
-| `updated_at` | timestamptz | — | | stamp tự động qua `IAuditableEntity` |
-
-
-**CHECK `ck_agent_chat_messages_scope`: `num_nonnulls(board_id, task_id) = 1`** — đúng một phạm vi. Hai CHECK riêng `IS NOT NULL` **không** biểu diễn được "một trong hai, và chỉ một" mà không cần cặp OR/AND.
-
-> **Ghi chú tinh chỉnh (Giai đoạn 14.5 — chốt ở bước lập kế hoạch, chi tiết `tasks/phase-14-5-foundation-and-agent-chat.md` §2):**
-> - **Append-only, KHÔNG query filter, KHÔNG soft-delete** — tiền lệ `ai_action_logs`/`agent_runs`. Một lượt chat là bản ghi audit; che nó đi sẽ làm không thể dựng lại vết của đề xuất. Dọn dữ liệu bằng **retention**, không bằng `deleted_at`.
-> - **KHÔNG navigation property trên entity.** `Workspace`/`Board`/`BoardTask` đều có global query filter, và một navigation bắt buộc trỏ tới principal đã bị lọc làm EF cảnh báo rằng join có thể **âm thầm mất row**. Khai báo quan hệ **chỉ bằng FK** (đúng như `AiObserverRun`) giữ model trung thực: transcript đọc theo id, tên hiển thị thì service nạp tường minh.
-> - **HAI lệnh `ToTable(…, t => t.HasCheckConstraint(...))`, không phải một chuỗi.** EF Core 10 **không** cho chuỗi `HasCheckConstraint` trên `CheckConstraintBuilder`, và dạng gộp một lệnh làm model **không round-trip qua snapshot** ⇒ `has-pending-model-changes` báo "thay đổi ma" **vĩnh viễn**. (Đã gặp thật trong phiên thi hành.)
-> - **Retention 90 ngày theo batch** (`AgentChat:RetentionDays` / `RetentionBatchSize`, runner `AgentChatRetentionRunner`, scoped + gọi trực tiếp được từ test theo tiền lệ `DailyDigestRunner`): một lượt quét đầu trên DB lâu năm không được khoá bảng.
-> - **Transcript lưu KHÔNG chứa khối JSON đề xuất.** Khối đó thuộc `ai_action_logs.after_snapshot` (nơi Manager đọc nó như **bản xem trước**), còn transcript là hội thoại người đọc. Khung `done` **vẫn** mang **đủ** câu trả lời (kể cả khối JSON) vì client cần nó để dựng action card. Lưu là **best-effort**: lỗi DB sau khi đã stream chỉ được log — câu trả lời đã tới tay người dùng rồi.
-> - **Bảo mật:** `role` chỉ nhận `User`/`Assistant`; `system` do server sở hữu nên **không** được nhận từ client (nếu không sẽ là đường buôn chỉ thị vào lịch sử đã lưu).
+1. **Phân biệt Xóa mềm (`Soft Delete`) và Hoàn tác AI (`Undo`):**
+   - Các bảng thực thể nghiệp vụ chính (`workspaces`, `boards`, `tasks`, `task_comments`) sử dụng `deleted_at` kèm Global Query Filter để ẩn dữ liệu đã xóa mà không làm gãy khóa ngoại lịch sử.
+   - Khi thực thể cha có Global Query Filter (như `BoardTask` hoặc `WorkspaceKnowledgeDocument`), các thực thể con phụ thuộc bắt buộc (`TaskExternalLink`, `WorkspaceKnowledgeChunk`) đều được khai báo Query Filter tương ứng để đảm bảo tính nhất quán truy vấn và không phát sinh cảnh báo `EF10622`.
+   - Riêng bảng `task_attachments` sử dụng cơ chế **xóa vật lý (Hard Delete)** khi Hoàn tác (`Undo`) nhằm giải phóng ngay dung lượng lưu trữ nhị phân `bytea` trên CSDL.
+2. **Các bảng Nhật ký Chỉ ghi nối (`Append-Only Audit Logs`):**
+   - Các bảng `ai_action_logs`, `activity_logs`, `notifications`, `ai_observer_runs`, `agent_runs`, `agent_chat_messages`, `webhook_delivery_outbox` và `github_webhook_deliveries` tuyệt đối không sử dụng soft-delete hay query filter để bảo toàn lịch sử kiểm toán độc lập (ngay cả khi bảng hoặc thẻ liên quan đã bị xóa mềm).
+   - Dung lượng các bảng nhật ký được kiểm soát thông qua các tiến trình dọn dẹp theo lô định kỳ (`RetentionRunner` theo cửa sổ 30–90 ngày).
+3. **Thứ tự Đọc Lịch sử Hội thoại (`agent_chat_messages`):**
+   - Do hai bản ghi câu hỏi (`User`) và câu trả lời (`Assistant`) có thể được lưu trong cùng một giao dịch `SaveChangesAsync` và nhận cùng dấu thời gian `created_at`, mọi truy vấn nạp lịch sử hội thoại bắt buộc sắp xếp theo bộ ba `(created_at, role, id)` để câu hỏi luôn hiển thị trước câu trả lời.
+4. **Kiểm soát Đồng thời, Cấp số Nguyên tử & Chống Chạy chồng:**
+   - Việc cấp phát mã công việc `TN-123` thực hiện qua câu lệnh cập nhật nguyên tử `UPDATE workspaces SET next_task_number = next_task_number + 1 ... RETURNING` kết hợp bảng khóa `task_numbers`, triệt tiêu hoàn toàn nguy cơ trùng mã khi nhiều yêu cầu tạo thẻ diễn ra đồng thời.
+   - Tiến trình quét `AI Observer` (theo workspace) và lượt chạy `AI Agent Executor` (theo task) sử dụng khóa tư vấn cấp phiên của PostgreSQL (`pg_try_advisory_lock`) kết hợp `SemaphoreSlim` để chống thực thi chồng chéo.
+5. **Quy tắc Migration cho `pgvector` và Chỉ mục Biểu thức:**
+   - Câu lệnh `CREATE EXTENSION IF NOT EXISTS vector;` và các chỉ mục biểu thức (`COALESCE(persona_key, 'general')`) được khai báo tường minh bằng `migrationBuilder.Sql(...)` trong file migration để đảm bảo PostgreSQL thực thi chính xác thứ tự phụ thuộc trước khi tạo cột `vector(1536)` và chỉ mục `HNSW`.
 
 ---
 
-### 3.11 Module AI — Multi-Agent Personas & Bộ nhớ Ngữ nghĩa (Giai đoạn 14.7 Track B)
+## 8. Tài liệu Tham chiếu Liên quan
 
-> **Lệch DoD có chủ ý:** Track B có **2 migration** (`Phase147AgentPersonas`, `Phase147KnowledgeBase` ⇒ `12 → 14`). Kế hoạch §3 ghi `11 → 13` nhưng con số đó viết **trước** khi Track A thi hành; Track A đã tạo `workspace_taxonomies` + 4 cột hồ sơ kỹ năng (lệch **L7**).
-
-#### `workspace_members.persona_key` (migration `Phase147AgentPersonas`)
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
-|---|---|---|---|---|
-| `persona_key` | varchar(40) | **null** | CHECK `persona_key IS NULL OR persona_key IN ('general','scrum_master','tech_lead','qa_security')` · CHECK `member_type <> 'human' OR persona_key IS NULL` | `NULL` cho người thật (ràng buộc thứ hai). Migration **backfill `'general'` cho mọi row `ai_agent`** ⇒ hành vi Phase 7 không đổi |
-
-**Index được THAY (không phải thêm):**
-```sql
--- Migration tạo index MỚI trước khi bỏ index CŨ ⇒ không có khoảnh khắc nào thiếu ràng buộc.
-CREATE UNIQUE INDEX uq_workspace_members_ai_persona
-  ON workspace_members (workspace_id, COALESCE(persona_key, 'general'))
-  WHERE member_type = 'ai_agent';
-DROP INDEX uq_workspace_members_ai_agent;   -- "đúng 1 agent/workspace" của Phase 7
-```
-> ⚠️ **`COALESCE` là bắt buộc, không phải cho đẹp.** PostgreSQL coi **mọi `NULL` là khác nhau**, nên unique index trên `(workspace_id, persona_key)` sẽ chấp nhận **không giới hạn** row agent có `persona_key IS NULL` ⇒ mất luôn tính "mỗi persona tối đa 1 row". EF Core **không có** API cho expression index ⇒ index này viết bằng **SQL thô trong migration** (model vẫn khai báo tên index để snapshot phản ánh đúng).
-> ⚠️ **Thứ tự lệnh trong migration là một phần của tính đúng:** `ADD COLUMN` → **backfill** → `CREATE INDEX mới` → `DROP INDEX cũ` → `ADD CHECK`.
-
-#### `workspace_knowledge_documents` (migration `Phase147KnowledgeBase`)
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
-|---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `workspace_id` | uuid | — | FK→`workspaces` (**Restrict**), IX `(workspace_id, created_at)` | **Restrict**, không CASCADE: workspace là **soft-delete** (`deleted_at`) nên cascade vật lý không bao giờ chạy — cùng quy ước `workspace_members`/`workspace_taxonomies` |
-| `title` | varchar(300) | — | | |
-| `source_url` | varchar(1000) | null | | |
-| `content` | text | — | | app layer cap **400 000** ký tự (gồm cả applier) |
-| `status` | varchar(20) | — | CHECK `status IN ('pending','ready','failed','deleted')` | **`deleted` là soft-delete dùng lại cột này** (không có `deleted_at`) ⇒ không cần migration thứ ba; `ready` **chỉ** được set khi **không còn** chunk nào thiếu vector |
-| `error` | varchar(500) | null | | lý do nhúng vector thất bại |
-| `chunk_count` | int | — | DEFAULT 0 | số chunk đã ghi (cache cho list view) |
-| `created_by_user_id` | uuid | — | FK→`users` (Restrict) | Manager **yêu cầu** (không phải người duyệt) |
-| `created_at`/`updated_at` | timestamptz | — | | `IAuditableEntity` |
-
-Query filter soft-delete theo `workspace.deleted_at` (cùng `WorkspaceTaxonomy`).
-
-#### `workspace_knowledge_chunks`
-| Cột | Kiểu | Null | Ràng buộc | Ghi chú |
-|---|---|---|---|---|
-| `id` | uuid | — | PK | |
-| `document_id` | uuid | — | FK→`workspace_knowledge_documents` (**CASCADE**) | chunk vô nghĩa nếu thiếu document |
-| `workspace_id` | uuid | — | IX `(workspace_id)` | **denormalize** từ document để truy vấn RAG là **một bảng**, không join |
-| `chunk_index` | int | — | UNIQUE `(document_id, chunk_index)` | idempotency guard khi cùng tài liệu được nộp hai lần |
-| `content` | text | — | | trần `Jev:RagChunkChars` (**1200**) / chunk, số chunk `Jev:RagMaxChunksPerDocument` (**200**) |
-| `embedding` | **`vector(1536)`** | **null** | IX **HNSW** `USING hnsw (embedding vector_cosine_ops)` | `NULL` = **chưa nhúng** — chính predicate mà runner quét, nên **không** cần cột cờ `pending` |
-| `created_at`/`updated_at` | timestamptz | — | | `IAuditableEntity` |
-
-> ⚠️ **Cột cố định số chiều.** `vector(1536)` (không phải `vector` không chiều) để lệch số chiều **thất bại trong database** thay vì âm thầm ghi những vector không bao giờ so sánh được. Đổi model embedding sang số chiều khác ⇒ `ALTER COLUMN … TYPE vector(N)` **+ re-embed toàn bộ**; `Embeddings:Dimensions` bị **kiểm tra lúc khởi động** (`ValidateOnStart`) nên lệch cấu hình là fail-fast chứ không phải lỗi runtime.
-> ⚠️ **Operator class phải khớp toán tử truy vấn.** Retrieval xếp hạng bằng cosine (`<=>` / `CosineDistance`) nên index phải là **`vector_cosine_ops`**; index dựng cho `vector_l2_ops` vẫn tồn tại, vẫn đúng cú pháp, và **không bao giờ được dùng**.
-> ⚠️ **`CREATE EXTENSION IF NOT EXISTS vector;` viết tay, đặt ĐẦU migration** — `modelBuilder.HasPostgresExtension("vector")` chỉ được EF ghi thành **annotation** trên `AlterDatabase()` và **không** phát ra câu lệnh. `vector` là extension **bên thứ ba** ⇒ image `postgres:18` chính thức **không** có; CI/dev dùng **`pgvector/pgvector:pg18`**.
-> ⚠️ **Query filter khớp document là BẮT BUỘC, không phải trang trí.** Document có filter soft-delete và là **đầu bắt buộc** của quan hệ ⇒ thiếu filter phía chunk thì EF cảnh báo `10622` và có thể nạp chunk mà document đã bị ẩn. Filter đi **qua document** (không qua `workspace_id` denormalize) để chỉ có **một** nguồn sự thật về khả năng hiển thị.
-
----
-
-### 3.12 Module AI — Tích hợp Hệ sinh thái Bên ngoài (Giai đoạn 15 — Migration #15 `Phase15ExternalIntegrations`)
-
-> Migration #15 bổ sung **6 bảng mới** (nâng tổng số bảng nghiệp vụ từ **21 → 27** bảng, cộng 7 bảng Identity = 34 bảng) và 4 cột mở rộng trên các bảng sẵn có; `dotnet ef migrations list` = **15**.
-
-- **Cột mở rộng trên bảng hiện có:**
-  - `users.is_system` (`boolean NOT NULL DEFAULT false`) — đánh dấu tài khoản hệ thống `GitHub Bot` (`00000000-0000-0000-0000-00000000b071`), bị chặn đăng nhập OAuth/refresh ở `AuthService`.
-  - `workspaces.next_task_number` (`bigint NOT NULL DEFAULT 1`) — bộ đếm nguyên tử cấp phát mã `TN-123` theo từng workspace.
-  - `tasks.task_number` (`bigint NOT NULL DEFAULT 0`) + IX `(board_id, task_number)` — số thứ tự thẻ được backfill theo `(created_at ASC, id ASC)`.
-  - `board_columns.is_in_review` (`boolean NOT NULL DEFAULT false`) + partial UQ `IX_board_columns_board_id_single_in_review` (`WHERE is_in_review = true`) — cột hệ thống thứ 3 (loại trừ lẫn nhau với `is_done` và `is_clarification`).
-
-#### 6 Bảng Mới của Giai đoạn 15
-1. **`task_numbers`** (`PK (workspace_id, task_number)`, `UQ task_id`): đảm bảo duy nhất toàn cục `task_number` trong phạm vi workspace.
-2. **`workspace_webhook_endpoints`** (`id`, `workspace_id`, `name`, `provider` CHECK `('slack','discord')`, `target_url`, `subscribed_events`, `is_active`, `failure_count`, `last_success_at`, `last_failure_at`, `last_error`, `created_by_user_id`, `created_at`, `updated_at`): cấu hình kênh Slack/Discord outbound.
-3. **`webhook_delivery_outbox`** (`id`, `endpoint_id`, `workspace_id`, `notification_id`, `event_type`, `dedupe_key`, `payload_json` `jsonb`, `status` CHECK `('Pending','Sent','Failed')`, `attempt_count`, `max_attempts`, `next_attempt_at`, `sent_at`, `last_http_status`, `last_error`, `created_at`, `updated_at`): hàng đợi outbox bền với backoff + circuit breaker.
-4. **`workspace_github_integrations`** (`id`, `workspace_id` UQ, `webhook_token` UQ, `secret_ciphertext`, `secret_hint`, `is_enabled`, `default_board_id` SET NULL, `issue_label_filter` varchar(500), `auto_move_on_pr`, `auto_create_tasks_from_issues`, `sync_issue_comments`, `created_by_user_id`, `created_at`, `updated_at`): 1 cấu hình GitHub Webhook / workspace; secret mã hoá bằng `IDataProtectionProvider`.
-5. **`github_webhook_deliveries`** (`id`, `integration_id`, `workspace_id`, `delivery_id`, `event_name`, `action`, `repository_full_name`, `status` CHECK `('Processed','Ignored','Failed')`, `summary`, `error_message`, `received_at`, `UQ (integration_id, delivery_id)`): chống replay theo `X-GitHub-Delivery` và sổ nhật ký delivery.
-6. **`task_external_links`** (`id`, `workspace_id`, `task_id` CASCADE, `provider` CHECK `('github')`, `link_type` CHECK `('pull_request','issue')`, `external_id`, `external_url`, `title`, `state` CHECK `('draft','open','merged','closed')`, `created_at`, `updated_at`, `UQ (task_id, provider, link_type, external_id)`): liên kết thẻ Kanban với GitHub Pull Request / Issue kèm matching global query filter.
-
----
-
-## 7. Toàn vẹn dữ liệu, edge cases & failure modes
-
-- **Giai đoạn 14 — KHÔNG thêm bảng/cột/index nào (cố ý, không phải bỏ sót).** Ba lý do cụ thể:
-  1. **AI Task Chat không có bảng transcript.** Server **không** lưu hội thoại: client giữ lịch sử và gửi lại mỗi lượt (chính lịch sử đó **là** input của prompt). Một bảng `ai_task_chat_messages` sẽ phải trả giá bằng migration + retention + query filter + `TRUNCATE` trong harness, cho một tính năng best-effort — và phiên chat vẫn "mất" khi người dùng không bấm lưu. Muốn giữ lâu dài thì bấm **"Lưu thành bình luận"**, tức là đi qua `ai_action_logs`/`task_comments` **sẵn có**.
-  2. **`ai_action_logs` phục vụ hai action mới mà không cần cột mới.** `action` và `entity_type` là **text tự do** (varchar(64)); `CreateBoardFromTemplate` và `PostComment` (đường chat) ghi vào đúng hai cột đó. `entity_type = 'Workspace'` **dùng lại** index `(entity_type, entity_id, created_at)`, đúng như `entity_type = 'Task'` đã làm ở Giai đoạn 7 ⇒ **không** index mới.
-  3. **Sức khỏe dự án là read model, không phải dữ liệu.** `ProjectHealth.Compute` tính lại từ `tasks`/`board_columns` mỗi request (thuần số học trên row đã nạp cho dashboard) ⇒ không cột cache, không bảng snapshot.
-- **Giai đoạn 14 — Snapshot jsonb bỏ khoá `null`.** `AiActionAppliedResult` thêm hai field **optional** (`createdBoardId`/`createdColumnIds`) cho board template, và serializer của `ai_action_logs` nay dùng `JsonIgnoreCondition.WhenWritingNull`. Nhờ vậy snapshot của Phase 4/7 **không** mọc thêm hai khoá `null` — hình dạng jsonb cũ giữ nguyên và "absent" vẫn đồng nghĩa "null" với các applier cũ (test hồi quy `BT_REGRESS_1` khoá lại điều này).
-- **Giai đoạn 14 — Undo board template là SOFT delete, không hard delete.** `boards.deleted_at` được set; row vẫn còn trong DB. Hard delete sẽ phá bất biến "append-only + mọi FK RESTRICT" của §7, và `tasks` của board đó đã tự động bị ẩn vì query filter của `BoardTask` đi theo board đã soft-delete. Hệ quả đã biết & chấp nhận: `activity_logs` vẫn giữ `boardId` của board đã xoá — đó là **lịch sử**, che nó đi là viết lại quá khứ (test `BT_UNDO_1` khẳng định phạm vi thật: danh sách board + số liệu dashboard).
-- **Giai đoạn 14 — Tín hiệu `AtRiskDeadline` không thêm bảng nào.** Nó đi qua đúng pipeline sẵn có: `ObserverSignalDetector` → `ObserverSummarizer` → `ai_observer_runs.summary` (jsonb) → `notifications.type` (text tự do) + `notifications.payload` (jsonb). Run summary có thêm 2 khoá chẩn đoán (`signalsPreserved`/`signalsDroppedBeforePrompt`) — additive trong jsonb, không đổi schema.
-- **Giai đoạn 14.5 — Migration DUY NHẤT: bảng `agent_chat_messages`.** Đây là **lệch DoD có chủ ý** so với Giai đoạn 14 (giai đoạn đó cấm migration): người dùng chốt **lưu transcript của chat cấp board** vào DB, mà "client giữ hội thoại" không thể làm được điều đó (hội thoại phải sống qua reload và giống nhau với mọi người mở board). Bốn gạch đầu dòng giải thích **vì sao vẫn không cần gì thêm ngoài một bảng**:
-  1. **`task_id` để sẵn ⇒ hợp nhất task chat sau này KHÔNG cần migration nữa.** CHECK `num_nonnulls(board_id, task_id) = 1` cho phép cùng bảng phục vụ hai phạm vi. → **Giai đoạn 14.6 §A3 đã dùng đúng chỗ chừa này**: dialog của tab `TaskDetailModal` ghi/nạp qua `task_id`, **0 migration mới**, và CHECK khiến hai transcript **không thể** trộn vào nhau.
-  2. **Không có bảng `ai_chat_sessions`.** "Session" **là** các row của một board — mở panel hai lần không tạo hội thoại thứ hai. Một bảng session riêng chỉ thêm một FK và một khái niệm để sai.
-  3. **Không cột/index mới cho `ai_action_logs`.** Hai action mới của chat (`UpdateTaskFields`, `MoveTaskToColumn`) dùng đúng `entity_type = 'Task'` + index `(entity_type, entity_id, created_at)` đã có; `applied_snapshot` chỉ mọc thêm hai khoá **optional** (`updatedTaskId`/`fromColumnId`) mà serializer **bỏ khoá null** ⇒ snapshot Phase 4/7 giữ **nguyên** hình dạng.
-  4. **Retention không cần bảng/cột nào.** `AgentChatRetentionRunner` xoá theo `created_at` + `AgentChat:RetentionDays` (mặc định 90), theo batch — dùng đúng index `(workspace_id, created_at)` của bảng mới. Không có cờ "đã dọn" nào phải lưu (khác digest, vốn cần idempotency theo ngày).
-- **Giai đoạn 14.5 — `IExternalAlertSink` KHÔNG thêm bảng.** Seam chỉ *phát* cảnh báo đã ghi (`notifications`) ra một transport; trạng thái gửi của transport (retry, dead-letter) là việc của Phase 15 — cố ý **không** cam kết schema cho nó bây giờ.
-- **Giai đoạn 13 — Migration additive DUY NHẤT: `users.digest_enabled`.** Một cột `boolean NOT NULL DEFAULT true`; **không** bảng mới, **không** cột nào khác bị sửa/xoá, **không** index mới. Lý do buộc phải có cột: digest do `BackgroundService` chạy **phía server** gửi, nên lựa chọn bật/tắt phải **đọc được từ DB** — cờ ở client (`localStorage`/Zustand) không thoả mãn, và `users` không có cột nào tái dùng được. `DEFAULT true` khiến migration **không cần backfill** và **không** đổi hành vi của bất kỳ row cũ nào.
-- **Giai đoạn 13 — Chống trùng digest dựa vào `email_messages`, KHÔNG thêm cột.** Idempotency key là `(kind = 'DailyDigest', to_email, ngày UTC của người nhận)`. Trên host free-tier tiến trình ngủ/thức nhiều lần trong ngày, nên mọi cờ in-memory sẽ bị reset bởi cold start và cùng một người nhận nhiều email. Dùng lại bảng audit sẵn có vừa bền vững vừa đúng nguyên tắc "chỉ thêm cột khi không còn đường nào khác". `email_messages` **không** có cột `recipient_user_id` ⇒ khoá theo `to_email`, hợp lệ vì `users.normalized_email` là **UQ** (1 email = 1 user).
-- **Giai đoạn 13 — Digest KHÔNG ghi `notifications` và KHÔNG ghi `activity_logs`.** Digest là một lần **đọc lại** dữ liệu người dùng đã thấy được; nếu nó bắt đầu sinh notification/activity thì mọi dashboard và trang hoạt động sẽ báo digest như một sự kiện nghiệp vụ. Có test tích hợp khẳng định **cả hai bảng đều không tăng** sau khi gửi digest.
-- **Giai đoạn 13 — Row `Failed` được coi là "đã xử lý hôm nay" (cố ý).** Nếu Resend lỗi, lượt gửi sau trong cùng ngày **không** thử lại, để một provider outage không bị hammer và không ăn vào hạn mức free-tier. Phương án tốt hơn (retry có backoff + đếm riêng) là nợ kỹ thuật có chủ ý.
-- **Giai đoạn 12 — Không migration mới (đóng băng 9 migrations):** Toàn bộ tính năng Dashboard, Tìm kiếm xuyên board và @mention không tạo thêm bảng, cột hay index vật lý mới (`has-pending-model-changes` sạch). Thông báo mention dùng type `CommentMention` ghi vào cột `notifications.type` và metadata (taskId, commentId, taskTitle, boardId, mentionedByUserId, mentionedByName) lưu trong `notifications.payload` (jsonb).
-- **Giai đoạn 12 — Quyền riêng tư & An toàn Mention:** Danh sách `mentionUserIds` được gửi tường minh từ client (server không tự parse regex từ text để tránh mạo danh/lệch ngữ cảnh). Server kiểm tra chặt chẽ: mọi mentioned user phải là thành viên người (`member_type = 'human'`) thuộc workspace; tự động deduplicate, loại bỏ tác giả bình luận và assignee (vì assignee đã nhận `CommentOnTask`), không gửi thông báo cho bot/AI.
-- **Giai đoạn 12 — Tìm kiếm phân trang Keyset:** `GET /api/workspaces/{id}/tasks/search` phân trang keyset trên `(updated_at DESC, id DESC)` với cursor mã hoá an toàn, tránh hiện tượng lệch trang khi dữ liệu thay đổi giữa các lần tải thêm.
-- **Giai đoạn 11 — Bảo mật token lời mời:** Token gửi qua email là chuỗi ngẫu nhiên độ entropy cao (cryptographically secure). Cột `workspace_invitations.token_hash` chỉ lưu băm **SHA-256** (128 ký tự hex), tuyệt đối không lưu token thô trong database. Tránh nguy cơ bị chiếm quyền truy cập nếu dữ liệu bị rò rỉ.
-- **Giai đoạn 11 — Partial unique index lời mời đang chờ (`Pending`):** Một email chỉ được phép có tối đa một lời mời ở trạng thái `Pending` trong một workspace (`uq_workspace_invitations_pending`). Lời mời cũ đã huỷ (`Cancelled`), đã chấp nhận (`Accepted`) hoặc hết hạn (`Expired`) không ngăn cản việc tạo lời mời mới cho cùng email.
-- **Giai đoạn 11 — Chặn chủ sở hữu rời workspace (`leaveWorkspace`):** Người dùng có `is_owner = true` (`workspaces.owner_id = user_id`) bị hệ thống chặn rời workspace (trả về `400 Bad Request`). Muốn rời, chủ sở hữu bắt buộc phải thực hiện chuyển giao quyền sở hữu (`Transfer Ownership`) cho thành viên khác tại trang Cài đặt workspace.
-- **Giai đoạn 11 — Chấp nhận lời mời và bảo toàn luồng đăng nhập:** Khi người dùng mở liên kết `/invitations/accept?token=...`, hệ thống kiểm tra token hợp lệ và chưa hết hạn (`expires_at > utcNow`). Nếu user chưa đăng nhập, token được lưu an toàn tại `sessionStorage` (`pending_invite_token`) và chuyển hướng sang `/login`; sau khi đăng nhập/đăng ký thành công, router tự động khôi phục và tiếp tục quy trình chấp nhận lời mời. Khi chấp nhận thành công, row `workspace_members` được tạo với `role = invited_role`, cập nhật `accepted_by_user_id`, `status = Accepted` và ghi nhận một bản ghi vào `activity_logs`.
-- **Refresh token rotate:** khi refresh, token cũ phải `revoked_at` ngay và token mới trỏ `replaced_by_token_id` về token cũ. Nếu một token đã revoke được sử dụng lại → phát hiện replay (revoke cả chuỗi con nếu cần) và trả `401`.
-- **Soft delete vs Undo:** `deleted_at` dùng để ẩn/phục hồi entity trong UI (workspace/board/column/task/comment). Undo cho **hành động AI** dùng `applied_snapshot` trong `ai_action_logs` (revert đúng những gì đã ghi thật; `before_snapshot` dùng cho loại hành động có dữ liệu gốc để khôi phục). Hai cơ chế này khác nhau và không thay thế lẫn nhau.
-- **Kanban đồng thời:** cập nhật `position`/`column_id` có thể xung đột giữa các client; chấp nhận **last-write-wins** ở giai đoạn này, client dùng optimistic update và đồng bộ lại khi server xác nhận (theo `02` §2.2).
-- **AI Smart Setup:** output JSON phải validate đúng schema trước khi ghi DB; không ghi thẳng — luôn qua `ai_action_logs` ở `Pending` rồi mới áp dụng (theo `02` §2.3).
-- **JSONB:** `basis`, `before/after_snapshot`, `payload`, `summary` chứa dữ liệu động; không dùng thay thế cột quan hệ cần lọc/truy vấn.
-- **Free-tier quota:** Neon/Supabase giới hạn storage/compute — không lưu file report lâu dài; cần chính sách retention cho `activity_logs` (ghi chú: dọn log cũ định kỳ để không phình quota). **Giai đoạn 5 chốt cơ chế:** prune `activity_logs` cũ hơn `Observer:RetentionDays` (mặc định 30 ngày) ở cuối mỗi run thành công, có cap số row mỗi lần xoá.
-- **AI Observer (Giai đoạn 5):** Observer là lớp **đọc/cảnh báo** — chỉ ghi `activity_logs`/`notifications`/`ai_observer_runs`, **không** ghi `tasks`/`labels`/`task_labels` và **không** đi qua `ai_action_logs`. Chống chạy chồng bằng `pg_try_advisory_lock` (1 run/workspace tại một thời điểm, toàn hệ thống); chống cảnh báo trùng bằng cửa sổ dedupe `(workspace_id, type, entity)` mặc định 24h; `ai_observer_runs.status = Skipped` khi Observer tắt hoặc không lấy được lock (không phải lỗi).
-- **Bất biến của log:** `activity_logs` **không** có query filter và **không** soft-delete — đây là event store chỉ ghi thêm; việc dọn dữ liệu chỉ theo chính sách retention ở trên. `notifications` cũng không soft-delete (lịch sử cảnh báo giữ nguyên kể cả khi Manager rời workspace; quyền đọc được lọc theo `recipient_user_id`).
-- **Reporting (Giai đoạn 6):** báo cáo là **projection read-only** trên `tasks`/`boards`/`board_columns`/`activity_logs`/`ai_observer_runs` — không bảng mới, không soft-delete, không retention riêng, không ghi dữ liệu, không đi qua `ai_action_logs`. File export sinh trong RAM rồi trả về client; **không** lưu trên server (xem §3.7).
-- **AI Agent Executor (Giai đoạn 7) — bảo mật danh tính agent:** row `users` của agent **không thể đăng nhập** (`password_hash = null`, `email = null`, `lockout_enabled = true`, `two_factor_enabled = true`, không có `user_logins`). `member_type = 'ai_agent'` là **discriminator duy nhất**; mọi truy vấn lọc thành viên phải dùng cột này. Agent có `role = 'Member'` — quyền ghi dữ liệu thật đi qua Accountability Layer và **do con người duyệt**, không qua `role`.
-- **Giai đoạn 7 — gán người thực hiện phải kiểm membership (siết mới):** mọi lần gán/đổi `tasks.assignee_id` (create task, update task, và applier `AssignMember` sau này) phải kiểm assignee **là thành viên của workspace chứa task**. Trước Giai đoạn 7, `TaskService` chỉ kiểm `users.AnyAsync` theo bảng `users`, tức là có thể gán cho user **ngoài** workspace. Agent không phải ngoại lệ — và chính vì agent là một `users` row nên nếu không siết, agent sẽ trở thành đường vào mới cho lỗi này.
-- **Giai đoạn 7 — `agent_runs` là nhật ký append-only theo lượt chạy:** "Chạy lại" **tạo row mới** (`previous_run_id` trỏ row cũ), **không** sửa row cũ; nhờ vậy lịch sử giải trình của lượt "hỏi lại" còn nguyên sau khi lượt sau thành công. Chống chạy chồng bằng `pg_try_advisory_lock` theo `task_id` + `SemaphoreSlim` trong process (không lấy được lock ⇒ `409`, **không** ghi row). **Run mồ côi** (app free-tier sleep/recycle giữa run) được `AgentRunReaper` đóng lúc khởi động: `status = Failed`, `stop_reason = InternalError`, set `finished_at` — nếu không, card Kanban sẽ kẹt "Đang chạy" vĩnh viễn.
-- **Giai đoạn 7 — guardrail ghi ngay trong `agent_runs`:** `tool_call_count` ≤ 15, wall-clock ≤ 5 phút, `prompt_tokens + completion_tokens` ≤ ~50 000 (mọi ngưỡng cấu hình được ở section `Agent`). Vượt ngưỡng ⇒ dừng, `status = Failed` + `stop_reason` tương ứng (`ToolLimit`/`TimeLimit`/`TokenBudget`), `error` ghi rõ đã dùng bao nhiêu, và **đúng một** `notifications` cho Manager/Admin (`notification_sent = true` chống spam). Không lặp vô hạn, không phát sinh chi phí ngoài kiểm soát.
-- **Giai đoạn 7 — `task_attachments` là NGOẠI LỆ duy nhất không soft-delete:** file (bytea, cap 512 KB) chỉ được sinh khi con người `Approved`; `Undone` ⇒ **xoá vật lý** row (không có `deleted_at`). Lý do: `bytea` để lại là tiêu quota thật, và Undo của AI phải trả workspace về đúng trạng thái trước đó. Hệ quả cần chấp nhận: file đã Undo **không thể khôi phục**. **Không** prune tự động `task_attachments` (file là nội dung người dùng đã duyệt). Prune `agent_runs` cũ hơn `Agent:RetentionDays` (mặc định 90 ngày) là hạng mục **optional** — chỉ audit, không phải nội dung nghiệp vụ.
-- **Giai đoạn 7 — hệ quả lên Reporting/Observer (hành vi mong muốn, ghi rõ để không bị coi là bug):** vì agent là `users` row bình thường, task do agent thực hiện **sẽ** xuất hiện trong `byAssignee` của báo cáo và **sẽ** được tính vào tín hiệu `Overload` nếu agent có nhiều task mở. Đây là hành vi đúng (task của agent cũng là task đang mở, cần được nhìn thấy). Nếu sau này muốn tách "hiệu suất của agent" khỏi "hiệu suất của người", hãy thêm cờ ở module `Reporting` — **không** thay đổi schema `tasks`.
-- **Giai đoạn 7 — `is_clarification` và `is_done` loại trừ nhau:** app layer từ chối bật đồng thời (400). Cột `is_clarification` **không** được coi là "done" khi set `completed_at` hay khi thống kê `progress`/`overdue` của báo cáo. Cột "Chờ làm rõ" **không xoá được** (kể cả khi rỗng) vì luồng agent phụ thuộc vào nó — khác luồng chặn xoá cột đang có task.
-- **Nhất quán `tasks.board_id` / `tasks.column_id`:** app layer phải đảm bảo task luôn thuộc cột thuộc đúng board; khuyến nghị validate ở service thay vì trigger để giữ logic tập trung.
-- **Cascade delete:** không dùng cascade vật lý; việc xóa workspace/board phải xử lý mềm (soft delete) và cân nhắc chính sách xóa các entity con.
-
----
-
-## 8. Giả định & tham chiếu
-
-**Giả định chính:**
-- Dữ liệu văn bản (name/description/title/content) không giới hạn độ dài cứng ở cấp DB trong tài liệu này; sẽ ràng buộc `varchar(n)`/`maxLength` cụ thể khi hiện thực nếu cần.
-- MVP dùng 1 assignee/task; đa assignee để giai đoạn sau.
-- Bảng giai đoạn 2–9 là thiết kế sơ bộ, có thể thay đổi khi hiện thực từng giai đoạn. Riêng **Giai đoạn 5 (§3.6)** đã được tinh chỉnh ở bước lập kế hoạch theo `tasks/phase-5-ai-observer.md` §0 (thêm `Skipped`, chốt fan-out notification, retention, advisory lock). **Giai đoạn 6 (§3.7)** đã chốt ở bước lập kế hoạch theo `tasks/phase-6-reporting-export.md` §0 (không bảng mới, quyền Manager/Admin, cửa sổ 30 ngày clamp 365, cap `MaxExportRows`, file trong RAM). **Giai đoạn 7 (§3.3, §3.4, §3.5, §3.8)** đã chốt ở bước lập kế hoạch theo `tasks/phase-7-ai-agent-executor.md` §0 (agent là `users` row per-workspace + `member_type`; `agent_runs.status` tách khỏi `stop_reason`; `task_attachments` dùng `bytea` cap 512 KB và là ngoại lệ không soft-delete; `board_columns.is_clarification` đi theo tiền lệ `is_done`).
-- **Giai đoạn 7 chưa chốt (cố ý để ngỏ, ghi rõ để không ai tưởng là sót):** cơ chế prune `agent_runs` theo retention (bảng đã có `Agent:RetentionDays` nhưng việc dọn chỉ làm sau khi phần chính ổn định); API tải/lưu attachment ngoài PostgreSQL (nếu một ngày vượt 512 KB/file, sẽ là **migration + storage mới**, không phải sửa cột hiện có).
-
-**Tài liệu nguồn:**
-- `project-docs/01-system-specification.md`
-- `project-docs/02-tech-stack-decisions.md`
-- `project-docs/03-roadmap.md`
-- `project-docs/tasks/phase-1-auth.md`
-- `project-docs/tasks/phase-7-ai-agent-executor.md`
+- Đặc tả nghiệp vụ hệ thống: [`01-system-specification.md`](01-system-specification.md)
+- Quyết định công nghệ & kiến trúc: [`02-tech-stack-decisions.md`](02-tech-stack-decisions.md)
+- Lộ trình phát triển các giai đoạn: [`03-roadmap.md`](03-roadmap.md)
+- Kiến trúc Hybrid AI & Jev: [`06-adjust-and-upgrade-with-jev.md`](06-adjust-and-upgrade-with-jev.md)
+- Thiết kế tích hợp bên ngoài: [`07-external-integrations-design.md`](07-external-integrations-design.md)

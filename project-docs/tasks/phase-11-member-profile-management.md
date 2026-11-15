@@ -1,6 +1,6 @@
 # Giai đoạn 11 — Quản lý Member & Profile (Kế hoạch chia task)
 
-> **Trạng thái thi hành:** 🔄 **Backend XONG; frontend + CI bàn giao antigravity** (`tasks/phase-11-remaining-frontend-handover.md`).
+> **Trạng thái thi hành:** 🔄 **Backend XONG; frontend + CI bàn giao antigravity** (`tasks/handovers/phase-11-remaining-frontend-handover.md`).
 > ✅ **§1 Persistence & migration** (2 bảng mới, migration `Phase11MemberProfile`, **9 migration**) ·
 > ✅ **§2 Email gateway (Resend)** (`EmailTemplateTests` 14/14 PASS) ·
 > ✅ **§3 Mời member qua email** (`InvitationApiTests`) ·
@@ -322,7 +322,7 @@ Run CI thứ hai: **370 pass / 1 fail**. Test đỏ duy nhất:
 
 ---
 
-## 9. §7 — Frontend — ⬜ **BÀN GIAO** (xem `tasks/phase-11-remaining-frontend-handover.md`)
+## 9. §7 — Frontend — ⬜ **BÀN GIAO** (xem `tasks/handovers/phase-11-remaining-frontend-handover.md`)
 
 Thư mục **mới**: `shared/components/AppHeader.tsx` (**G**) · `shared/components/NotificationBell.tsx` ·
 `shared/hooks/useUnreadCount.ts` · `features/members/{types,services,utils,components,pages}` ·
@@ -344,7 +344,7 @@ Thư mục **mới**: `shared/components/AppHeader.tsx` (**G**) · `shared/compo
 
 ---
 
-## 10. §8/§9 — CI & tài liệu — ⬜ **BÀN GIAO** (xem `tasks/phase-11-remaining-frontend-handover.md`)
+## 10. §8/§9 — CI & tài liệu — ⬜ **BÀN GIAO** (xem `tasks/handovers/phase-11-remaining-frontend-handover.md`)
 
 | # | File | Việc |
 |---|---|---|

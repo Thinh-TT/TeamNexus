@@ -709,7 +709,7 @@ src/Modules/Ai/TeamNexus.Modules.Ai/
 
 ## 5. Frontend (React + TS + Vite + Ant Design)
 
-> **✅ ĐÃ HOÀN THÀNH — xem `tasks/phase-7-frontend-handover.md` và `report/phase-7-ai-agent-executor-test-report.md`.**
+> **✅ ĐÃ HOÀN THÀNH — xem `tasks/handovers/phase-7-frontend-handover.md` và `report/phase-7-ai-agent-executor-test-report.md`.**
 > Hạng mục Frontend (§5) của Giai đoạn 7 đã được hoàn tất toàn diện:
 > - Hợp đồng API 7 route, SignalR real-time event, và types mirror.
 > - Dropdown assignee cho AI Agent (avatar + purple tag), đồng bộ `useWorkspaceMembers` cache theo `workspaceId`.
@@ -944,7 +944,7 @@ export interface AgentRunProgressEvent {
 - [x] Harness **A–I** PASS, số check ghi vào report: **A 36/36 (§2.1) + I 44/44 (§2.2) + §4 270/270 (§2.3) + §7 tổng 291/291 (§2.4)** — mỗi nhóm có bảng
 - [x] Frontend: `lint` (0/0) + `tsc -b` (exit 0) + `build` (OK) + `test` sạch, test **187 > 155** (nhóm J: 35 files, 187 tests PASS 100%)
 - [x] `03-roadmap.md` §9: Đã cập nhật trạng thái HOÀN THÀNH cho cả Backend và Frontend
-- [x] `04-database-design.md` (§1, §2, §3.3, §3.4, §3.5, **§3.8**, §4, §5, §7, §8), `README.md`, `src/Modules/Ai/README.md`, `src/Modules/Board/README.md`, `report/phase-7-ai-agent-executor-test-report.md` đã cập nhật và **khớp với code** (+ `03-roadmap.md`, `tasks/phase-7-frontend-handover.md`)
+- [x] `04-database-design.md` (§1, §2, §3.3, §3.4, §3.5, **§3.8**, §4, §5, §7, §8), `README.md`, `src/Modules/Ai/README.md`, `src/Modules/Board/README.md`, `report/phase-7-ai-agent-executor-test-report.md` đã cập nhật và **khớp với code** (+ `03-roadmap.md`, `tasks/handovers/phase-7-frontend-handover.md`)
 - [x] Ghi rõ trong report các **hạn chế đã biết** (report §5, 14 mục): không streaming token; run mất khi app sleep; `cancel` chỉ trong cùng instance; chưa prune; chưa test xUnit; `status=Completed` chưa được set (phán quyết ở `ai_action_logs`); `after_snapshot` của attachment mang base64; Tavily `Bearer` đã xác nhận bằng gọi thật nhưng `Body` vẫn là phương án dự phòng cấu hình
 
 ---

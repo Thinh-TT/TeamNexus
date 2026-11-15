@@ -1,6 +1,6 @@
 # TeamNexus — Điều chỉnh & Nâng cấp Hệ thống với Mô hình Jev (Non-Generative Decision AI)
 
-> **Tài liệu thứ 06 của `project-docs/`.** Kế thừa từ `05-capstone-and-itgottalent.md` và `tasks/phase-14-6-ai-agent-enhancements.md`.
+> **Tài liệu thứ 06 của `project-docs/`.** Kế thừa từ [`05-academic-project-transition.md`](05-academic-project-transition.md) và [`03-roadmap.md`](03-roadmap.md) (Giai đoạn 14.7).
 > **Mục tiêu:** Lưu trữ toàn bộ định hướng nghiên cứu, cơ sở lý thuyết, kiến trúc kỹ thuật và kế hoạch hiện thực hóa việc tích hợp **Jev** — mô hình AI ra quyết định không sinh văn bản (Non-Generative Decision Model) vào TeamNexus, kết hợp nâng cấp toàn diện năng lực Autonomous Agent (hợp nhất từ Track B Phase 14.6 vào **Giai đoạn 14.7**).
 >
 > **Nguyên tắc bất biến:**
@@ -183,175 +183,119 @@ Nhằm bảo đảm tính ổn định, mạch lạc và tích hợp sâu kiến
 
 ## 5. THIẾT KẾ DỮ LIỆU & HỢP ĐỒNG API (DATA MODEL & CONTRACTS)
 
-> **📌 CẬP NHẬT SAU KHI THI HÀNH (Giai đoạn 14.7 Track A **và** Track B):** §5.1 và §5.2 dưới đây là **thiết kế dự kiến ban đầu**. Hợp đồng **thật đã hiện thực** khác ở vài điểm quan trọng — xem **§5.3** (Track A) và **§5.4** (Track B) để biết chính xác cái gì đã được build. Đừng code theo §5.1/§5.2 mà không đọc §5.3/§5.4. Giai đoạn 14.7 nay **đã xong cả hai Track** (§A1–§A5 + §B1–§B3); nhật ký thi hành đầy đủ ở `tasks/phase-14-7-autonomous-agent-jev.md` §11–§12.
+### 5.1. Hợp đồng Hệ thống 1 & Định tuyến Quyết định (Track A — Foundation, Triage & Dispatching)
 
-### 5.3. Hợp đồng THẬT đã hiện thực (Giai đoạn 14.7 Track A)
+**A. Giao thức Jev 1.13 Decisions API:**
+Jev sử dụng **Decisions API** chuyên biệt thay vì `/chat/completions`:
+- Điểm cuối: `POST {Jev:BaseUrl}{Jev:DecisionsPath}` (mặc định `https://openrouter.ai` + `/api/alpha/decisions`).
+- Payload yêu cầu: `{ model, state, questions }` (`state` nhận `string | object | array`; `criteria` của `choice` là object `{ nhãn: mô tả }`; `criteria` của `score` là mảng thứ tự tăng dần).
+- Payload phản hồi: `{ answers, model, provider, usage: { input_tokens, output_tokens, cost } }`.
+- Các kiểu câu trả lời:
+  - `noul` → `{ type, noul: 0..1 }` (không có trường `confidence` trên đường truyền; điểm tự tin được tính suy dẫn từ khoảng cách `|noul - 0.5|`).
+  - `choice` → `{ type, choice, probabilities, confidence }`.
+  - `score` → `{ type, score, legend, probabilities, confidence }`.
+- Các trường `probabilities` và `confidence` được kiểm tra an toàn; nếu vắng mặt hoặc không hợp lệ, hệ thống xử lý theo nhánh không đủ độ tin cậy thay vì suy diễn mặc định.
 
-**A. Jev KHÔNG đi qua `/chat/completions` — đây là phát hiện quan trọng nhất khi tra tài liệu gốc.**
-Jev có **Decisions API** riêng. Vì vậy `DeepSeekAiProvider` hiện có **không thể tái dùng**, kể cả khi chỉ đổi `BaseUrl`:
-`POST {Jev:BaseUrl}{Jev:DecisionsPath}` (mặc định `https://openrouter.ai` + `/api/alpha/decisions`) với body
-`{ model, state, questions }` → response `{ answers, model, provider, usage: { input_tokens, output_tokens, cost } }`.
-`state` nhận `string | object | array`. `criteria` của `choice` là **object `{ nhãn: mô tả }`**; của `score` là **array tăng dần**.
-Câu trả lời có kiểu: `noul` → `{ type, noul: 0..1 }` (**KHÔNG có `confidence`**); `choice` → `{ type, choice, probabilities, confidence }`; `score` → `{ type, score, legend, probabilities, confidence }`.
-⚠️ `probabilities`/`confidence` là **optional** trong schema OpenRouter (dù Portkey đánh dấu required) ⇒ code phải chịu được thiếu, và thiếu ⇒ **coi là không dùng được**, không được suy diễn thành mặc định tự tin.
+**B. Lược đồ Cơ sở dữ liệu (Migration `Phase147AgentPlatform`):**
+- Bảng `workspace_members`: bổ sung `skills jsonb NOT NULL DEFAULT '[]'`, `primary_role varchar(50) DEFAULT 'Member'`, `capacity_weight double precision DEFAULT 1.0` (`CHECK > 0`), `max_wip_limit int DEFAULT 5` (`CHECK >= 0`).
+- Bảng `workspace_taxonomies`: `id · workspace_id · kind ('domain'|'work_type') · key · label · color_hex · position · created_at · updated_at`, ràng buộc duy nhất `UNIQUE (workspace_id, kind, key)` và chỉ mục `(workspace_id, kind, position)`.
 
-**B. Schema thật (1 migration: `Phase147AgentPlatform`, `11 → 12`):**
-- `workspace_members` thêm `skills jsonb NOT NULL DEFAULT '[]'`, `primary_role varchar(50) DEFAULT 'Member'`, `capacity_weight double precision DEFAULT 1.0` (CHECK `> 0`), `max_wip_limit int DEFAULT 5` (CHECK `>= 0`).
-- Bảng **`workspace_taxonomies`**: `id · workspace_id · kind ('domain'|'work_type') · key · label · color_hex · position · created_at · updated_at`, UNIQUE `(workspace_id, kind, key)`, index `(workspace_id, kind, position)`.
-- **KHÁC thiết kế §5.1:** không có cột `domain`/`work_type` trên cùng một bảng như SQL minh hoạ, mà dùng **một cột `kind`** + `key`/`label` — để thêm loại danh mục mới không cần đổi schema. `persona_key` **chưa** thêm (thuộc Track B §B1).
-
-**C. Hợp đồng `IJevDecisionService` thật** (4 method thay vì 3; mọi kết quả đều mang `ConfidenceScore` **và** `RoutingAdvice`):
+**C. Hợp đồng Dịch vụ `IJevDecisionService`:**
 ```csharp
-Task<TaskTriageResult>            TriageTaskAsync(TaskTriageContext, CancellationToken);
-Task<AssigneeRecommendationResult> RecommendAssigneeAsync(AssigneeDispatchContext, CancellationToken);
-Task<ObserverRiskAssessmentResult> AssessObserverSignalsAsync(ObserverRiskContext, CancellationToken);
-Task<RecoveryActionDecisionResult> DecideRecoveryActionAsync(RecoveryActionContext, CancellationToken);
+public interface IJevDecisionService
+{
+    Task<TaskTriageResult>             TriageTaskAsync(TaskTriageContext context, CancellationToken ct = default);
+    Task<AssigneeRecommendationResult> RecommendAssigneeAsync(AssigneeDispatchContext context, CancellationToken ct = default);
+    Task<ObserverRiskAssessmentResult> AssessObserverSignalsAsync(ObserverRiskContext context, CancellationToken ct = default);
+    Task<RecoveryActionDecisionResult> DecideRecoveryActionAsync(RecoveryActionContext context, CancellationToken ct = default);
+    Task<AcceptanceValidationResult?>  ValidateAcceptanceCriteriaAsync(string stateJson, CancellationToken ct = default);
+}
 ```
 - `TaskTriageResult(string? SuggestedDomain, string? SuggestedWorkType, string? SuggestedPriority, bool NeedsSecurityReview, double ConfidenceScore, string RoutingAdvice, IReadOnlyList<TriageOption> Options)`
 - `AssigneeRecommendationResult(Guid? RecommendedUserId, double ConfidenceScore, IReadOnlyList<CandidateScore> CandidateRankings, string RoutingAdvice)`
 - `ObserverRiskAssessmentResult(string EvaluatedSeverity, bool RequireImmediateAlert, bool HasDominoRisk, double ConfidenceScore, string RoutingAdvice)`
 - `RecoveryActionDecisionResult(string? ActionType, Guid? TargetTaskId, Guid? TargetUserId, double ConfidenceScore, string RoutingAdvice)`
+- `AcceptanceValidationResult(bool? Verified, double ConfidenceScore, string RoutingAdvice, JevDecisionUsage? Usage)`
 
-**D. Rẽ nhánh confidence là CODE CỦA TA, không phải của provider** (`ConfidenceRouting`, hàm thuần):
-`≥ 0.85` ⇒ `DirectAssign` (đúng 1 đề xuất) · `[0.50, 0.85)` ⇒ `OfferChoices` (≤ 3) · `< 0.50` ⇒ `ManualRequired` **và mọi giá trị đề xuất bị set `null`**.
-Cấu hình ngược (`High < Medium`) bị **clamp** để nhánh giữa không biến mất; `NaN`/`∞` ⇒ `ManualRequired`.
+**D. Định tuyến Độ tự tin Tất định (`ConfidenceRouting` — Hàm thuần):**
+- `confidence ≥ 0.85` → **`DirectAssign`** (trả về đúng 1 đề xuất có độ tin cậy cao nhất).
+- `0.50 ≤ confidence < 0.85` → **`OfferChoices`** (trả về tối đa 3 lựa chọn để người dùng cân nhắc).
+- `confidence < 0.50` (hoặc `NaN`/`∞`) → **`ManualRequired`** và **mọi giá trị đề xuất bị đặt về `null`**.
 
-**E. Endpoint HTTP thật:**
-| Method | Route | Quyền | Ghi chú |
-|---|---|---|---|
-| `GET` / `PUT` | `/api/workspaces/{id}/taxonomies` | Member+ / Manager+ | Seed lazy idempotent (`INSERT … ON CONFLICT DO NOTHING`) |
-| `PUT` | `/api/workspaces/{id}/members/{userId}/profile` | Admin/Owner | Từ chối AI Agent; field **vắng ⇒ giữ nguyên**, list **rỗng ⇒ xoá** |
-| `POST` | `/api/boards/{id}/tasks/triage` | Member+ | **Không ghi gì**; tắt ⇒ 503; provider lỗi ⇒ **200 + `degraded:true`** |
-| `POST` | `/api/boards/{id}/tasks/{taskId}/assignee-suggestions` | Member+ | **Không ghi gì**; thẻ khác bảng ⇒ 400 |
+**E. Bảo vệ Quyền riêng tư & Chống rò rỉ Định danh (Zero-GUID / Zero-PII):**
+- Jev chỉ nhận **nhãn ẩn danh do máy chủ cấp** (`cand-1`, `cand-2`, hoặc `key` taxonomy) và không bao giờ nhận `Guid` hay địa chỉ `email` của người dùng.
+- Bộ kiểm tra đầu ra lọc bỏ mọi chuỗi khớp biểu thức chính quy GUID theo cơ chế phòng thủ chiều sâu.
 
-**F. Chống rò rỉ ID — mạnh hơn đường LLM:** Jev chỉ nhận **nhãn do server cấp** (`cand-1`, key taxonomy). Nó **không bao giờ** nhận `Guid` ⇒ không thể trả lại. Validator **còn** lọc thêm mọi chuỗi khớp mẫu GUID (phòng thủ theo chiều sâu). Context assignee **không gửi `email`**. Có test khẳng định `userId` không xuất hiện trong trường văn bản, và **test khẳng định email không rời khỏi tiến trình**.
+**F. Kế hoạch Tự phục hồi (`RecoveryPlan` `AiActionType`):**
+- Phạm vi `entity_type = 'Workspace'`, hỗ trợ 4 chiến lược trong payload `kind`: `ReassignTask`, `SplitSubtasks` (ủy quyền tạo thẻ con và lưu `createdTaskIds` vào `applied_snapshot` để hoàn tác chính xác), `ExtendDeadline` và `EscalateManager`.
+- Mặc định `AutoRecoveryPlanEnabled = false` để quản trị viên chủ động bật khi cần.
 
-**G. Recovery Plan (Phần B) — thật:** action type **`RecoveryPlan`** (`entity_type='Workspace'`), `kind` nằm **trong payload** (4 giá trị). `RecoveryPlanApplier` **KHÔNG mở transaction** (bẫy P2 Phase 14.5). `SplitSubtasks` **uỷ quyền** `CreateSubtasksApplier` **và phải mang `createdTaskIds` lên** `applied_snapshot`, nếu không Undo xoá 0 thẻ mà báo thành công. `EscalateManager` **không ghi gì** + trả warning. Requester = **Admin/Manager thật** (không có system principal). `AutoRecoveryPlanEnabled = false` **mặc định**.
-
-**H. `FakeJevDecisionProvider` (offline, 0 token):** chọn kịch bản bằng sentinel `FAKE:JEV_HIGH|MED|LOW|ERROR|SLOW` **quét trong toàn bộ `state`** (không chỉ một field — vì ba context đặt tiêu đề ở ba chỗ khác nhau). Luôn **đọc lại chính các nhãn `criteria` mà caller gửi** ⇒ câu trả lời fake không bao giờ lệch khỏi hợp lệ.
-
-### 5.4. Hợp đồng THẬT đã hiện thực (Giai đoạn 14.7 **Track B** — §B1–§B3)
-
-> **Trạng thái:** **ĐÃ XONG.** Nhật ký thi hành đầy đủ (9 quyết định **K1–K9**, 6 lệch **L7–L12**) ở `tasks/phase-14-7-autonomous-agent-jev.md` §12. Dưới đây chỉ là phần **khác so với thiết kế dự kiến của tài liệu này**.
-
-**A. Schema thật (2 migration mới: `Phase147AgentPersonas` `12 → 13`, `Phase147KnowledgeBase` `13 → 14`):**
-- `workspace_members.persona_key varchar(40) NULL` + CHECK `persona_key IS NULL OR persona_key IN ('general','scrum_master','tech_lead','qa_security')` + CHECK `member_type <> 'human' OR persona_key IS NULL`.
-- **Backfill bắt buộc, chạy TRƯỚC khi tạo index:** `UPDATE workspace_members SET persona_key = 'general' WHERE member_type = 'ai_agent' AND persona_key IS NULL;` ⇒ row agent cũ trở thành persona `general` và **hành vi Phase 7 không đổi**.
-- **Index được THAY** (khác mô tả cũ "nới thành `(workspace_id, persona_key)`"):
-  `CREATE UNIQUE INDEX uq_workspace_members_ai_persona ON workspace_members (workspace_id, COALESCE(persona_key, 'general')) WHERE member_type = 'ai_agent';`
-  rồi mới `DROP INDEX uq_workspace_members_ai_agent`. **Lý do `COALESCE`:** PostgreSQL coi mọi `NULL` là khác nhau, nên unique index trên `(workspace_id, persona_key)` sẽ **không** chặn được nhiều row `persona_key IS NULL` ⇒ mất luôn tính "mỗi persona tối đa 1 row". EF Core **không có** API cho expression index ⇒ viết **SQL thô** trong migration.
-- `workspace_knowledge_documents`: `id · workspace_id (RESTRICT) · title (300) · source_url (1000 NULL) · content (text) · status ('pending'|'ready'|'failed'|'deleted') · error (500 NULL) · chunk_count · created_by_user_id (RESTRICT) · created_at · updated_at`; index `(workspace_id, created_at)`. **KHÁC thiết kế:** `ON DELETE RESTRICT` chứ không phải CASCADE, vì cả schema **soft-delete** workspace (`workspaces.deleted_at`) nên cascade vật lý không bao giờ chạy; và `deleted` **dùng lại cột `status`** thay vì thêm `deleted_at`.
-- `workspace_knowledge_chunks`: `id · document_id (CASCADE) · workspace_id (denormalize) · chunk_index · content · embedding vector(1536) NULL · created_at · updated_at`; UNIQUE `(document_id, chunk_index)`; index **HNSW** `USING hnsw (embedding vector_cosine_ops)`.
-- **`CREATE EXTENSION IF NOT EXISTS vector;` viết tay, đặt đầu migration 2:** `modelBuilder.HasPostgresExtension("vector")` chỉ được EF ghi thành **annotation** trên `AlterDatabase()` và **KHÔNG** phát ra câu lệnh. Vì vậy **không** dùng khai báo đó (xem lệch **L9**).
-- **Thư viện .NET:** `Pgvector.EntityFrameworkCore` **0.3.0** (+ `Pgvector` 0.3.2) trong `TeamNexus.Persistence`, và **bắt buộc** `options.UseNpgsql(cs, npgsql => npgsql.UseVector())` — thiếu dòng đó provider **từ chối kiểu CLR `Vector?`** ngay khi dựng model.
-
-**B. Hợp đồng `IJevDecisionService` thật — 4 → 5 method:** thêm
-`Task<AcceptanceValidationResult?> ValidateAcceptanceCriteriaAsync(string stateJson, CancellationToken)`
-trả **`null`** (không ném) khi Jev tắt hoặc provider lỗi. `AcceptanceValidationResult(bool? Verified, double ConfidenceScore, string RoutingAdvice, JevDecisionUsage? Usage)`. ⚠️ Shape `noul` **không có** `confidence` ⇒ `ConfidenceScore` là con số **SUY RA** từ khoảng cách của xác suất tới ngưỡng 0.5, và điều đó được ghi rõ trong code.
-
-**C. Persona — hợp đồng thật:**
-- `IAiAgentResolver` thêm **đúng 1** method: `EnsurePersonaAgentAsync(Guid workspaceId, string personaKey, CancellationToken)`; 3 method cũ **không đổi** về chữ ký. `NullAiAgentResolver` **ném** `NotSupportedException` (không trả `Guid.Empty`).
-- `PersonaCatalog` là **hàm thuần**: `general` → `TeamNexus Agent`, skill **`[]`** (tương thích ngược Phase 7); `scrum_master` → `AI Scrum Master` (`user-story`, `acceptance-criteria`, `sprint-planning`); `tech_lead` → `AI Tech Lead` (`architecture`, `code-review`, `api-design`); `qa_security` → `AI QA & Security` (`test-cases`, `security-audit`, `threat-modeling`).
-- `AgentUserName`: persona `general` **giữ nguyên** `ai-agent-{workspaceId:N}` (không thêm đoạn persona) — đổi nó là thay đổi định danh dữ liệu im lặng. Persona khác: `ai-agent-{personaKey}-{workspaceId:N}`.
-- `IsAiAgentAsync` **KHÔNG ĐỔI** ⇒ mọi persona là agent ở mọi module mà không phải sửa file nào của các module đó.
-- **Persona trong Agent Chat:** `?persona=` (vắng/rỗng ⇒ `AgentChat:DefaultPersona` = `general`; **sai ⇒ 400**). Khối `VAI TRÒ:` chỉ được **PREPEND** cho persona khác `general`; **`AgentChatPrompts.Marker` giữ nguyên từng byte** (bộ chọn nhánh của `FakeAiProvider`). Shape SSE **không đổi**. `agent_chat_messages` **không** thêm cột persona.
-
-**D. Ba tool ReAct mới — hợp đồng thật:** `InspectMemberWorkload` (`{ userId }`), `MatchSkills` (`{ skills[], limit }`, **không** gọi model), `ValidateAcceptanceCriteria` (`{ draft, criteria }`). Whitelist **4 → 7**. Guardrail **không đổi** (15 / 300 s / 50 000 token / 20 lượt LLM). `InspectMemberWorkload` **dùng chung** `IMemberWorkloadReader` với §A4.
-
-**E. Endpoint HTTP thật (Track B) — bổ sung vào bảng §5.3.E:**
-| Method | Route | Quyền | Ghi chú |
-|---|---|---|---|
-| `GET` | `/api/workspaces/{id}/knowledge/documents` | Member+ | `Jev:RagEnabled=false` ⇒ `{ enabled:false, items:[] }` |
-| `POST` | `/api/workspaces/{id}/knowledge/documents` | Manager+ | **201 kèm action `Pending`**, KHÔNG trả document; RAG off ⇒ 400 |
-| `DELETE` | `/api/workspaces/{id}/knowledge/documents/{docId}` | Manager+ | **201 kèm action `Pending`** |
-| `?persona=` | `POST /api/boards/{id}/agent-chat/stream` | Member+ | **Chỉ append query param**; shape SSE **không đổi** |
-| *(append)* | `GET /api/boards/{id}/agent-chat/session` | Member+ | thêm `personas[]` + `defaultPersona` |
-| *(append)* | `WorkspaceMemberResponse` | — | thêm `personaKey` (field thứ 13, `null` cho người thật) |
-
-**F. Accountability Layer — đường ghi kiến thức:** action type **`CreateKnowledgeDocument`** (một type, `kind` trong payload: vắng ⇒ tạo, `"Delete"` ⇒ xoá), scope `entity_type='Workspace'`. Applier **KHÔNG mở transaction** (`ApproveAsync` đã mở — bẫy **P2**). Undo = soft-delete (`status='deleted'`); khôi phục về `ready` **chỉ khi** mọi chunk đã có vector, ngược lại `pending`.
-
-**G. Embedding:** port **`IEmbeddingProvider`** + `OpenRouterEmbeddingProvider` (OpenAI-compatible `POST {BaseUrl}/embeddings`, đọc `data[].index` để **sắp đúng thứ tự**) + `FakeEmbeddingProvider` (**tất định** từ SHA-256, cùng chuỗi ⇒ cùng vector, không gọi mạng). Section cấu hình **`Embeddings`** (tách khỏi `Jev`); `Enabled=false` mặc định; `Dimensions` **bắt buộc = 1536** và **kiểm tra lúc khởi động** (`ValidateOnStart`) vì cột `vector(1536)` cố định trong schema. `KnowledgeEmbeddingRunner` (scoped, gọi trực tiếp được từ test) + `KnowledgeEmbeddingBackgroundService`. **Embedding KHÔNG chạy trong đường duyệt** — duyệt phải thành công kể cả khi nhà cung cấp embedding chết.
-
-**H. Hạ tầng:** CI + dev dùng **`pgvector/pgvector:pg18`** (⚠️ `postgres:18` chính thức **không** có extension `vector`). `DatabaseFixture` **probe extension TRƯỚC `MigrateAsync`**; thiếu ⇒ **skip CẢ NHÓM test DB** kèm hướng dẫn (khác kế hoạch "chỉ skip nhóm RAG" — xem lệch **L10**).
-
-
-### 5.1. Mở rộng Database Schema (thiết kế DỰ KIẾN ban đầu — xem §5.3.A/B cho bản thật)
-```sql
--- 1. Bổ sung kỹ năng và vai trò cho thành viên workspace
-ALTER TABLE workspace_members 
-ADD COLUMN IF NOT EXISTS skills jsonb DEFAULT '[]'::jsonb,
-ADD COLUMN IF NOT EXISTS primary_role varchar(50) DEFAULT 'Member',
-ADD COLUMN IF NOT EXISTS max_wip_limit int DEFAULT 5;
-
--- 2. Quản lý nhãn cố định / taxonomy chuẩn hóa
-CREATE TABLE IF NOT EXISTS workspace_taxonomies (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    domain varchar(50) NOT NULL, -- 'Backend', 'Frontend', 'DevOps', 'Mobile', etc.
-    work_type varchar(50) NOT NULL, -- 'Feature', 'Bug', 'Refactor', etc.
-    color_hex varchar(10) NOT NULL,
-    created_at timestamptz NOT NULL DEFAULT now()
-);
-CREATE INDEX IF NOT EXISTS idx_workspace_taxonomies_ws ON workspace_taxonomies(workspace_id);
-```
-
-### 5.2. C# Interface Contract: `IJevDecisionService`
-```csharp
-namespace TeamNexus.Modules.Ai.Services.Jev;
-
-public interface IJevDecisionService
-{
-    /// <summary>Phân loại nhanh task và đánh giá độ khẩn cấp (Single-pass).</summary>
-    Task<TaskTriageResult> TriageTaskAsync(string title, string? description, CancellationToken ct = default);
-
-    /// <summary>Gợi ý thành viên phù hợp nhất dựa trên kỹ năng và khối lượng công việc hiện tại.</summary>
-    Task<AssigneeRecommendationResult> RecommendAssigneeAsync(
-        string taskTitle, 
-        string? taskDescription, 
-        IReadOnlyList<MemberWorkloadContext> candidates, 
-        CancellationToken ct = default);
-
-    /// <summary>Đánh giá mức độ nghiêm trọng của tín hiệu và định tuyến kịch bản phục hồi cho AI Observer.</summary>
-    Task<ObserverRiskAssessmentResult> AssessObserverSignalsAsync(
-        IReadOnlyList<ObserverSignalContext> signals, 
-        CancellationToken ct = default);
-}
-
-public sealed record TaskTriageResult(
-    string SuggestedDomain,
-    string SuggestedWorkType,
-    string SuggestedPriority,
-    bool NeedsSecurityReview,
-    double ConfidenceScore);
-
-public sealed record AssigneeRecommendationResult(
-    Guid? RecommendedUserId,
-    double ConfidenceScore,
-    IReadOnlyList<CandidateScore> CandidateRankings,
-    string RoutingAdvice); // "DirectAssign", "OfferChoices", "ManualRequired"
-
-public sealed record ObserverRiskAssessmentResult(
-    string EvaluatedSeverity, // "Low", "Medium", "High", "Critical"
-    bool RequireImmediateAlert,
-    bool HasDominoRisk,
-    string RecommendedActionType, // "Reassign", "SplitSubtasks", "ExtendDeadline", "None"
-    double ConfidenceScore);
-```
+**G. Chế độ Giả lập Tất định (`FakeJevDecisionProvider`):**
+- Hoạt động hoàn toàn ngoại tuyến (`0` token) khi không cấu hình `Jev:ApiKey`, điều khiển kịch bản qua các sentinel `FAKE:JEV_HIGH | MED | LOW | ERROR | SLOW` và luôn đọc lại tập nhãn `criteria` hợp lệ từ yêu cầu đầu vào.
 
 ---
 
-## 6. GIÁ TRỊ HỌC THUẬT & ĐIỂM CỘNG TẠI CUỘC THI IT GOT TALENT
+### 5.2. Hợp đồng Đa Nhân cách, ReAct 7 Công cụ & Cơ sở Tri thức RAG (Track B — Personas, Tools & `pgvector`)
 
-Trong hồ sơ Đồ án Chuyên ngành và Bài dự thi **IT got Talent (Hạng mục AI)**, việc tích hợp Jev mang lại những luận điểm cạnh tranh mang tính đột phá:
+**A. Lược đồ Cơ sở dữ liệu (Migrations `Phase147AgentPersonas` & `Phase147KnowledgeBase`):**
+- Bảng `workspace_members`: bổ sung cột `persona_key varchar(40) NULL` kèm ràng buộc `CHECK (persona_key IS NULL OR persona_key IN ('general','scrum_master','tech_lead','qa_security'))` và `CHECK (member_type <> 'human' OR persona_key IS NULL)`.
+- Chỉ mục duy nhất biểu thức một phần:
+  ```sql
+  CREATE UNIQUE INDEX uq_workspace_members_ai_persona
+  ON workspace_members (workspace_id, COALESCE(persona_key, 'general'))
+  WHERE member_type = 'ai_agent';
+  ```
+- Bảng `workspace_knowledge_documents`: `id · workspace_id (RESTRICT) · title (300) · source_url (1000 NULL) · content (text) · status ('pending'|'ready'|'failed'|'deleted') · error (500 NULL) · chunk_count · created_by_user_id (RESTRICT) · created_at · updated_at`; chỉ mục `(workspace_id, created_at)`.
+- Bảng `workspace_knowledge_chunks`: `id · document_id (CASCADE) · workspace_id · chunk_index · content · embedding vector(1536) NULL · created_at · updated_at`; ràng buộc `UNIQUE (document_id, chunk_index)` và chỉ mục láng giềng gần đúng **HNSW** `USING hnsw (embedding vector_cosine_ops)`.
+- Kích hoạt tiện ích mở rộng PostgreSQL `CREATE EXTENSION IF NOT EXISTS vector;` kết hợp `Pgvector.EntityFrameworkCore` (`UseVector()`).
 
-1. **Khắc phục triệt để điểm yếu của "Chatbot AI đại trà":**
-   - Hầu hết các đồ án thông thường chỉ dừng lại ở việc dùng LLM dạng "hỏi-đáp sinh text".
-   - TeamNexus chứng minh được tư duy kỹ thuật đỉnh cao: **Dùng đúng mô hình cho đúng bài toán**. Không dùng một cỗ máy LLM cồng kềnh để làm việc phân loại đơn giản.
-2. **Mô hình Hybrid AI (Tư duy Nhanh & Chậm — System 1 & System 2):**
-   - Hiện thực hóa thuyết nhận thức Kahneman trong kiến trúc phần mềm: Jev phản xạ trong 100ms để định tuyến, lọc dữ liệu; LLM DeepSeek chỉ suy ngẫm sâu khi cần phân tích chiến lược.
-3. **Số đo định lượng kiểm chứng được (Measurable Benchmarks):**
-   - **Độ trễ:** Giảm thời gian ra quyết định phân loại từ 2.800ms (LLM) xuống **140ms (Jev)** (nhanh hơn gấp 20 lần).
-   - **Chi phí vận hành:** Tiết kiệm ~92% chi phí token cho các tác vụ nền định kỳ của AI Observer.
-   - **Độ chính xác & An toàn:** 0% lỗi hallucination cấu trúc JSON, 100% tuân thủ Accountability Layer.
-4. **Tính khả thi và sẵn sàng Production:**
-   - Hệ thống vẫn giữ vững nguyên tắc **Graceful Degradation** và tính tương thích ngược, đảm bảo TeamNexus vận hành liên tục, ổn định và an toàn trên Internet thật.
+**B. Danh mục Đa Nhân cách Chuyên gia (`PersonaCatalog`):**
+- `general` → **TeamNexus Agent** (tương thích ngược với định danh `ai-agent-{workspaceId:N}`).
+- `scrum_master` → **AI Scrum Master** (kỹ năng: `user-story`, `acceptance-criteria`, `sprint-planning`).
+- `tech_lead` → **AI Tech Lead** (kỹ năng: `architecture`, `code-review`, `api-design`).
+- `qa_security` → **AI QA & Security** (kỹ năng: `test-cases`, `security-audit`, `threat-modeling`).
+- `IAiAgentResolver.EnsurePersonaAgentAsync(workspaceId, personaKey, ct)` đảm bảo khởi tạo thành viên ảo theo từng nhân cách; luồng Board Agent Chat nhận tham số tùy chọn `?persona=`.
+
+**C. Mở rộng Vòng lặp ReAct (7 Công cụ):**
+- Bổ sung 3 công cụ mới bên cạnh 4 công cụ gốc (`SearchSystemData`, `WebSearch`, `DraftOutput`, `RequestClarification`):
+  1. `InspectMemberWorkload` (`{ userId }`): Truy vấn tải công việc hiện tại của thành viên qua `IMemberWorkloadReader`.
+  2. `MatchSkills` (`{ skills[], limit }`): Đối sánh kỹ năng yêu cầu với hồ sơ thành viên trong Workspace.
+  3. `ValidateAcceptanceCriteria` (`{ draft, criteria }`): Thẩm định bản thảo đầu ra so với tiêu chí nghiệm thu bằng Jev System-1.
+- Giữ nguyên ngân sách bảo vệ: tối đa `15` lượt gọi công cụ, thời gian chạy `300s`, `50.000` tokens và `20` lượt gọi LLM.
+
+**D. Đường ống Sinh Vector Nhúng (`IEmbeddingProvider` & `KnowledgeEmbeddingRunner`):**
+- Tách biệt cấu hình tại section `Embeddings` (`Dimensions = 1536` được kiểm tra ngay khi khởi động `ValidateOnStart`).
+- Hỗ trợ `OpenRouterEmbeddingProvider` (`POST {BaseUrl}/embeddings`) khi có khóa API và `FakeEmbeddingProvider` (băm SHA-256 tất định) khi chạy ngoại tuyến.
+- Mọi thao tác thêm hoặc xóa tài liệu tri thức đều đi qua **Accountability Layer** (`AiActionType.CreateKnowledgeDocument`), sau khi được duyệt sẽ được `KnowledgeEmbeddingRunner` chia đoạn và tính toán vector nhúng ở tiến trình nền.
+
+**E. Bảng Tổng hợp các Điểm cuối HTTP (Giai đoạn 14.7 Track A & Track B):**
+
+| Phương thức | Đường dẫn (Route) | Phân quyền | Mô tả chức năng |
+|---|---|---|---|
+| `GET` / `PUT` | `/api/workspaces/{id}/taxonomies` | Member+ / Manager+ | Truy vấn (kèm khởi tạo mặc định idempotent) và cập nhật từ điển nhãn chuẩn hóa của Workspace |
+| `PUT` | `/api/workspaces/{id}/members/{userId}/profile` | Admin | Cập nhật kỹ năng (`skills`), vai trò chính (`primaryRole`) và giới hạn WIP (`maxWipLimit`) của thành viên |
+| `POST` | `/api/boards/{id}/tasks/triage` | Member+ | Phân loại nhanh độ ưu tiên và nhãn công việc bằng Jev System-1 (chỉ đọc, hỗ trợ `degraded: true`) |
+| `POST` | `/api/boards/{id}/tasks/{taskId}/assignee-suggestions` | Member+ | Xếp hạng và gợi ý người nhận việc phù hợp nhất bằng Jev System-1 |
+| `GET` | `/api/workspaces/{id}/knowledge/documents` | Member+ | Liệt kê danh sách tài liệu trong Cơ sở Tri thức RAG của Workspace |
+| `POST` | `/api/workspaces/{id}/knowledge/documents` | Manager+ | Tạo đề xuất nạp tài liệu tri thức mới (`201 Created` kèm `AiActionLog` `Pending`) |
+| `DELETE` | `/api/workspaces/{id}/knowledge/documents/{docId}` | Manager+ | Tạo đề xuất xóa tài liệu tri thức (`201 Created` kèm `AiActionType.CreateKnowledgeDocument` `kind="Delete"`) |
+| `POST` | `/api/boards/{id}/agent-chat/stream?persona=` | Member+ | Hội thoại SSE cấp độ bảng với nhân cách chuyên gia được chọn |
+| `GET` | `/api/boards/{id}/agent-chat/session` | Member+ | Truy vấn phiên hội thoại bảng kèm danh sách `personas[]` và `defaultPersona` |
+
+---
+
+## 6. GIÁ TRỊ HỌC THUẬT & ĐÓNG GÓP KỸ THUẬT TRONG ĐỒ ÁN
+
+Trong khuôn khổ **Đồ án Học thuật**, việc thiết kế và hiện thực hóa kiến trúc **Hybrid AI (Jev 1.13 + DeepSeek)** kết hợp **Semantic RAG (`pgvector`)** mang lại những đóng góp kỹ thuật rõ nét:
+
+1. **Khắc phục triệt để hạn chế của kiến trúc "Thuần LLM" truyền thống:**
+   - Thay vì sử dụng một mô hình ngôn ngữ lớn cồng kềnh cho mọi tác vụ, TeamNexus áp dụng nguyên lý **dùng đúng mô hình cho đúng bài toán**: mô hình quyết định có cấu trúc (**Jev 1.13**) cho các bài toán phân loại/định tuyến thời gian thực và mô hình sinh ngôn ngữ (**DeepSeek**) cho suy luận đa bước.
+2. **Hiện thực hóa Lý thuyết Nhận thức Kép (System 1 & System 2) trong Kỹ thuật Phần mềm:**
+   - **System 1 (Jev):** Phản xạ trong `~100–300ms` để phân loại thẻ, xếp hạng ứng viên và lọc tín hiệu rủi ro.
+   - **System 2 (DeepSeek):** Suy luận chiến lược, tổng hợp tri thức RAG và sinh kế hoạch phục hồi dự án.
+3. **Số đo Định lượng & Tính Tất định Kiểm chứng được:**
+   - **Độ trễ:** Giảm thời gian ra quyết định phân loại từ `~2.800ms` (LLM truyền thống) xuống **`~140–250ms` (Jev)**.
+   - **Chi phí vận hành:** Tiết kiệm hơn `90%` chi phí token cho các chu kỳ quét nền định kỳ của AI Observer nhờ màng lọc tiền xử lý `noul`.
+   - **An toàn dữ liệu & Quyền riêng tư:** `0%` lỗi ảo giác cấu trúc JSON, `0%` rò rỉ UUID/Email sang mô hình quyết định bên ngoài, và `100%` tuân thủ **AI Accountability Layer**.
+4. **Sẵn sàng Vận hành Thực tế (Production-Ready & Graceful Degradation):**
+   - Toàn bộ kiến trúc duy trì nguyên tắc suy giảm an toàn (**Graceful Degradation**) và tương thích ngược hoàn toàn, đảm bảo hệ thống vận hành ổn định trên cả môi trường đám mây thực tế lẫn môi trường kiểm thử ngoại tuyến.

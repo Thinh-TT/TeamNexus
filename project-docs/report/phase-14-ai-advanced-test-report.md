@@ -1,7 +1,7 @@
 # Báo cáo nghiệm thu — Giai đoạn 14: Nâng cao AI (Backend)
 
 > **Phạm vi báo cáo:** **backend** (toàn bộ phần backend đã hiện thực & verify). Phần **frontend** ở trạng thái
-> **📤 bàn giao** — theo dõi ở `tasks/phase-14-remaining-frontend-handover.md`.
+> **📤 bàn giao** — theo dõi ở `tasks/handovers/phase-14-remaining-frontend-handover.md`.
 > **Kế hoạch đã chốt:** `tasks/phase-14-ai-advanced.md`.
 > **Ngày đo:** phiên thi hành Giai đoạn 14. **Máy đo:** dev local, PostgreSQL thật ở `localhost:5432`.
 
@@ -169,7 +169,7 @@ thay vì `Task.Delay(3s)`, hoặc test chấp nhận cả 200 và 409) — **kh�
 
 | # | Việc | Ai | Ghi chú |
 |---|---|---|---|
-| 1 | **Toàn bộ frontend Giai đoạn 14** | **antigravity** | `tasks/phase-14-remaining-frontend-handover.md` (hợp đồng API + 13 bẫy) |
+| 1 | **Toàn bộ frontend Giai đoạn 14** | **antigravity** | `tasks/handovers/phase-14-remaining-frontend-handover.md` (hợp đồng API + 13 bẫy) |
 | 2 | Nâng `.github/workflows/ci-web.yml` từ `-lt 508` lên số thật | **antigravity** | Làm **sau cùng**, khi FE xong |
 | 3 | **1 lượt kiểm thử tay** bằng Scalar UI (bằng chứng §6.5 #5 của kế hoạch) | người duyệt | 5 bước, gồm cả `POST .../observer/scan` để thấy `AtRiskDeadline` thật |
 | 4 | Chạy lại 2 workflow CI trên GitHub Actions | người duyệt | Cần `postgres:18` service container của CI (máy dev chỉ có PostgreSQL local) |

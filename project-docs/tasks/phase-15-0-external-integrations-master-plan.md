@@ -10,7 +10,7 @@
 > 4. [`phase-15-3-inbound-github-webhooks-and-pr-automation.md`](./phase-15-3-inbound-github-webhooks-and-pr-automation.md) *(Sub-phase 15.3 — Inbound GitHub Webhook, HMAC-SHA256, `TaskKeyParser` & PR State Machine + Undo)*
 > 5. [`phase-15-4-github-issues-jev-triage-and-comments.md`](./phase-15-4-github-issues-jev-triage-and-comments.md) *(Sub-phase 15.4 — GitHub Issue → Task + Jev 1.13 Auto-Triage & Đồng bộ Comment 1 chiều)*
 > 6. [`phase-15-5-frontend-integrations-and-e2e-verification.md`](./phase-15-5-frontend-integrations-and-e2e-verification.md) *(Sub-phase 15.5 — Giao diện React 19 / Ant Design v6, Vitest / xUnit Gates & Đồng bộ Tài liệu)*
-> 7. [`phase-15-remaining-frontend-handover.md`](./phase-15-remaining-frontend-handover.md) *(Bàn giao phiên sau — trạng thái 15.1→15.4, cấu hình deploy đã đặt, checklist xác minh, việc còn lại của 15.5 & rủi ro mở)*
+> 7. [`handovers/phase-15-remaining-frontend-handover.md`](./handovers/phase-15-remaining-frontend-handover.md) *(Bàn giao phiên sau — trạng thái 15.1→15.4, cấu hình deploy đã đặt, checklist xác minh, việc còn lại của 15.5 & rủi ro mở)*
 
 ---
 

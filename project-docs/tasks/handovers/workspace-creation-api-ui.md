@@ -46,10 +46,10 @@ Ghi chú thiết kế:
 
 | File | Thay đổi |
 |---|---|
-| [`WorkspaceDtos.cs`](../../src/Modules/Board/TeamNexus.Modules.Board/DTOs/WorkspaceDtos.cs) | Thêm `CreateWorkspaceRequest(string Name, string? Description)` |
-| [`IActivityLogWriter.cs`](../../src/Modules/Board/TeamNexus.Modules.Board/Services/IActivityLogWriter.cs) | Thêm `ObserverActivityActions.WorkspaceCreated` |
-| [`WorkspaceService.cs`](../../src/Modules/Board/TeamNexus.Modules.Board/Services/WorkspaceService.cs) | `CreateAsync`: validate tên/mô tả, tạo `Workspace` + `WorkspaceMember(Admin, Human)`, **một** `SaveChangesAsync`, ghi activity. Thêm `MaxDescriptionLength = 2000` + `RequireValidDescription` (dùng chung cho `UpdateAsync` để mô tả quá dài trả **400** thay vì 500 từ `varchar(2000)`) |
-| [`WorkspacesEndpoints.cs`](../../src/Modules/Board/TeamNexus.Modules.Board/Endpoints/WorkspacesEndpoints.cs) | `MapPost("/")` + CSRF filter; handler mỏng trả `Results.Created` |
+| [`WorkspaceDtos.cs`](../../../src/Modules/Board/TeamNexus.Modules.Board/DTOs/WorkspaceDtos.cs) | Thêm `CreateWorkspaceRequest(string Name, string? Description)` |
+| [`IActivityLogWriter.cs`](../../../src/Modules/Board/TeamNexus.Modules.Board/Services/IActivityLogWriter.cs) | Thêm `ObserverActivityActions.WorkspaceCreated` |
+| [`WorkspaceService.cs`](../../../src/Modules/Board/TeamNexus.Modules.Board/Services/WorkspaceService.cs) | `CreateAsync`: validate tên/mô tả, tạo `Workspace` + `WorkspaceMember(Admin, Human)`, **một** `SaveChangesAsync`, ghi activity. Thêm `MaxDescriptionLength = 2000` + `RequireValidDescription` (dùng chung cho `UpdateAsync` để mô tả quá dài trả **400** thay vì 500 từ `varchar(2000)`) |
+| [`WorkspacesEndpoints.cs`](../../../src/Modules/Board/TeamNexus.Modules.Board/Endpoints/WorkspacesEndpoints.cs) | `MapPost("/")` + CSRF filter; handler mỏng trả `Results.Created` |
 
 Bất biến được giữ:
 - `ListForUserAsync` / `EnsureDefaultWorkspaceAsync` **không đổi** — sau khi POST, user đã có membership nên
@@ -61,11 +61,11 @@ Bất biến được giữ:
 
 | File | Thay đổi |
 |---|---|
-| [`workspace.types.ts`](../../frontend/src/features/workspace/types/workspace.types.ts) | Thêm `CreateWorkspaceRequest` |
-| [`workspaceApi.ts`](../../frontend/src/features/workspace/services/workspaceApi.ts) | Thêm `create()` → `POST /workspaces` |
-| [`WorkspaceCreateModal.tsx`](../../frontend/src/features/workspace/components/WorkspaceCreateModal.tsx) | **Mới**: modal tên (required + whitespace + max 120) và mô tả (max 2000); `confirmLoading` chặn double-submit; `try/catch` nuốt lỗi để modal ở lại (pattern `ColumnModal`) |
-| [`DashboardPage.tsx`](../../frontend/src/features/auth/pages/DashboardPage.tsx) | Nút primary `data-testid="create-workspace-btn"` ở header card + nút trong `Empty`; handler gọi API, chèn workspace vào state, `message.success`, điều hướng `/workspaces/{id}/boards`; lỗi hiện `message.error` rồi rethrow để modal giữ nguyên |
-| [`activityLabels.ts`](../../frontend/src/features/workspace/utils/activityLabels.ts) | Nhãn `WorkspaceCreated` → "đã tạo workspace" |
+| [`workspace.types.ts`](../../../frontend/src/features/workspace/types/workspace.types.ts) | Thêm `CreateWorkspaceRequest` |
+| [`workspaceApi.ts`](../../../frontend/src/features/workspace/services/workspaceApi.ts) | Thêm `create()` → `POST /workspaces` |
+| [`WorkspaceCreateModal.tsx`](../../../frontend/src/features/workspace/components/WorkspaceCreateModal.tsx) | **Mới**: modal tên (required + whitespace + max 120) và mô tả (max 2000); `confirmLoading` chặn double-submit; `try/catch` nuốt lỗi để modal ở lại (pattern `ColumnModal`) |
+| [`DashboardPage.tsx`](../../../frontend/src/features/auth/pages/DashboardPage.tsx) | Nút primary `data-testid="create-workspace-btn"` ở header card + nút trong `Empty`; handler gọi API, chèn workspace vào state, `message.success`, điều hướng `/workspaces/{id}/boards`; lỗi hiện `message.error` rồi rethrow để modal giữ nguyên |
+| [`activityLabels.ts`](../../../frontend/src/features/workspace/utils/activityLabels.ts) | Nhãn `WorkspaceCreated` → "đã tạo workspace" |
 
 Lý do điều hướng tới `/boards` (không phải `/dashboard`): workspace mới **rỗng**, và trang bảng Kanban có
 sẵn empty state **"Tạo bảng đầu tiên"** — đúng hành động tiếp theo.
@@ -84,7 +84,7 @@ sẵn empty state **"Tạo bảng đầu tiên"** — đúng hành động tiế
 
 ## 6. Test matrix
 
-**Backend** — [`WorkspaceApiTests.cs`](../../tests/TeamNexus.Api.Tests/Integration/WorkspaceApiTests.cs)
+**Backend** — [`WorkspaceApiTests.cs`](../../../tests/TeamNexus.Api.Tests/Integration/WorkspaceApiTests.cs)
 (nhóm `---- create (POST /api/workspaces) ----`):
 201 + quyền Admin/Owner + DB row; mô tả trắng ⇒ `null`; workspace xuất hiện trong list và **không** sinh
 workspace mặc định; tạo 2 workspace giữ cả hai; tên trắng ⇒ 400 (2 case); biên 120/121; mô tả 2001 ⇒ 400
@@ -92,13 +92,13 @@ workspace mặc định; tạo 2 workspace giữ cả hai; tên trắng ⇒ 400 
 không thấy workspace mới; `GET /{id}` sau tạo ⇒ `memberCount = 1`, `boardCount = 0`.
 
 **Frontend**:
-[`workspaceApi.test.ts`](../../frontend/src/features/workspace/services/__tests__/workspaceApi.test.ts)
+[`workspaceApi.test.ts`](../../../frontend/src/features/workspace/services/__tests__/workspaceApi.test.ts)
 (`create` gọi đúng `POST /workspaces` + body);
-[`WorkspaceCreateModal.test.tsx`](../../frontend/src/features/workspace/components/__tests__/WorkspaceCreateModal.test.tsx)
+[`WorkspaceCreateModal.test.tsx`](../../../frontend/src/features/workspace/components/__tests__/WorkspaceCreateModal.test.tsx)
 (render field, chặn tên trắng, trim + submit, mô tả rỗng ⇒ `null`, API lỗi ⇒ modal không đóng);
-[`DashboardPage.test.tsx`](../../frontend/src/features/auth/pages/__tests__/DashboardPage.test.tsx)
+[`DashboardPage.test.tsx`](../../../frontend/src/features/auth/pages/__tests__/DashboardPage.test.tsx)
 (tạo thành công ⇒ gọi API + điều hướng `/workspaces/{id}/boards`; thất bại ⇒ modal còn mở);
-[`activityLabels.test.ts`](../../frontend/src/features/workspace/utils/__tests__/activityLabels.test.ts)
+[`activityLabels.test.ts`](../../../frontend/src/features/workspace/utils/__tests__/activityLabels.test.ts)
 (nhãn `WorkspaceCreated`).
 
 ## 7. Nhật ký thi hành

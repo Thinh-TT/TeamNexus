@@ -8,7 +8,7 @@
 > **§4 (Module Ai): 270/270** · **§7 đợt verify tổng (A–I + gọi thật): 291/291** ⇒ **371 check PASS** cho cả giai đoạn.
 > Đã bắt và sửa **5 bug thật** (2 ở §3, 3 ở §4 — xem §4), trong đó bug #1 của §4 (**DeepSeek không map
 > `tool_calls`/`finish_reason`**) sẽ làm **toàn bộ tính năng không chạy được với provider thật** mà nhóm D/E không thể phát hiện.
-> Còn lại: **§5 frontend (nhóm J)** — đã bàn giao ở `tasks/phase-7-frontend-handover.md`.
+> Còn lại: **§5 frontend (nhóm J)** — đã bàn giao ở `tasks/handovers/phase-7-frontend-handover.md`.
 > Kế hoạch chi tiết + quyết định D1–D20: `tasks/phase-7-ai-agent-executor.md`; schema: `04-database-design.md` §3.3, §3.4, §3.8.
 >
 > **Baseline trước khi bắt đầu (đã ghi nhận):** backend Phase 1–6 xong; frontend **30 test files / 155 tests PASS**,
@@ -298,7 +298,7 @@ phải giữ mảng bằng dấu `,` và **không** pipe trực tiếp từ hàm
 
 ## 2.5 Nhóm J của §7 (Frontend — React + TS + Vite + Ant Design) — ✅ 187/187 tests PASS
 
-Thực thi trọn vẹn hạng mục bàn giao §5 (`phase-7-frontend-handover.md`):
+Thực thi trọn vẹn hạng mục bàn giao §5 (`tasks/handovers/phase-7-frontend-handover.md`):
 - **Assignee Selection:** `useWorkspaceMembers` hook cache danh sách theo `workspaceId`, `TaskDetailModal` Select (`data-testid="assignee-select"`) hiển thị avatar + purple tag "AI Agent" cho `ai_agent` members, `KanbanColumn` quick-add hỗ trợ chọn assignee ngay khi tạo task.
 - **Clarification State:** `KanbanColumn` hiển thị icon `QuestionCircleOutlined` màu vàng `#f59e0b` khi `column.isClarification`, `TaskCard` hiển thị badge AI Agent đang chạy và clamp 2 dòng câu hỏi làm rõ, `TaskDetailModal` hiển thị panel câu hỏi nổi bật cùng nút "Chạy lại" (chỉ Manager/Admin).
 - **Agent Panel & Accountability:** `AgentRunPanel` hiển thị bộ counter số tool call, tokens, timeline trace các tool đã dispatch, cảnh báo trace truncated, tags trạng thái tiếng Việt, nút Chạy / Chạy lại / Huỷ; `AgentDraftApproval` tái dùng `AiActionLogItem` sẵn có; `AttachmentList` hiển thị danh sách đính kèm và tải blob an toàn qua `saveBlob`.
